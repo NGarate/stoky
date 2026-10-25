@@ -35,7 +35,13 @@ let userId: string;
 
 beforeAll(async () => {
   email = generateTestEmail(MARKER);
-  userId = (await createTestUser({ email, name: `Policy ${MARKER}`, password: PASSWORD })).id;
+  userId = (
+    await createTestUser({
+      email,
+      name: `Policy ${MARKER}`,
+      password: PASSWORD,
+    })
+  ).id;
 });
 
 afterAll(async () => {
@@ -48,9 +54,10 @@ interface Browser {
   setCookie: string[];
 }
 
-async function signIn(
-  { rememberMe, cookie }: { rememberMe?: unknown; cookie?: string } = {},
-): Promise<Browser> {
+async function signIn({
+  rememberMe,
+  cookie,
+}: { rememberMe?: unknown; cookie?: string } = {}): Promise<Browser> {
   const answer = await signInWith(
     rememberMe === undefined
       ? { email, password: PASSWORD }
@@ -74,7 +81,10 @@ const row = (id: string) => prisma.session.findUnique({ where: { id } });
  */
 function mergeJar(jar: string, setCookie: string[]): string {
   const cookies = new Map(
-    jar.split("; ").filter(Boolean).map((pair) => [pair.split("=", 1)[0], pair] as const),
+    jar
+      .split("; ")
+      .filter(Boolean)
+      .map((pair) => [pair.split("=", 1)[0], pair] as const),
   );
   for (const line of setCookie) {
     const pair = line.split(";")[0].trim();
@@ -88,7 +98,11 @@ function mergeJar(jar: string, setCookie: string[]): string {
 const DAY = 24 * 60 * MINUTE;
 
 /** Moves the row as if `idleMs` had passed since it was last slid. */
-async function idle(id: string, idleMs: number, authenticatedAgoMs = idleMs): Promise<void> {
+async function idle(
+  id: string,
+  idleMs: number,
+  authenticatedAgoMs = idleMs,
+): Promise<void> {
   const now = Date.now();
   await prisma.session.update({
     where: { id },
@@ -113,7 +127,9 @@ describe("a new browser session", () => {
     // Better Auth reads a missing `rememberMe` as true; the route does not.
     const browser = await signIn();
     expect((await row(browser.sessionId))!.persistent).toBe(false);
-    const sessionCookie = browser.setCookie.find((line) => line.startsWith("stoky.session_token="));
+    const sessionCookie = browser.setCookie.find((line) =>
+      line.startsWith("stoky.session_token="),
+    );
     expect(sessionCookie).not.toMatch(/max-age|expires=/i);
   });
 
@@ -123,12 +139,20 @@ describe("a new browser session", () => {
 
     const stored = await row(browser.sessionId);
     const expires = stored!.expiresAt.getTime();
-    expect(expires).toBeGreaterThanOrEqual(before + BROWSER_IDLE_S * 1000 - 1000);
-    expect(expires).toBeLessThanOrEqual(Date.now() + BROWSER_IDLE_S * 1000 + 1000);
-    expect(stored!.authenticatedAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
+    expect(expires).toBeGreaterThanOrEqual(
+      before + BROWSER_IDLE_S * 1000 - 1000,
+    );
+    expect(expires).toBeLessThanOrEqual(
+      Date.now() + BROWSER_IDLE_S * 1000 + 1000,
+    );
+    expect(stored!.authenticatedAt.getTime()).toBeGreaterThanOrEqual(
+      before - 1000,
+    );
     expect(stored!.ipAddress).toBeNull();
 
-    const sessionCookie = browser.setCookie.find((line) => line.startsWith("stoky.session_token="));
+    const sessionCookie = browser.setCookie.find((line) =>
+      line.startsWith("stoky.session_token="),
+    );
     expect(sessionCookie).toBeDefined();
     expect(sessionCookie).not.toMatch(/max-age|expires=/i);
     expect(sessionCookie).toMatch(/HttpOnly/);
@@ -158,7 +182,9 @@ describe("what slides it", () => {
       getSession: () => readSession(request.headers, { refresh: true }),
       createContext: createTRPCContext,
     });
-    const request = new Request(`${testOrigin()}/api/trpc/auth.me`, { headers: browser.headers });
+    const request = new Request(`${testOrigin()}/api/trpc/auth.me`, {
+      headers: browser.headers,
+    });
     const response = await handler(request);
 
     expect(response.status).toBe(200);
@@ -170,8 +196,12 @@ describe("what slides it", () => {
     await idle(browser.sessionId, 14 * MINUTE);
     const before = (await row(browser.sessionId))!.expiresAt.getTime();
 
-    expect(await readSession(browser.headers, { refresh: false })).not.toBeNull();
-    expect(await readSession(browser.headers, { refresh: true })).not.toBeNull();
+    expect(
+      await readSession(browser.headers, { refresh: false }),
+    ).not.toBeNull();
+    expect(
+      await readSession(browser.headers, { refresh: true }),
+    ).not.toBeNull();
 
     expect((await row(browser.sessionId))!.expiresAt.getTime()).toBe(before);
   });
@@ -191,7 +221,9 @@ describe("what slides it", () => {
         .join("; "),
     });
 
-    expect(await readSession(withoutDontRemember, { refresh: true })).not.toBeNull();
+    expect(
+      await readSession(withoutDontRemember, { refresh: true }),
+    ).not.toBeNull();
 
     expect((await row(browser.sessionId))!.expiresAt.getTime()).toBe(before);
   });
@@ -220,7 +252,9 @@ describe("what ends it", () => {
     // Nothing caches the session: no cookie cache, no signed copy of it in
     // the browser to outlive the row.
     const browser = await signIn();
-    expect(await readSession(browser.headers, { refresh: false })).not.toBeNull();
+    expect(
+      await readSession(browser.headers, { refresh: false }),
+    ).not.toBeNull();
 
     await prisma.session.delete({ where: { id: browser.sessionId } });
 
@@ -253,7 +287,9 @@ describe("which deadline it says is next", () => {
     const browser = await signIn();
     await idle(browser.sessionId, 14 * MINUTE);
 
-    expect((await readSession(browser.headers, { refresh: false }))?.expiresKind).toBe("idle");
+    expect(
+      (await readSession(browser.headers, { refresh: false }))?.expiresKind,
+    ).toBe("idle");
     expect((await keepAlive(browser))?.kind).toBe("idle");
   });
 
@@ -262,15 +298,27 @@ describe("which deadline it says is next", () => {
     // deadline is nine minutes out, a minute short of the limit. Activity now
     // slides it to the limit and no further, and both answers say so.
     const browser = await signIn();
-    await idle(browser.sessionId, 6 * MINUTE, BROWSER_CAP_S * 1000 - 10 * MINUTE);
-    const authenticatedAt = (await row(browser.sessionId))!.authenticatedAt.getTime();
-    expect((await readSession(browser.headers, { refresh: false }))?.expiresKind).toBe("idle");
+    await idle(
+      browser.sessionId,
+      6 * MINUTE,
+      BROWSER_CAP_S * 1000 - 10 * MINUTE,
+    );
+    const authenticatedAt = (await row(
+      browser.sessionId,
+    ))!.authenticatedAt.getTime();
+    expect(
+      (await readSession(browser.headers, { refresh: false }))?.expiresKind,
+    ).toBe("idle");
 
     const answer = await keepAlive(browser);
 
     expect(answer?.kind).toBe("cap");
-    expect(new Date(answer!.expires).getTime()).toBe(authenticatedAt + BROWSER_CAP_S * 1000);
-    expect((await readSession(browser.headers, { refresh: false }))?.expiresKind).toBe("cap");
+    expect(new Date(answer!.expires).getTime()).toBe(
+      authenticatedAt + BROWSER_CAP_S * 1000,
+    );
+    expect(
+      (await readSession(browser.headers, { refresh: false }))?.expiresKind,
+    ).toBe("cap");
   });
 
   it("is the limit on an answer that did not slide, too", async () => {
@@ -281,7 +329,9 @@ describe("which deadline it says is next", () => {
     await prisma.session.update({
       where: { id: browser.sessionId },
       data: {
-        authenticatedAt: new Date(now - BROWSER_CAP_S * 1000 + BROWSER_IDLE_S * 1000 - 30_000),
+        authenticatedAt: new Date(
+          now - BROWSER_CAP_S * 1000 + BROWSER_IDLE_S * 1000 - 30_000,
+        ),
         expiresAt: new Date(now + BROWSER_IDLE_S * 1000 - 30_000),
       },
     });
@@ -294,7 +344,10 @@ describe("a remembered session", () => {
   /** Sets the row's clocks as if the session had been used `usedAgoMs` ago. */
   async function used(
     id: string,
-    { usedAgoMs, authenticatedAgoMs }: { usedAgoMs: number; authenticatedAgoMs: number },
+    {
+      usedAgoMs,
+      authenticatedAgoMs,
+    }: { usedAgoMs: number; authenticatedAgoMs: number },
   ): Promise<void> {
     const now = Date.now();
     await prisma.session.update({
@@ -314,15 +367,23 @@ describe("a remembered session", () => {
 
     const stored = (await row(browser.sessionId))!;
     expect(stored.persistent).toBe(true);
-    expect(stored.expiresAt.getTime()).toBeGreaterThanOrEqual(before + REMEMBERED_IDLE_S * 1000 - 1000);
-    expect(stored.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + REMEMBERED_IDLE_S * 1000 + 1000);
+    expect(stored.expiresAt.getTime()).toBeGreaterThanOrEqual(
+      before + REMEMBERED_IDLE_S * 1000 - 1000,
+    );
+    expect(stored.expiresAt.getTime()).toBeLessThanOrEqual(
+      Date.now() + REMEMBERED_IDLE_S * 1000 + 1000,
+    );
 
-    const sessionCookie = browser.setCookie.find((line) => line.startsWith("stoky.session_token="));
+    const sessionCookie = browser.setCookie.find((line) =>
+      line.startsWith("stoky.session_token="),
+    );
     const maxAge = Number(/max-age=(\d+)/i.exec(sessionCookie ?? "")?.[1]);
     expect(maxAge).toBe(REMEMBERED_IDLE_S);
 
     // Its deadline is the idle one: ninety days is far inside the year.
-    expect((await readSession(browser.headers, { refresh: false }))?.expiresKind).toBe("idle");
+    expect(
+      (await readSession(browser.headers, { refresh: false }))?.expiresKind,
+    ).toBe("idle");
   });
 
   it("is what the route's header says, over what Better Auth was asked", async () => {
@@ -335,34 +396,55 @@ describe("a remembered session", () => {
       headers: new Headers({ "x-stoky-remember": "0" }),
     })) as { token: string };
 
-    const stored = await prisma.session.findUnique({ where: { token: answer.token } });
+    const stored = await prisma.session.findUnique({
+      where: { token: answer.token },
+    });
     expect(stored?.persistent).toBe(false);
-    expect(stored!.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + BROWSER_IDLE_S * 1000 + 1000);
+    expect(stored!.expiresAt.getTime()).toBeLessThanOrEqual(
+      Date.now() + BROWSER_IDLE_S * 1000 + 1000,
+    );
   });
 
   it("is slid by a tRPC read once a day has passed since it was last written", async () => {
     const browser = await signIn({ rememberMe: true });
-    await used(browser.sessionId, { usedAgoMs: DAY + 1000, authenticatedAgoMs: 10 * DAY });
+    await used(browser.sessionId, {
+      usedAgoMs: DAY + 1000,
+      authenticatedAgoMs: 10 * DAY,
+    });
     const before = Date.now();
 
-    expect(await readSession(browser.headers, { refresh: true })).not.toBeNull();
+    expect(
+      await readSession(browser.headers, { refresh: true }),
+    ).not.toBeNull();
 
     const slid = (await row(browser.sessionId))!;
-    expect(slid.expiresAt.getTime()).toBeGreaterThanOrEqual(before + REMEMBERED_IDLE_S * 1000 - 1000);
+    expect(slid.expiresAt.getTime()).toBeGreaterThanOrEqual(
+      before + REMEMBERED_IDLE_S * 1000 - 1000,
+    );
     expect(slid.updatedAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
   });
 
   it("is not written by a read within the day, nor by a render's read ever", async () => {
     const browser = await signIn({ rememberMe: true });
-    await used(browser.sessionId, { usedAgoMs: DAY - MINUTE, authenticatedAgoMs: 10 * DAY });
+    await used(browser.sessionId, {
+      usedAgoMs: DAY - MINUTE,
+      authenticatedAgoMs: 10 * DAY,
+    });
     const within = (await row(browser.sessionId))!;
 
-    expect(await readSession(browser.headers, { refresh: true })).not.toBeNull();
+    expect(
+      await readSession(browser.headers, { refresh: true }),
+    ).not.toBeNull();
     expect((await row(browser.sessionId))!.updatedAt).toEqual(within.updatedAt);
 
-    await used(browser.sessionId, { usedAgoMs: DAY + 1000, authenticatedAgoMs: 10 * DAY });
+    await used(browser.sessionId, {
+      usedAgoMs: DAY + 1000,
+      authenticatedAgoMs: 10 * DAY,
+    });
     const due = (await row(browser.sessionId))!;
-    expect(await readSession(browser.headers, { refresh: false })).not.toBeNull();
+    expect(
+      await readSession(browser.headers, { refresh: false }),
+    ).not.toBeNull();
     expect((await row(browser.sessionId))!.expiresAt).toEqual(due.expiresAt);
   });
 
@@ -377,13 +459,17 @@ describe("a remembered session", () => {
       where: { id: browser.sessionId },
       data: {
         authenticatedAt,
-        expiresAt: new Date(authenticatedAt.getTime() + REMEMBERED_CAP_S * 1000),
+        expiresAt: new Date(
+          authenticatedAt.getTime() + REMEMBERED_CAP_S * 1000,
+        ),
         updatedAt: new Date(now - MINUTE),
       },
     });
     const before = (await row(browser.sessionId))!;
 
-    expect(await readSession(browser.headers, { refresh: true })).not.toBeNull();
+    expect(
+      await readSession(browser.headers, { refresh: true }),
+    ).not.toBeNull();
 
     expect((await row(browser.sessionId))!.updatedAt).toEqual(before.updatedAt);
   });
@@ -392,10 +478,17 @@ describe("a remembered session", () => {
     // Signed in 364 days ago, last slid a day and a second ago: the slide now
     // may reach a year from the sign-in — a day from now — and no further.
     const browser = await signIn({ rememberMe: true });
-    await used(browser.sessionId, { usedAgoMs: DAY + 1000, authenticatedAgoMs: 364 * DAY });
-    expect(await readSession(browser.headers, { refresh: true })).not.toBeNull();
+    await used(browser.sessionId, {
+      usedAgoMs: DAY + 1000,
+      authenticatedAgoMs: 364 * DAY,
+    });
+    expect(
+      await readSession(browser.headers, { refresh: true }),
+    ).not.toBeNull();
     const slid = (await row(browser.sessionId))!;
-    expect(slid.expiresAt.getTime()).toBe(slid.authenticatedAt.getTime() + REMEMBERED_CAP_S * 1000);
+    expect(slid.expiresAt.getTime()).toBe(
+      slid.authenticatedAt.getTime() + REMEMBERED_CAP_S * 1000,
+    );
 
     // A day and a second pass, the way the other tests let time pass: every
     // clock on the row moves back by that much.
@@ -461,16 +554,21 @@ describe("a remembered session", () => {
     const second = await signIn({ rememberMe: true, cookie: jar });
 
     expect((await row(second.sessionId))!.persistent).toBe(true);
-    expect(second.setCookie).toContainEqual(expect.stringMatching(/^stoky\.dont_remember=; Max-Age=0;/));
+    expect(second.setCookie).toContainEqual(
+      expect.stringMatching(/^stoky\.dont_remember=; Max-Age=0;/),
+    );
     expect(second.headers.get("cookie")).not.toMatch(/dont_remember/);
 
     // And with the browser's jar as it now stands, the daily slide happens.
-    await used(second.sessionId, { usedAgoMs: DAY + 1000, authenticatedAgoMs: 2 * DAY });
+    await used(second.sessionId, {
+      usedAgoMs: DAY + 1000,
+      authenticatedAgoMs: 2 * DAY,
+    });
     const before = Date.now();
     expect(await readSession(second.headers, { refresh: true })).not.toBeNull();
-    expect((await row(second.sessionId))!.expiresAt.getTime()).toBeGreaterThanOrEqual(
-      before + REMEMBERED_IDLE_S * 1000 - 1000,
-    );
+    expect(
+      (await row(second.sessionId))!.expiresAt.getTime(),
+    ).toBeGreaterThanOrEqual(before + REMEMBERED_IDLE_S * 1000 - 1000);
   });
 });
 
@@ -480,7 +578,11 @@ describe("a read of a session that has gone (D144)", () => {
 
   /** Whether `lines` expire the cookie called `name`. */
   const expires = (lines: string[], name: string) =>
-    lines.some((line) => line.startsWith(`${name}=`) && (/;\s*max-age=0\b/i.test(line) || line.startsWith(`${name}=;`)));
+    lines.some(
+      (line) =>
+        line.startsWith(`${name}=`) &&
+        (/;\s*max-age=0\b/i.test(line) || line.startsWith(`${name}=;`)),
+    );
 
   /** A browser session whose row has just been deleted, as a password change deletes it. */
   async function goneSession(): Promise<Headers> {
@@ -535,7 +637,11 @@ describe("a read of a session that has gone (D144)", () => {
     headers.set("content-type", "application/json");
 
     const response = await POST(
-      new Request(`${testOrigin()}/api/auth/sign-out`, { method: "POST", headers, body: "{}" }),
+      new Request(`${testOrigin()}/api/auth/sign-out`, {
+        method: "POST",
+        headers,
+        body: "{}",
+      }),
     );
 
     expect(response.status).toBe(200);

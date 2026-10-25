@@ -3,7 +3,10 @@ import { createTRPCRouter, adminProcedure, protectedProcedure } from "../trpc";
 import { enforceRateLimit } from "../throttle";
 import { addMemberRateLimit, clientAddress } from "@/lib/rate-limit";
 import { hashPassword } from "@/lib/auth/password-hash";
-import { createCredentialUser, setPasswordAndEndSessions } from "@/lib/auth/credentials";
+import {
+  createCredentialUser,
+  setPasswordAndEndSessions,
+} from "@/lib/auth/credentials";
 import { endSessions } from "@/lib/auth/end-sessions";
 import { liveSessionsOf } from "@/lib/auth/session-list";
 import { confirmCurrentPassword } from "@/lib/auth/reauth";
@@ -230,7 +233,9 @@ export const householdRouter = createTRPCRouter({
       // once it commits (READ COMMITTED), matches nothing, and throws — which
       // rolls its own household back.
       const household = await ctx.db.$transaction(async (tx) => {
-        const created = await tx.household.create({ data: { name: input.name } });
+        const created = await tx.household.create({
+          data: { name: input.name },
+        });
         const claimed = await tx.user.updateMany({
           where: { id: userId, householdId: null },
           data: { householdId: created.id, role: "OWNER" },
@@ -261,7 +266,13 @@ export const householdRouter = createTRPCRouter({
   members: adminProcedure.query(async ({ ctx }) => {
     return ctx.db.user.findMany({
       where: { householdId: ctx.householdId },
-      select: { id: true, name: true, email: true, role: true, twoFactorEnabled: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        twoFactorEnabled: true,
+      },
       orderBy: [{ role: "asc" }, { name: "asc" }],
     });
   }),
@@ -318,7 +329,12 @@ export const householdRouter = createTRPCRouter({
 
       // Named fields, never the row: it is the whole `User`, and any column it
       // grows would reach the browser by default.
-      return { id: user.id, name: user.name, email: user.email, role: user.role };
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      };
     }),
   /**
    * Change what an existing member may do.
@@ -338,7 +354,11 @@ export const householdRouter = createTRPCRouter({
     .input(updateMemberRoleSchema)
     .mutation(async ({ ctx, input }) => {
       return withOwnersLocked(ctx.db, ctx.householdId, async (tx) => {
-        const member = await memberOfHousehold(tx, input.userId, ctx.householdId);
+        const member = await memberOfHousehold(
+          tx,
+          input.userId,
+          ctx.householdId,
+        );
 
         assertMayActOnOwner(ctx.role, member.role, input.role);
         await assertAnOwnerRemains(tx, ctx.householdId, member, input.role);
@@ -381,19 +401,30 @@ export const householdRouter = createTRPCRouter({
   removeMember: adminProcedure
     .input(removeMemberSchema)
     .mutation(async ({ ctx, input }) => {
-      const removed = await withOwnersLocked(ctx.db, ctx.householdId, async (tx) => {
-        const member = await memberOfHousehold(tx, input.userId, ctx.householdId);
+      const removed = await withOwnersLocked(
+        ctx.db,
+        ctx.householdId,
+        async (tx) => {
+          const member = await memberOfHousehold(
+            tx,
+            input.userId,
+            ctx.householdId,
+          );
 
-        assertMayActOnOwner(ctx.role, member.role);
-        await assertAnOwnerRemains(tx, ctx.householdId, member, null);
+          assertMayActOnOwner(ctx.role, member.role);
+          await assertAnOwnerRemains(tx, ctx.householdId, member, null);
 
-        await tx.user.update({
-          where: { id: member.id },
-          data: { householdId: null },
-        });
+          await tx.user.update({
+            where: { id: member.id },
+            data: { householdId: null },
+          });
 
-        return { id: member.id, ended: await endSessions(tx, { userId: member.id }) };
-      });
+          return {
+            id: member.id,
+            ended: await endSessions(tx, { userId: member.id }),
+          };
+        },
+      );
 
       logSecurityEvent("auth.session.ended", {
         userId: ctx.session.user.id,
@@ -429,10 +460,17 @@ export const householdRouter = createTRPCRouter({
     .input(memberSessionsSchema)
     .query(async ({ ctx, input }) => {
       if (input.userId === ctx.session.user.id) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: OWN_SESSIONS_MESSAGE });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: OWN_SESSIONS_MESSAGE,
+        });
       }
 
-      const member = await memberOfHousehold(ctx.db, input.userId, ctx.householdId);
+      const member = await memberOfHousehold(
+        ctx.db,
+        input.userId,
+        ctx.householdId,
+      );
 
       assertMayActOnOwner(ctx.role, member.role);
 
@@ -482,10 +520,17 @@ export const householdRouter = createTRPCRouter({
     .input(endMemberSessionsSchema)
     .mutation(async ({ ctx, input }) => {
       if (input.userId === ctx.session.user.id) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: OWN_SESSIONS_MESSAGE });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: OWN_SESSIONS_MESSAGE,
+        });
       }
 
-      const member = await memberOfHousehold(ctx.db, input.userId, ctx.householdId);
+      const member = await memberOfHousehold(
+        ctx.db,
+        input.userId,
+        ctx.householdId,
+      );
 
       assertMayActOnOwner(ctx.role, member.role);
 
@@ -501,7 +546,10 @@ export const householdRouter = createTRPCRouter({
       const ended = await endSessions(ctx.db, where);
 
       if (input.sessionId !== undefined && ended === 0) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found",
+        });
       }
 
       logSecurityEvent("auth.session.ended", {
@@ -550,12 +598,21 @@ export const householdRouter = createTRPCRouter({
     .input(endHouseholdSessionsSchema)
     .mutation(async ({ ctx, input }) => {
       if (ctx.role !== "OWNER") {
-        throw new TRPCError({ code: "FORBIDDEN", message: OWNERS_ONLY_MESSAGE });
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: OWNERS_ONLY_MESSAGE,
+        });
       }
 
-      await confirmCurrentPassword(ctx, input.currentPassword, "household-end-all");
+      await confirmCurrentPassword(
+        ctx,
+        input.currentPassword,
+        "household-end-all",
+      );
 
-      const ended = await endSessions(ctx.db, { user: { householdId: ctx.householdId } });
+      const ended = await endSessions(ctx.db, {
+        user: { householdId: ctx.householdId },
+      });
 
       logSecurityEvent("auth.session.ended", {
         userId: ctx.session.user.id,
@@ -616,7 +673,10 @@ export const householdRouter = createTRPCRouter({
       const callerId = ctx.session.user.id;
 
       if (input.userId === callerId) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: RESET_OWN_PASSWORD_MESSAGE });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: RESET_OWN_PASSWORD_MESSAGE,
+        });
       }
 
       await enforceRateLimit(
@@ -625,7 +685,11 @@ export const householdRouter = createTRPCRouter({
         "Too many accounts created or passwords set. Try again in a little while.",
       );
 
-      const member = await memberOfHousehold(ctx.db, input.userId, ctx.householdId);
+      const member = await memberOfHousehold(
+        ctx.db,
+        input.userId,
+        ctx.householdId,
+      );
 
       assertMayActOnOwner(ctx.role, member.role);
 
@@ -644,14 +708,18 @@ export const householdRouter = createTRPCRouter({
 
       const count = await setPasswordAndEndSessions(
         ctx.db,
-        { userId: member.id, guard: { householdId: ctx.householdId, role: member.role } },
+        {
+          userId: member.id,
+          guard: { householdId: ctx.householdId, role: member.role },
+        },
         passwordHash,
       );
 
       if (count === 0) {
         throw new TRPCError({
           code: "CONFLICT",
-          message: "This member changed while the password was being set. Try again.",
+          message:
+            "This member changed while the password was being set. Try again.",
         });
       }
 
@@ -709,12 +777,23 @@ export const householdRouter = createTRPCRouter({
       const callerId = ctx.session.user.id;
 
       if (input.userId === callerId) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: REMOVE_OWN_TWO_FACTOR_MESSAGE });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: REMOVE_OWN_TWO_FACTOR_MESSAGE,
+        });
       }
 
-      await confirmCurrentPassword(ctx, input.currentPassword, "member-two-factor");
+      await confirmCurrentPassword(
+        ctx,
+        input.currentPassword,
+        "member-two-factor",
+      );
 
-      const member = await memberOfHousehold(ctx.db, input.userId, ctx.householdId);
+      const member = await memberOfHousehold(
+        ctx.db,
+        input.userId,
+        ctx.householdId,
+      );
 
       assertMayActOnOwner(ctx.role, member.role);
 
@@ -731,7 +810,8 @@ export const householdRouter = createTRPCRouter({
         if (count === 0) {
           throw new TRPCError({
             code: "CONFLICT",
-            message: "This member has no two-step verification to remove, or changed. Try again.",
+            message:
+              "This member has no two-step verification to remove, or changed. Try again.",
           });
         }
         await tx.twoFactor.deleteMany({ where: { userId: member.id } });

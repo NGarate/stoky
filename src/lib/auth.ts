@@ -5,7 +5,11 @@ import type { HouseholdRole } from "@prisma/client";
 import { assertUsableSecret } from "@/lib/auth/secret";
 import { getAuth } from "@/lib/auth/instance";
 import type { AppSession } from "@/lib/auth/session";
-import { capFor, deadlineKind, rememberedRefreshDue } from "@/lib/auth/session-policy";
+import {
+  capFor,
+  deadlineKind,
+  rememberedRefreshDue,
+} from "@/lib/auth/session-policy";
 
 /**
  * Checked here because this is the module every server path goes through, and

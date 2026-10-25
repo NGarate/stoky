@@ -31,7 +31,10 @@ async function showSnackbar(page: Page): Promise<void> {
   });
 
   await page.goto("/receipts/upload");
-  await page.getByRole("heading", { name: /ticket/i }).first().waitFor();
+  await page
+    .getByRole("heading", { name: /ticket/i })
+    .first()
+    .waitFor();
 
   await page.setInputFiles('input[type="file"]', {
     name: "ticket.png",
@@ -54,7 +57,9 @@ test.describe("the snackbar over the phone's navigation bar", () => {
 
     const verdict = await page.evaluate(() => {
       const bar = document.querySelector<HTMLElement>("[data-fixed-bottom]");
-      const toast = document.querySelector<HTMLElement>('[data-testid="snackbar"]');
+      const toast = document.querySelector<HTMLElement>(
+        '[data-testid="snackbar"]',
+      );
       if (!bar || !toast) return { error: "missing element" };
       const barRect = bar.getBoundingClientRect();
       const toastRect = toast.getBoundingClientRect();
@@ -76,14 +81,20 @@ test.describe("the snackbar over the phone's navigation bar", () => {
     expect(verdict.toastTop!).toBeGreaterThan(0);
   });
 
-  test("sits near the bottom on a tier with no bottom bar", async ({ page }) => {
+  test("sits near the bottom on a tier with no bottom bar", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await showSnackbar(page);
 
     const gap = await page.evaluate(() => {
-      const toast = document.querySelector<HTMLElement>('[data-testid="snackbar"]');
+      const toast = document.querySelector<HTMLElement>(
+        '[data-testid="snackbar"]',
+      );
       if (!toast) return -1;
-      return Math.round(window.innerHeight - toast.getBoundingClientRect().bottom);
+      return Math.round(
+        window.innerHeight - toast.getBoundingClientRect().bottom,
+      );
     });
 
     // Clear of the edge, but not floating in the middle of the page because

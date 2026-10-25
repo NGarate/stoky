@@ -24,9 +24,7 @@ function entry(quantity: number, expiresInDays?: number): LedgerEntry {
     id: `entry-${String(counter).padStart(3, "0")}`,
     quantity,
     expirationDate:
-      expiresInDays === undefined
-        ? null
-        : new Date(2026, 0, 1 + expiresInDays),
+      expiresInDays === undefined ? null : new Date(2026, 0, 1 + expiresInDays),
   };
 }
 
@@ -175,19 +173,32 @@ describe("daysUntilExpiry", () => {
   });
 
   it("reads an expiry carrying a time of day as the date it falls on", () => {
-    expect(daysUntilExpiry(new Date("2026-10-08T15:30:00Z"), madrid("2026-10-06T12:00:00Z"))).toBe(2);
+    expect(
+      daysUntilExpiry(
+        new Date("2026-10-08T15:30:00Z"),
+        madrid("2026-10-06T12:00:00Z"),
+      ),
+    ).toBe(2);
   });
 });
 
 describe("endOfDayAfter", () => {
   it("bounds a window so its last day is included whole", () => {
     const today = startOfToday(new Date("2026-10-06T08:00:00Z"));
-    expect(endOfDayAfter(today, 7).toISOString()).toBe("2026-10-14T00:00:00.000Z");
+    expect(endOfDayAfter(today, 7).toISOString()).toBe(
+      "2026-10-14T00:00:00.000Z",
+    );
   });
 });
 
 describe("allocateFefo", () => {
-  const at = (id: string, quantity: number, day: number | null, locationId = "shelf", extra: Partial<LedgerEntry> = {}): LedgerEntry => ({
+  const at = (
+    id: string,
+    quantity: number,
+    day: number | null,
+    locationId = "shelf",
+    extra: Partial<LedgerEntry> = {},
+  ): LedgerEntry => ({
     id,
     quantity,
     expirationDate: day === null ? null : new Date(2026, 0, day),
@@ -200,7 +211,11 @@ describe("allocateFefo", () => {
     const entries = [at("b1", 3, null), at("b2", 3, 20), at("b3", 2, 10)];
     const { parts, unassigned } = allocateFefo(entries, "shelf", 6);
 
-    expect(parts.map((part) => [part.batch.id, part.quantity])).toEqual([["b3", 2], ["b2", 3], ["b1", 1]]);
+    expect(parts.map((part) => [part.batch.id, part.quantity])).toEqual([
+      ["b3", 2],
+      ["b2", 3],
+      ["b1", 1],
+    ]);
     expect(unassigned).toBe(0);
   });
 
@@ -212,7 +227,9 @@ describe("allocateFefo", () => {
     ];
     const { parts } = allocateFefo(entries, "shelf", 1);
 
-    expect(parts.map((part) => [part.batch.id, part.quantity])).toEqual([["b1", 1]]);
+    expect(parts.map((part) => [part.batch.id, part.quantity])).toEqual([
+      ["b1", 1],
+    ]);
   });
 
   it("leaves what it cannot place in a known batch unassigned", () => {

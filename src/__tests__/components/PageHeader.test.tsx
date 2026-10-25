@@ -18,7 +18,9 @@ afterEach(cleanup);
 
 /** True when `a` comes before `b` in document order. */
 function precedes(a: Node, b: Node): boolean {
-  return Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+  return Boolean(
+    a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING,
+  );
 }
 
 describe("PageHeader", () => {

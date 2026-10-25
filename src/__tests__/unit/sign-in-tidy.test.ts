@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  mock,
+  spyOn,
+} from "bun:test";
 import type { SessionDb } from "@/lib/auth/end-sessions";
 import { MAX_SESSIONS_PER_ACCOUNT } from "@/lib/auth/session-policy";
 import {
@@ -43,17 +51,21 @@ function fakeDb(count = 1, beyond: string[] = []) {
     calls.push("findMany");
     return beyond.map((id) => ({ id }));
   });
-  const queryRaw = mock(async (strings: TemplateStringsArray, ..._values: unknown[]) => {
-    calls.push(`queryRaw ${strings.join("?")}`);
-    return [];
-  });
+  const queryRaw = mock(
+    async (strings: TemplateStringsArray, ..._values: unknown[]) => {
+      calls.push(`queryRaw ${strings.join("?")}`);
+      return [];
+    },
+  );
   const tx = { session: { deleteMany, findMany }, $queryRaw: queryRaw };
-  const transaction = mock(async (run: (client: typeof tx) => Promise<unknown>) => {
-    calls.push("begin");
-    const result = await run(tx);
-    calls.push("commit");
-    return result;
-  });
+  const transaction = mock(
+    async (run: (client: typeof tx) => Promise<unknown>) => {
+      calls.push("begin");
+      const result = await run(tx);
+      calls.push("commit");
+      return result;
+    },
+  );
   return {
     db: { $transaction: transaction } as unknown as TidyDb,
     tx: tx as unknown as SessionDb,
@@ -80,7 +92,11 @@ describe("signInTidyFilter", () => {
   it("names the presented session and the account's expired rows, never the new one", () => {
     expect(
       signInTidyFilter(
-        { previous: { id: "s-old", userId: "u-1" }, userId: "u-2", newToken: "t-new" },
+        {
+          previous: { id: "s-old", userId: "u-1" },
+          userId: "u-2",
+          newToken: "t-new",
+        },
         NOW,
       ),
     ).toEqual({
@@ -90,7 +106,10 @@ describe("signInTidyFilter", () => {
   });
 
   it("leaves the id clause out when nothing was presented", () => {
-    const filter = signInTidyFilter({ previous: null, userId: "u-1", newToken: "t-new" }, NOW);
+    const filter = signInTidyFilter(
+      { previous: null, userId: "u-1", newToken: "t-new" },
+      NOW,
+    );
 
     expect(filter.OR).toEqual([{ userId: "u-1", expiresAt: { lt: NOW } }]);
     // Not even as `{ id: undefined }`, an empty clause by another name.
@@ -99,8 +118,12 @@ describe("signInTidyFilter", () => {
   });
 
   it("refuses to build a filter without the account or the new token", () => {
-    expect(() => signInTidyFilter({ previous: null, userId: "", newToken: "t" }, NOW)).toThrow();
-    expect(() => signInTidyFilter({ previous: null, userId: "u", newToken: "" }, NOW)).toThrow();
+    expect(() =>
+      signInTidyFilter({ previous: null, userId: "", newToken: "t" }, NOW),
+    ).toThrow();
+    expect(() =>
+      signInTidyFilter({ previous: null, userId: "u", newToken: "" }, NOW),
+    ).toThrow();
   });
 });
 
@@ -110,7 +133,11 @@ describe("tidyAfterSignIn", () => {
 
     const result = await tidyAfterSignIn(
       db,
-      { previous: { id: "s-old", userId: "u-1" }, userId: "u-2", newToken: "t-new" },
+      {
+        previous: { id: "s-old", userId: "u-1" },
+        userId: "u-2",
+        newToken: "t-new",
+      },
       NOW,
     );
 
@@ -130,7 +157,11 @@ describe("tidyAfterSignIn", () => {
   it("records nothing when no session was presented", async () => {
     const { db } = fakeDb(3);
 
-    await tidyAfterSignIn(db, { previous: null, userId: "u-1", newToken: "t-new" }, NOW);
+    await tidyAfterSignIn(
+      db,
+      { previous: null, userId: "u-1", newToken: "t-new" },
+      NOW,
+    );
 
     expect(warn).not.toHaveBeenCalled();
   });
@@ -140,7 +171,9 @@ describe("capSessions", () => {
   it("asks for the account's other sessions past the nine the new one keeps, least recently used last", async () => {
     const { tx, findMany, deleteMany } = fakeDb(0, []);
 
-    expect(await capSessions(tx, { userId: "u-1", keepToken: "t-new" })).toBe(0);
+    expect(await capSessions(tx, { userId: "u-1", keepToken: "t-new" })).toBe(
+      0,
+    );
 
     expect(MAX_SESSIONS_PER_ACCOUNT).toBe(10);
     expect(findMany).toHaveBeenCalledWith({
@@ -156,16 +189,24 @@ describe("capSessions", () => {
   it("ends what it found, still scoped to the account", async () => {
     const { tx, deleteMany } = fakeDb(2, ["s-a", "s-b"]);
 
-    expect(await capSessions(tx, { userId: "u-1", keepToken: "t-new" })).toBe(2);
+    expect(await capSessions(tx, { userId: "u-1", keepToken: "t-new" })).toBe(
+      2,
+    );
 
-    expect(deleteMany).toHaveBeenCalledWith({ where: { userId: "u-1", id: { in: ["s-a", "s-b"] } } });
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: { userId: "u-1", id: { in: ["s-a", "s-b"] } },
+    });
   });
 
   it("refuses to count without the account or the token it keeps", async () => {
     const { tx, findMany } = fakeDb();
 
-    await expect(capSessions(tx, { userId: "", keepToken: "t" })).rejects.toThrow();
-    await expect(capSessions(tx, { userId: "u", keepToken: "" })).rejects.toThrow();
+    await expect(
+      capSessions(tx, { userId: "", keepToken: "t" }),
+    ).rejects.toThrow();
+    await expect(
+      capSessions(tx, { userId: "u", keepToken: "" }),
+    ).rejects.toThrow();
     expect(findMany).not.toHaveBeenCalled();
   });
 });
@@ -174,7 +215,11 @@ describe("tidyAfterSignIn and the cap", () => {
   it("locks the account, then tidies, then caps, in one transaction", async () => {
     const { db, calls, queryRaw } = fakeDb(1, []);
 
-    await tidyAfterSignIn(db, { previous: null, userId: "u-1", newToken: "t-new" }, NOW);
+    await tidyAfterSignIn(
+      db,
+      { previous: null, userId: "u-1", newToken: "t-new" },
+      NOW,
+    );
 
     expect(calls).toEqual([
       "begin",
@@ -193,14 +238,28 @@ describe("tidyAfterSignIn and the cap", () => {
 
     const result = await tidyAfterSignIn(
       db,
-      { previous: { id: "s-old", userId: "u-1" }, userId: "u-1", newToken: "t-new" },
+      {
+        previous: { id: "s-old", userId: "u-1" },
+        userId: "u-1",
+        newToken: "t-new",
+      },
       NOW,
     );
 
     expect(result).toEqual({ replaced: 1, evicted: 1 });
     expect(ended()).toEqual([
-      expect.objectContaining({ reason: "replaced", userId: "u-1", targetUserId: "u-1", count: "1" }),
-      expect.objectContaining({ reason: "evicted", userId: "u-1", targetUserId: "u-1", count: "1" }),
+      expect.objectContaining({
+        reason: "replaced",
+        userId: "u-1",
+        targetUserId: "u-1",
+        count: "1",
+      }),
+      expect.objectContaining({
+        reason: "evicted",
+        userId: "u-1",
+        targetUserId: "u-1",
+        count: "1",
+      }),
     ]);
     expect(JSON.stringify(warn.mock.calls)).not.toContain("t-new");
   });
@@ -212,7 +271,15 @@ describe("tidyAfterSignIn and the cap", () => {
     });
 
     await expect(
-      tidyAfterSignIn(db, { previous: { id: "s-old", userId: "u-1" }, userId: "u-1", newToken: "t-new" }, NOW),
+      tidyAfterSignIn(
+        db,
+        {
+          previous: { id: "s-old", userId: "u-1" },
+          userId: "u-1",
+          newToken: "t-new",
+        },
+        NOW,
+      ),
     ).rejects.toThrow("serialisation failure");
     expect(ended()).toEqual([]);
   });
@@ -220,7 +287,9 @@ describe("tidyAfterSignIn and the cap", () => {
   it("opens no transaction for a sign-in without an account or a token", async () => {
     const { db, transaction } = fakeDb();
 
-    await expect(tidyAfterSignIn(db, { previous: null, userId: "", newToken: "t" }, NOW)).rejects.toThrow();
+    await expect(
+      tidyAfterSignIn(db, { previous: null, userId: "", newToken: "t" }, NOW),
+    ).rejects.toThrow();
     expect(transaction).not.toHaveBeenCalled();
   });
 });

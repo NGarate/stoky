@@ -21,7 +21,9 @@ export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = "es";
 
 export function isSupportedLocale(value: unknown): value is Locale {
-  return typeof value === "string" && (LOCALES as readonly string[]).includes(value);
+  return (
+    typeof value === "string" && (LOCALES as readonly string[]).includes(value)
+  );
 }
 
 /**

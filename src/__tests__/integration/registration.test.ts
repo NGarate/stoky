@@ -1,4 +1,12 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "bun:test";
 import { PrismaClient } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { join } from "node:path";
@@ -33,12 +41,16 @@ const PASSWORD = "cocina despensa nevera";
 
 function isolatedDatabaseUrl(): { url: string; name: string } {
   const base = process.env.DATABASE_URL;
-  if (!base) throw new Error("DATABASE_URL is not set; run through `bun run test:integration`.");
+  if (!base)
+    throw new Error(
+      "DATABASE_URL is not set; run through `bun run test:integration`.",
+    );
   const url = new URL(base);
   const name = `${url.pathname.slice(1)}_registration`;
   // An identifier cannot be a bind parameter, so it is checked instead: this
   // name is interpolated into CREATE and DROP DATABASE below.
-  if (!/^[a-z0-9_]+$/.test(name)) throw new Error(`Refusing database name ${JSON.stringify(name)}`);
+  if (!/^[a-z0-9_]+$/.test(name))
+    throw new Error(`Refusing database name ${JSON.stringify(name)}`);
   url.pathname = `/${name}`;
   return { url: url.toString(), name };
 }
@@ -47,17 +59,24 @@ const isolated = isolatedDatabaseUrl();
 let db: PrismaClient;
 
 beforeAll(async () => {
-  await prisma.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${isolated.name}" WITH (FORCE)`);
+  await prisma.$executeRawUnsafe(
+    `DROP DATABASE IF EXISTS "${isolated.name}" WITH (FORCE)`,
+  );
   await prisma.$executeRawUnsafe(`CREATE DATABASE "${isolated.name}"`);
 
-  const migrate = Bun.spawnSync(["bunx", "--bun", "prisma", "migrate", "deploy"], {
-    cwd: ROOT,
-    env: { ...process.env, DATABASE_URL: isolated.url },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const migrate = Bun.spawnSync(
+    ["bunx", "--bun", "prisma", "migrate", "deploy"],
+    {
+      cwd: ROOT,
+      env: { ...process.env, DATABASE_URL: isolated.url },
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
   if (migrate.exitCode !== 0) {
-    throw new Error(`prisma migrate deploy failed:\n${migrate.stdout}\n${migrate.stderr}`);
+    throw new Error(
+      `prisma migrate deploy failed:\n${migrate.stdout}\n${migrate.stderr}`,
+    );
   }
 
   db = new PrismaClient({ datasources: { db: { url: isolated.url } } });
@@ -65,7 +84,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await db?.$disconnect();
-  await prisma.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${isolated.name}" WITH (FORCE)`);
+  await prisma.$executeRawUnsafe(
+    `DROP DATABASE IF EXISTS "${isolated.name}" WITH (FORCE)`,
+  );
 });
 
 const env = process.env as Record<string, string | undefined>;
@@ -131,7 +152,9 @@ describe("closed", () => {
     env[REGISTRATION_ENV] = "closed";
     const caller = await callerOn(db);
 
-    const refused = await refusal(caller.auth.register(account("first", `Casa ${RUN}`)));
+    const refused = await refusal(
+      caller.auth.register(account("first", `Casa ${RUN}`)),
+    );
 
     expect(refused.code).toBe("FORBIDDEN");
     expect(refused.message).toBe(REGISTRATION_CLOSED_MESSAGE);
@@ -161,11 +184,15 @@ describe("first-user", () => {
 
     const first = await caller.auth.register(account("owner", `Casa ${RUN}`));
     expect(first.success).toBe(true);
-    const owner = await db.user.findUnique({ where: { email: first.user.email } });
+    const owner = await db.user.findUnique({
+      where: { email: first.user.email },
+    });
     expect(owner?.role).toBe("OWNER");
     expect(owner?.householdId).not.toBeNull();
 
-    const refused = await refusal(caller.auth.register(account("second", `Otra ${RUN}`)));
+    const refused = await refusal(
+      caller.auth.register(account("second", `Otra ${RUN}`)),
+    );
     expect(refused.code).toBe("FORBIDDEN");
     expect(refused.message).toBe(REGISTRATION_CLOSED_MESSAGE);
     expect(await db.user.count()).toBe(1);
@@ -188,8 +215,12 @@ describe("first-user", () => {
     await (await callerOn(db)).auth.register(account("owner"));
     const caller = await callerOn(db, `${RUN}-first-user`);
 
-    expect((await refusal(caller.auth.register(account("a")))).code).toBe("FORBIDDEN");
-    expect((await refusal(caller.auth.register(account("b")))).code).toBe("TOO_MANY_REQUESTS");
+    expect((await refusal(caller.auth.register(account("a")))).code).toBe(
+      "FORBIDDEN",
+    );
+    expect((await refusal(caller.auth.register(account("b")))).code).toBe(
+      "TOO_MANY_REQUESTS",
+    );
   });
 
   it("lets only one of two simultaneous claims of a fresh instance through", async () => {
@@ -204,10 +235,16 @@ describe("first-user", () => {
       caller.auth.register(account("right", `Derecha ${RUN}`)),
     ]);
 
-    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
     const [rejected] = results.filter((result) => result.status === "rejected");
-    expect((rejected as PromiseRejectedResult).reason).toBeInstanceOf(TRPCError);
-    expect(((rejected as PromiseRejectedResult).reason as TRPCError).code).toBe("FORBIDDEN");
+    expect((rejected as PromiseRejectedResult).reason).toBeInstanceOf(
+      TRPCError,
+    );
+    expect(((rejected as PromiseRejectedResult).reason as TRPCError).code).toBe(
+      "FORBIDDEN",
+    );
     expect(await db.user.count()).toBe(1);
     // The loser's household was never written, rather than written and left.
     expect(await db.household.count()).toBe(1);
@@ -228,7 +265,9 @@ describe("first-user", () => {
       async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(${REGISTRATION_LOCK_KEY})`;
 
-        const attempt = caller.auth.register(account("waiting", `Espera ${RUN}`));
+        const attempt = caller.auth.register(
+          account("waiting", `Espera ${RUN}`),
+        );
         const outcome = attempt.then(
           () => "registered",
           (error: unknown) => error,
@@ -246,7 +285,8 @@ describe("first-user", () => {
             WHERE locktype = 'advisory' AND NOT granted
               AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`;
           if (waiting > 0 || settled) break;
-          if (Date.now() > deadline) throw new Error("the registration neither waited nor finished");
+          if (Date.now() > deadline)
+            throw new Error("the registration neither waited nor finished");
           await Bun.sleep(20);
         }
 
@@ -271,7 +311,9 @@ describe("open", () => {
     const caller = await callerOn(db);
 
     for (const suffix of ["uno", "dos", "tres"]) {
-      const result = await caller.auth.register(account(suffix, `Casa ${suffix} ${RUN}`));
+      const result = await caller.auth.register(
+        account(suffix, `Casa ${suffix} ${RUN}`),
+      );
       expect(result.success).toBe(true);
     }
 
@@ -281,7 +323,9 @@ describe("open", () => {
     const users = await db.user.findMany({ select: { id: true } });
     for (const { id } of users) {
       expect(
-        await db.account.count({ where: { userId: id, accountId: id, providerId: "credential" } }),
+        await db.account.count({
+          where: { userId: id, accountId: id, providerId: "credential" },
+        }),
       ).toBe(1);
     }
   });
@@ -298,14 +342,18 @@ describe("open", () => {
       caller.auth.register(account("same", `Segunda ${RUN}`)),
     ]);
 
-    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
     const [rejected] = results.filter((result) => result.status === "rejected");
-    expect(((rejected as PromiseRejectedResult).reason as TRPCError).code).toBe("CONFLICT");
+    expect(((rejected as PromiseRejectedResult).reason as TRPCError).code).toBe(
+      "CONFLICT",
+    );
     expect(await db.user.count()).toBe(1);
     expect(await db.household.count()).toBe(1);
-    expect(
-      await db.household.count({ where: { members: { none: {} } } }),
-    ).toBe(0);
+    expect(await db.household.count({ where: { members: { none: {} } } })).toBe(
+      0,
+    );
   });
 
   it("a failure after the user insert leaves no orphan user or account", async () => {
@@ -317,7 +365,9 @@ describe("open", () => {
     const caller = await callerOn(db);
 
     await refuseCredentialRows(async () => {
-      await expect(caller.auth.register(account("orphan", `Huérfana ${RUN}`))).rejects.toThrow();
+      await expect(
+        caller.auth.register(account("orphan", `Huérfana ${RUN}`)),
+      ).rejects.toThrow();
     });
 
     expect(await db.user.count()).toBe(0);
@@ -360,7 +410,9 @@ async function refuseCredentialRows(body: () => Promise<void>): Promise<void> {
   try {
     await body();
   } finally {
-    await db.$executeRawUnsafe(`DROP TRIGGER refuse_account_insert ON "Account"`);
+    await db.$executeRawUnsafe(
+      `DROP TRIGGER refuse_account_insert ON "Account"`,
+    );
     await db.$executeRawUnsafe(`DROP FUNCTION refuse_account_insert()`);
   }
 }

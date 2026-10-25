@@ -23,19 +23,45 @@ let leaving = "";
 let staying = "";
 
 beforeAll(async () => {
-  leaving = (await prisma.user.create({ data: { email: `${RUN}.leaving@example.com`, name: "Se va" } })).id;
-  staying = (await prisma.user.create({ data: { email: `${RUN}.staying@example.com`, name: "Se queda" } })).id;
+  leaving = (
+    await prisma.user.create({
+      data: { email: `${RUN}.leaving@example.com`, name: "Se va" },
+    })
+  ).id;
+  staying = (
+    await prisma.user.create({
+      data: { email: `${RUN}.staying@example.com`, name: "Se queda" },
+    })
+  ).id;
   await prisma.session.createMany({
     data: [
       { token: `${RUN}-leaving-phone`, userId: leaving, expiresAt: inAnHour() },
-      { token: `${RUN}-leaving-laptop`, userId: leaving, expiresAt: inAnHour() },
+      {
+        token: `${RUN}-leaving-laptop`,
+        userId: leaving,
+        expiresAt: inAnHour(),
+      },
       { token: `${RUN}-staying-phone`, userId: staying, expiresAt: inAnHour() },
     ],
   });
   await prisma.passkey.createMany({
     data: [
-      { userId: leaving, credentialID: `${RUN}-leaving-key`, publicKey: "pk", counter: 0, deviceType: "singleDevice", backedUp: false },
-      { userId: staying, credentialID: `${RUN}-staying-key`, publicKey: "pk", counter: 0, deviceType: "singleDevice", backedUp: false },
+      {
+        userId: leaving,
+        credentialID: `${RUN}-leaving-key`,
+        publicKey: "pk",
+        counter: 0,
+        deviceType: "singleDevice",
+        backedUp: false,
+      },
+      {
+        userId: staying,
+        credentialID: `${RUN}-staying-key`,
+        publicKey: "pk",
+        counter: 0,
+        deviceType: "singleDevice",
+        backedUp: false,
+      },
     ],
   });
   await prisma.twoFactor.createMany({
@@ -49,7 +75,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await prisma.session.deleteMany({ where: { token: { startsWith: RUN } } });
   await prisma.twoFactor.deleteMany({ where: { secret: { startsWith: RUN } } });
-  await prisma.passkey.deleteMany({ where: { credentialID: { startsWith: RUN } } });
+  await prisma.passkey.deleteMany({
+    where: { credentialID: { startsWith: RUN } },
+  });
   await prisma.user.deleteMany({ where: { email: { startsWith: RUN } } });
   await prisma.$disconnect();
 });
@@ -68,8 +96,12 @@ describe("an account's authenticator", () => {
     // The account was deleted by the test above; the order is the file's.
     expect(await prisma.user.count({ where: { id: leaving } })).toBe(0);
 
-    expect(await prisma.twoFactor.count({ where: { userId: leaving } })).toBe(0);
-    expect(await prisma.twoFactor.count({ where: { userId: staying } })).toBe(1);
+    expect(await prisma.twoFactor.count({ where: { userId: leaving } })).toBe(
+      0,
+    );
+    expect(await prisma.twoFactor.count({ where: { userId: staying } })).toBe(
+      1,
+    );
   });
 });
 

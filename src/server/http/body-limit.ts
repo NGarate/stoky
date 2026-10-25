@@ -61,7 +61,10 @@ export type BodyWithin =
  * the rest, and closing is how the server avoids reading it to keep the
  * connection reusable.
  */
-export async function readBodyWithin(req: Request, maxBytes: number): Promise<BodyWithin> {
+export async function readBodyWithin(
+  req: Request,
+  maxBytes: number,
+): Promise<BodyWithin> {
   const declared = Number(req.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > maxBytes) {
     return { ok: false, response: payloadTooLarge(maxBytes) };
@@ -107,7 +110,12 @@ export async function readBodyWithin(req: Request, maxBytes: number): Promise<Bo
 export function initWithBody(
   req: Request,
   body: Uint8Array<ArrayBuffer> | null,
-): { method: string; headers: Headers; body: Uint8Array<ArrayBuffer> | null; signal: AbortSignal } {
+): {
+  method: string;
+  headers: Headers;
+  body: Uint8Array<ArrayBuffer> | null;
+  signal: AbortSignal;
+} {
   const headers = new Headers(req.headers);
   headers.delete("transfer-encoding");
   if (body === null) headers.delete("content-length");

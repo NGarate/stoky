@@ -69,10 +69,7 @@ const COMMON_PASSWORDS = new Set([
 ]);
 
 export type PasswordProblem =
-  | "tooShort"
-  | "tooLong"
-  | "common"
-  | "containsIdentity";
+  "tooShort" | "tooLong" | "common" | "containsIdentity";
 
 /**
  * Everything wrong with a password, rather than the first thing.
@@ -96,10 +93,7 @@ export function passwordProblems(
 
   // The local part of the address and the name, both ways round: "noel" is no
   // better a secret for noel@example.com than the address itself.
-  const identityParts = [
-    identity.email?.split("@")[0],
-    identity.name,
-  ]
+  const identityParts = [identity.email?.split("@")[0], identity.name]
     .filter((part): part is string => Boolean(part && part.trim().length >= 3))
     .map((part) => part.trim().toLowerCase());
 
@@ -156,7 +150,9 @@ export const PASSWORD_CONTAINS_IDENTITY_MESSAGE =
   "That password contains the person's own name or email address";
 
 /** Whether a refusal's message is the identity rule's. */
-export function isPasswordIdentityRefusal(message: string | undefined): boolean {
+export function isPasswordIdentityRefusal(
+  message: string | undefined,
+): boolean {
   return Boolean(message?.includes(PASSWORD_CONTAINS_IDENTITY_MESSAGE));
 }
 
@@ -168,10 +164,13 @@ export function isPasswordIdentityRefusal(message: string | undefined): boolean 
  * who mistyped their current password is still signed in. One constant on
  * both sides, for the same reason as the identity message above.
  */
-export const WRONG_CURRENT_PASSWORD_MESSAGE = "The current password is not correct";
+export const WRONG_CURRENT_PASSWORD_MESSAGE =
+  "The current password is not correct";
 
 /** Whether a refusal's message is the wrong-current-password one. */
-export function isWrongCurrentPasswordRefusal(message: string | undefined): boolean {
+export function isWrongCurrentPasswordRefusal(
+  message: string | undefined,
+): boolean {
   return Boolean(message?.includes(WRONG_CURRENT_PASSWORD_MESSAGE));
 }
 

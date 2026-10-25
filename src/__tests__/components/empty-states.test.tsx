@@ -80,12 +80,12 @@ mock.module("@/lib/trpc/client", () => ({
 }));
 
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
-const { default: ProductsPage } = await import("@/app/(dashboard)/products/page");
+const { default: ProductsPage } =
+  await import("@/app/(dashboard)/products/page");
 const { InventoryView } = await import("@/app/(dashboard)/inventory/page");
 const { default: PricesPage } = await import("@/app/(dashboard)/prices/page");
-const { default: ShoppingListsPage } = await import(
-  "@/app/(dashboard)/shopping/lists/page"
-);
+const { default: ShoppingListsPage } =
+  await import("@/app/(dashboard)/shopping/lists/page");
 
 function mount(ui: React.ReactElement): void {
   renderWithIntl(<SnackbarProvider>{ui}</SnackbarProvider>);
@@ -117,7 +117,9 @@ describe("a household with no products yet", () => {
     mount(<ProductsPage />);
 
     const box = emptyState();
-    expect(within(box).getByText("Todavía no hay productos")).toBeInTheDocument();
+    expect(
+      within(box).getByText("Todavía no hay productos"),
+    ).toBeInTheDocument();
     expect(
       within(box).getByText("Crea el primero o escanea su código de barras."),
     ).toBeInTheDocument();
@@ -130,7 +132,9 @@ describe("a household with no products yet", () => {
     mount(<InventoryView />);
 
     const box = emptyState();
-    expect(within(box).getByText("Todavía no hay productos")).toBeInTheDocument();
+    expect(
+      within(box).getByText("Todavía no hay productos"),
+    ).toBeInTheDocument();
     expect(hrefs(box)).toEqual(["/products/new", "/products/scan"]);
   });
 
@@ -140,7 +144,9 @@ describe("a household with no products yet", () => {
 
     mount(<InventoryView />);
 
-    expect(screen.getByText(/Ningún producto coincide con «caviar»/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Ningún producto coincide con «caviar»/),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Todavía no hay productos")).toBeAbsent();
   });
 });
@@ -181,7 +187,11 @@ describe("/shopping/lists with no lists", () => {
     mount(<ShoppingListsPage />);
 
     const box = emptyState();
-    expect(within(box).getByText("Todavía no tienes listas")).toBeInTheDocument();
-    expect(within(box).getByRole("button", { name: "Crear lista" })).toBeInTheDocument();
+    expect(
+      within(box).getByText("Todavía no tienes listas"),
+    ).toBeInTheDocument();
+    expect(
+      within(box).getByRole("button", { name: "Crear lista" }),
+    ).toBeInTheDocument();
   });
 });

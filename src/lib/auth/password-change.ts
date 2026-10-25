@@ -63,7 +63,8 @@ export interface PasswordChangeOutcome {
   rotated: boolean;
 }
 
-const callBetterAuth: ChangePasswordCall = (request) => getAuth().api.changePassword(request);
+const callBetterAuth: ChangePasswordCall = (request) =>
+  getAuth().api.changePassword(request);
 
 export async function changeOwnPassword(
   headers: Headers,
@@ -91,12 +92,18 @@ function refusalFor(error: unknown): unknown {
   if (!isAPIError(error)) return error;
   const code = (error.body as { code?: unknown } | undefined)?.code;
   if (code === "INVALID_PASSWORD") {
-    return new TRPCError({ code: "BAD_REQUEST", message: WRONG_CURRENT_PASSWORD_MESSAGE });
+    return new TRPCError({
+      code: "BAD_REQUEST",
+      message: WRONG_CURRENT_PASSWORD_MESSAGE,
+    });
   }
   if (error.status === "UNAUTHORIZED") {
     // The session ended between the router's read and Better Auth's: the
     // same answer every procedure gives a session that has ended.
-    return new TRPCError({ code: "UNAUTHORIZED", message: "This session has ended" });
+    return new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "This session has ended",
+    });
   }
   return error;
 }

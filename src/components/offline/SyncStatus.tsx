@@ -112,10 +112,7 @@ export function SyncStatus(): JSX.Element {
                     <span className="flex-1">
                       {tLabel(op.label.key, units.labelValues(op.label.values))}
                     </span>
-                    <Button
-                      onClick={() => setReconciling(op)}
-                      type="button"
-                    >
+                    <Button onClick={() => setReconciling(op)} type="button">
                       {t("review")}
                     </Button>
                   </li>
@@ -167,10 +164,7 @@ export function SyncStatus(): JSX.Element {
                     <span className="flex-1">
                       {tLabel(op.label.key, units.labelValues(op.label.values))}
                     </span>
-                    <Button
-                      onClick={() => retry(op.id)}
-                      type="button"
-                    >
+                    <Button onClick={() => retry(op.id)} type="button">
                       {t("retry")}
                     </Button>
                     <Button
@@ -192,7 +186,7 @@ export function SyncStatus(): JSX.Element {
                 each one was made — which a banner cannot say. */}
             {state.failed.length > 0 ? (
               <Button asChild className="mt-3 mr-2" variant="outline">
-                <Link href="/settings/unsaved" > {t("seeUnsaved")} </Link>
+                <Link href="/settings/unsaved"> {t("seeUnsaved")} </Link>
               </Button>
             ) : null}
 
@@ -209,10 +203,7 @@ export function SyncStatus(): JSX.Element {
             ) : (
               /* The only honest answer to a captive portal, which reports
                  itself as online and swallows every request. */
-              <Button
-                onClick={drain}
-                type="button"
-              >
+              <Button onClick={drain} type="button">
                 {t("sendNow")}
               </Button>
             )}

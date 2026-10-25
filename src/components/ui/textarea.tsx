@@ -13,8 +13,7 @@ import { cn } from "@/lib/utils";
  * The 48px floor is a floor rather than a height — `rows` decides the resting
  * size, and a textarea that grows must not be clipped to a control's height.
  */
-export interface TextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
+export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, ...props }, ref) => {

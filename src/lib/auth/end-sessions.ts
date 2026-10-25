@@ -45,15 +45,22 @@ export async function endSessions(
       typeof value === "object" &&
       Object.values(value).some((inner) => inner === undefined));
   if (entries.length === 0 || entries.some(([, value]) => missing(value))) {
-    throw new Error("endSessions refuses a filter that would match every session");
+    throw new Error(
+      "endSessions refuses a filter that would match every session",
+    );
   }
-  const ending = await db.session.findMany({ where, select: { id: true, userId: true } });
+  const ending = await db.session.findMany({
+    where,
+    select: { id: true, userId: true },
+  });
   const accounts = challenges ? await accountsNamed(db, where, ending) : [];
   const { count } = await db.session.deleteMany({ where });
   await endTwoFactorChallenges(db, accounts);
   if (ending.length > 0) {
     await db.verification.deleteMany({
-      where: { identifier: { in: ending.map(({ id }) => `${STEP_UP_PREFIX}${id}`) } },
+      where: {
+        identifier: { in: ending.map(({ id }) => `${STEP_UP_PREFIX}${id}`) },
+      },
     });
   }
   return count;
@@ -91,11 +98,19 @@ async function accountsNamed(
   const user: Prisma.UserWhereInput = {};
   if (typeof where.userId === "string") user.id = where.userId;
   const related = where.user;
-  if (related && typeof related === "object" && !("is" in related) && !("isNot" in related)) {
+  if (
+    related &&
+    typeof related === "object" &&
+    !("is" in related) &&
+    !("isNot" in related)
+  ) {
     Object.assign(user, related);
   }
   if (Object.keys(user).length > 0) {
-    for (const { id } of await db.user.findMany({ where: user, select: { id: true } })) {
+    for (const { id } of await db.user.findMany({
+      where: user,
+      select: { id: true },
+    })) {
       found.add(id);
     }
   }
@@ -117,10 +132,16 @@ export const TWO_FACTOR_CHALLENGE_PREFIX = "2fa-";
  * a removal, "end every session". Its attempt counter (`2fa-attempts-<id>`,
  * whose value is a number, not an account) goes with it.
  */
-export async function endTwoFactorChallenges(db: SessionDb, userIds: string[]): Promise<number> {
+export async function endTwoFactorChallenges(
+  db: SessionDb,
+  userIds: string[],
+): Promise<number> {
   if (userIds.length === 0) return 0;
   const challenges = await db.verification.findMany({
-    where: { identifier: { startsWith: TWO_FACTOR_CHALLENGE_PREFIX }, value: { in: userIds } },
+    where: {
+      identifier: { startsWith: TWO_FACTOR_CHALLENGE_PREFIX },
+      value: { in: userIds },
+    },
     select: { identifier: true },
   });
   if (challenges.length === 0) return 0;
@@ -128,7 +149,12 @@ export async function endTwoFactorChallenges(db: SessionDb, userIds: string[]): 
   await db.verification.deleteMany({
     where: {
       identifier: {
-        in: [...identifiers, ...identifiers.map((id) => `${TWO_FACTOR_CHALLENGE_PREFIX}attempts-${id}`)],
+        in: [
+          ...identifiers,
+          ...identifiers.map(
+            (id) => `${TWO_FACTOR_CHALLENGE_PREFIX}attempts-${id}`,
+          ),
+        ],
       },
     },
   });

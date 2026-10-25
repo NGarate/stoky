@@ -102,8 +102,12 @@ describe("preferredLocale", () => {
   it("refuses to let either steer a module path", () => {
     // Both are resolved, not only the cookie. A check that guards the input
     // you thought of is the one that gets bypassed.
-    expect(preferredLocale("../package", "../../etc/passwd")).toBe(DEFAULT_LOCALE);
-    expect(preferredLocale("es/../../../etc/passwd", null)).toBe(DEFAULT_LOCALE);
+    expect(preferredLocale("../package", "../../etc/passwd")).toBe(
+      DEFAULT_LOCALE,
+    );
+    expect(preferredLocale("es/../../../etc/passwd", null)).toBe(
+      DEFAULT_LOCALE,
+    );
   });
 
   it("falls back to Spanish when neither has an answer", () => {

@@ -127,7 +127,9 @@ describe("the back arrow belongs to BackLink", () => {
 
     expect(TYPED_BACK_ARROW.test(breadcrumb)).toBe(false);
     expect(
-      files.some((file) => file.path === "components/inventory/LocationPicker.tsx"),
+      files.some(
+        (file) => file.path === "components/inventory/LocationPicker.tsx",
+      ),
     ).toBe(true);
   });
 });
@@ -193,7 +195,8 @@ describe("the way back belongs to BackLink", () => {
   });
 
   test("passes the component that is allowed to carry it", () => {
-    const correct = '<BackLink href="/products">{t("backToProduct")}</BackLink>';
+    const correct =
+      '<BackLink href="/products">{t("backToProduct")}</BackLink>';
     const found = [...correct.matchAll(LINK_ELEMENT)].filter(
       ([, tag, attributes, body]) =>
         tag !== "BackLink" && BACK_KEY.test(`${attributes} ${body}`),

@@ -41,9 +41,7 @@ test.describe("Creating a product from the shopping list", () => {
 
     await page.getByRole("button", { name: es.shopping.create }).click();
     await page.getByLabel(es.shopping.listName).fill(listName);
-    await page
-      .getByRole("button", { name: es.shopping.create })
-      .click();
+    await page.getByRole("button", { name: es.shopping.create }).click();
 
     const link = page.getByRole("link", { name: new RegExp(listName) });
     await expect(link).toBeVisible({ timeout: 15_000 });
@@ -60,12 +58,12 @@ test.describe("Creating a product from the shopping list", () => {
     await expect(nameBox).toBeVisible({ timeout: 15_000 });
     await nameBox.fill(productName);
 
-    await page
-      .getByRole("button", { name: es.receipts.createProduct })
-      .click();
+    await page.getByRole("button", { name: es.receipts.createProduct }).click();
 
     // The item, on the list. Not a validation error, and not an empty form.
-    await expect(page.getByText(productName, { exact: false }).first()).toBeVisible({
+    await expect(
+      page.getByText(productName, { exact: false }).first(),
+    ).toBeVisible({
       timeout: 20_000,
     });
     await expect(page.getByText(es.shopping.productRequired)).toHaveCount(0);

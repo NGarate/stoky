@@ -13,9 +13,13 @@ import type { TestingLibraryMatchers } from "@testing-library/jest-dom/matchers"
 type DomMatchers<E, R> = Omit<TestingLibraryMatchers<E, R>, "toBeEmpty">;
 
 declare module "bun:test" {
-  interface Matchers<T = unknown>
-    extends DomMatchers<typeof expect.stringContaining, T> {}
+  interface Matchers<T = unknown> extends DomMatchers<
+    typeof expect.stringContaining,
+    T
+  > {}
 
-  interface AsymmetricMatchers
-    extends DomMatchers<typeof expect.stringContaining, unknown> {}
+  interface AsymmetricMatchers extends DomMatchers<
+    typeof expect.stringContaining,
+    unknown
+  > {}
 }

@@ -38,7 +38,7 @@ describe("what counts as a device id", () => {
       // Upper case: not what `randomUUID` emits, so it did not come from here.
       "6BA7B810-9DAD-4D11-80B4-00C04FD430C8",
       // The shapes an injection would arrive as.
-      "'; drop table \"User\"; --",
+      '\'; drop table "User"; --',
       "../../etc/passwd",
       "<script>alert(1)</script>",
       // Right pattern with something appended, which a non-anchored regex

@@ -39,7 +39,10 @@ test.describe("a production build's authentication", () => {
         origin: "https://evil.example",
         cookie: "stoky_device=00000000-0000-4000-8000-000000000000",
       },
-      data: JSON.stringify({ email: DEMO_EMAIL, password: "no es la contraseña" }),
+      data: JSON.stringify({
+        email: DEMO_EMAIL,
+        password: "no es la contraseña",
+      }),
     });
 
     expect(response.status()).toBe(403);
@@ -88,7 +91,9 @@ test("somebody can actually sign in", async ({ page }) => {
   await expect(page).toHaveURL(/\/start/, { timeout: 30_000 });
   // Answering it is a server action, and it lands on the authenticated shell
   // this test has always ended on.
-  await page.getByRole("button", { name: new RegExp(es.start.dashboard) }).click();
+  await page
+    .getByRole("button", { name: new RegExp(es.start.dashboard) })
+    .click();
   await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
   await expect(page.locator("main:visible")).toBeVisible();
   // Instant validation reports asynchronously over the dev HMR websocket,
@@ -108,7 +113,9 @@ test("somebody can actually sign in", async ({ page }) => {
   // Also exercised against next dev when investigating navigation validation:
   // a successful HTTP response and URL change can still carry an Instant
   // error from the authenticated layout's server-side request reads.
-  expect(browserErrors.filter((text) =>
-    /uncached data during prerendering|blocking-prerender-dynamic/.test(text),
-  )).toEqual([]);
+  expect(
+    browserErrors.filter((text) =>
+      /uncached data during prerendering|blocking-prerender-dynamic/.test(text),
+    ),
+  ).toEqual([]);
 });

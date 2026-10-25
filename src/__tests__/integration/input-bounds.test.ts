@@ -46,9 +46,16 @@ beforeAll(async () => {
     role: "OWNER",
   });
   userId = user.id;
-  productId = (await createTestProduct({ name: `${MARKER} leche`, householdId: household.id })).id;
+  productId = (
+    await createTestProduct({
+      name: `${MARKER} leche`,
+      householdId: household.id,
+    })
+  ).id;
   api = appRouter.createCaller(
-    await createTRPCContext({ session: createMockSession({ ...user, household }) }),
+    await createTRPCContext({
+      session: createMockSession({ ...user, household }),
+    }),
   );
 });
 
@@ -59,24 +66,38 @@ afterAll(async () => {
 });
 
 /** The input paths a call was refused over, or the reason it was not refused. */
-async function refusedFields(call: () => Promise<unknown>): Promise<string[] | string> {
+async function refusedFields(
+  call: () => Promise<unknown>,
+): Promise<string[] | string> {
   try {
     await call();
     return "accepted";
   } catch (error) {
-    if (!(error instanceof TRPCError)) return `not a TRPCError: ${String(error)}`;
+    if (!(error instanceof TRPCError))
+      return `not a TRPCError: ${String(error)}`;
     if (error.code !== "BAD_REQUEST") return error.code;
-    if (!(error.cause instanceof ZodError)) return "BAD_REQUEST from the resolver";
+    if (!(error.cause instanceof ZodError))
+      return "BAD_REQUEST from the resolver";
     // De-duplicated: Infinity breaks `.finite()` and `.max()` at once.
-    return [...new Set(error.cause.issues.map((issue) => issue.path.join(".")))];
+    return [
+      ...new Set(error.cause.issues.map((issue) => issue.path.join("."))),
+    ];
   }
 }
 
 describe("inputs declared beside their procedure", () => {
   it("refuses a page size that would reach LIMIT as -1", async () => {
-    expect(await refusedFields(() => api.product.searchByName({ query: "leche", limit: -1 }))).toEqual(["limit"]);
-    expect(await refusedFields(() => api.receipt.list({ limit: -1 }))).toEqual(["limit"]);
-    expect(await refusedFields(() => api.price.getProductPrices({ limit: 1e9 }))).toEqual(["limit"]);
+    expect(
+      await refusedFields(() =>
+        api.product.searchByName({ query: "leche", limit: -1 }),
+      ),
+    ).toEqual(["limit"]);
+    expect(await refusedFields(() => api.receipt.list({ limit: -1 }))).toEqual([
+      "limit",
+    ]);
+    expect(
+      await refusedFields(() => api.price.getProductPrices({ limit: 1e9 })),
+    ).toEqual(["limit"]);
   });
 
   it("refuses a fractional page size before it reaches take", async () => {
@@ -84,12 +105,16 @@ describe("inputs declared beside their procedure", () => {
     // it: 2.5 answered with two rows and a cursor rather than an error. The
     // product is real so that, unbounded, the call is accepted, not NOT_FOUND.
     expect(
-      await refusedFields(() => api.inventory.getStockHistory({ productId, limit: 2.5 })),
+      await refusedFields(() =>
+        api.inventory.getStockHistory({ productId, limit: 2.5 }),
+      ),
     ).toEqual(["limit"]);
   });
 
   it("refuses a day window that cannot become a date", async () => {
-    expect(await refusedFields(() => api.inventory.getExpiringItems({ days: 1e12 }))).toEqual(["days"]);
+    expect(
+      await refusedFields(() => api.inventory.getExpiringItems({ days: 1e12 })),
+    ).toEqual(["days"]);
   });
 
   it("refuses an infinite price or quantity", async () => {
@@ -123,7 +148,11 @@ describe("inputs declared beside their procedure", () => {
       action: "SKIP" as const,
     }));
 
-    expect(await refusedFields(() => api.receipt.confirmAll({ receiptId: "r", items }))).toEqual(["items"]);
+    expect(
+      await refusedFields(() =>
+        api.receipt.confirmAll({ receiptId: "r", items }),
+      ),
+    ).toEqual(["items"]);
   });
 
   it("refuses stored text past its bound before anything is written", async () => {
@@ -131,7 +160,9 @@ describe("inputs declared beside their procedure", () => {
     // as the request body could carry. `procedure-input-bounds.test.ts` proves
     // every field has a maximum; this proves the router enforces it.
     expect(
-      await refusedFields(() => api.store.create({ name: "M".repeat(MAX_NAME_LENGTH + 1) })),
+      await refusedFields(() =>
+        api.store.create({ name: "M".repeat(MAX_NAME_LENGTH + 1) }),
+      ),
     ).toEqual(["name"]);
     expect(
       await refusedFields(() =>
@@ -146,13 +177,15 @@ describe("inputs declared beside their procedure", () => {
       ),
     ).toEqual(["note"]);
     expect(
-      await refusedFields(() => api.price.recordPrice({
-        productId: "p",
-        storeId: "s",
-        price: 1,
-        unit: "unidad",
-        currency: "EURO",
-      })),
+      await refusedFields(() =>
+        api.price.recordPrice({
+          productId: "p",
+          storeId: "s",
+          price: 1,
+          unit: "unidad",
+          currency: "EURO",
+        }),
+      ),
     ).toEqual(["currency"]);
   });
 
@@ -160,8 +193,16 @@ describe("inputs declared beside their procedure", () => {
     // So the bounds above are bounds and not a broken procedure.
     expect(await api.receipt.list({ limit: 20 })).toBeDefined();
     // The history screen asks for a hundred, the most a page may hold.
-    expect((await api.inventory.getStockHistory({ productId, limit: 100 })).entries).toEqual([]);
-    expect(Array.isArray(await api.inventory.getExpiringItems({ days: 30 }))).toBe(true);
-    expect(Array.isArray(await api.product.searchByName({ query: "leche", limit: 10 }))).toBe(true);
+    expect(
+      (await api.inventory.getStockHistory({ productId, limit: 100 })).entries,
+    ).toEqual([]);
+    expect(
+      Array.isArray(await api.inventory.getExpiringItems({ days: 30 })),
+    ).toBe(true);
+    expect(
+      Array.isArray(
+        await api.product.searchByName({ query: "leche", limit: 10 }),
+      ),
+    ).toBe(true);
   });
 });

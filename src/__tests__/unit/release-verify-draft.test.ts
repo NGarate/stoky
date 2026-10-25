@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -19,7 +28,13 @@ const REPO = "Owner-X/Stoky";
 const IMAGE = "ghcr.io/owner-x/stoky";
 const DIGEST = `sha256:${"a".repeat(64)}`;
 const OTHER_DIGEST = `sha256:${"b".repeat(64)}`;
-const ASSETS = ["docker-compose.yml", "example.env", "traefik.yml", "install.sh", "SHA256SUMS"];
+const ASSETS = [
+  "docker-compose.yml",
+  "example.env",
+  "traefik.yml",
+  "install.sh",
+  "SHA256SUMS",
+];
 const CHECKS = [
   "release assets",
   "checksums",
@@ -35,7 +50,8 @@ const CHECKS = [
 const fixtures: string[] = [];
 
 afterEach(() => {
-  for (const fixture of fixtures.splice(0)) rmSync(fixture, { recursive: true, force: true });
+  for (const fixture of fixtures.splice(0))
+    rmSync(fixture, { recursive: true, force: true });
 });
 
 type Options = {
@@ -62,21 +78,37 @@ type Options = {
   extraImage?: string;
 };
 
-const sha256 = (text: string) => new Bun.CryptoHasher("sha256").update(text).digest("hex");
+const sha256 = (text: string) =>
+  new Bun.CryptoHasher("sha256").update(text).digest("hex");
 
 function setup(options: Options = {}) {
   const fixture = mkdtempSync(join(tmpdir(), "stoky-release-verify-"));
   fixtures.push(fixture);
-  for (const directory of ["scripts", "deploy", "bin", "release"]) mkdirSync(join(fixture, directory), { recursive: true });
-  copyFileSync(join(root, "scripts/release-verify-draft.sh"), join(fixture, "scripts/release-verify-draft.sh"));
+  for (const directory of ["scripts", "deploy", "bin", "release"])
+    mkdirSync(join(fixture, directory), { recursive: true });
+  copyFileSync(
+    join(root, "scripts/release-verify-draft.sh"),
+    join(fixture, "scripts/release-verify-draft.sh"),
+  );
   // The repository's Compose file, as a repository with this test's name has it.
-  const source = readFileSync(join(root, "deploy/docker-compose.yml"), "utf8").replaceAll("ghcr.io/ngarate/stoky", IMAGE);
+  const source = readFileSync(
+    join(root, "deploy/docker-compose.yml"),
+    "utf8",
+  ).replaceAll("ghcr.io/ngarate/stoky", IMAGE);
   expect(source).toContain(`"${IMAGE}:\${STOKY_VERSION`);
   writeFileSync(join(fixture, "deploy/docker-compose.yml"), source);
 
   // The tagged source: an older stable tag, the previous candidate, this one.
-  const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_AUTHOR_NAME: "Test", GIT_AUTHOR_EMAIL: "test@example.invalid", GIT_COMMITTER_NAME: "Test", GIT_COMMITTER_EMAIL: "test@example.invalid" };
-  const git = (...args: string[]) => execFileSync("git", args, { cwd: fixture, env: gitEnv });
+  const gitEnv = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_AUTHOR_NAME: "Test",
+    GIT_AUTHOR_EMAIL: "test@example.invalid",
+    GIT_COMMITTER_NAME: "Test",
+    GIT_COMMITTER_EMAIL: "test@example.invalid",
+  };
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: fixture, env: gitEnv });
   git("init", "-q", "-b", "master");
   git("add", "deploy/docker-compose.yml");
   git("commit", "-q", "--no-gpg-sign", "-m", "the release");
@@ -84,17 +116,26 @@ function setup(options: Options = {}) {
 
   // The release, as scripts/release-assets.sh packages it.
   const release = join(fixture, "release");
-  const relink = (text: string) => text.replaceAll("/blob/master/", `/blob/${TAG}/`);
+  const relink = (text: string) =>
+    text.replaceAll("/blob/master/", `/blob/${TAG}/`);
   let compose = relink(source).replace(
     /^(\s*image:\s*"?[^"\s@]+:\$\{STOKY_VERSION(?::\?[^}]*)?\})("?\s*)$/m,
     `$1@${DIGEST}$2`,
   );
   expect(compose).toContain(`}@${DIGEST}`);
-  if (options.extraComposeLine) compose = compose.replace("services:", "# An unreviewed change.\nservices:");
+  if (options.extraComposeLine)
+    compose = compose.replace(
+      "services:",
+      "# An unreviewed change.\nservices:",
+    );
   const files: Record<string, string> = {
     "docker-compose.yml": compose,
-    "example.env": relink(readFileSync(join(root, "deploy/example.env"), "utf8")).replace(/^STOKY_VERSION=.*$/m, `STOKY_VERSION=${TAG}`),
-    "traefik.yml": relink(readFileSync(join(root, "deploy/traefik.yml"), "utf8")),
+    "example.env": relink(
+      readFileSync(join(root, "deploy/example.env"), "utf8"),
+    ).replace(/^STOKY_VERSION=.*$/m, `STOKY_VERSION=${TAG}`),
+    "traefik.yml": relink(
+      readFileSync(join(root, "deploy/traefik.yml"), "utf8"),
+    ),
     "install.sh": options.hostileInstall
       ? `#!/bin/bash\ntouch "${options.hostileInstall}"\n`
       : relink(readFileSync(join(root, "deploy/install.sh"), "utf8")).replace(
@@ -102,9 +143,16 @@ function setup(options: Options = {}) {
           `DEFAULT_VERSION=${options.installVersion ?? TAG}`,
         ),
   };
-  for (const [name, text] of Object.entries(files)) writeFileSync(join(release, name), text, { mode: 0o755 });
-  writeFileSync(join(release, "SHA256SUMS"), Object.entries(files).map(([name, text]) => `${sha256(text)}  ${name}\n`).join(""));
-  if (options.tamper) appendFileSync(join(release, "traefik.yml"), "# replaced\n");
+  for (const [name, text] of Object.entries(files))
+    writeFileSync(join(release, name), text, { mode: 0o755 });
+  writeFileSync(
+    join(release, "SHA256SUMS"),
+    Object.entries(files)
+      .map(([name, text]) => `${sha256(text)}  ${name}\n`)
+      .join(""),
+  );
+  if (options.tamper)
+    appendFileSync(join(release, "traefik.yml"), "# replaced\n");
 
   const calls = join(fixture, "calls");
   writeFileSync(calls, "");
@@ -194,14 +242,22 @@ cp "$source" "$output"
       GITHUB_STEP_SUMMARY: summary,
     };
     delete env.GH_REPO;
-    const result = Bun.spawnSync(["bash", "scripts/release-verify-draft.sh", ...args], { cwd: fixture, env });
+    const result = Bun.spawnSync(
+      ["bash", "scripts/release-verify-draft.sh", ...args],
+      { cwd: fixture, env },
+    );
     const stdout = result.stdout.toString();
     const rows = new Map<string, { result: string; detail: string }>();
     for (const line of stdout.split("\n")) {
       const match = line.match(/^(ok|FAIL)\s+(\S+(?: \S+)*)\s{2,}(.*)$/);
       if (match) rows.set(match[2], { result: match[1], detail: match[3] });
     }
-    return { exitCode: result.exitCode, stdout, stderr: result.stderr.toString(), rows };
+    return {
+      exitCode: result.exitCode,
+      stdout,
+      stderr: result.stderr.toString(),
+      rows,
+    };
   };
   return {
     run: (...args: string[]) => run(TAG, "--repo", REPO, ...args),
@@ -212,11 +268,17 @@ cp "$source" "$output"
 }
 
 /** Every check is reported, and exactly `failing` failed. */
-function expectFailures(result: ReturnType<ReturnType<typeof setup>["run"]>, failing: string[]) {
+function expectFailures(
+  result: ReturnType<ReturnType<typeof setup>["run"]>,
+  failing: string[],
+) {
   expect([...result.rows.keys()]).toEqual(CHECKS);
-  const failed = [...result.rows].filter(([, row]) => row.result === "FAIL").map(([name]) => name);
+  const failed = [...result.rows]
+    .filter(([, row]) => row.result === "FAIL")
+    .map(([name]) => name);
   // The script's own account of what failed, when the test is about to say so.
-  if (failed.join() !== failing.join()) console.error(result.stdout, result.stderr);
+  if (failed.join() !== failing.join())
+    console.error(result.stdout, result.stderr);
   expect(failed).toEqual(failing);
   expect(result.exitCode).toBe(failing.length ? 1 : 0);
 }
@@ -226,11 +288,23 @@ describe("verifying a release draft", () => {
     const fixture = setup();
     const result = fixture.run();
     expectFailures(result, []);
-    expect(result.rows.get("image digest")?.detail).toBe(`${IMAGE}:${TAG} is ${DIGEST}`);
+    expect(result.rows.get("image digest")?.detail).toBe(
+      `${IMAGE}:${TAG} is ${DIGEST}`,
+    );
     // The negative check is made against the previous version tag.
-    expect(result.rows.get("attestation can fail")?.detail).toContain(`refs/tags/${PREVIOUS}`);
+    expect(result.rows.get("attestation can fail")?.detail).toContain(
+      `refs/tags/${PREVIOUS}`,
+    );
     const negative = `/SHA256SUMS --repo ${REPO} --signer-workflow ${REPO}/.github/workflows/ci.yml --source-ref refs/tags/${PREVIOUS}`;
-    expect(fixture.calls().filter((call) => call.startsWith("gh attestation verify /") && call.endsWith(negative))).toHaveLength(1);
+    expect(
+      fixture
+        .calls()
+        .filter(
+          (call) =>
+            call.startsWith("gh attestation verify /") &&
+            call.endsWith(negative),
+        ),
+    ).toHaveLength(1);
     const summary = fixture.summary();
     expect(summary).toContain(`### Release verification: ${TAG} (draft)`);
     for (const check of CHECKS) expect(summary).toContain(`| ok | ${check} |`);
@@ -241,12 +315,18 @@ describe("verifying a release draft", () => {
     expect(fixture.run().exitCode).toBe(0);
     const pull = fixture.calls().find((call) => call.startsWith("docker pull"));
     expect(pull).toBe(`docker pull --quiet ${IMAGE}@${DIGEST} config=0`);
-    const config = fixture.calls().find((call) => call.startsWith("docker compose config"));
+    const config = fixture
+      .calls()
+      .find((call) => call.startsWith("docker compose config"));
     expect(config).toBe("docker compose config --images config=0");
   });
 
   it("fails a file that does not match its checksum, and the install that checks it", () => {
-    expectFailures(setup({ tamper: true }).run(), ["checksums", "fresh install", "compose images"]);
+    expectFailures(setup({ tamper: true }).run(), [
+      "checksums",
+      "fresh install",
+      "compose images",
+    ]);
   });
 
   it("fails a file with no attestation for this tag", () => {
@@ -255,12 +335,24 @@ describe("verifying a release draft", () => {
   });
 
   it("never runs an install.sh with no attestation, however its checksum agrees", () => {
-    const ran = join(mkdtempSync(join(tmpdir(), "stoky-release-verify-ran-")), "ran");
+    const ran = join(
+      mkdtempSync(join(tmpdir(), "stoky-release-verify-ran-")),
+      "ran",
+    );
     fixtures.push(dirname(ran));
-    const result = setup({ unattested: ["install.sh"], hostileInstall: ran }).run();
-    expectFailures(result, ["attestation install.sh", "fresh install", "compose images"]);
+    const result = setup({
+      unattested: ["install.sh"],
+      hostileInstall: ran,
+    }).run();
+    expectFailures(result, [
+      "attestation install.sh",
+      "fresh install",
+      "compose images",
+    ]);
     expect(result.rows.get("checksums")?.result).toBe("ok");
-    expect(result.rows.get("fresh install")?.detail).toBe(`install.sh is not attested for refs/tags/${TAG}; not run`);
+    expect(result.rows.get("fresh install")?.detail).toBe(
+      `install.sh is not attested for refs/tags/${TAG}; not run`,
+    );
     expect(existsSync(ran)).toBe(false);
   });
 
@@ -281,7 +373,9 @@ describe("verifying a release draft", () => {
   });
 
   it("fails an image with no provenance for this tag", () => {
-    expectFailures(setup({ provenanceFails: true }).run(), ["image provenance"]);
+    expectFailures(setup({ provenanceFails: true }).run(), [
+      "image provenance",
+    ]);
   });
 
   it("fails an image that does not pull anonymously", () => {
@@ -289,7 +383,10 @@ describe("verifying a release draft", () => {
   });
 
   it("fails an install.sh that does not install its own release", () => {
-    expectFailures(setup({ installVersion: PREVIOUS }).run(), ["fresh install", "compose images"]);
+    expectFailures(setup({ installVersion: PREVIOUS }).run(), [
+      "fresh install",
+      "compose images",
+    ]);
   });
 
   it("fails when Compose resolves an image the released file does not name", () => {
@@ -303,7 +400,9 @@ describe("verifying a release draft", () => {
     const refused = fixture.run();
     expect(refused.exitCode).toBe(2);
     expect(refused.stderr).toContain("already published");
-    expect(fixture.calls().some((call) => call.startsWith("gh release download"))).toBe(false);
+    expect(
+      fixture.calls().some((call) => call.startsWith("gh release download")),
+    ).toBe(false);
     const again = fixture.run("--published");
     expectFailures(again, []);
     expect(fixture.summary()).toContain(`(published)`);

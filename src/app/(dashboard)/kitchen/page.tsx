@@ -106,7 +106,11 @@ export default function KitchenPage(): JSX.Element {
    * it; the created id is kept so the gap before the list query refetches
    * cannot open the door again.
    */
-  const waitingForList = useRef<Array<{ id: string; name: string; defaultUnit: string }> | null>(null);
+  const waitingForList = useRef<Array<{
+    id: string;
+    name: string;
+    defaultUnit: string;
+  }> | null>(null);
   const createdListId = useRef<string | null>(null);
   const createList = api.shopping.create.useMutation({
     onError: () => {
@@ -234,7 +238,8 @@ export default function KitchenPage(): JSX.Element {
     const used = queue.pending.reduce((sum, op) => {
       const input = op.input as { batchId?: string; quantity?: number };
       return op.path === "inventory.consumeStock" && input.batchId === batch.id
-        ? sum + (input.quantity ?? 0) : sum;
+        ? sum + (input.quantity ?? 0)
+        : sum;
     }, 0);
     return Math.max(0, batch.quantity - used);
   }
@@ -308,16 +313,25 @@ export default function KitchenPage(): JSX.Element {
                   </p>
 
                   <p className="mt-1 text-xl text-warn-foreground">
-                    {batchLeft(batch) === null ? t("quantityUnknown") : t("batchLeft", { quantity: batchLeft(batch) ?? 0, unit: units.unit(batch.unit, batchLeft(batch) ?? 0) })}
+                    {batchLeft(batch) === null
+                      ? t("quantityUnknown")
+                      : t("batchLeft", {
+                          quantity: batchLeft(batch) ?? 0,
+                          unit: units.unit(batch.unit, batchLeft(batch) ?? 0),
+                        })}
                   </p>
                   <Button
-                    disabled={batchLeft(batch) === null || (batchLeft(batch) ?? 0) < 1}
+                    disabled={
+                      batchLeft(batch) === null || (batchLeft(batch) ?? 0) < 1
+                    }
                     className="mt-4 w-full text-xl"
                     onClick={() => useOne(batch)}
                     size="lg"
                     type="button"
                   >
-                    <span aria-hidden="true">{t("useOneUnit", { unit: units.unit(batch.unit, 1) })}</span>
+                    <span aria-hidden="true">
+                      {t("useOneUnit", { unit: units.unit(batch.unit, 1) })}
+                    </span>
                     <span className="sr-only">
                       {t("useOneOf", {
                         unit: units.unit(batch.unit, 1),
@@ -362,7 +376,9 @@ export default function KitchenPage(): JSX.Element {
               a metre away must say it rather than swallow the tap. */}
           <p
             aria-live="polite"
-            className={listError ? "mb-3 text-lg text-danger-foreground" : "sr-only"}
+            className={
+              listError ? "mb-3 text-lg text-danger-foreground" : "sr-only"
+            }
             role="status"
           >
             {listError ? t("listCreateFailed") : ""}
@@ -408,7 +424,10 @@ export default function KitchenPage(): JSX.Element {
                         value: t("leftOf", {
                           stock: Math.max(0, left),
                           minimum: product.minStock ?? 0,
-                          unit: units.unit(product.defaultUnit, product.minStock ?? 0),
+                          unit: units.unit(
+                            product.defaultUnit,
+                            product.minStock ?? 0,
+                          ),
                         }),
                       },
                     ]}

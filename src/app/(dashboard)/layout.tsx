@@ -72,28 +72,31 @@ export default async function DashboardLayout({
             after <main>, so it never intrudes on the tab order of someone
             working down the page — F8 is how you reach it deliberately. */}
         <SnackbarProvider>
-        <div className="min-h-screen bg-background text-foreground">
-          <DashboardNav />
-          <CompactNav />
-          {/* WCAG 2.2.6: an idle session must say so before it takes work with it. */}
-          <SessionKeepAlive expiresAt={session.expires} kind={session.expiresKind} />
-        {/* The cached shell belongs to this account and no other. */}
-        <ShellCacheGuard userId={session.user.id} />
-        {/* Renders nothing; hands the account's answer to the store the
+          <div className="min-h-screen bg-background text-foreground">
+            <DashboardNav />
+            <CompactNav />
+            {/* WCAG 2.2.6: an idle session must say so before it takes work with it. */}
+            <SessionKeepAlive
+              expiresAt={session.expires}
+              kind={session.expiresKind}
+            />
+            {/* The cached shell belongs to this account and no other. */}
+            <ShellCacheGuard userId={session.user.id} />
+            {/* Renders nothing; hands the account's answer to the store the
             snackbar reads. */}
-        <PreferencesSync
-          snackbarDuration={preferences?.snackbarDuration ?? "default"}
-        />
-        {/* The last answer each screen showed, so opening without a signal
+            <PreferencesSync
+              snackbarDuration={preferences?.snackbarDuration ?? "default"}
+            />
+            {/* The last answer each screen showed, so opening without a signal
             shows real data rather than the paused panel. */}
-        <ReadCache />
-          <main className="mx-auto max-w-7xl p-4 pb-28 md:pb-8 md:pl-36 lg:pb-4 lg:pl-4">
-            {/* Above the content, because what it says sometimes needs doing
+            <ReadCache />
+            <main className="mx-auto max-w-7xl p-4 pb-28 md:pb-8 md:pl-36 lg:pb-4 lg:pl-4">
+              {/* Above the content, because what it says sometimes needs doing
                 before what is below it can be trusted. */}
-            <SyncStatus />
-            {children}
-          </main>
-        </div>
+              <SyncStatus />
+              {children}
+            </main>
+          </div>
         </SnackbarProvider>
       </WriteQueueProvider>
     </ComposerProvider>

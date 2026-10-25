@@ -52,12 +52,16 @@ describe("rateLimitIdentifier", () => {
   });
 
   it("tolerates the whitespace real proxies emit", () => {
-    const headers = new Headers({ "x-forwarded-for": "1.1.1.1,   10.0.0.7  ," });
+    const headers = new Headers({
+      "x-forwarded-for": "1.1.1.1,   10.0.0.7  ,",
+    });
     expect(rateLimitIdentifier(headers)).toBe("10.0.0.7");
   });
 
   it("falls back to X-Real-IP", () => {
-    expect(rateLimitIdentifier(new Headers({ "x-real-ip": "10.0.0.8" }))).toBe("10.0.0.8");
+    expect(rateLimitIdentifier(new Headers({ "x-real-ip": "10.0.0.8" }))).toBe(
+      "10.0.0.8",
+    );
   });
 
   it("puts an unidentifiable caller in a shared bucket rather than exempting it", () => {
@@ -74,11 +78,15 @@ describe("rateLimitIdentifier", () => {
  */
 describe("rateLimitIdentifier on IPv6", () => {
   const from = (address: string) =>
-    rateLimitIdentifier(new Headers({ "x-forwarded-for": `198.51.100.4, ${address}` }));
+    rateLimitIdentifier(
+      new Headers({ "x-forwarded-for": `198.51.100.4, ${address}` }),
+    );
 
   it("puts two addresses in one /64 in one bucket", () => {
     // The rotation an attacker gets for free, privacy extensions included.
-    expect(from("2001:db8:aa:bb::1")).toBe(from("2001:db8:aa:bb:dead:beef:1234:5678"));
+    expect(from("2001:db8:aa:bb::1")).toBe(
+      from("2001:db8:aa:bb:dead:beef:1234:5678"),
+    );
     expect(from("2001:db8:aa:bb::1")).toBe("2001:db8:aa:bb::/64");
   });
 
@@ -136,10 +144,12 @@ describe("clientAddress", () => {
   it("reads the same hop the limiter does", () => {
     // Two functions reading the header two ways would log one client and
     // count another.
-    expect(clientAddress(new Headers({ "x-forwarded-for": "1.1.1.1, 10.0.0.7" }))).toBe(
-      "10.0.0.7",
+    expect(
+      clientAddress(new Headers({ "x-forwarded-for": "1.1.1.1, 10.0.0.7" })),
+    ).toBe("10.0.0.7");
+    expect(clientAddress(new Headers({ "x-real-ip": "10.0.0.8" }))).toBe(
+      "10.0.0.8",
     );
-    expect(clientAddress(new Headers({ "x-real-ip": "10.0.0.8" }))).toBe("10.0.0.8");
     expect(clientAddress(new Headers())).toBe("unknown");
   });
 });
@@ -170,16 +180,20 @@ describe("what the identifier cannot know", () => {
   it("honours a header the caller wrote, when nothing has appended to it", () => {
     // One entry means the last hop *is* the first hop. Nothing here can tell
     // that apart from a proxy's own single entry.
-    expect(rateLimitIdentifier(new Headers({ "x-forwarded-for": "1.2.3.4" }))).toBe(
-      "1.2.3.4",
-    );
+    expect(
+      rateLimitIdentifier(new Headers({ "x-forwarded-for": "1.2.3.4" })),
+    ).toBe("1.2.3.4");
   });
 
   it("gives a caller who varies it a fresh bucket every time", () => {
     // The whole per-IP limit, defeated by a header, on any deployment that
     // exposes the app without a proxy in front of it.
-    const first = rateLimitIdentifier(new Headers({ "x-forwarded-for": "1.2.3.4" }));
-    const second = rateLimitIdentifier(new Headers({ "x-forwarded-for": "9.9.9.9" }));
+    const first = rateLimitIdentifier(
+      new Headers({ "x-forwarded-for": "1.2.3.4" }),
+    );
+    const second = rateLimitIdentifier(
+      new Headers({ "x-forwarded-for": "9.9.9.9" }),
+    );
 
     expect(first).not.toBe(second);
   });
@@ -233,7 +247,8 @@ describe("accountIdentifier", () => {
   it("is the same length whatever it was given", () => {
     // A key whose length tracked the address would leak the address's length.
     expect(accountIdentifier("a@b.co")).toHaveLength(
-      accountIdentifier("a-very-long-address@a-very-long-domain.example").length,
+      accountIdentifier("a-very-long-address@a-very-long-domain.example")
+        .length,
     );
   });
 });
@@ -290,7 +305,11 @@ describe("the configured limits", () => {
       attempts: 20,
       windowSeconds: 86_400,
     });
-    for (const other of [loginRateLimit(), loginAccountRateLimit(), registerRateLimit()]) {
+    for (const other of [
+      loginRateLimit(),
+      loginAccountRateLimit(),
+      registerRateLimit(),
+    ]) {
       expect(twoFactorCodeRateLimit().prefix).not.toBe(other.prefix);
     }
 
@@ -334,7 +353,10 @@ describe("the configured limits", () => {
   it("reads the known-device override, and refuses one that would disable it", () => {
     process.env.RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS = "2";
     process.env.RATE_LIMIT_LOGIN_DEVICE_WINDOW_SECONDS = "60";
-    expect(loginDeviceRateLimit()).toMatchObject({ attempts: 2, windowSeconds: 60 });
+    expect(loginDeviceRateLimit()).toMatchObject({
+      attempts: 2,
+      windowSeconds: 60,
+    });
 
     process.env.RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS = "0";
     expect(loginDeviceRateLimit().attempts).toBe(5);
@@ -357,7 +379,10 @@ describe("the configured limits", () => {
   it("reads the add-member override, and refuses one that would disable it", () => {
     process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS = "2";
     process.env.RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS = "60";
-    expect(addMemberRateLimit()).toMatchObject({ attempts: 2, windowSeconds: 60 });
+    expect(addMemberRateLimit()).toMatchObject({
+      attempts: 2,
+      windowSeconds: 60,
+    });
 
     process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS = "0";
     expect(addMemberRateLimit().attempts).toBe(20);
@@ -376,7 +401,11 @@ describe("the configured limits", () => {
       delete process.env[name];
     }
 
-    expect(reauthRateLimit()).toEqual({ prefix: "rl:reauth", attempts: 5, windowSeconds: 900 });
+    expect(reauthRateLimit()).toEqual({
+      prefix: "rl:reauth",
+      attempts: 5,
+      windowSeconds: 900,
+    });
     expect(reauthAccountRateLimit()).toEqual({
       prefix: "rl:reauth-acct",
       attempts: 20,
@@ -390,7 +419,10 @@ describe("the configured limits", () => {
     process.env.RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS = "3";
     process.env.RATE_LIMIT_REAUTH_ACCOUNT_WINDOW_SECONDS = "120";
     expect(reauthRateLimit()).toMatchObject({ attempts: 2, windowSeconds: 60 });
-    expect(reauthAccountRateLimit()).toMatchObject({ attempts: 3, windowSeconds: 120 });
+    expect(reauthAccountRateLimit()).toMatchObject({
+      attempts: 3,
+      windowSeconds: 120,
+    });
 
     process.env.RATE_LIMIT_REAUTH_ATTEMPTS = "0";
     process.env.RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS = "-1";
@@ -414,7 +446,10 @@ describe("the configured limits", () => {
 
     process.env.RATE_LIMIT_PASSKEY_OPTIONS_ATTEMPTS = "3";
     process.env.RATE_LIMIT_PASSKEY_OPTIONS_WINDOW_SECONDS = "60";
-    expect(passkeyOptionsRateLimit()).toMatchObject({ attempts: 3, windowSeconds: 60 });
+    expect(passkeyOptionsRateLimit()).toMatchObject({
+      attempts: 3,
+      windowSeconds: 60,
+    });
     process.env.RATE_LIMIT_PASSKEY_OPTIONS_ATTEMPTS = "0";
     expect(passkeyOptionsRateLimit().attempts).toBe(30);
   });
@@ -428,9 +463,18 @@ describe("the configured limits", () => {
     // in a few times has not spent any of it.
     // A known device's budget is not the account's either: sharing it would
     // put the owner's phone back on the counter a stranger can fill.
-    expect(loginDeviceRateLimit().prefix).not.toBe(loginAccountRateLimit().prefix);
-    const others = [loginRateLimit(), loginAccountRateLimit(), registerRateLimit(), uploadRateLimit()];
-    expect(others.map((limit) => limit.prefix)).not.toContain(addMemberRateLimit().prefix);
+    expect(loginDeviceRateLimit().prefix).not.toBe(
+      loginAccountRateLimit().prefix,
+    );
+    const others = [
+      loginRateLimit(),
+      loginAccountRateLimit(),
+      registerRateLimit(),
+      uploadRateLimit(),
+    ];
+    expect(others.map((limit) => limit.prefix)).not.toContain(
+      addMemberRateLimit().prefix,
+    );
   });
 
   it("meters sixty Open Food Facts lookups an hour per account", () => {

@@ -27,7 +27,9 @@ describe("ReceiptStatusBadge", () => {
     // Guards against a new ReceiptStatus member landing without a config entry,
     // which would crash the badge on `config.icon`.
     for (const status of Object.values(ReceiptStatus)) {
-      const { unmount } = renderWithIntl(<ReceiptStatusBadge status={status} />);
+      const { unmount } = renderWithIntl(
+        <ReceiptStatusBadge status={status} />,
+      );
       expect(screen.getByText(expected[status])).toBeInTheDocument();
       unmount();
     }
@@ -140,9 +142,9 @@ function compact(container: HTMLElement): HTMLElement {
  * pinned to the steps themselves — the number circles reuse the same colours.
  */
 function stepActivity(container: HTMLElement): boolean[] {
-  return Array.from(ladder(container).querySelectorAll("div.flex.flex-col")).map(
-    (step) => step.className.includes("text-primary"),
-  );
+  return Array.from(
+    ladder(container).querySelectorAll("div.flex.flex-col"),
+  ).map((step) => step.className.includes("text-primary"));
 }
 
 describe("ReceiptStatusStep", () => {
@@ -151,7 +153,14 @@ describe("ReceiptStatusStep", () => {
       <ReceiptStatusStep status={ReceiptStatus.PARSED} />,
     );
 
-    const labels = ["Subida", "Lectura", "Datos", "Revisión", "Confirmado", "En el inventario"];
+    const labels = [
+      "Subida",
+      "Lectura",
+      "Datos",
+      "Revisión",
+      "Confirmado",
+      "En el inventario",
+    ];
     for (const label of labels) {
       expect(within(ladder(container)).getByText(label)).toBeInTheDocument();
     }

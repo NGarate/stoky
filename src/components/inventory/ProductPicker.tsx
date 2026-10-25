@@ -44,7 +44,12 @@ interface ProductPickerProps {
  * and the filter above it keeps the option list short when a household has
  * hundreds of products.
  */
-export function ProductPicker({ value, onChange, error, hint }: ProductPickerProps) {
+export function ProductPicker({
+  value,
+  onChange,
+  error,
+  hint,
+}: ProductPickerProps) {
   // The labels are the same wherever this is used, so they live in a namespace
   // of their own rather than in whichever page happened to be written first.
   const t = useTranslations("inventory.picker");
@@ -150,7 +155,10 @@ export function ProductPicker({ value, onChange, error, hint }: ProductPickerPro
           {statusMessage}
         </p>
         {error ? (
-          <p id={errorId} className="mt-1 text-sm font-medium text-danger-foreground">
+          <p
+            id={errorId}
+            className="mt-1 text-sm font-medium text-danger-foreground"
+          >
             {error}
           </p>
         ) : null}

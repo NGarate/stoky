@@ -35,7 +35,10 @@ export function CreateProductInline({
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <div className="block">
-        <label htmlFor={fieldId} className="text-sm font-medium text-foreground">
+        <label
+          htmlFor={fieldId}
+          className="text-sm font-medium text-foreground"
+        >
           {t("productNameLabel")}
         </label>
         <Input
@@ -56,7 +59,12 @@ export function CreateProductInline({
       </div>
 
       <div className="flex gap-2">
-        <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          className="flex-1"
+        >
           {common("cancel")}
         </Button>
         <Button type="submit" className="flex-1" disabled={!name.trim()}>

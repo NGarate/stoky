@@ -47,7 +47,12 @@ mock.module("@/lib/offline/queue-context", () => ({
 }));
 
 const LOADED = {
-  data: { id: "p1", name: "Huevos", totalStock: 6, defaultUnit: "ud" } as unknown,
+  data: {
+    id: "p1",
+    name: "Huevos",
+    totalStock: 6,
+    defaultUnit: "ud",
+  } as unknown,
   isPending: false,
   error: null as { message: string } | null,
   refetch: () => {},
@@ -68,7 +73,9 @@ mock.module("@/lib/trpc/client", () => ({
     },
     inventory: {
       adjustStock: {
-        useMutation: (opts?: { onSuccess?: (e: unknown, v: unknown) => unknown }) => ({
+        useMutation: (opts?: {
+          onSuccess?: (e: unknown, v: unknown) => unknown;
+        }) => ({
           mutate: (input: Record<string, unknown>) => {
             adjustCalls.push(input);
             void opts?.onSuccess?.({}, input);
@@ -80,9 +87,8 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
-const { AdjustStockView } = await import(
-  "@/app/(dashboard)/products/[id]/adjust/page"
-);
+const { AdjustStockView } =
+  await import("@/app/(dashboard)/products/[id]/adjust/page");
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
 
 beforeEach(() => {
@@ -103,17 +109,23 @@ function submit(actual: string, reason: string): void {
   fireEvent.click(screen.getByRole("button", { name: "Guardar ajuste" }));
 }
 
-
 /** A refusal as the client receives it: the code is what RouteState reads. */
 function notFoundError(): TRPCClientError<never> {
   const error = new TRPCClientError<never>("Product not found");
-  Object.defineProperty(error, "data", { value: { code: "NOT_FOUND", httpStatus: 404 } });
+  Object.defineProperty(error, "data", {
+    value: { code: "NOT_FOUND", httpStatus: 404 },
+  });
   return error;
 }
 
 describe("the adjustment", () => {
   it("does not turn a blank recount into zero stock", () => {
-    renderWithIntl(<SnackbarProvider><AdjustStockView id="p1" /></SnackbarProvider>, { locale: "es" });
+    renderWithIntl(
+      <SnackbarProvider>
+        <AdjustStockView id="p1" />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
     submit("", "Recuento");
     expect(adjustCalls).toEqual([]);
     expect(screen.getByRole("alert")).toBeInTheDocument();

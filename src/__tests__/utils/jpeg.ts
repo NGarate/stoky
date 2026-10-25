@@ -105,7 +105,10 @@ export function hasExif(buffer: Buffer): boolean {
 export function exifPayload(buffer: Buffer): Buffer {
   for (const segment of jpegSegments(buffer)) {
     if (segment.marker !== APP1) continue;
-    const payload = buffer.subarray(segment.start, segment.start + segment.length);
+    const payload = buffer.subarray(
+      segment.start,
+      segment.start + segment.length,
+    );
     if (payload.subarray(0, EXIF_HEADER.length).equals(EXIF_HEADER)) {
       return payload;
     }
@@ -140,7 +143,10 @@ const SOF_MARKERS = new Set([
  * `[precision:1][height:2][width:2][components:1]`, and it describes the pixels
  * that are actually encoded.
  */
-export function jpegDimensions(buffer: Buffer): { width: number; height: number } {
+export function jpegDimensions(buffer: Buffer): {
+  width: number;
+  height: number;
+} {
   for (const segment of jpegSegments(buffer)) {
     if (!SOF_MARKERS.has(segment.marker)) continue;
     return {
@@ -165,8 +171,10 @@ export function exifOrientation(buffer: Buffer): number | null {
 
   const tiff = payload.subarray(EXIF_HEADER.length);
   const little = tiff.subarray(0, 2).toString("latin1") === "II";
-  const u16 = (at: number) => (little ? tiff.readUInt16LE(at) : tiff.readUInt16BE(at));
-  const u32 = (at: number) => (little ? tiff.readUInt32LE(at) : tiff.readUInt32BE(at));
+  const u16 = (at: number) =>
+    little ? tiff.readUInt16LE(at) : tiff.readUInt16BE(at);
+  const u32 = (at: number) =>
+    little ? tiff.readUInt32LE(at) : tiff.readUInt32BE(at);
 
   const ifd0 = u32(4);
   if (ifd0 + 2 > tiff.length) return null;

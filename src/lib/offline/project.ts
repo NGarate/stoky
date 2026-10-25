@@ -80,8 +80,11 @@ export function projectShoppingItems<T extends ServerItem>(
       const existing = projected.get(input.id);
       if (!existing) continue;
 
-      const changes: Partial<ProjectedItem & { quantity: number; storeId: string | null }> = {};
-      if (typeof input.isChecked === "boolean") changes.isChecked = input.isChecked;
+      const changes: Partial<
+        ProjectedItem & { quantity: number; storeId: string | null }
+      > = {};
+      if (typeof input.isChecked === "boolean")
+        changes.isChecked = input.isChecked;
       if (typeof input.quantity === "number") changes.quantity = input.quantity;
       // `null` is a choice — "anywhere" — so presence, not truthiness.
       if (typeof input.storeId === "string" || input.storeId === null) {
@@ -142,13 +145,19 @@ export function projectStockTotals(
   const projected = new Map(totals);
 
   for (const op of pending) {
-    const input = op.input as { productId?: unknown; quantity?: unknown; unit?: unknown };
+    const input = op.input as {
+      productId?: unknown;
+      quantity?: unknown;
+      unit?: unknown;
+    };
     if (typeof input.productId !== "string") continue;
     if (typeof input.quantity !== "number") continue;
 
-    const quantity = typeof input.unit === "string"
-      ? canonicalCount({ quantity: input.quantity, unit: input.unit }).quantity
-      : input.quantity;
+    const quantity =
+      typeof input.unit === "string"
+        ? canonicalCount({ quantity: input.quantity, unit: input.unit })
+            .quantity
+        : input.quantity;
     const current = projected.get(input.productId) ?? 0;
 
     if (op.path === "inventory.addStock") {
@@ -186,11 +195,17 @@ export function projectOnListQuantities(
 
   for (const op of pending) {
     if (op.path !== "shopping.addItem") continue;
-    const input = op.input as { productId?: unknown; quantity?: unknown; unit?: unknown };
+    const input = op.input as {
+      productId?: unknown;
+      quantity?: unknown;
+      unit?: unknown;
+    };
     if (typeof input.productId !== "string") continue;
     const amount = typeof input.quantity === "number" ? input.quantity : 1;
-    const quantity = typeof input.unit === "string"
-      ? canonicalCount({ quantity: amount, unit: input.unit }).quantity : amount;
+    const quantity =
+      typeof input.unit === "string"
+        ? canonicalCount({ quantity: amount, unit: input.unit }).quantity
+        : amount;
     projected.set(
       input.productId,
       round((projected.get(input.productId) ?? 0) + quantity),
@@ -209,7 +224,10 @@ function round(value: number): number {
 export function pendingProductIds(pending: readonly QueuedOp[]): Set<string> {
   const ids = new Set<string>();
   for (const op of pending) {
-    if (op.path !== "inventory.addStock" && op.path !== "inventory.consumeStock") {
+    if (
+      op.path !== "inventory.addStock" &&
+      op.path !== "inventory.consumeStock"
+    ) {
       continue;
     }
     const productId = (op.input as { productId?: unknown }).productId;

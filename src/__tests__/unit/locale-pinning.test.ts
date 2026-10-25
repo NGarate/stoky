@@ -79,7 +79,9 @@ describe("nothing decides the language for the reader", () => {
     // The regex is the whole test, so it gets its own assertion rather than
     // being trusted. A pattern that matched nothing would make the check above
     // pass for ever.
-    expect(PINNED.test(`new Date().toLocaleDateString("es-ES", {})`)).toBe(true);
+    expect(PINNED.test(`new Date().toLocaleDateString("es-ES", {})`)).toBe(
+      true,
+    );
     expect(PINNED.test(`new Intl.NumberFormat("en", {})`)).toBe(true);
 
     // And does not fire on the correct version.

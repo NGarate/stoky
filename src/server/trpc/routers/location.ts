@@ -82,59 +82,61 @@ export const locationRouter = createTRPCRouter({
    * say. Every caller therefore had to cast, and a cast is where a wrong shape
    * stops being a compiler error and becomes an empty list on a screen.
    */
-  getTree: householdProcedure.query(async ({ ctx }): Promise<LocationTreeNode[]> => {
-    const allLocations = await ctx.db.storageLocation.findMany({
-      where: {
-        householdId: ctx.householdId,
-      },
-      orderBy: {
-        name: "asc",
-      },
-      include: {
-        _count: {
-          select: {
-            stockEntries: true,
+  getTree: householdProcedure.query(
+    async ({ ctx }): Promise<LocationTreeNode[]> => {
+      const allLocations = await ctx.db.storageLocation.findMany({
+        where: {
+          householdId: ctx.householdId,
+        },
+        orderBy: {
+          name: "asc",
+        },
+        include: {
+          _count: {
+            select: {
+              stockEntries: true,
+            },
           },
         },
-      },
-    });
-
-    const locationMap = new Map<string, LocationTreeNode>();
-    const roots: LocationTreeNode[] = [];
-
-    // First pass: create map
-    for (const location of allLocations) {
-      locationMap.set(location.id, {
-        ...location,
-        children: [],
       });
-    }
 
-    // Second pass: build hierarchy. Attached by reachability rather than by
-    // "has a parent": an orphan, or a loop of locations inside each other
-    // (ISSUES.md LOC-1, which `update` could once be raced into making), is
-    // drawn at the root. Attaching every row whose parent was in the map made
-    // a loop's members vanish — nobody was a root — and with them everything
-    // stored inside, beyond the reach of `delete`, which refuses a location
-    // with sub-locations. `parentId` itself is returned unchanged, so a
-    // screen can still say which location a looped row claims to be inside.
-    const drawn = drawnParents(allLocations);
-    for (const location of allLocations) {
-      const node = locationMap.get(location.id);
-      if (!node) continue;
+      const locationMap = new Map<string, LocationTreeNode>();
+      const roots: LocationTreeNode[] = [];
 
-      const parentId = drawn.get(location.id) ?? null;
-      const parent = parentId ? locationMap.get(parentId) : undefined;
-
-      if (parent) {
-        parent.children.push(node);
-      } else {
-        roots.push(node);
+      // First pass: create map
+      for (const location of allLocations) {
+        locationMap.set(location.id, {
+          ...location,
+          children: [],
+        });
       }
-    }
 
-    return roots;
-  }),
+      // Second pass: build hierarchy. Attached by reachability rather than by
+      // "has a parent": an orphan, or a loop of locations inside each other
+      // (ISSUES.md LOC-1, which `update` could once be raced into making), is
+      // drawn at the root. Attaching every row whose parent was in the map made
+      // a loop's members vanish — nobody was a root — and with them everything
+      // stored inside, beyond the reach of `delete`, which refuses a location
+      // with sub-locations. `parentId` itself is returned unchanged, so a
+      // screen can still say which location a looped row claims to be inside.
+      const drawn = drawnParents(allLocations);
+      for (const location of allLocations) {
+        const node = locationMap.get(location.id);
+        if (!node) continue;
+
+        const parentId = drawn.get(location.id) ?? null;
+        const parent = parentId ? locationMap.get(parentId) : undefined;
+
+        if (parent) {
+          parent.children.push(node);
+        } else {
+          roots.push(node);
+        }
+      }
+
+      return roots;
+    },
+  ),
 
   /** Adds a location, optionally inside another. */
   create: adminProcedure
@@ -238,7 +240,12 @@ export const locationRouter = createTRPCRouter({
               });
             }
 
-            const refusal = await moveRefusal(tx, householdId, id, data.parentId);
+            const refusal = await moveRefusal(
+              tx,
+              householdId,
+              id,
+              data.parentId,
+            );
             if (refusal) {
               throw new TRPCError({ code: "BAD_REQUEST", message: refusal });
             }

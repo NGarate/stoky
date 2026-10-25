@@ -92,7 +92,9 @@ describe("deleting a product that has been used", () => {
       },
     });
 
-    const refusal = await refusalFrom(caller.product.delete({ id: product.id }));
+    const refusal = await refusalFrom(
+      caller.product.delete({ id: product.id }),
+    );
 
     expect(refusal.code).toBe("CONFLICT");
   });
@@ -111,7 +113,9 @@ describe("deleting a product that has been used", () => {
       })),
     });
 
-    const refusal = await refusalFrom(caller.product.delete({ id: product.id }));
+    const refusal = await refusalFrom(
+      caller.product.delete({ id: product.id }),
+    );
 
     // Without the count, "this product still has stock entries" leaves somebody
     // hunting for how much.

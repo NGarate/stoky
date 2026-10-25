@@ -12,12 +12,19 @@ import {
  * every case is an environment literal.
  */
 
-const production = (urls: string) => ({ NODE_ENV: "production", STOKY_URLS: urls });
+const production = (urls: string) => ({
+  NODE_ENV: "production",
+  STOKY_URLS: urls,
+});
 
 describe("passkeysAvailable", () => {
   it("is true for an https first entry with a domain name", () => {
     expect(passkeysAvailable(production("https://stoky.example"))).toBe(true);
-    expect(passkeysAvailable(production("https://stoky.example:8443, http://192.168.1.10:3000"))).toBe(true);
+    expect(
+      passkeysAvailable(
+        production("https://stoky.example:8443, http://192.168.1.10:3000"),
+      ),
+    ).toBe(true);
   });
 
   it("is true for http at localhost, the one secure context plain HTTP has", () => {
@@ -39,7 +46,11 @@ describe("passkeysAvailable", () => {
 
   it("is decided by the first entry alone", () => {
     // An https name listed second does not make a LAN-first install a relying party.
-    expect(passkeysAvailable(production("http://192.168.1.10:3000, https://stoky.example"))).toBe(false);
+    expect(
+      passkeysAvailable(
+        production("http://192.168.1.10:3000, https://stoky.example"),
+      ),
+    ).toBe(false);
   });
 
   it("is false in production with nothing set", () => {
@@ -62,7 +73,9 @@ describe("passkeyRpHost and passkeyRpOrigin", () => {
 });
 
 describe("passkeyOfferedAt", () => {
-  const env = production("https://stoky.example, https://stoky.lan, http://192.168.1.10:3000");
+  const env = production(
+    "https://stoky.example, https://stoky.lan, http://192.168.1.10:3000",
+  );
 
   it("is true at the canonical host", () => {
     expect(passkeyOfferedAt("stoky.example", env)).toBe(true);
@@ -84,6 +97,8 @@ describe("passkeyOfferedAt", () => {
     expect(passkeyOfferedAt(null, env)).toBe(false);
     expect(passkeyOfferedAt("", env)).toBe(false);
     expect(passkeyOfferedAt("a b", env)).toBe(false);
-    expect(passkeyOfferedAt("192.168.1.10", production("https://192.168.1.10"))).toBe(false);
+    expect(
+      passkeyOfferedAt("192.168.1.10", production("https://192.168.1.10")),
+    ).toBe(false);
   });
 });

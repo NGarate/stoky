@@ -13,7 +13,9 @@ export function AutoListPreview() {
     return null;
   }
 
-  const uncheckedCount = autoList.items.filter((item) => !item.isChecked).length;
+  const uncheckedCount = autoList.items.filter(
+    (item) => !item.isChecked,
+  ).length;
 
   if (uncheckedCount === 0) {
     return null;
@@ -36,7 +38,7 @@ export function AutoListPreview() {
         <Button asChild variant="default">
           {/* Says which list (WCAG 2.4.9): a bare "Ver" beside a heading
               is a link whose purpose is only the heading's. */}
-          <Link href={`/shopping/${autoList.id}`} > {t("viewAutoList")} </Link>
+          <Link href={`/shopping/${autoList.id}`}> {t("viewAutoList")} </Link>
         </Button>
       </div>
     </div>

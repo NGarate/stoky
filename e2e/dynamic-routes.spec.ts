@@ -132,7 +132,10 @@ const DESTINATIONS: Destination[] = [
  * the edit screen is linked from the product's page, not from the index, and
  * discovering it the way a person does is the point of this file.
  */
-async function resolveHref(page: Page, destination: Destination): Promise<string> {
+async function resolveHref(
+  page: Page,
+  destination: Destination,
+): Promise<string> {
   const first = await firstDetailLink(
     page,
     destination.index,
@@ -194,7 +197,9 @@ test.describe("Routes reached by following a link", () => {
       await page.goto(href);
       await settle(page);
 
-      const results = await new AxeBuilder({ page }).withTags(AAA_TAGS).analyze();
+      const results = await new AxeBuilder({ page })
+        .withTags(AAA_TAGS)
+        .analyze();
       const report = results.violations
         .map(
           (v) =>

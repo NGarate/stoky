@@ -210,7 +210,6 @@ describe("tag normalisation", () => {
     ).toEqual([{ tag: "e322", risk: "none" }]);
   });
 
-
   it("strips the language prefix and sub-variant suffix", () => {
     expect(normaliseAdditiveTag("en:e322i")).toBe("e322");
     expect(normaliseAdditiveTag("en:E250")).toBe("e250");
@@ -230,7 +229,9 @@ describe("tag normalisation", () => {
       nutriscore_grade: "a",
       additives_tags: ["en:e150d"],
     }) as Extract<Rating, { kind: "rated" }>;
-    expect(rating.breakdown.additives.tags).toEqual([{ tag: "e150d", risk: "moderate" }]);
+    expect(rating.breakdown.additives.tags).toEqual([
+      { tag: "e150d", risk: "moderate" },
+    ]);
     expect(rating.breakdown.additives.worst).toBe("moderate");
   });
 

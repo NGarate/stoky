@@ -53,7 +53,8 @@ export function describeError(error: unknown): unknown {
     const reason = below.at(-1);
     if (reason) parts.push(reason.trim());
   } else if (error instanceof Prisma.PrismaClientInitializationError) {
-    if (below.length > 0) parts.push(below.map((line) => line.trim()).join(" "));
+    if (below.length > 0)
+      parts.push(below.map((line) => line.trim()).join(" "));
   }
 
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.meta) {

@@ -65,7 +65,8 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
-const { ReconcileDialog } = await import("@/components/offline/ReconcileDialog");
+const { ReconcileDialog } =
+  await import("@/components/offline/ReconcileDialog");
 
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
 
@@ -108,7 +109,9 @@ describe("answering the question", () => {
       target: { value: "3" },
     });
     fireEvent.submit(
-      screen.getByRole("button", { name: "Guardar la cantidad" }).closest("form") as HTMLFormElement,
+      screen
+        .getByRole("button", { name: "Guardar la cantidad" })
+        .closest("form") as HTMLFormElement,
     );
 
     expect(discard).toHaveBeenCalledWith("op-1");
@@ -139,7 +142,9 @@ describe("who may answer it", () => {
     renderWithIntl(<ReconcileDialog onClose={() => {}} op={op} />);
 
     expect(screen.queryByLabelText(/¿Cuánto hay ahora/)).toBeAbsent();
-    expect(screen.getByRole("dialog")).toHaveTextContent(/no corregir la cantidad/i);
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      /no corregir la cantidad/i,
+    );
   });
 });
 

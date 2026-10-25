@@ -48,7 +48,8 @@ function withTimeout<T>(work: Promise<T>, label: string): Promise<T> {
     work,
     new Promise<never>((_, reject) =>
       setTimeout(
-        () => reject(new Error(`${label} did not answer in ${CHECK_TIMEOUT_MS}ms`)),
+        () =>
+          reject(new Error(`${label} did not answer in ${CHECK_TIMEOUT_MS}ms`)),
         CHECK_TIMEOUT_MS,
       ),
     ),

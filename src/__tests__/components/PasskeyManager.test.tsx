@@ -1,5 +1,13 @@
 import "../setup/matchers";
-import { describe, it, expect, afterAll, afterEach, beforeEach, mock } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  afterAll,
+  afterEach,
+  beforeEach,
+  mock,
+} from "bun:test";
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -93,7 +101,12 @@ mock.module("@/lib/trpc/client", () => ({
     useUtils: () => ({}),
     auth: {
       me: {
-        useQuery: () => ({ data: me, error: null, fetchStatus: "idle", refetch: async () => {} }),
+        useQuery: () => ({
+          data: me,
+          error: null,
+          fetchStatus: "idle",
+          refetch: async () => {},
+        }),
       },
       confirmPassword: {
         useMutation: () => ({
@@ -114,12 +127,14 @@ const { SnackbarProvider } = await import("@/components/ui/snackbar");
 // file shares one window, and a later one (the login page's passkey offer)
 // must not find this file's address or a WebAuthn it never set up.
 const STARTING_URL = window.location.href;
-const STARTING_PROPERTIES = (["isSecureContext", "PublicKeyCredential"] as const).map(
-  (key) => [key, Object.getOwnPropertyDescriptor(window, key)] as const,
-);
+const STARTING_PROPERTIES = (
+  ["isSecureContext", "PublicKeyCredential"] as const
+).map((key) => [key, Object.getOwnPropertyDescriptor(window, key)] as const);
 
 afterAll(() => {
-  (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL(STARTING_URL);
+  (
+    window as unknown as { happyDOM: { setURL(url: string): void } }
+  ).happyDOM.setURL(STARTING_URL);
   for (const [key, descriptor] of STARTING_PROPERTIES) {
     if (descriptor) Object.defineProperty(window, key, descriptor);
     else delete (window as unknown as Record<string, unknown>)[key];
@@ -128,8 +143,13 @@ afterAll(() => {
 
 /** The page's address, its secure-context flag, and whether WebAuthn exists. */
 function browserAt(url: string, { secure = true, webauthn = true } = {}): void {
-  (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL(url);
-  Object.defineProperty(window, "isSecureContext", { value: secure, configurable: true });
+  (
+    window as unknown as { happyDOM: { setURL(url: string): void } }
+  ).happyDOM.setURL(url);
+  Object.defineProperty(window, "isSecureContext", {
+    value: secure,
+    configurable: true,
+  });
   Object.defineProperty(window, "PublicKeyCredential", {
     value: webauthn ? function PublicKeyCredential() {} : undefined,
     configurable: true,
@@ -137,7 +157,12 @@ function browserAt(url: string, { secure = true, webauthn = true } = {}): void {
 }
 
 beforeEach(() => {
-  me = { id: "u-alba", role: "MEMBER", twoFactorEnabled: false, passkeyOrigin: ORIGIN };
+  me = {
+    id: "u-alba",
+    role: "MEMBER",
+    twoFactorEnabled: false,
+    passkeyOrigin: ORIGIN,
+  };
   passkeys = [PHONE, KEY];
   steps = [];
   addRefusal = null;
@@ -158,7 +183,10 @@ function renderSection() {
 }
 
 /** Types the password into the open dialog and presses its action. */
-async function confirm(user: ReturnType<typeof userEvent.setup>, password = PASSWORD) {
+async function confirm(
+  user: ReturnType<typeof userEvent.setup>,
+  password = PASSWORD,
+) {
   const dialog = await screen.findByRole("dialog");
   await user.type(within(dialog).getByLabelText(es.reauth.password), password);
   await user.click(within(dialog).getAllByRole("button").at(-1) as HTMLElement);
@@ -169,12 +197,16 @@ describe("the list", () => {
   it("names each passkey, says when it was added and whether it is synced", async () => {
     renderSection();
 
-    const phone = (await screen.findByText(PHONE.name as string)).closest("li") as HTMLElement;
+    const phone = (await screen.findByText(PHONE.name as string)).closest(
+      "li",
+    ) as HTMLElement;
     expect(within(phone).getByText(t.passkeysSynced)).toBeInTheDocument();
     expect(within(phone).getByText(t.passkeysCreated)).toBeInTheDocument();
 
     // A passkey made without a name still has a title to act on.
-    const key = screen.getByText(t.passkeysUnnamed).closest("li") as HTMLElement;
+    const key = screen
+      .getByText(t.passkeysUnnamed)
+      .closest("li") as HTMLElement;
     expect(within(key).getByText(t.passkeysDeviceOnly)).toBeInTheDocument();
   });
 
@@ -183,7 +215,9 @@ describe("the list", () => {
     renderSection();
 
     expect(await screen.findByText(t.passkeysNone)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: t.passkeysAdd })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: t.passkeysAdd }),
+    ).toBeInTheDocument();
   });
 
   it.each(["KITCHEN", "MEMBER", "ADMIN", "OWNER"] as const)(
@@ -193,7 +227,9 @@ describe("the list", () => {
       renderSection();
 
       expect(await screen.findByText(PHONE.name as string)).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: t.passkeysAdd })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: t.passkeysAdd }),
+      ).toBeInTheDocument();
     },
   );
 });
@@ -222,14 +258,18 @@ describe("where adding one cannot work", () => {
     renderSection();
 
     expect(
-      await screen.findByText(t.passkeysOnlyAt.replace("{host}", "stoky.example")),
+      await screen.findByText(
+        t.passkeysOnlyAt.replace("{host}", "stoky.example"),
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: t.passkeysAdd })).toBeNull();
     // The list and its removal still work there: a lost phone's passkey can
     // be removed from whatever address the person is at.
     expect(screen.getByText(PHONE.name as string)).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: t.passkeysRemoveNamed.replace("{name}", PHONE.name as string) }),
+      screen.getByRole("button", {
+        name: t.passkeysRemoveNamed.replace("{name}", PHONE.name as string),
+      }),
     ).toBeInTheDocument();
   });
 
@@ -248,15 +288,21 @@ describe("adding one", () => {
     const user = userEvent.setup();
     renderSection();
 
-    await user.click(await screen.findByRole("button", { name: t.passkeysAdd }));
+    await user.click(
+      await screen.findByRole("button", { name: t.passkeysAdd }),
+    );
     const dialog = await screen.findByRole("dialog");
     // The advice for a device other people use, before the password is typed.
-    expect(within(dialog).getByText(t.passkeysSharedDevice)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(t.passkeysSharedDevice),
+    ).toBeInTheDocument();
     expect(steps).toEqual([]);
 
     await confirm(user);
 
-    await waitFor(() => expect(screen.queryAllByRole("dialog", { hidden: true })).toHaveLength(0));
+    await waitFor(() =>
+      expect(screen.queryAllByRole("dialog", { hidden: true })).toHaveLength(0),
+    );
     expect(steps.map(([step]) => step)).toEqual(["confirmPassword", "add"]);
     expect(steps[0]).toEqual(["confirmPassword", PASSWORD]);
     // Named after where it was made, so it can be told apart before a rename.
@@ -268,10 +314,14 @@ describe("adding one", () => {
     const user = userEvent.setup();
     renderSection();
 
-    await user.click(await screen.findByRole("button", { name: t.passkeysAdd }));
+    await user.click(
+      await screen.findByRole("button", { name: t.passkeysAdd }),
+    );
     const dialog = await confirm(user);
 
-    expect(await within(dialog).findByText(t.passkeysCancelled)).toBeInTheDocument();
+    expect(
+      await within(dialog).findByText(t.passkeysCancelled),
+    ).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });
@@ -287,13 +337,22 @@ describe("removing one", () => {
       }),
     );
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByLabelText(es.reauth.password)).toBeInTheDocument();
+    expect(
+      within(dialog).getByLabelText(es.reauth.password),
+    ).toBeInTheDocument();
     expect(steps).toEqual([]);
 
     await confirm(user);
 
-    await waitFor(() => expect(steps).toEqual([["confirmPassword", PASSWORD], ["remove", PHONE.id]]));
-    await waitFor(() => expect(screen.queryByText(PHONE.name as string)).toBeNull());
+    await waitFor(() =>
+      expect(steps).toEqual([
+        ["confirmPassword", PASSWORD],
+        ["remove", PHONE.id],
+      ]),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText(PHONE.name as string)).toBeNull(),
+    );
   });
 });
 
@@ -312,7 +371,9 @@ describe("focus after removing one", () => {
     await confirm(user);
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    await waitFor(() => expect(screen.getByText(t.passkeysExplain)).toHaveFocus());
+    await waitFor(() =>
+      expect(screen.getByText(t.passkeysExplain)).toHaveFocus(),
+    );
   });
 });
 
@@ -328,10 +389,17 @@ describe("renaming one", () => {
     );
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).queryByLabelText(es.reauth.password)).toBeNull();
-    await user.type(within(dialog).getByLabelText(t.passkeysNameLabel), "  Llave del llavero  ");
-    await user.click(within(dialog).getByRole("button", { name: t.passkeysRenameSave }));
+    await user.type(
+      within(dialog).getByLabelText(t.passkeysNameLabel),
+      "  Llave del llavero  ",
+    );
+    await user.click(
+      within(dialog).getByRole("button", { name: t.passkeysRenameSave }),
+    );
 
-    await waitFor(() => expect(steps).toEqual([["rename", KEY.id, "Llave del llavero"]]));
+    await waitFor(() =>
+      expect(steps).toEqual([["rename", KEY.id, "Llave del llavero"]]),
+    );
   });
 
   it("bounds the field at the length the server accepts", async () => {
@@ -362,9 +430,13 @@ describe("renaming one", () => {
       }),
     );
     const dialog = await screen.findByRole("dialog");
-    await user.click(within(dialog).getByRole("button", { name: t.passkeysRenameSave }));
+    await user.click(
+      within(dialog).getByRole("button", { name: t.passkeysRenameSave }),
+    );
 
-    expect(await within(dialog).findByText(t.passkeysNameMissing)).toBeInTheDocument();
+    expect(
+      await within(dialog).findByText(t.passkeysNameMissing),
+    ).toBeInTheDocument();
     expect(steps).toEqual([]);
   });
 });

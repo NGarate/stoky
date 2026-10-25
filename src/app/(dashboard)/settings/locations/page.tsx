@@ -129,9 +129,16 @@ function LocationTree({
         // inside nothing gets no definition list at all, rather than three
         // rows of zeroes and dashes.
         const meta = [
-          ...(stored > 0 ? [{ label: t("stored"), value: String(stored) }] : []),
+          ...(stored > 0
+            ? [{ label: t("stored"), value: String(stored) }]
+            : []),
           ...(location.children.length > 0
-            ? [{ label: t("contains"), value: String(location.children.length) }]
+            ? [
+                {
+                  label: t("contains"),
+                  value: String(location.children.length),
+                },
+              ]
             : []),
           ...(parentName ? [{ label: t("inside"), value: parentName }] : []),
         ];
@@ -217,7 +224,9 @@ export default function LocationsPage(): JSX.Element {
    * discovering by pressing Guardar.
    */
   const parentOptions = useMemo(() => {
-    const forbidden = editing ? subtreeIds(tree, editing.id) : new Set<string>();
+    const forbidden = editing
+      ? subtreeIds(tree, editing.id)
+      : new Set<string>();
     return flatten(tree).filter((entry) => !forbidden.has(entry.id));
   }, [editing, tree]);
 
@@ -282,7 +291,11 @@ export default function LocationsPage(): JSX.Element {
     const parent = parentId === "" ? undefined : parentId;
 
     if (editing) {
-      updateMutation.mutate({ id: editing.id, name: trimmed, parentId: parent });
+      updateMutation.mutate({
+        id: editing.id,
+        name: trimmed,
+        parentId: parent,
+      });
     } else {
       createMutation.mutate({ name: trimmed, parentId: parent });
     }
@@ -455,7 +468,11 @@ export default function LocationsPage(): JSX.Element {
         <EmptyState
           action={
             canManage && !isEditing ? (
-              <Button onClick={() => setIsEditing(true)} type="button" variant="outline">
+              <Button
+                onClick={() => setIsEditing(true)}
+                type="button"
+                variant="outline"
+              >
                 {t("create")}
               </Button>
             ) : undefined

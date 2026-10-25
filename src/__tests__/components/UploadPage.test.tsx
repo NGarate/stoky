@@ -60,7 +60,8 @@ mock.module("@/lib/trpc/client", () => ({
 }));
 
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
-const { default: UploadPage } = await import("@/app/(dashboard)/receipts/upload/page");
+const { default: UploadPage } =
+  await import("@/app/(dashboard)/receipts/upload/page");
 
 function mount(): HTMLElement {
   return renderWithIntl(
@@ -71,8 +72,13 @@ function mount(): HTMLElement {
 }
 
 async function upload(container: HTMLElement): Promise<void> {
-  const input = container.querySelector('input[type="file"]') as HTMLInputElement;
-  await userEvent.upload(input, new File(["receipt"], "ticket.jpg", { type: "image/jpeg" }));
+  const input = container.querySelector(
+    'input[type="file"]',
+  ) as HTMLInputElement;
+  await userEvent.upload(
+    input,
+    new File(["receipt"], "ticket.jpg", { type: "image/jpeg" }),
+  );
 }
 
 /** The polite region the page owns (the snackbar's is a different one). */
@@ -116,8 +122,12 @@ describe("the result of reading a receipt", () => {
     await upload(container);
 
     await waitFor(() => {
-      expect(pageStatus(container)?.textContent).toMatch(/No se ha podido leer el ticket/);
+      expect(pageStatus(container)?.textContent).toMatch(
+        /No se ha podido leer el ticket/,
+      );
     });
-    expect(screen.getByRole("button", { name: "Subir otra foto" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Subir otra foto" }),
+    ).toBeInTheDocument();
   });
 });

@@ -42,7 +42,9 @@ describe("a device nobody has been asked about", () => {
   it("sends a kitchen account straight to the kitchen", () => {
     // "The role sets the default: a kitchen account lands on the kitchen
     // screen without being asked."
-    expect(landingPath({ role: "KITCHEN", choice: undefined })).toBe("/kitchen");
+    expect(landingPath({ role: "KITCHEN", choice: undefined })).toBe(
+      "/kitchen",
+    );
   });
 
   it("asks everybody else", () => {

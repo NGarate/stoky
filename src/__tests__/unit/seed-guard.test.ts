@@ -32,7 +32,9 @@ function runSeed(nodeEnv: string) {
 
 describe("demoSeedRefusal", () => {
   it("refuses production", () => {
-    expect(demoSeedRefusal({ NODE_ENV: "production" })).toContain("Refusing to seed");
+    expect(demoSeedRefusal({ NODE_ENV: "production" })).toContain(
+      "Refusing to seed",
+    );
   });
 
   it("refuses production however it is spelled", () => {
@@ -52,7 +54,11 @@ describe("demoSeedRefusal", () => {
     // none. Any environment variable that let production through would be a
     // way to publish the demo password on a real instance.
     expect(
-      demoSeedRefusal({ NODE_ENV: "production", STOKY_ALLOW_DEMO_SEED: "1", FORCE: "1" }),
+      demoSeedRefusal({
+        NODE_ENV: "production",
+        STOKY_ALLOW_DEMO_SEED: "1",
+        FORCE: "1",
+      }),
     ).not.toBeNull();
   });
 });

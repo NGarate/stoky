@@ -37,7 +37,9 @@ type Problem =
  */
 function serverProblem(error: unknown): Problem {
   const code =
-    error instanceof TRPCClientError ? (error.data?.code as string | undefined) : undefined;
+    error instanceof TRPCClientError
+      ? (error.data?.code as string | undefined)
+      : undefined;
   const message = error instanceof Error ? error.message : undefined;
 
   if (code === "TOO_MANY_REQUESTS") return "tooMany";
@@ -92,7 +94,9 @@ export function ChangePasswordForm(): JSX.Element {
     setFocusSignal((signal) => signal + 1);
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
     event.preventDefault();
     setChanged(false);
     // Read before the await: React clears `currentTarget` once the handler
@@ -106,7 +110,8 @@ export function ChangePasswordForm(): JSX.Element {
 
     const found: Problem[] = [];
     if (currentPassword.length === 0) found.push("missingCurrent");
-    if (newPassword.length < MIN_PASSWORD_LENGTH) found.push("newPasswordTooShort");
+    if (newPassword.length < MIN_PASSWORD_LENGTH)
+      found.push("newPasswordTooShort");
     if (newPassword !== again) found.push("mismatch");
     if (found.length > 0) {
       refuse(found);
@@ -141,7 +146,9 @@ export function ChangePasswordForm(): JSX.Element {
     failed: t("failed"),
   };
 
-  const currentInvalid = problems.some((p) => p === "missingCurrent" || p === "wrongCurrent");
+  const currentInvalid = problems.some(
+    (p) => p === "missingCurrent" || p === "wrongCurrent",
+  );
   const newInvalid = problems.some(
     (p) => p === "newPasswordTooShort" || p === "tooEasy" || p === "identity",
   );
@@ -161,7 +168,11 @@ export function ChangePasswordForm(): JSX.Element {
       {/* Always mounted, empty until a change succeeds, so the sentence is
           announced when it appears (WCAG 4.1.3) without taking focus from
           the button that was pressed. */}
-      <div aria-live="polite" className="mt-4 space-y-1 text-sm empty:mt-0" role="status">
+      <div
+        aria-live="polite"
+        className="mt-4 space-y-1 text-sm empty:mt-0"
+        role="status"
+      >
         {changed ? (
           <>
             <p className="font-medium text-foreground">{t("changedTitle")}</p>
@@ -174,7 +185,12 @@ export function ChangePasswordForm(): JSX.Element {
           field and say one thing; the summary above says all of them, in
           this application's words. `method="post"` so a submit before
           hydration cannot put a password in the query string. */}
-      <form className="mt-4 space-y-5" method="post" noValidate onSubmit={handleSubmit}>
+      <form
+        className="mt-4 space-y-5"
+        method="post"
+        noValidate
+        onSubmit={handleSubmit}
+      >
         <div className="space-y-2">
           <label
             className="text-sm font-medium text-foreground"
@@ -194,7 +210,10 @@ export function ChangePasswordForm(): JSX.Element {
             required
             type="password"
           />
-          <p className="text-sm text-muted-foreground" id={`${fieldId}-current-hint`}>
+          <p
+            className="text-sm text-muted-foreground"
+            id={`${fieldId}-current-hint`}
+          >
             {t("currentHint")}
           </p>
         </div>
@@ -217,7 +236,10 @@ export function ChangePasswordForm(): JSX.Element {
             required
             type="password"
           />
-          <p className="text-sm text-muted-foreground" id={`${fieldId}-new-hint`}>
+          <p
+            className="text-sm text-muted-foreground"
+            id={`${fieldId}-new-hint`}
+          >
             {t("newPasswordHint", { min: MIN_PASSWORD_LENGTH })}
           </p>
         </div>
@@ -239,7 +261,10 @@ export function ChangePasswordForm(): JSX.Element {
             required
             type="password"
           />
-          <p className="text-sm text-muted-foreground" id={`${fieldId}-confirm-hint`}>
+          <p
+            className="text-sm text-muted-foreground"
+            id={`${fieldId}-confirm-hint`}
+          >
             {t("confirmHint")}
           </p>
         </div>
@@ -250,7 +275,11 @@ export function ChangePasswordForm(): JSX.Element {
           {t("endsSessions")}
         </p>
 
-        <Button aria-describedby={`${fieldId}-ends`} disabled={change.isPending} type="submit">
+        <Button
+          aria-describedby={`${fieldId}-ends`}
+          disabled={change.isPending}
+          type="submit"
+        >
           {change.isPending ? t("working") : t("submit")}
         </Button>
       </form>

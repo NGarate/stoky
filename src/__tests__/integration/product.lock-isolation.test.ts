@@ -76,7 +76,11 @@ beforeAll(async () => {
   Object.assign(B, await makeHousehold("B"));
 
   const product = await prisma.product.create({
-    data: { name: "Aceite de oliva", defaultUnit: "L", householdId: A.householdId },
+    data: {
+      name: "Aceite de oliva",
+      defaultUnit: "L",
+      householdId: A.householdId,
+    },
   });
   A.productId = product.id;
   await prisma.stockEntry.create({
@@ -106,9 +110,15 @@ afterAll(async () => {
   await prisma.stockEntry.deleteMany({
     where: { product: { householdId: { in: households } } },
   });
-  await prisma.product.deleteMany({ where: { householdId: { in: households } } });
-  await prisma.storageLocation.deleteMany({ where: { householdId: { in: households } } });
-  await prisma.mutationReplay.deleteMany({ where: { userId: { in: [A.userId, B.userId] } } });
+  await prisma.product.deleteMany({
+    where: { householdId: { in: households } },
+  });
+  await prisma.storageLocation.deleteMany({
+    where: { householdId: { in: households } },
+  });
+  await prisma.mutationReplay.deleteMany({
+    where: { userId: { in: [A.userId, B.userId] } },
+  });
   await prisma.user.deleteMany({ where: { id: { in: [A.userId, B.userId] } } });
   await prisma.household.deleteMany({ where: { id: { in: households } } });
   await prisma.$disconnect();
@@ -185,7 +195,9 @@ describe("another household's product id takes no row lock", () => {
     "consumeStock is refused while the owner holds the product",
     async () => {
       const api = await callerFor(B);
-      const before = await prisma.stockEntry.count({ where: { productId: A.productId } });
+      const before = await prisma.stockEntry.count({
+        where: { productId: A.productId },
+      });
 
       expectNotFound(
         await whileOwnerHoldsTheLock(() =>
@@ -197,7 +209,9 @@ describe("another household's product id takes no row lock", () => {
           }),
         ),
       );
-      expect(await prisma.stockEntry.count({ where: { productId: A.productId } })).toBe(before);
+      expect(
+        await prisma.stockEntry.count({ where: { productId: A.productId } }),
+      ).toBe(before);
     },
     TEST_TIMEOUT_MS,
   );
@@ -252,7 +266,9 @@ describe("another household's product id takes no row lock", () => {
           api.product.update({ id: A.productId, name: "Renombrado por B" }),
         ),
       );
-      const product = await prisma.product.findUniqueOrThrow({ where: { id: A.productId } });
+      const product = await prisma.product.findUniqueOrThrow({
+        where: { id: A.productId },
+      });
       expect(product.name).toBe("Aceite de oliva");
     },
     TEST_TIMEOUT_MS,

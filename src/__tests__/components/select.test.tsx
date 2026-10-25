@@ -39,7 +39,12 @@ describe("Select and Input", () => {
     const input = screen.getByLabelText("cantidad");
     const select = screen.getByLabelText("tienda");
 
-    for (const shared of ["bg-background", "border-input", "min-h-[48px]", "rounded-md"]) {
+    for (const shared of [
+      "bg-background",
+      "border-input",
+      "min-h-[48px]",
+      "rounded-md",
+    ]) {
       expect(surface(input)).toContain(shared);
       expect(surface(select)).toContain(shared);
     }

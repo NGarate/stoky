@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -25,15 +33,24 @@ function repo() {
   const fixture = mkdtempSync(join(tmpdir(), "stoky-install-hooks-"));
   fixtures.push(fixture);
   mkdirSync(join(fixture, "scripts"));
-  copyFileSync(join(root, "scripts/install-hooks.sh"), join(fixture, "scripts/install-hooks.sh"));
+  copyFileSync(
+    join(root, "scripts/install-hooks.sh"),
+    join(fixture, "scripts/install-hooks.sh"),
+  );
   // Stands in for the real checks: records how it was called, and fails when
   // asked to, so a commit can be seen going through or being stopped.
-  writeFileSync(join(fixture, "scripts/check-scope.sh"), 'echo "$*" >> "$CALLS"\nexit "${SCOPE_EXIT:-0}"\n');
+  writeFileSync(
+    join(fixture, "scripts/check-scope.sh"),
+    'echo "$*" >> "$CALLS"\nexit "${SCOPE_EXIT:-0}"\n',
+  );
   const callsPath = join(fixture, "calls");
   writeFileSync(callsPath, "");
 
   const spawn = (cmd: string[], extra: Record<string, string> = {}) => {
-    const result = Bun.spawnSync(cmd, { cwd: fixture, env: { ...process.env, ...gitEnv, CALLS: callsPath, ...extra } });
+    const result = Bun.spawnSync(cmd, {
+      cwd: fixture,
+      env: { ...process.env, ...gitEnv, CALLS: callsPath, ...extra },
+    });
     return { exitCode: result.exitCode, stderr: result.stderr.toString() };
   };
   spawn(["git", "init", "-q", "-b", "master"]);
@@ -42,13 +59,17 @@ function repo() {
   return {
     fixture,
     hook,
-    install: (...args: string[]) => spawn(["bash", "scripts/install-hooks.sh", ...args]),
+    install: (...args: string[]) =>
+      spawn(["bash", "scripts/install-hooks.sh", ...args]),
     commit: (scopeExit = 0) => {
       writeFileSync(join(fixture, `file-${Math.random()}`), "x\n");
       spawn(["git", "add", "."]);
-      return spawn(["git", "commit", "-q", "-m", "change"], { SCOPE_EXIT: String(scopeExit) });
+      return spawn(["git", "commit", "-q", "-m", "change"], {
+        SCOPE_EXIT: String(scopeExit),
+      });
     },
-    calls: () => readFileSync(callsPath, "utf8").trim().split("\n").filter(Boolean),
+    calls: () =>
+      readFileSync(callsPath, "utf8").trim().split("\n").filter(Boolean),
   };
 }
 
@@ -91,7 +112,10 @@ describe("install-hooks.sh", () => {
 
   it("installs where core.hooksPath points", () => {
     const r = repo();
-    Bun.spawnSync(["git", "config", "core.hooksPath", "custom-hooks"], { cwd: r.fixture, env: { ...process.env, ...gitEnv } });
+    Bun.spawnSync(["git", "config", "core.hooksPath", "custom-hooks"], {
+      cwd: r.fixture,
+      env: { ...process.env, ...gitEnv },
+    });
     expect(r.install().exitCode).toBe(0);
     expect(existsSync(join(r.fixture, "custom-hooks/pre-commit"))).toBe(true);
     expect(r.commit().exitCode).toBe(0);

@@ -19,7 +19,10 @@ import type { QueuedOp } from "@/lib/offline/queue";
 
 const enqueue = mock((_op: unknown) => ({ ok: true as const, id: "op-1" }));
 /** What the server answers a scan with; null leaves the mutation unanswered. */
-let scanResult: { product: { id: string; name: string } | null; source: string } | null = null;
+let scanResult: {
+  product: { id: string; name: string } | null;
+  source: string;
+} | null = null;
 let scanCallbacks: {
   onSuccess?: (result: unknown, input: unknown) => void;
   onError?: (error: unknown, input: unknown) => void;
@@ -32,8 +35,7 @@ const scanMutate = mock((input: unknown) => {
   if (scanError !== null) {
     const error = scanError;
     setTimeout(() => scanCallbacks.onError?.(error, input), 0);
-  }
-  else if (scanResult !== null) scanCallbacks.onSuccess?.(scanResult, input);
+  } else if (scanResult !== null) scanCallbacks.onSuccess?.(scanResult, input);
 });
 const productInvalidate = mock(() => Promise.resolve());
 let pending: QueuedOp[] = [];
@@ -90,7 +92,8 @@ mock.module("@thewirv/react-barcode-scanner", () => ({
   },
 }));
 
-const { default: ScanPage } = await import("@/app/(dashboard)/products/scan/page");
+const { default: ScanPage } =
+  await import("@/app/(dashboard)/products/scan/page");
 const { buttonVariants } = await import("@/components/ui/button");
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
 
@@ -138,7 +141,10 @@ describe("scanning with a signal", () => {
 
 describe("a scan that creates a product", () => {
   it("refreshes the catalogue, which did not have it a moment ago", async () => {
-    scanResult = { product: { id: "p-new", name: "Galletas" }, source: "openfoodfacts" };
+    scanResult = {
+      product: { id: "p-new", name: "Galletas" },
+      source: "openfoodfacts",
+    };
     render();
     await typeBarcode("8410000444444");
 
@@ -160,7 +166,10 @@ describe("the manual field", () => {
     // field's only name.
     render();
 
-    expect(screen.getByLabelText("Código de barras")).toHaveAttribute("name", "barcode");
+    expect(screen.getByLabelText("Código de barras")).toHaveAttribute(
+      "name",
+      "barcode",
+    );
   });
 
   it("submits through the Button primitive, which owns the target floor", () => {
@@ -215,7 +224,10 @@ describe("scanning with no signal", () => {
         path: "product.resolveScan",
         input: { barcode: "8410000333333" },
         householdId: "h1",
-        label: { key: "offline.scannedBarcode", values: { barcode: "8410000333333" } },
+        label: {
+          key: "offline.scannedBarcode",
+          values: { barcode: "8410000333333" },
+        },
         createdAt: new Date(),
         attempts: 0,
       },
@@ -276,7 +288,9 @@ describe("a lookup refused for being one too many", () => {
     await typeBarcode("8410000888888");
 
     await waitFor(() =>
-      expect(routerPush).toHaveBeenCalledWith("/products/new?barcode=8410000888888"),
+      expect(routerPush).toHaveBeenCalledWith(
+        "/products/new?barcode=8410000888888",
+      ),
     );
     expect(
       await screen.findByText(
@@ -297,7 +311,9 @@ describe("a camera that cannot be used", () => {
 
     act(() => {
       scannerOnError?.(
-        Object.assign(new Error("Permission denied"), { name: "NotAllowedError" }),
+        Object.assign(new Error("Permission denied"), {
+          name: "NotAllowedError",
+        }),
       );
     });
 

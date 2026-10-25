@@ -71,7 +71,11 @@ function MemberRow({
               <Button onClick={onRemove} type="button" variant="destructive">
                 Sí, quitar del hogar
               </Button>
-              <Button onClick={() => setConfirming(false)} type="button" variant="outline">
+              <Button
+                onClick={() => setConfirming(false)}
+                type="button"
+                variant="outline"
+              >
                 Cancelar
               </Button>
             </div>
@@ -98,7 +102,11 @@ function MemberRow({
                   Guardar el rol
                 </Button>
               </form>
-              <Button onClick={() => setConfirming(true)} type="button" variant="outline">
+              <Button
+                onClick={() => setConfirming(true)}
+                type="button"
+                variant="outline"
+              >
                 Quitar del hogar
               </Button>
             </div>
@@ -121,7 +129,10 @@ describe("changing a member's role", () => {
       <MemberRow name="Ana" onRemove={() => {}} onSave={onSave} role="OWNER" />,
     );
 
-    await userEvent.selectOptions(screen.getByLabelText("Rol de Ana"), "KITCHEN");
+    await userEvent.selectOptions(
+      screen.getByLabelText("Rol de Ana"),
+      "KITCHEN",
+    );
 
     expect(onSave).toHaveBeenCalledTimes(0);
   });
@@ -132,8 +143,13 @@ describe("changing a member's role", () => {
       <MemberRow name="Ana" onRemove={() => {}} onSave={onSave} role="OWNER" />,
     );
 
-    await userEvent.selectOptions(screen.getByLabelText("Rol de Ana"), "KITCHEN");
-    await userEvent.click(screen.getByRole("button", { name: "Guardar el rol" }));
+    await userEvent.selectOptions(
+      screen.getByLabelText("Rol de Ana"),
+      "KITCHEN",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Guardar el rol" }),
+    );
 
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(onSave.mock.calls[0]?.[0]).toBe("KITCHEN");
@@ -143,13 +159,21 @@ describe("changing a member's role", () => {
     // Otherwise the row invites a write that would do nothing, and a disabled
     // control says "there is no change here" more honestly than a no-op.
     renderWithIntl(
-      <MemberRow name="Ana" onRemove={() => {}} onSave={() => {}} role="OWNER" />,
+      <MemberRow
+        name="Ana"
+        onRemove={() => {}}
+        onSave={() => {}}
+        role="OWNER"
+      />,
     );
 
     const save = screen.getByRole("button", { name: "Guardar el rol" });
     expect(save).toBeDisabled();
 
-    await userEvent.selectOptions(screen.getByLabelText("Rol de Ana"), "MEMBER");
+    await userEvent.selectOptions(
+      screen.getByLabelText("Rol de Ana"),
+      "MEMBER",
+    );
     expect(save).not.toBeDisabled();
   });
 
@@ -157,7 +181,12 @@ describe("changing a member's role", () => {
     // Four rows of "Rol" tell a screen reader which control it is and not
     // whose, which is the whole difficulty of a list of forms.
     renderWithIntl(
-      <MemberRow name="Ana" onRemove={() => {}} onSave={() => {}} role="MEMBER" />,
+      <MemberRow
+        name="Ana"
+        onRemove={() => {}}
+        onSave={() => {}}
+        role="MEMBER"
+      />,
     );
 
     expect(screen.getByLabelText("Rol de Ana")).toBeInTheDocument();
@@ -175,9 +204,9 @@ describe("creating an account", () => {
   it("tells an admin who has run out of the hourly meter to wait, not to retry", () => {
     // The per-admin meter refuses for up to an hour; "Inténtalo otra vez"
     // would send the admin straight back into the same refusal.
-    expect(addRefusalOf(refused("TOO_MANY_REQUESTS", "Too many accounts created"))).toBe(
-      "tooMany",
-    );
+    expect(
+      addRefusalOf(refused("TOO_MANY_REQUESTS", "Too many accounts created")),
+    ).toBe("tooMany");
   });
 
   it("tells an admin who chose a common password to choose another, not to retry", () => {
@@ -191,19 +220,26 @@ describe("creating an account", () => {
       role: "MEMBER",
     });
     expect(refusal.success).toBe(false);
-    expect(addRefusalOf(refused("BAD_REQUEST", refusal.error?.message))).toBe("tooEasy");
+    expect(addRefusalOf(refused("BAD_REQUEST", refusal.error?.message))).toBe(
+      "tooEasy",
+    );
   });
 
   it("reads each other refusal the procedure can give", () => {
     expect(addRefusalOf(refused("CONFLICT"))).toBe("taken");
     expect(
       addRefusalOf(
-        refused("BAD_REQUEST", "That password contains the person's own name or email address"),
+        refused(
+          "BAD_REQUEST",
+          "That password contains the person's own name or email address",
+        ),
       ),
     ).toBe("identity");
     expect(addRefusalOf(refused("INTERNAL_SERVER_ERROR"))).toBe("other");
     // Another field's BAD_REQUEST is not the password's fault.
-    expect(addRefusalOf(refused("BAD_REQUEST", "Invalid email address"))).toBe("other");
+    expect(addRefusalOf(refused("BAD_REQUEST", "Invalid email address"))).toBe(
+      "other",
+    );
     expect(addRefusalOf(new Error("offline"))).toBe("other");
   });
 });
@@ -212,24 +248,42 @@ describe("removing a member", () => {
   it("asks before doing it", async () => {
     const onRemove = mock(() => {});
     renderWithIntl(
-      <MemberRow name="Ana" onRemove={onRemove} onSave={() => {}} role="MEMBER" />,
+      <MemberRow
+        name="Ana"
+        onRemove={onRemove}
+        onSave={() => {}}
+        role="MEMBER"
+      />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Quitar del hogar" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Quitar del hogar" }),
+    );
 
     expect(onRemove).toHaveBeenCalledTimes(0);
-    const confirm = screen.getByRole("group", { name: "¿Quitar a Ana del hogar?" });
+    const confirm = screen.getByRole("group", {
+      name: "¿Quitar a Ana del hogar?",
+    });
     expect(confirm).toBeInTheDocument();
   });
 
   it("removes on the second answer", async () => {
     const onRemove = mock(() => {});
     renderWithIntl(
-      <MemberRow name="Ana" onRemove={onRemove} onSave={() => {}} role="MEMBER" />,
+      <MemberRow
+        name="Ana"
+        onRemove={onRemove}
+        onSave={() => {}}
+        role="MEMBER"
+      />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Quitar del hogar" }));
-    const confirm = screen.getByRole("group", { name: "¿Quitar a Ana del hogar?" });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Quitar del hogar" }),
+    );
+    const confirm = screen.getByRole("group", {
+      name: "¿Quitar a Ana del hogar?",
+    });
     await userEvent.click(
       within(confirm).getByRole("button", { name: "Sí, quitar del hogar" }),
     );
@@ -240,10 +294,17 @@ describe("removing a member", () => {
   it("puts the row back when the answer is no", async () => {
     const onRemove = mock(() => {});
     renderWithIntl(
-      <MemberRow name="Ana" onRemove={onRemove} onSave={() => {}} role="MEMBER" />,
+      <MemberRow
+        name="Ana"
+        onRemove={onRemove}
+        onSave={() => {}}
+        role="MEMBER"
+      />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Quitar del hogar" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Quitar del hogar" }),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
 
     expect(onRemove).toHaveBeenCalledTimes(0);
@@ -298,7 +359,9 @@ describe("a member's sessions", () => {
     onEndOne?: (session: { id: string; name: string }) => Promise<unknown>;
     onEndAll?: () => Promise<unknown>;
   }): JSX.Element {
-    const [member, setMember] = useState<{ id: string; name: string } | null>(ANA);
+    const [member, setMember] = useState<{ id: string; name: string } | null>(
+      ANA,
+    );
     return (
       <MemberSessionsDialog
         loadError={loadError}
@@ -323,25 +386,40 @@ describe("a member's sessions", () => {
 
     const rows = within(screen.getByRole("dialog")).getAllByRole("listitem");
     expect(rows).toHaveLength(2);
-    expect(within(rows[0]!).getByText("Pantalla de cocina")).toBeInTheDocument();
-    // The browser too, when the title is the screen.
-    expect(within(rows[0]!).getByText("Firefox en Android")).toBeInTheDocument();
-    expect(within(rows[0]!).getByText("Recordada")).toBeInTheDocument();
-    expect(within(rows[1]!).getByText("Dispositivo desconocido")).toBeInTheDocument();
     expect(
-      within(rows[1]!).getByRole("button", { name: "Cerrar esta: Dispositivo desconocido" }),
+      within(rows[0]!).getByText("Pantalla de cocina"),
+    ).toBeInTheDocument();
+    // The browser too, when the title is the screen.
+    expect(
+      within(rows[0]!).getByText("Firefox en Android"),
+    ).toBeInTheDocument();
+    expect(within(rows[0]!).getByText("Recordada")).toBeInTheDocument();
+    expect(
+      within(rows[1]!).getByText("Dispositivo desconocido"),
+    ).toBeInTheDocument();
+    expect(
+      within(rows[1]!).getByRole("button", {
+        name: "Cerrar esta: Dispositivo desconocido",
+      }),
     ).toBeInTheDocument();
   });
 
   it("ends the row pressed, by its id, and nothing else", async () => {
     const onEndOne = mock(async (_session: { id: string; name: string }) => {});
     const onEndAll = mock(async () => {});
-    renderWithIntl(<Harness onEndAll={onEndAll} onEndOne={onEndOne} />, { locale: "es" });
+    renderWithIntl(<Harness onEndAll={onEndAll} onEndOne={onEndOne} />, {
+      locale: "es",
+    });
 
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar esta: Pantalla de cocina" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar esta: Pantalla de cocina" }),
+    );
 
     expect(onEndOne).toHaveBeenCalledTimes(1);
-    expect(onEndOne.mock.calls[0]?.[0]).toEqual({ id: "s-tablet", name: "Pantalla de cocina" });
+    expect(onEndOne.mock.calls[0]?.[0]).toEqual({
+      id: "s-tablet",
+      name: "Pantalla de cocina",
+    });
     expect(onEndAll).toHaveBeenCalledTimes(0);
   });
 
@@ -351,22 +429,33 @@ describe("a member's sessions", () => {
       { locale: "es" },
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar todas sus sesiones" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar todas sus sesiones" }),
+    );
 
     expect(
-      await screen.findByText("Solo una persona propietaria puede cerrar las sesiones de otra."),
+      await screen.findByText(
+        "Solo una persona propietaria puede cerrar las sesiones de otra.",
+      ),
     ).toBeInTheDocument();
-    expect(within(screen.getByRole("dialog")).getAllByRole("listitem")).toHaveLength(2);
+    expect(
+      within(screen.getByRole("dialog")).getAllByRole("listitem"),
+    ).toHaveLength(2);
   });
 
   it("says an owner's are an owner's even to list, and shows no rows", () => {
-    renderWithIntl(<Harness loadError={refusal("FORBIDDEN")} sessions={undefined} />, {
-      locale: "es",
-    });
+    renderWithIntl(
+      <Harness loadError={refusal("FORBIDDEN")} sessions={undefined} />,
+      {
+        locale: "es",
+      },
+    );
 
     const dialog = screen.getByRole("dialog");
     expect(
-      within(dialog).getByText("Solo una persona propietaria puede cerrar las sesiones de otra."),
+      within(dialog).getByText(
+        "Solo una persona propietaria puede cerrar las sesiones de otra.",
+      ),
     ).toBeInTheDocument();
     expect(within(dialog).queryAllByRole("listitem")).toHaveLength(0);
   });
@@ -374,15 +463,21 @@ describe("a member's sessions", () => {
   it("says when somebody is signed in nowhere, and offers nothing to end", () => {
     renderWithIntl(<Harness sessions={[]} />, { locale: "es" });
 
-    expect(screen.getByText("Ana no tiene ninguna sesión abierta.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Cerrar todas sus sesiones" })).toBeDisabled();
+    expect(
+      screen.getByText("Ana no tiene ninguna sesión abierta."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Cerrar todas sus sesiones" }),
+    ).toBeDisabled();
   });
 
   it("reads each refusal the procedures can give", () => {
     expect(memberSessionsRefusalOf(refusal("FORBIDDEN"))).toBe("notOwner");
     // Ended already, from elsewhere or by its clock: the list was out of date.
     expect(memberSessionsRefusalOf(refusal("NOT_FOUND"))).toBe("gone");
-    expect(memberSessionsRefusalOf(refusal("INTERNAL_SERVER_ERROR"))).toBe("failed");
+    expect(memberSessionsRefusalOf(refusal("INTERNAL_SERVER_ERROR"))).toBe(
+      "failed",
+    );
     expect(memberSessionsRefusalOf(new Error("offline"))).toBe("failed");
   });
 });
@@ -422,15 +517,20 @@ describe("setting a member's password", () => {
   }
 
   const field = () => screen.getByLabelText("Contraseña nueva");
-  const submit = () => screen.getByRole("button", { name: "Cambiar la contraseña" });
+  const submit = () =>
+    screen.getByRole("button", { name: "Cambiar la contraseña" });
 
   it("names the person, and says every session they have will end", () => {
     // The title is the dialog's accessible name: a field for a password is
     // one somebody can fill in for the wrong person.
     renderWithIntl(<Harness onSubmit={async () => {}} />, { locale: "es" });
 
-    const dialog = screen.getByRole("dialog", { name: "Nueva contraseña para Ana" });
-    expect(dialog).toHaveAccessibleDescription(/se cerrarán todas sus sesiones/i);
+    const dialog = screen.getByRole("dialog", {
+      name: "Nueva contraseña para Ana",
+    });
+    expect(dialog).toHaveAccessibleDescription(
+      /se cerrarán todas sus sesiones/i,
+    );
   });
 
   it("renders nothing while nobody is chosen", () => {
@@ -459,7 +559,9 @@ describe("setting a member's password", () => {
 
     expect(onSubmit).toHaveBeenCalledTimes(0);
     expect(
-      screen.getByText(`La contraseña necesita al menos ${MIN_PASSWORD_LENGTH} caracteres.`),
+      screen.getByText(
+        `La contraseña necesita al menos ${MIN_PASSWORD_LENGTH} caracteres.`,
+      ),
     ).toBeInTheDocument();
     expect(field()).toHaveAttribute("aria-invalid", "true");
   });
@@ -497,7 +599,9 @@ describe("setting a member's password", () => {
 
   it("clears a refusal when it is closed, so the next person's dialog starts clean", async () => {
     function Reopening(): JSX.Element {
-      const [member, setMember] = useState<{ id: string; name: string } | null>(ANA);
+      const [member, setMember] = useState<{ id: string; name: string } | null>(
+        ANA,
+      );
       return (
         <>
           <Button
@@ -519,16 +623,22 @@ describe("setting a member's password", () => {
     await userEvent.type(field(), "tarro de garbanzos azul");
     await userEvent.click(submit());
     expect(
-      await screen.findByText("No se ha podido cambiar la contraseña. Inténtalo otra vez."),
+      await screen.findByText(
+        "No se ha podido cambiar la contraseña. Inténtalo otra vez.",
+      ),
     ).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Luis" }));
 
-    expect(screen.getByRole("dialog", { name: "Nueva contraseña para Luis" })).toBeInTheDocument();
     expect(
-      screen.queryByText("No se ha podido cambiar la contraseña. Inténtalo otra vez."),
+      screen.getByRole("dialog", { name: "Nueva contraseña para Luis" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "No se ha podido cambiar la contraseña. Inténtalo otra vez.",
+      ),
     ).toBeNull();
   });
 
@@ -537,12 +647,17 @@ describe("setting a member's password", () => {
     expect(resetRefusalOf(refusal("FORBIDDEN"))).toBe("notOwner");
     expect(
       resetRefusalOf(
-        refusal("BAD_REQUEST", "That password contains the person's own name or email address"),
+        refusal(
+          "BAD_REQUEST",
+          "That password contains the person's own name or email address",
+        ),
       ),
     ).toBe("identity");
-    expect(resetRefusalOf(refusal("BAD_REQUEST", "That password is too easy to guess"))).toBe(
-      "tooEasy",
-    );
+    expect(
+      resetRefusalOf(
+        refusal("BAD_REQUEST", "That password is too easy to guess"),
+      ),
+    ).toBe("tooEasy");
     // Gone from the household, or changed while the hash ran: try again.
     expect(resetRefusalOf(refusal("NOT_FOUND"))).toBe("failed");
     expect(resetRefusalOf(refusal("CONFLICT"))).toBe("failed");

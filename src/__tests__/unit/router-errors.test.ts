@@ -50,7 +50,9 @@ describe("router error types", () => {
     const servicesDir = join(import.meta.dir, "../../server/services");
     const withBareErrors = readdirSync(servicesDir)
       .filter((f) => f.endsWith(".ts"))
-      .filter((f) => /throw new Error\b/.test(readFileSync(join(servicesDir, f), "utf8")));
+      .filter((f) =>
+        /throw new Error\b/.test(readFileSync(join(servicesDir, f), "utf8")),
+      );
 
     expect(withBareErrors).toEqual([]);
   });

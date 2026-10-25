@@ -25,7 +25,13 @@ import type { JSX } from "react";
  * key to type and a link to open, which is what somebody who cannot scan
  * uses instead.
  */
-export function TotpQr({ value, label }: { value: string; label: string }): JSX.Element {
+export function TotpQr({
+  value,
+  label,
+}: {
+  value: string;
+  label: string;
+}): JSX.Element {
   const { size, path } = useMemo(() => {
     const qr = encode(value, { ecc: "M", border: 4 });
     let d = "";

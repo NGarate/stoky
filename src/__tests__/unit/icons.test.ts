@@ -48,11 +48,17 @@ const files = sourceFiles(SRC).map((path) => ({
 describe("icons", () => {
   it("scans something, so the checks below are not vacuous", () => {
     expect(files.length).toBeGreaterThan(40);
-    expect(files.some(({ source }) => source.includes('from "lucide-react"'))).toBe(true);
+    expect(
+      files.some(({ source }) => source.includes('from "lucide-react"')),
+    ).toBe(true);
   });
 
   it("closes things with lucide's X, not a ✕ character", () => {
-    expect(files.filter(({ source }) => source.includes("✕")).map(({ path }) => path)).toEqual([]);
+    expect(
+      files
+        .filter(({ source }) => source.includes("✕"))
+        .map(({ path }) => path),
+    ).toEqual([]);
   });
 
   it("does not hand-draw a glyph lucide already has", () => {
@@ -69,9 +75,15 @@ describe("icons", () => {
     for (const { path, source } of files) {
       const imported = /import \{([^}]*)\} from "lucide-react"/.exec(source);
       if (!imported) continue;
-      for (const name of imported[1]!.split(",").map((n) => n.trim()).filter(Boolean)) {
-        for (const use of source.matchAll(new RegExp(`<${name}\\b([^>]*)>`, "g"))) {
-          if (!/aria-hidden="true"/.test(use[1]!)) unhidden.push(`${path}: <${name}>`);
+      for (const name of imported[1]!
+        .split(",")
+        .map((n) => n.trim())
+        .filter(Boolean)) {
+        for (const use of source.matchAll(
+          new RegExp(`<${name}\\b([^>]*)>`, "g"),
+        )) {
+          if (!/aria-hidden="true"/.test(use[1]!))
+            unhidden.push(`${path}: <${name}>`);
         }
       }
     }

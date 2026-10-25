@@ -115,43 +115,40 @@ export function ReconcileDialog({
     onError: () => setFailed(true),
   });
 
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onCloseRef.current();
-        return;
-      }
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onCloseRef.current();
+      return;
+    }
 
-      if (event.key !== "Tab") return;
+    if (event.key !== "Tab") return;
 
-      const panel = dialogRef.current;
-      if (!panel) return;
+    const panel = dialogRef.current;
+    if (!panel) return;
 
-      // Tab stops rather than focusable elements: a radio group is one stop,
-      // and a `last` the browser never reaches is a wrap that never fires.
-      const stops = tabbableWithin(panel);
-      if (stops.length === 0) return;
+    // Tab stops rather than focusable elements: a radio group is one stop,
+    // and a `last` the browser never reaches is a wrap that never fires.
+    const stops = tabbableWithin(panel);
+    if (stops.length === 0) return;
 
-      const first = stops[0];
-      const last = stops[stops.length - 1];
-      const active = document.activeElement;
+    const first = stops[0];
+    const last = stops[stops.length - 1];
+    const active = document.activeElement;
 
-      // `active === panel` is the state it opens in — focus is on the card
-      // itself, which is before every control in it, so shift+Tab from there
-      // is a backwards exit and wraps the same way.
-      const atStart = active === first || active === panel;
+    // `active === panel` is the state it opens in — focus is on the card
+    // itself, which is before every control in it, so shift+Tab from there
+    // is a backwards exit and wraps the same way.
+    const atStart = active === first || active === panel;
 
-      if (event.shiftKey && (atStart || !panel.contains(active))) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    },
-    [],
-  );
+    if (event.shiftKey && (atStart || !panel.contains(active))) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  }, []);
 
   useEffect(() => {
     // Whoever opened it gets focus back on close, or the keyboard user is
@@ -192,7 +189,15 @@ export function ReconcileDialog({
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     const actual = Number(amount);
-    if (amount.trim() === "" || role === undefined || !product.data || !Number.isFinite(actual) || actual < 0 || !input.productId) return;
+    if (
+      amount.trim() === "" ||
+      role === undefined ||
+      !product.data ||
+      !Number.isFinite(actual) ||
+      actual < 0 ||
+      !input.productId
+    )
+      return;
 
     setFailed(false);
     adjust.mutate({
@@ -253,7 +258,9 @@ export function ReconcileDialog({
               className="block text-sm font-medium text-foreground"
               htmlFor={`${fieldId}-amount`}
             >
-              {t("reconcileQuestion", { unit: units.measure(product.data?.defaultUnit) })}
+              {t("reconcileQuestion", {
+                unit: units.measure(product.data?.defaultUnit),
+              })}
             </label>
             <Input
               aria-describedby={hintId}

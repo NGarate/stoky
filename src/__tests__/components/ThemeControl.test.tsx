@@ -126,7 +126,11 @@ describe("ThemeControl", () => {
       expect(second).toBeChecked();
     });
     expect(first).toBeChecked();
-    expect(screen.getAllByLabelText("Sistema").every((r) => !(r as HTMLInputElement).checked)).toBe(true);
+    expect(
+      screen
+        .getAllByLabelText("Sistema")
+        .every((r) => !(r as HTMLInputElement).checked),
+    ).toBe(true);
   });
 
   it("follows a change made in another tab", async () => {
@@ -136,7 +140,10 @@ describe("ThemeControl", () => {
     // so this is the only signal the other tab gets.
     window.localStorage.setItem(THEME_STORAGE_KEY, "light");
     window.dispatchEvent(
-      new StorageEvent("storage", { key: THEME_STORAGE_KEY, newValue: "light" }),
+      new StorageEvent("storage", {
+        key: THEME_STORAGE_KEY,
+        newValue: "light",
+      }),
     );
 
     await waitFor(() => {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { inUnit, toChartPoints, unitPrice, withUnitPrices } from "@/lib/prices/unitPrice";
+import {
+  inUnit,
+  toChartPoints,
+  unitPrice,
+  withUnitPrices,
+} from "@/lib/prices/unitPrice";
 
 /** `PriceRecord.price` is a total for `quantity` units; these divide it once. */
 describe("unitPrice", () => {

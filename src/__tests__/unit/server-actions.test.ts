@@ -128,7 +128,8 @@ function importedActions(
     if (!clause) continue;
     if (clause.name) names.add(clause.name.text);
     const bindings = clause.namedBindings;
-    if (bindings && ts.isNamespaceImport(bindings)) namespaces.add(bindings.name.text);
+    if (bindings && ts.isNamespaceImport(bindings))
+      namespaces.add(bindings.name.text);
     if (bindings && ts.isNamedImports(bindings)) {
       for (const element of bindings.elements) names.add(element.name.text);
     }
@@ -146,10 +147,14 @@ function boundActions(
 
   const isImportedAction = (node: ts.Expression): boolean => {
     if (ts.isIdentifier(node)) return names.has(node.text);
-    if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      ts.isIdentifier(node.expression)
+    ) {
       return namespaces.has(node.expression.text);
     }
-    if (ts.isParenthesizedExpression(node)) return isImportedAction(node.expression);
+    if (ts.isParenthesizedExpression(node))
+      return isImportedAction(node.expression);
     return false;
   };
 
@@ -183,7 +188,9 @@ const importsAnAction = (from: string) => (specifier: string) => {
 describe("Server Actions carry no values of their own", () => {
   it("scans something, so the checks below are not vacuous", () => {
     expect(files.length).toBeGreaterThan(100);
-    expect([...actionModules].map((path) => relative(SRC, path)).toSorted()).toEqual(
+    expect(
+      [...actionModules].map((path) => relative(SRC, path)).toSorted(),
+    ).toEqual(
       expect.arrayContaining([
         "lib/auth/actions.ts",
         "lib/i18n/cookies.ts",
@@ -194,7 +201,10 @@ describe("Server Actions carry no values of their own", () => {
     // The bind check only looks where an action is imported; finding none
     // would pass it everywhere.
     const callers = files.filter(({ path, source }) => {
-      const { names, namespaces } = importedActions(source, importsAnAction(path));
+      const { names, namespaces } = importedActions(
+        source,
+        importsAnAction(path),
+      );
       return names.size + namespaces.size > 0;
     });
     expect(callers.length).toBeGreaterThanOrEqual(3);
@@ -250,7 +260,7 @@ describe("the checks recognise what they look for", () => {
       "actions.ts",
       [
         '"use server";',
-        "// a comment that says \"use server\";",
+        '// a comment that says "use server";',
         'const label = "use server";',
         "export async function act(): Promise<void> {}",
       ].join("\n"),
@@ -258,7 +268,10 @@ describe("the checks recognise what they look for", () => {
     expect(isActionModule(actionsFile)).toBe(true);
     expect(strayDirectives(actionsFile)).toEqual([]);
 
-    const jsx = parse("note.tsx", "export const N = () => <p>use server</p>;\n");
+    const jsx = parse(
+      "note.tsx",
+      "export const N = () => <p>use server</p>;\n",
+    );
     expect(isActionModule(jsx)).toBe(false);
     expect(strayDirectives(jsx)).toEqual([]);
   });

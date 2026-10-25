@@ -57,13 +57,17 @@ describe("ExpiryStatus", () => {
 
   it("is a pill in the tone the rule gives", () => {
     renderWithIntl(<ExpiryStatus daysUntilExpiry={-2} />, { locale: "es" });
-    expect(screen.getByText("Caducó hace 2 días").className).toContain("bg-danger");
+    expect(screen.getByText("Caducó hace 2 días").className).toContain(
+      "bg-danger",
+    );
     cleanup();
     renderWithIntl(<ExpiryStatus daysUntilExpiry={2} />, { locale: "es" });
     expect(screen.getByText("Caduca en 2 días").className).toContain("bg-warn");
     cleanup();
     renderWithIntl(<ExpiryStatus daysUntilExpiry={6} />, { locale: "es" });
-    expect(screen.getByText("Caduca en 6 días").className).toContain("bg-muted");
+    expect(screen.getByText("Caduca en 6 días").className).toContain(
+      "bg-muted",
+    );
   });
 
   it("outlines itself on a card already tinted its tone", () => {

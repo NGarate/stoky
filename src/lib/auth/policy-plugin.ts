@@ -1,7 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import type { BetterAuthPlugin } from "better-auth";
-import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
+import {
+  APIError,
+  createAuthMiddleware,
+  getSessionFromCtx,
+} from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { symmetricDecrypt } from "better-auth/crypto";
 import { hashBackupCode } from "@/lib/auth/backup-codes";
@@ -116,7 +120,11 @@ export const NO_MATCH_CODE = "stoky-no-match";
 export const totpClock = { now: (): number => Date.now() };
 
 /** RFC 4226 HOTP: HMAC-SHA-1 keyed with the secret as Better Auth stores it (its UTF-8 bytes). */
-export function hotp(secret: string, counter: number, digits: number = TOTP_DIGITS): string {
+export function hotp(
+  secret: string,
+  counter: number,
+  digits: number = TOTP_DIGITS,
+): string {
   const message = Buffer.alloc(8);
   message.writeBigUInt64BE(BigInt(counter));
   const mac = createHmac("sha1", secret).update(message).digest();
@@ -136,13 +144,18 @@ export function totpStep(at: number): number {
  * Every candidate is computed and compared whatever the earlier ones gave, so
  * how long this takes does not say which step matched, or whether one did.
  */
-export function matchingStep(secret: string, code: string, at: number): number | null {
+export function matchingStep(
+  secret: string,
+  code: string,
+  at: number,
+): number | null {
   const now = totpStep(at);
   const given = Buffer.from(code.padEnd(TOTP_DIGITS, "\0").slice(0, 64));
   let matched: number | null = null;
   for (let step = now - TOTP_WINDOW; step <= now + TOTP_WINDOW; step += 1) {
     const expected = Buffer.from(hotp(secret, step).padEnd(given.length, "\0"));
-    const equal = timingSafeEqual(given, expected) && code.length === TOTP_DIGITS;
+    const equal =
+      timingSafeEqual(given, expected) && code.length === TOTP_DIGITS;
     if (equal && matched === null) matched = step;
   }
   return matched;
@@ -171,10 +184,15 @@ async function lockedFor(ctx: GuardContext): Promise<number> {
   const owner = await codeOwner(ctx).catch(() => null);
   const row = owner
     ? await ctx.context.adapter
-        .findOne<TwoFactorRow>({ model: "twoFactor", where: [{ field: "userId", value: owner.userId }] })
+        .findOne<TwoFactorRow>({
+          model: "twoFactor",
+          where: [{ field: "userId", value: owner.userId }],
+        })
         .catch(() => null)
     : null;
-  const until = row?.lockedUntil ? new Date(row.lockedUntil).getTime() : Number.NaN;
+  const until = row?.lockedUntil
+    ? new Date(row.lockedUntil).getTime()
+    : Number.NaN;
   if (Number.isNaN(until)) return TWO_FACTOR_LOCK_S;
   return Math.max(1, Math.ceil((until - Date.now()) / 1000));
 }
@@ -241,17 +259,24 @@ async function requestSession(raw: unknown): Promise<{
   };
   let headers = ctx.headers;
   if (headers?.has("authorization")) {
-    const bearer = ctx.context.options.plugins?.find((plugin) => plugin.id === "bearer");
+    const bearer = ctx.context.options.plugins?.find(
+      (plugin) => plugin.id === "bearer",
+    );
     for (const hook of bearer?.hooks?.before ?? []) {
       if (!hook.matcher(ctx as never)) continue;
-      const result = (await hook.handler({ ...ctx, returnHeaders: true } as never)) as {
+      const result = (await hook.handler({
+        ...ctx,
+        returnHeaders: true,
+      } as never)) as {
         response?: { context?: { headers?: unknown } };
       } | null;
       const converted = result?.response?.context?.headers;
       if (converted instanceof Headers) headers = converted;
     }
   }
-  return getSessionFromCtx({ ...ctx, headers } as never, { disableRefresh: true });
+  return getSessionFromCtx({ ...ctx, headers } as never, {
+    disableRefresh: true,
+  });
 }
 
 /**
@@ -261,15 +286,19 @@ async function requestSession(raw: unknown): Promise<{
  * names. Null when neither holds; Better Auth then refuses the request
  * itself.
  */
-async function codeOwner(ctx: GuardContext): Promise<{ userId: string; signIn: boolean } | null> {
+async function codeOwner(
+  ctx: GuardContext,
+): Promise<{ userId: string; signIn: boolean } | null> {
   const session = await requestSession(ctx);
   if (session?.user?.id) return { userId: session.user.id, signIn: false };
 
   const cookie = ctx.context.createAuthCookie("two_factor");
   const identifier = await ctx.getSignedCookie(cookie.name, ctx.context.secret);
   if (!identifier) return null;
-  const challenge = await ctx.context.internalAdapter.findVerificationValue(identifier);
-  if (!challenge || new Date(challenge.expiresAt).getTime() <= Date.now()) return null;
+  const challenge =
+    await ctx.context.internalAdapter.findVerificationValue(identifier);
+  if (!challenge || new Date(challenge.expiresAt).getTime() <= Date.now())
+    return null;
   return { userId: challenge.value, signIn: true };
 }
 
@@ -319,8 +348,13 @@ async function chargeCode(
   if (!charge.allowed) {
     throw new APIError(
       "TOO_MANY_REQUESTS",
-      { code: "TOO_MANY_WRONG_CODES", message: "Too many wrong codes for this account" },
-      { "retry-after": String(Math.max(1, Math.ceil(charge.retryAfterSeconds))) },
+      {
+        code: "TOO_MANY_WRONG_CODES",
+        message: "Too many wrong codes for this account",
+      },
+      {
+        "retry-after": String(Math.max(1, Math.ceil(charge.retryAfterSeconds))),
+      },
     );
   }
   return charge;
@@ -347,9 +381,16 @@ async function requireStepUp(
 ): Promise<void> {
   const session = await requestSession(raw);
   if (!session?.session?.id || !session.user?.id) {
-    throw new APIError("UNAUTHORIZED", { code: "UNAUTHORIZED", message: "Sign in first" });
+    throw new APIError("UNAUTHORIZED", {
+      code: "UNAUTHORIZED",
+      message: "Sign in first",
+    });
   }
-  const held = await hasStepUp(db, { sessionId: session.session.id, userId: session.user.id, spend });
+  const held = await hasStepUp(db, {
+    sessionId: session.session.id,
+    userId: session.user.id,
+    spend,
+  });
   if (!held) {
     throw new APIError("FORBIDDEN", {
       code: STEP_UP_REQUIRED,
@@ -375,7 +416,9 @@ interface CookieContext {
 function removeSetCookie(headers: Headers | undefined, name: string): void {
   if (!headers) return;
   const existing = headers.getSetCookie();
-  const kept = existing.filter((line) => !line.startsWith(`${name}=`) && !line.startsWith(`${name}.`));
+  const kept = existing.filter(
+    (line) => !line.startsWith(`${name}=`) && !line.startsWith(`${name}.`),
+  );
   if (kept.length === existing.length) return;
   headers.delete("set-cookie");
   for (const line of kept) headers.append("set-cookie", line);
@@ -385,7 +428,10 @@ function removeSetCookie(headers: Headers | undefined, name: string): void {
  * Takes out of `headers` the `Set-Cookie` lines that expire one of `names` —
  * an empty value or `Max-Age=0` — and keeps every other line, in order.
  */
-function removeExpiringSetCookies(headers: Headers | undefined, names: readonly string[]): void {
+function removeExpiringSetCookies(
+  headers: Headers | undefined,
+  names: readonly string[],
+): void {
   if (!headers) return;
   const existing = headers.getSetCookie();
   const kept = existing.filter((line) => {
@@ -394,7 +440,11 @@ function removeExpiringSetCookies(headers: Headers | undefined, names: readonly 
     const name = (separator === -1 ? pair : pair.slice(0, separator)).trim();
     if (!names.includes(name)) return true;
     const value = separator === -1 ? "" : pair.slice(separator + 1).trim();
-    const expires = value === "" || attributes.some((attribute) => /^\s*max-age\s*=\s*0\s*$/i.test(attribute));
+    const expires =
+      value === "" ||
+      attributes.some((attribute) =>
+        /^\s*max-age\s*=\s*0\s*$/i.test(attribute),
+      );
     return !expires;
   });
   if (kept.length === existing.length) return;
@@ -405,12 +455,18 @@ function removeExpiringSetCookies(headers: Headers | undefined, names: readonly 
 /** The parts of a session read's context the cookie guard reads. */
 interface ReadContext {
   context: {
-    authCookies: { sessionToken: { name: string }; dontRememberToken: { name: string } };
+    authCookies: {
+      sessionToken: { name: string };
+      dontRememberToken: { name: string };
+    };
     responseHeaders?: Headers;
   };
 }
 
-export function stokyPolicy({ db, limiter = valkeyCodeLimiter }: PolicyPluginOptions) {
+export function stokyPolicy({
+  db,
+  limiter = valkeyCodeLimiter,
+}: PolicyPluginOptions) {
   return {
     id: "stoky-policy",
     hooks: {
@@ -430,7 +486,8 @@ export function stokyPolicy({ db, limiter = valkeyCodeLimiter }: PolicyPluginOpt
           // dead cookie left behind costs nothing — every read refuses it —
           // and the next sign-in replaces it (a ticked one clears
           // dont_remember itself, `src/server/http/auth-handler.ts`).
-          matcher: (context: { path?: string }) => context.path === "/get-session",
+          matcher: (context: { path?: string }) =>
+            context.path === "/get-session",
           handler: createAuthMiddleware(async (raw) => {
             const ctx = raw as unknown as ReadContext;
             removeExpiringSetCookies(ctx.context.responseHeaders, [
@@ -440,12 +497,16 @@ export function stokyPolicy({ db, limiter = valkeyCodeLimiter }: PolicyPluginOpt
           }),
         },
         {
-          matcher: (context: { path?: string }) => context.path === "/passkey/verify-authentication",
+          matcher: (context: { path?: string }) =>
+            context.path === "/passkey/verify-authentication",
           handler: createAuthMiddleware(async (raw) => {
             const ctx = raw as unknown as CookieContext;
             const session = ctx.context.newSession;
             if (!session || ctx.headers?.get(REMEMBER_HEADER) !== "0") return;
-            removeSetCookie(ctx.context.responseHeaders, ctx.context.authCookies.sessionToken.name);
+            removeSetCookie(
+              ctx.context.responseHeaders,
+              ctx.context.authCookies.sessionToken.name,
+            );
             await setSessionCookie(raw as never, session, true);
           }),
         },
@@ -463,7 +524,8 @@ export function stokyPolicy({ db, limiter = valkeyCodeLimiter }: PolicyPluginOpt
             };
             const returned = ctx.context.returned;
             if (!(returned instanceof APIError)) return;
-            const code = (returned.body as { code?: unknown } | undefined)?.code;
+            const code = (returned.body as { code?: unknown } | undefined)
+              ?.code;
             if (code !== "ACCOUNT_TEMPORARILY_LOCKED") return;
             ctx.setHeader("retry-after", String(await lockedFor(ctx)));
           }),
@@ -483,17 +545,21 @@ export function stokyPolicy({ db, limiter = valkeyCodeLimiter }: PolicyPluginOpt
           }),
         })),
         {
-          matcher: (context: { path?: string }) => context.path === "/two-factor/verify-backup-code",
+          matcher: (context: { path?: string }) =>
+            context.path === "/two-factor/verify-backup-code",
           handler: createAuthMiddleware(async (raw) => {
             const ctx = raw as unknown as GuardContext;
             const code = ctx.body?.code;
             // Not a string: Better Auth's own schema refuses it.
             if (typeof code !== "string") return;
-            return { context: { body: { ...ctx.body, code: hashBackupCode(code) } } };
+            return {
+              context: { body: { ...ctx.body, code: hashBackupCode(code) } },
+            };
           }),
         },
         {
-          matcher: (context: { path?: string }) => context.path === "/two-factor/verify-totp",
+          matcher: (context: { path?: string }) =>
+            context.path === "/two-factor/verify-totp",
           handler: createAuthMiddleware(async (raw) => {
             const ctx = raw as unknown as GuardContext;
             const code = ctx.body?.code;
@@ -509,15 +575,24 @@ export function stokyPolicy({ db, limiter = valkeyCodeLimiter }: PolicyPluginOpt
             // Nothing to guard: Better Auth answers TOTP_NOT_ENABLED.
             if (!row || (owner.signIn && row.verified === false)) return;
 
-            const address = ctx.headers ? clientAddress(ctx.headers) : undefined;
+            const address = ctx.headers
+              ? clientAddress(ctx.headers)
+              : undefined;
             let secret: string;
             try {
-              secret = await symmetricDecrypt({ key: ctx.context.secretConfig, data: row.secret });
+              secret = await symmetricDecrypt({
+                key: ctx.context.secretConfig,
+                data: row.secret,
+              });
             } catch {
-              logSecurityEvent("auth.twofactor.unreadable", { userId: owner.userId, address });
+              logSecurityEvent("auth.twofactor.unreadable", {
+                userId: owner.userId,
+                address,
+              });
               throw new APIError("UNAUTHORIZED", {
                 code: "TWO_FACTOR_UNREADABLE",
-                message: "The authenticator secret cannot be read with this server's secret",
+                message:
+                  "The authenticator secret cannot be read with this server's secret",
               });
             }
 
@@ -526,12 +601,18 @@ export function stokyPolicy({ db, limiter = valkeyCodeLimiter }: PolicyPluginOpt
             // wrong and replayed codes stay counted. Not while Better Auth's
             // own lock holds, which refuses those itself, uncounted.
             const locked =
-              row.lockedUntil != null && new Date(row.lockedUntil).getTime() > Date.now();
-            const charge = owner.signIn && !locked ? await chargeCode(limiter, owner.userId) : null;
+              row.lockedUntil != null &&
+              new Date(row.lockedUntil).getTime() > Date.now();
+            const charge =
+              owner.signIn && !locked
+                ? await chargeCode(limiter, owner.userId)
+                : null;
 
             const step = matchingStep(secret, code, totpClock.now());
             if (step === null) {
-              return { context: { body: { ...ctx.body, code: NO_MATCH_CODE } } };
+              return {
+                context: { body: { ...ctx.body, code: NO_MATCH_CODE } },
+              };
             }
 
             // The check and the claim in one statement; a tagged template, so
@@ -541,10 +622,21 @@ export function stokyPolicy({ db, limiter = valkeyCodeLimiter }: PolicyPluginOpt
               WHERE id = ${row.id}
                 AND ("lastTotpCounter" IS NULL OR "lastTotpCounter" < ${step})`;
             if (claimed === 0) {
-              logSecurityEvent("auth.twofactor.replayed", { userId: owner.userId, address });
-              throw new APIError("UNAUTHORIZED", { code: "INVALID_CODE", message: "Invalid code" });
+              logSecurityEvent("auth.twofactor.replayed", {
+                userId: owner.userId,
+                address,
+              });
+              throw new APIError("UNAUTHORIZED", {
+                code: "INVALID_CODE",
+                message: "Invalid code",
+              });
             }
-            if (charge) await limiter.refund(twoFactorCodeRateLimit(), owner.userId, charge.window);
+            if (charge)
+              await limiter.refund(
+                twoFactorCodeRateLimit(),
+                owner.userId,
+                charge.window,
+              );
           }),
         },
       ],

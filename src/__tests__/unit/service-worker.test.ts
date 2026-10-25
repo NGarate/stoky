@@ -45,11 +45,10 @@ describe("the worker is actually shipped", () => {
   });
 
   it("is tracked by git", () => {
-    const tracked = execFileSync(
-      "git",
-      ["ls-files", "--", "public/sw.js"],
-      { cwd: ROOT, encoding: "utf8" },
-    ).trim();
+    const tracked = execFileSync("git", ["ls-files", "--", "public/sw.js"], {
+      cwd: ROOT,
+      encoding: "utf8",
+    }).trim();
 
     expect(tracked).toBe("public/sw.js");
   });
@@ -83,7 +82,9 @@ describe("what it must never touch", () => {
   it("refuses to store an API response even if one reached the writer", () => {
     // Belt and braces on the one class of response that carries household
     // data and a session.
-    const writer = SOURCE.slice(SOURCE.indexOf("async function putIfCacheable"));
+    const writer = SOURCE.slice(
+      SOURCE.indexOf("async function putIfCacheable"),
+    );
     expect(writer).toContain('startsWith("/api/")');
   });
 
@@ -91,7 +92,7 @@ describe("what it must never touch", () => {
     // Its own CSP is `connect-src 'self'`, which governs fetch() *inside* the
     // worker — so handling an images.openfoodfacts.org request blocks it and
     // every product image goes blank, looking exactly like an OFF outage.
-    expect(SOURCE).toContain("if (!isSameOrigin) return \"passthrough\"");
+    expect(SOURCE).toContain('if (!isSameOrigin) return "passthrough"');
   });
 
   it("passes RSC payload requests through", () => {
@@ -132,8 +133,8 @@ describe("source shape", () => {
   });
 
   it("names its caches so they can be found and purged", () => {
-    expect(SOURCE).toContain('stoky-shell-');
-    expect(SOURCE).toContain('stoky-static-');
+    expect(SOURCE).toContain("stoky-shell-");
+    expect(SOURCE).toContain("stoky-static-");
   });
 
   it("forgets everything when the account changes", () => {
@@ -187,12 +188,18 @@ describe("giving up on the network", () => {
         put: async () => {},
         add: async () => {},
         match: async (request: Request | string) =>
-          store.get(typeof request === "string" ? request : new URL(request.url).pathname),
+          store.get(
+            typeof request === "string"
+              ? request
+              : new URL(request.url).pathname,
+          ),
       }),
       keys: async () => [],
       delete: async () => true,
       match: async (request: Request | string) =>
-        store.get(typeof request === "string" ? request : new URL(request.url).pathname),
+        store.get(
+          typeof request === "string" ? request : new URL(request.url).pathname,
+        ),
     };
 
     const self = {
@@ -219,7 +226,8 @@ describe("giving up on the network", () => {
     new Function("self", SOURCE)(self);
 
     const fetchHandler = listeners.get("fetch");
-    if (!fetchHandler) throw new Error("the worker registered no fetch listener");
+    if (!fetchHandler)
+      throw new Error("the worker registered no fetch listener");
 
     return {
       fetchHandler,
@@ -311,7 +319,11 @@ describe("what an unlisted navigation keeps", () => {
     const caches = {
       open: async (name: string) => {
         opened.push(name);
-        return { put: async () => {}, add: async () => {}, match: async () => undefined };
+        return {
+          put: async () => {},
+          add: async () => {},
+          match: async () => undefined,
+        };
       },
       keys: async () => existing,
       delete: async (name: string) => {
@@ -378,7 +390,12 @@ describe("what an unlisted navigation keeps", () => {
   });
 
   it("deletes the cache an earlier worker filled, on activate", async () => {
-    const worker = load(["none", "stoky-shell-v1", "stoky-static-v1", "someone-else"]);
+    const worker = load([
+      "none",
+      "stoky-shell-v1",
+      "stoky-static-v1",
+      "someone-else",
+    ]);
 
     await worker.fire("activate", {});
 

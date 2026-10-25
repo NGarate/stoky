@@ -1,7 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth/password-hash";
 import { createCredentialUser } from "@/lib/auth/credentials";
-import type { User, Household, HouseholdRole, Product, StockEntry, StorageLocation } from "@prisma/client";
+import type {
+  User,
+  Household,
+  HouseholdRole,
+  Product,
+  StockEntry,
+  StorageLocation,
+} from "@prisma/client";
 import type { AppSession } from "@/lib/auth/session";
 
 /**
@@ -72,11 +79,15 @@ export async function createTestUser(data: TestUserData): Promise<User> {
  */
 export async function storedPasswordHash(userId: string): Promise<string> {
   const account = await prisma.account.findUniqueOrThrow({
-    where: { providerId_accountId: { providerId: "credential", accountId: userId } },
+    where: {
+      providerId_accountId: { providerId: "credential", accountId: userId },
+    },
     select: { userId: true, password: true },
   });
   if (account.userId !== userId || account.password === null) {
-    throw new Error(`the credential row of ${userId} holds no password of its own`);
+    throw new Error(
+      `the credential row of ${userId} holds no password of its own`,
+    );
   }
   return account.password;
 }
@@ -84,7 +95,9 @@ export async function storedPasswordHash(userId: string): Promise<string> {
 /**
  * Creates a test household
  */
-export async function createTestHousehold(data: TestHouseholdData): Promise<Household> {
+export async function createTestHousehold(
+  data: TestHouseholdData,
+): Promise<Household> {
   return prisma.household.create({
     data: {
       name: data.name,
@@ -95,7 +108,9 @@ export async function createTestHousehold(data: TestHouseholdData): Promise<Hous
 /**
  * Creates a test product
  */
-export async function createTestProduct(data: TestProductData): Promise<Product> {
+export async function createTestProduct(
+  data: TestProductData,
+): Promise<Product> {
   return prisma.product.create({
     data: {
       name: data.name,
@@ -112,7 +127,9 @@ export async function createTestProduct(data: TestProductData): Promise<Product>
 /**
  * Creates a test storage location
  */
-export async function createTestLocation(data: TestLocationData): Promise<StorageLocation> {
+export async function createTestLocation(
+  data: TestLocationData,
+): Promise<StorageLocation> {
   return prisma.storageLocation.create({
     data: {
       name: data.name,
@@ -125,7 +142,9 @@ export async function createTestLocation(data: TestLocationData): Promise<Storag
 /**
  * Creates a test stock entry
  */
-export async function createTestStockEntry(data: TestStockEntryData): Promise<StockEntry> {
+export async function createTestStockEntry(
+  data: TestStockEntryData,
+): Promise<StockEntry> {
   return prisma.stockEntry.create({
     data: {
       productId: data.productId,
@@ -155,7 +174,9 @@ export async function cleanupTestUsers(emailPattern: string): Promise<void> {
 /**
  * Clean up test households by name pattern
  */
-export async function cleanupTestHouseholds(namePattern: string): Promise<void> {
+export async function cleanupTestHouseholds(
+  namePattern: string,
+): Promise<void> {
   await prisma.household.deleteMany({
     where: {
       name: {
@@ -201,7 +222,7 @@ export async function cleanupAllTestData(): Promise<void> {
  */
 export async function createTestScenario() {
   const timestamp = Date.now();
-  
+
   // Create household
   const household = await createTestHousehold({
     name: `Test Household ${timestamp}`,
@@ -266,7 +287,9 @@ export function generateTestName(prefix = "Test"): string {
 /**
  * Helper to create a mock session for tRPC context
  */
-export function createMockSession(user: User & { household?: Household | null }): AppSession {
+export function createMockSession(
+  user: User & { household?: Household | null },
+): AppSession {
   return {
     user: {
       id: user.id,

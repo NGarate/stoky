@@ -5,8 +5,14 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ReauthDialog, type ReauthAction } from "@/components/session/ReauthDialog";
-import { EndSessionError, useEndSession } from "@/components/session/use-end-session";
+import {
+  ReauthDialog,
+  type ReauthAction,
+} from "@/components/session/ReauthDialog";
+import {
+  EndSessionError,
+  useEndSession,
+} from "@/components/session/use-end-session";
 import { api } from "@/lib/trpc/client";
 import type { JSX } from "react";
 
@@ -51,14 +57,18 @@ export function EndHouseholdSessions(): JSX.Element {
   const password = useRef<string | null>(null);
   const { pending, unsaved, leave, sendThenLeave } = useEndSession(() => {
     const currentPassword = password.current;
-    if (currentPassword === null) throw new Error("no password to confirm with");
+    if (currentPassword === null)
+      throw new Error("no password to confirm with");
     return endHousehold.mutateAsync({ currentPassword });
   });
 
   const [open, setOpen] = useState(false);
   const opener = useRef<HTMLButtonElement | null>(null);
 
-  async function submit(currentPassword: string, actionId: string): Promise<void> {
+  async function submit(
+    currentPassword: string,
+    actionId: string,
+  ): Promise<void> {
     // The page goes to /login when this resolves; nothing after it runs.
     // Cleared however it ends, so the password does not outlive the attempt.
     password.current = currentPassword;
@@ -83,7 +93,9 @@ export function EndHouseholdSessions(): JSX.Element {
     }
     const refusal = error instanceof EndSessionError ? error.cause : error;
     const code =
-      refusal instanceof TRPCClientError ? (refusal.data?.code as string | undefined) : undefined;
+      refusal instanceof TRPCClientError
+        ? (refusal.data?.code as string | undefined)
+        : undefined;
     return code === "FORBIDDEN" ? t("endAllHouseholdNotOwner") : null;
   }
 
@@ -91,13 +103,25 @@ export function EndHouseholdSessions(): JSX.Element {
     pending > 0
       ? [
           { id: "send", label: tSecurity("endSendFirst") },
-          { id: "discard", label: tSecurity("endDiscard"), variant: "destructive" },
+          {
+            id: "discard",
+            label: tSecurity("endDiscard"),
+            variant: "destructive",
+          },
         ]
-      : [{ id: "leave", label: t("endAllHouseholdButton"), variant: "destructive" }];
+      : [
+          {
+            id: "leave",
+            label: t("endAllHouseholdButton"),
+            variant: "destructive",
+          },
+        ];
 
   return (
     <>
-      <p className="text-sm text-muted-foreground">{t("endAllHouseholdIntro")}</p>
+      <p className="text-sm text-muted-foreground">
+        {t("endAllHouseholdIntro")}
+      </p>
       <Button
         className="mt-3"
         onClick={(event) => {
@@ -118,7 +142,9 @@ export function EndHouseholdSessions(): JSX.Element {
           pending > 0 || unsaved > 0 ? (
             <div className="mb-3 rounded border border-warn-foreground bg-warn p-3 text-sm text-warn-foreground">
               <p>
-                {pending > 0 ? tSecurity("endPending", { count: pending }) : null}
+                {pending > 0
+                  ? tSecurity("endPending", { count: pending })
+                  : null}
                 {/* Refused changes go with the rest, and sending first cannot
                     save them — so they are said apart. */}
                 {unsaved > 0 ? (
@@ -129,7 +155,11 @@ export function EndHouseholdSessions(): JSX.Element {
                 ) : null}
               </p>
               {unsaved > 0 ? (
-                <Button asChild className="px-0 text-warn-foreground" variant="link">
+                <Button
+                  asChild
+                  className="px-0 text-warn-foreground"
+                  variant="link"
+                >
                   <Link href="/settings/unsaved">{tOffline("seeUnsaved")}</Link>
                 </Button>
               ) : null}

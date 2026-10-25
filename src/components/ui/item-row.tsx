@@ -30,43 +30,43 @@ import type { JSX, ReactNode } from "react";
  * nowhere to put an action.
  */
 const itemRowVariants = cva("transition-colors", {
-    variants: {
-      /**
-       * Whether the row is a card.
-       *
-       * `plain` exists because the owner's rule is "no cards except where a
-       * card is concretely justified" (DESIGN_AUDIT A5.4), and the Panel and
-       * the kitchen are where it was applied: their rows separate with a
-       * divider and nothing frames them. Unifying the lists means sharing the
-       * *grammar* — a title that links, a status opposite it, the details
-       * underneath — not forcing a box onto screens that decided against one.
-       */
-      variant: {
-        card: "rounded-lg border border-border shadow-sm",
-        plain: "border-border border-b last:border-0",
-      },
-      density: {
-        compact: "p-3",
-        default: "p-4 md:p-5",
-        touch: "min-h-[64px] p-4 md:p-5",
-      },
-      tone: {
-        neutral: "",
-        warn: "bg-warn",
-        danger: "bg-danger",
-      },
+  variants: {
+    /**
+     * Whether the row is a card.
+     *
+     * `plain` exists because the owner's rule is "no cards except where a
+     * card is concretely justified" (DESIGN_AUDIT A5.4), and the Panel and
+     * the kitchen are where it was applied: their rows separate with a
+     * divider and nothing frames them. Unifying the lists means sharing the
+     * *grammar* — a title that links, a status opposite it, the details
+     * underneath — not forcing a box onto screens that decided against one.
+     */
+    variant: {
+      card: "rounded-lg border border-border shadow-sm",
+      plain: "border-border border-b last:border-0",
     },
-    compoundVariants: [
-      // Only a card has a surface of its own to tint.
-      { variant: "card", tone: "neutral", class: "bg-card" },
-      // A card's padding is inside its surface; a plain row has no surface,
-      // so the inset only pushed every title 12–20px right of the heading it
-      // sits under. The vertical rhythm stays. `md:` too, or `md:p-5` brings
-      // the inset back at the tablet tier.
-      { variant: "plain", class: "px-0 md:px-0" },
-    ],
-    defaultVariants: { variant: "card", density: "default", tone: "neutral" },
-  });
+    density: {
+      compact: "p-3",
+      default: "p-4 md:p-5",
+      touch: "min-h-[64px] p-4 md:p-5",
+    },
+    tone: {
+      neutral: "",
+      warn: "bg-warn",
+      danger: "bg-danger",
+    },
+  },
+  compoundVariants: [
+    // Only a card has a surface of its own to tint.
+    { variant: "card", tone: "neutral", class: "bg-card" },
+    // A card's padding is inside its surface; a plain row has no surface,
+    // so the inset only pushed every title 12–20px right of the heading it
+    // sits under. The vertical rhythm stays. `md:` too, or `md:p-5` brings
+    // the inset back at the tablet tier.
+    { variant: "plain", class: "px-0 md:px-0" },
+  ],
+  defaultVariants: { variant: "card", density: "default", tone: "neutral" },
+});
 
 const titleVariants = cva(
   // `min-w` as well as `min-h`. A target is 48px in *both* directions, and a
@@ -137,7 +137,9 @@ export function ItemRow({
   className,
 }: ItemRowProps): JSX.Element {
   return (
-    <Element className={cn(itemRowVariants({ density, tone, variant }), className)}>
+    <Element
+      className={cn(itemRowVariants({ density, tone, variant }), className)}
+    >
       <div className="flex flex-wrap items-start justify-between gap-2">
         {href ? (
           <Link

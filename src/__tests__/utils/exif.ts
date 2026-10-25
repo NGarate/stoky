@@ -138,7 +138,11 @@ export function exifPayloadFor(spec: ExifSpec): Buffer {
   }
 
   if (!spec.gps) {
-    return Buffer.concat([EXIF_PREFIX, header, serialiseIfd(entries, 8, little)]);
+    return Buffer.concat([
+      EXIF_PREFIX,
+      header,
+      serialiseIfd(entries, 8, little),
+    ]);
   }
 
   // The GPS block is a *second* IFD, pointed at from the first. Its offset can

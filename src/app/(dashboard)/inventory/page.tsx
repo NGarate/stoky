@@ -207,7 +207,7 @@ export function InventoryView(): JSX.Element {
             {t("filterRestockActive")}
           </p>
           <Button asChild variant="link">
-            <Link href="/inventory" > {t("filterClear")} </Link>
+            <Link href="/inventory"> {t("filterClear")} </Link>
           </Button>
         </div>
       ) : (
@@ -252,7 +252,11 @@ export function InventoryView(): JSX.Element {
             {common("search")}
           </Button>
           {search ? (
-            <Button onClick={() => go({ q: null })} type="button" variant="ghost">
+            <Button
+              onClick={() => go({ q: null })}
+              type="button"
+              variant="ghost"
+            >
               {t("searchClear")}
             </Button>
           ) : null}
@@ -294,7 +298,11 @@ export function InventoryView(): JSX.Element {
       {products.length === 0 && search ? (
         <EmptyState
           action={
-            <Button onClick={() => go({ q: null })} type="button" variant="outline">
+            <Button
+              onClick={() => go({ q: null })}
+              type="button"
+              variant="outline"
+            >
               {t("searchClear")}
             </Button>
           }
@@ -354,53 +362,58 @@ export function InventoryView(): JSX.Element {
           hidden one makes "the product is on the page" assert false on the tier
           where it is true. */}
       {products.length > 0 ? (
-      <div className="hidden overflow-hidden rounded-lg border border-border bg-card shadow lg:block">
-        <table className="w-full">
-          <thead className="bg-muted text-muted-foreground">
-            <tr>
-              <th className="px-4 py-3 text-left">{t("productHeader")}</th>
-              <th className="px-4 py-3 text-left">{t("categoryHeader")}</th>
-              <th className="px-4 py-3 text-right">{t("totalStockHeader")}</th>
-              <th className="px-4 py-3 text-center">{t("statusHeader")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((product) => (
-              <tr
-                key={product.id}
-                className={`border-t border-border ${
-                  ROW_TINTS[stockTone(product.totalStock, product.isLowStock)]
-                }`}
-              >
-                <td className="px-4 py-3">
-                  <Button asChild variant="link">
-                    <Link href={`/products/${product.id}`} > {product.name} </Link>
-                  </Button>
-                </td>
-                <td className="px-4 py-3">
-                  <Badge tone="neutral">
-                    {product.category || t("noCategory")}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <StockAmount
-                    defaultUnit={product.defaultUnit}
-                    isLowStock={product.isLowStock}
-                    totalStock={product.totalStock}
-                  />
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <StockStatus
-                    isLowStock={product.isLowStock}
-                    onTintedRow
-                    totalStock={product.totalStock}
-                  />
-                </td>
+        <div className="hidden overflow-hidden rounded-lg border border-border bg-card shadow lg:block">
+          <table className="w-full">
+            <thead className="bg-muted text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 text-left">{t("productHeader")}</th>
+                <th className="px-4 py-3 text-left">{t("categoryHeader")}</th>
+                <th className="px-4 py-3 text-right">
+                  {t("totalStockHeader")}
+                </th>
+                <th className="px-4 py-3 text-center">{t("statusHeader")}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {products.map((product) => (
+                <tr
+                  key={product.id}
+                  className={`border-t border-border ${
+                    ROW_TINTS[stockTone(product.totalStock, product.isLowStock)]
+                  }`}
+                >
+                  <td className="px-4 py-3">
+                    <Button asChild variant="link">
+                      <Link href={`/products/${product.id}`}>
+                        {" "}
+                        {product.name}{" "}
+                      </Link>
+                    </Button>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge tone="neutral">
+                      {product.category || t("noCategory")}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <StockAmount
+                      defaultUnit={product.defaultUnit}
+                      isLowStock={product.isLowStock}
+                      totalStock={product.totalStock}
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <StockStatus
+                      isLowStock={product.isLowStock}
+                      onTintedRow
+                      totalStock={product.totalStock}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
 
       {/* Phone and tablet: one card per product. */}

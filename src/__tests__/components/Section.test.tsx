@@ -17,7 +17,10 @@ describe("Section", () => {
 
     // The region a screen reader lists is called what the reader sees.
     const region = screen.getByRole("region", { name: "Necesita reposición" });
-    const heading = screen.getByRole("heading", { level: 2, name: "Necesita reposición" });
+    const heading = screen.getByRole("heading", {
+      level: 2,
+      name: "Necesita reposición",
+    });
     expect(region.contains(heading)).toBe(true);
     expect(region.textContent).toContain("Leche");
   });
@@ -34,9 +37,15 @@ describe("Section", () => {
   });
 
   it("grows only at the kitchen's distance", () => {
-    render(<Section density="touch" title="Usar ya">x</Section>);
+    render(
+      <Section density="touch" title="Usar ya">
+        x
+      </Section>,
+    );
 
-    expect(screen.getByRole("heading", { level: 2 }).className).toContain("md:text-2xl");
+    expect(screen.getByRole("heading", { level: 2 }).className).toContain(
+      "md:text-2xl",
+    );
   });
 
   it("puts the aside opposite the heading and after it in reading order", () => {

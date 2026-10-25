@@ -36,14 +36,18 @@ describe("canonicalise", () => {
     const a = { productId: "p1", quantity: 2, unit: "L" };
     const b = { unit: "L", productId: "p1", quantity: 2 };
 
-    expect(JSON.stringify(canonicalise(a))).toBe(JSON.stringify(canonicalise(b)));
+    expect(JSON.stringify(canonicalise(a))).toBe(
+      JSON.stringify(canonicalise(b)),
+    );
   });
 
   it("treats an omitted field and an undefined one as the same request", () => {
     const a = { productId: "p1", note: undefined };
     const b = { productId: "p1" };
 
-    expect(JSON.stringify(canonicalise(a))).toBe(JSON.stringify(canonicalise(b)));
+    expect(JSON.stringify(canonicalise(a))).toBe(
+      JSON.stringify(canonicalise(b)),
+    );
   });
 
   it("keeps a date as an instant, not as whatever the clock printed", () => {
@@ -66,7 +70,9 @@ describe("canonicalise", () => {
     const a = { where: { b: 1, a: 2 } };
     const b = { where: { a: 2, b: 1 } };
 
-    expect(JSON.stringify(canonicalise(a))).toBe(JSON.stringify(canonicalise(b)));
+    expect(JSON.stringify(canonicalise(a))).toBe(
+      JSON.stringify(canonicalise(b)),
+    );
   });
 
   it("keeps array order, because order is content", () => {

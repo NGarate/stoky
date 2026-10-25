@@ -64,7 +64,11 @@ beforeAll(async () => {
   Object.assign(B, await makeHousehold("B"));
 
   const product = await prisma.product.create({
-    data: { name: "Leche entera", defaultUnit: "L", householdId: A.householdId },
+    data: {
+      name: "Leche entera",
+      defaultUnit: "L",
+      householdId: A.householdId,
+    },
   });
   A.productId = product.id;
 });
@@ -77,7 +81,9 @@ afterAll(async () => {
   await prisma.stockEntry.deleteMany({
     where: { product: { householdId: { in: households } } },
   });
-  await prisma.product.deleteMany({ where: { householdId: { in: households } } });
+  await prisma.product.deleteMany({
+    where: { householdId: { in: households } },
+  });
   await prisma.store.deleteMany({ where: { householdId: { in: households } } });
   await prisma.user.deleteMany({ where: { id: { in: [A.userId, B.userId] } } });
   await prisma.household.deleteMany({ where: { id: { in: households } } });
@@ -91,7 +97,7 @@ describe("addStock and another household's store", () => {
     let thrown: unknown;
     try {
       await api.inventory.addStock({
-      ...envelope(A.userId),
+        ...envelope(A.userId),
         productId: A.productId,
         quantity: 1,
         unit: "L",
@@ -116,7 +122,7 @@ describe("addStock and another household's store", () => {
 
     await api.inventory
       .addStock({
-      ...envelope(A.userId),
+        ...envelope(A.userId),
         productId: A.productId,
         quantity: 3,
         unit: "L",
@@ -162,7 +168,6 @@ describe("addStock and another household's store", () => {
       productId: A.productId,
       quantity: 1,
       unit: "L",
-
     });
 
     expect(entry.quantity).toBe(1);

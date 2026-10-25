@@ -44,12 +44,12 @@ describe("Checkbox", () => {
       </>,
     );
 
-    expect(screen.getByRole("checkbox", { name: "A" })).toHaveAccessibleDescription(
-      "uno",
-    );
-    expect(screen.getByRole("checkbox", { name: "B" })).toHaveAccessibleDescription(
-      "dos",
-    );
+    expect(
+      screen.getByRole("checkbox", { name: "A" }),
+    ).toHaveAccessibleDescription("uno");
+    expect(
+      screen.getByRole("checkbox", { name: "B" }),
+    ).toHaveAccessibleDescription("dos");
   });
 
   it("reports the new state each time it is toggled", () => {
@@ -105,9 +105,9 @@ describe("Checkbox", () => {
       </form>,
     );
 
-    expect(new FormData(container.querySelector("form")!).get("rememberMe")).toBe(
-      "on",
-    );
+    expect(
+      new FormData(container.querySelector("form")!).get("rememberMe"),
+    ).toBe("on");
   });
 
   it("can be disabled", () => {

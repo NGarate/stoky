@@ -108,7 +108,11 @@ describe("Household Validation Schemas", () => {
     });
 
     it("should accept all valid roles", () => {
-      const roles: Array<"OWNER" | "ADMIN" | "MEMBER"> = ["OWNER", "ADMIN", "MEMBER"];
+      const roles: Array<"OWNER" | "ADMIN" | "MEMBER"> = [
+        "OWNER",
+        "ADMIN",
+        "MEMBER",
+      ];
 
       for (const role of roles) {
         const result = householdMemberSchema.safeParse({
@@ -160,8 +164,10 @@ describe("Household Validation Schemas", () => {
 
     it("accepts a password unrelated to the person", () => {
       expect(
-        addMemberSchema.safeParse({ ...member, password: "tablet despensa nevera" })
-          .success,
+        addMemberSchema.safeParse({
+          ...member,
+          password: "tablet despensa nevera",
+        }).success,
       ).toBe(true);
     });
 
@@ -177,8 +183,10 @@ describe("Household Validation Schemas", () => {
 
     it("refuses one containing their address's local part", () => {
       expect(
-        addMemberSchema.safeParse({ ...member, password: "lucia.m-2026-tablet" })
-          .success,
+        addMemberSchema.safeParse({
+          ...member,
+          password: "lucia.m-2026-tablet",
+        }).success,
       ).toBe(false);
     });
   });

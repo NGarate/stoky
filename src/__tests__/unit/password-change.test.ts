@@ -1,7 +1,10 @@
 import { describe, it, expect } from "bun:test";
 import { TRPCError } from "@trpc/server";
 import { APIError } from "better-auth/api";
-import { changeOwnPassword, type ChangePasswordCall } from "@/lib/auth/password-change";
+import {
+  changeOwnPassword,
+  type ChangePasswordCall,
+} from "@/lib/auth/password-change";
 import { isWrongCurrentPasswordRefusal } from "@/lib/validations/password";
 
 /**
@@ -14,9 +17,14 @@ import { isWrongCurrentPasswordRefusal } from "@/lib/validations/password";
  * refusal is proved here, along with what is asked of Better Auth.
  */
 
-const INPUT = { currentPassword: "cocina despensa nevera", newPassword: "tarro de garbanzos azul" };
+const INPUT = {
+  currentPassword: "cocina despensa nevera",
+  newPassword: "tarro de garbanzos azul",
+};
 
-function recording(answer: () => Promise<unknown> = async () => ({ token: "t" })) {
+function recording(
+  answer: () => Promise<unknown> = async () => ({ token: "t" }),
+) {
   const sent: Parameters<ChangePasswordCall>[0][] = [];
   const call: ChangePasswordCall = async (request) => {
     sent.push(request);
@@ -64,7 +72,10 @@ describe("changing a password through Better Auth", () => {
 
   it("answers Better Auth's wrong-password refusal as the router's own", async () => {
     const { call } = recording(async () => {
-      throw new APIError("BAD_REQUEST", { code: "INVALID_PASSWORD", message: "Invalid password" });
+      throw new APIError("BAD_REQUEST", {
+        code: "INVALID_PASSWORD",
+        message: "Invalid password",
+      });
     });
 
     const refusal = await refusalOf(
@@ -73,7 +84,9 @@ describe("changing a password through Better Auth", () => {
 
     expect(refusal).toBeInstanceOf(TRPCError);
     expect((refusal as TRPCError).code).toBe("BAD_REQUEST");
-    expect(isWrongCurrentPasswordRefusal((refusal as TRPCError).message)).toBe(true);
+    expect(isWrongCurrentPasswordRefusal((refusal as TRPCError).message)).toBe(
+      true,
+    );
   });
 
   it("answers a session that ended in between as UNAUTHORIZED", async () => {
@@ -95,8 +108,10 @@ describe("changing a password through Better Auth", () => {
       throw failure;
     });
 
-    expect(await refusalOf(changeOwnPassword(new Headers({ cookie: "a=b" }), INPUT, call))).toBe(
-      failure,
-    );
+    expect(
+      await refusalOf(
+        changeOwnPassword(new Headers({ cookie: "a=b" }), INPUT, call),
+      ),
+    ).toBe(failure);
   });
 });

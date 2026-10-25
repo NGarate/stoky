@@ -1,4 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+} from "bun:test";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
@@ -80,7 +87,9 @@ beforeEach(async () => {
   await prisma.stockEntry.deleteMany({
     where: { product: { householdId: OWNER.householdId } },
   });
-  await prisma.product.deleteMany({ where: { householdId: OWNER.householdId } });
+  await prisma.product.deleteMany({
+    where: { householdId: OWNER.householdId },
+  });
   await prisma.mutationReplay.deleteMany({ where: { userId: OWNER.userId } });
 
   const product = await prisma.product.create({
@@ -107,7 +116,9 @@ afterAll(async () => {
   await prisma.stockEntry.deleteMany({
     where: { product: { householdId: OWNER.householdId } },
   });
-  await prisma.product.deleteMany({ where: { householdId: OWNER.householdId } });
+  await prisma.product.deleteMany({
+    where: { householdId: OWNER.householdId },
+  });
   await prisma.storageLocation.deleteMany({
     where: { householdId: OWNER.householdId },
   });
@@ -290,7 +301,6 @@ describe("inventory.consumeStock", () => {
       productId: OWNER.productId,
       quantity: 6,
       unit: "L",
-
     });
 
     const call = {
@@ -320,7 +330,6 @@ describe("inventory.consumeStock", () => {
       productId: OWNER.productId,
       quantity: 2,
       unit: "L",
-
     });
 
     const call = {

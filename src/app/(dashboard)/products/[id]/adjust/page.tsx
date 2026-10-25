@@ -265,10 +265,7 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="submit"
-            disabled={adjustStock.isPending}
-          >
+          <Button type="submit" disabled={adjustStock.isPending}>
             {t("submit")}
           </Button>
           {/* "Cancelar", not "Volver al producto" a second time. The way out
@@ -284,7 +281,11 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
           </Button>
           {/* Reduced to the pending state, which is what it was always for.
               An adjustment is an event and now says so in the snackbar. */}
-          <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+          <p
+            role="status"
+            aria-live="polite"
+            className="text-sm text-muted-foreground"
+          >
             {adjustStock.isPending ? t("submitting") : ""}
           </p>
         </div>

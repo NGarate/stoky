@@ -40,7 +40,10 @@ function flushWrites(): Promise<void> {
 
 function clientWith(data: unknown): QueryClient {
   const client = new QueryClient();
-  client.setQueryData([["inventory", "getExpiringItems"], { type: "query" }], data);
+  client.setQueryData(
+    [["inventory", "getExpiringItems"], { type: "query" }],
+    data,
+  );
   return client;
 }
 
@@ -77,7 +80,9 @@ beforeEach(() => {
 
 describe("what comes back on the next visit", () => {
   it("restores what a screen last showed", async () => {
-    const restored = await roundTrip(USER, [{ id: "b1", name: "Leche entera" }]);
+    const restored = await roundTrip(USER, [
+      { id: "b1", name: "Leche entera" },
+    ]);
 
     expect(restored).toEqual([{ id: "b1", name: "Leche entera" }]);
   });
@@ -116,7 +121,10 @@ describe("what comes back on the next visit", () => {
 
     // The shared kitchen tablet.
     expect(
-      theirs.getQueryData([["inventory", "getExpiringItems"], { type: "query" }]),
+      theirs.getQueryData([
+        ["inventory", "getExpiringItems"],
+        { type: "query" },
+      ]),
     ).toBeUndefined();
   });
 });
@@ -167,7 +175,10 @@ describe("a restored answer is shown, never trusted", () => {
 describe("what is not written", () => {
   it("leaves a query outside the allowlist out of the cache", async () => {
     const writing = new QueryClient();
-    writing.setQueryData([["receipt", "list"], { type: "query" }], [{ id: "r1" }]);
+    writing.setQueryData(
+      [["receipt", "list"], { type: "query" }],
+      [{ id: "r1" }],
+    );
     await persistQueryClientSave({
       queryClient: writing,
       ...persistOptions(USER, { throttleTime: 0 }),

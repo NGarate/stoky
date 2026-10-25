@@ -1,6 +1,20 @@
 import "../setup/matchers";
-import { describe, it, expect, afterEach, beforeEach, jest, mock } from "bun:test";
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  describe,
+  it,
+  expect,
+  afterEach,
+  beforeEach,
+  jest,
+  mock,
+} from "bun:test";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
@@ -41,16 +55,11 @@ mock.module("@/lib/offline/queue-context", () => ({
   }),
 }));
 
-const { SnackbarProvider, useSnackbar } = await import(
-  "@/components/ui/snackbar"
-);
+const { SnackbarProvider, useSnackbar } =
+  await import("@/components/ui/snackbar");
 
 /** A button per snackbar shape, so a test can fire one by clicking. */
-function Harness({
-  onUndo,
-}: {
-  onUndo?: () => void;
-}): React.JSX.Element {
+function Harness({ onUndo }: { onUndo?: () => void }): React.JSX.Element {
   const snackbar = useSnackbar();
   return (
     <>
@@ -92,7 +101,10 @@ function Harness({
         onClick={() =>
           snackbar.show({
             kind: "undo-queued",
-            message: { key: "offline.usedUp", values: { quantity: 1, unit: "L", name: "Leche" } },
+            message: {
+              key: "offline.usedUp",
+              values: { quantity: 1, unit: "L", name: "Leche" },
+            },
             opId: "op-1",
           })
         }
@@ -104,7 +116,10 @@ function Harness({
         onClick={() =>
           snackbar.show({
             kind: "undo-queued",
-            message: { key: "offline.addedStock", values: { quantity: 2, unit: "L", name: "Pan" } },
+            message: {
+              key: "offline.addedStock",
+              values: { quantity: 2, unit: "L", name: "Pan" },
+            },
             opId: "op-2",
           })
         }
@@ -116,7 +131,10 @@ function Harness({
         onClick={() =>
           snackbar.show({
             kind: "confirm",
-            message: { key: "offline.usedUp", values: { quantity: 2, unit: "unit", name: "Huevos" } },
+            message: {
+              key: "offline.usedUp",
+              values: { quantity: 2, unit: "unit", name: "Huevos" },
+            },
           })
         }
         type="button"
@@ -197,7 +215,9 @@ describe("what the snackbar says", () => {
 
     // The op label is `{key, values}` so that a queue composed in Spanish and
     // read after a language switch is not half in each (queue.ts:41-47).
-    expect(await screen.findAllByText("Marcaste «Leche» como comprado")).not.toHaveLength(0);
+    expect(
+      await screen.findAllByText("Marcaste «Leche» como comprado"),
+    ).not.toHaveLength(0);
   });
 
   it("writes a stored count unit as a word, in the reader's plural", async () => {
@@ -262,17 +282,23 @@ describe("a failure", () => {
     try {
       render();
       fireEvent.click(screen.getByRole("button", { name: "confirmar" }));
-      expect(screen.getAllByText("Marcaste «Leche» como comprado").length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText("Marcaste «Leche» como comprado").length,
+      ).toBeGreaterThan(0);
       act(() => {
         jest.advanceTimersByTime(7_000);
       });
-      expect(screen.queryAllByText("Marcaste «Leche» como comprado")).toHaveLength(0);
+      expect(
+        screen.queryAllByText("Marcaste «Leche» como comprado"),
+      ).toHaveLength(0);
 
       fireEvent.click(screen.getByRole("button", { name: "fallo" }));
       act(() => {
         jest.advanceTimersByTime(10 * 60_000);
       });
-      expect(screen.getAllByText(/No se ha podido eliminar/).length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText(/No se ha podido eliminar/).length,
+      ).toBeGreaterThan(0);
     } finally {
       jest.useRealTimers();
     }
@@ -288,11 +314,17 @@ describe("a failure", () => {
 
     await press("confirmar");
 
-    expect(screen.getAllByText(/No se ha podido eliminar/).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/No se ha podido eliminar/).length,
+    ).toBeGreaterThan(0);
 
-    await userEvent.click(screen.getByRole("button", { name: "Descartar el aviso" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Descartar el aviso" }),
+    );
     await waitFor(() => {
-      expect(screen.getAllByText("Marcaste «Leche» como comprado").length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText("Marcaste «Leche» como comprado").length,
+      ).toBeGreaterThan(0);
     });
   });
 });
@@ -338,7 +370,9 @@ describe("undo", () => {
     // MIN_UNDO_MS the duration fell through to the *preference* — so the
     // snackbar outlived the window it was measuring, and under "hasta
     // descartar" it never closed at all.
-    expect(screen.getByRole("button", { name: "Deshacer" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Deshacer" }),
+    ).toBeInTheDocument();
   });
 
   it("says it was too late rather than closing as if it had worked", async () => {
@@ -368,7 +402,9 @@ describe("undo", () => {
     try {
       render();
       fireEvent.click(screen.getByRole("button", { name: "deshacible" }));
-      expect(screen.getByRole("button", { name: "Deshacer" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Deshacer" }),
+      ).toBeInTheDocument();
 
       act(() => {
         window.dispatchEvent(new Event("blur"));
@@ -408,9 +444,13 @@ describe("two things at once", () => {
     await press("confirmar otro");
 
     await waitFor(() => {
-      expect(screen.getAllByText("Quitaste «Pan» de la lista")).not.toHaveLength(0);
+      expect(
+        screen.getAllByText("Quitaste «Pan» de la lista"),
+      ).not.toHaveLength(0);
     });
-    expect(screen.queryAllByText("Marcaste «Leche» como comprado")).toHaveLength(0);
+    expect(
+      screen.queryAllByText("Marcaste «Leche» como comprado"),
+    ).toHaveLength(0);
   });
 
   it("gives a second undoable action its own undo, not one ten seconds late", async () => {
@@ -426,7 +466,9 @@ describe("two things at once", () => {
     // run out and it arrived with no undo at all. Two independent windows
     // are two snackbars.
     await waitFor(() => {
-      expect(screen.getAllByRole("button", { name: "Deshacer" })).toHaveLength(2);
+      expect(screen.getAllByRole("button", { name: "Deshacer" })).toHaveLength(
+        2,
+      );
     });
   });
 
@@ -439,8 +481,12 @@ describe("two things at once", () => {
 
     // The exact failure D54 rejected toasts over: the button someone is
     // reaching for must not vanish because something else happened.
-    expect(screen.getByRole("button", { name: "Deshacer" })).toBeInTheDocument();
-    expect(screen.queryAllByText("Marcaste «Leche» como comprado")).toHaveLength(0);
+    expect(
+      screen.getByRole("button", { name: "Deshacer" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryAllByText("Marcaste «Leche» como comprado"),
+    ).toHaveLength(0);
   });
 });
 
@@ -455,7 +501,9 @@ describe("dismissing", () => {
     );
 
     await waitFor(() => {
-      expect(screen.queryAllByText("Marcaste «Leche» como comprado")).toHaveLength(0);
+      expect(
+        screen.queryAllByText("Marcaste «Leche» como comprado"),
+      ).toHaveLength(0);
     });
   });
 });

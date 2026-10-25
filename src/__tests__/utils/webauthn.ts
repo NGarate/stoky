@@ -1,4 +1,12 @@
-import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomBytes, sign, type KeyObject } from "node:crypto";
+import {
+  createHash,
+  createPrivateKey,
+  createPublicKey,
+  generateKeyPairSync,
+  randomBytes,
+  sign,
+  type KeyObject,
+} from "node:crypto";
 import { GET, POST } from "@/app/api/auth/[...all]/route";
 import { DEVICE_ID_COOKIE } from "@/lib/device";
 import { cookieHeaderFrom, freshTestAddress, testOrigin } from "./authorize";
@@ -26,8 +34,10 @@ const FLAG_USER_PRESENT = 0x01;
 const FLAG_USER_VERIFIED = 0x04;
 const FLAG_ATTESTED_DATA = 0x40;
 
-const b64url = (bytes: Uint8Array | Buffer): string => Buffer.from(bytes).toString("base64url");
-const sha256 = (data: Uint8Array | Buffer | string): Buffer => createHash("sha256").update(data).digest();
+const b64url = (bytes: Uint8Array | Buffer): string =>
+  Buffer.from(bytes).toString("base64url");
+const sha256 = (data: Uint8Array | Buffer | string): Buffer =>
+  createHash("sha256").update(data).digest();
 
 /** Just enough CBOR (RFC 8949) for an attestation object and a COSE key. */
 function cbor(value: unknown): Buffer {
@@ -82,7 +92,11 @@ export class SoftAuthenticator {
   private readonly privateKey: KeyObject;
   private counter: number;
 
-  private constructor(credentialId: Buffer, privateKey: KeyObject, counter: number) {
+  private constructor(
+    credentialId: Buffer,
+    privateKey: KeyObject,
+    counter: number,
+  ) {
     this.credentialId = credentialId;
     this.privateKey = privateKey;
     this.counter = counter;
@@ -104,7 +118,10 @@ export class SoftAuthenticator {
   toJSON(): SoftAuthenticatorJSON {
     return {
       credentialId: b64url(this.credentialId),
-      privateKey: this.privateKey.export({ format: "jwk" }) as Record<string, unknown>,
+      privateKey: this.privateKey.export({ format: "jwk" }) as Record<
+        string,
+        unknown
+      >,
       counter: this.counter,
     };
   }
@@ -114,20 +131,37 @@ export class SoftAuthenticator {
     return b64url(this.credentialId);
   }
 
-  private authenticatorData(rpId: string, flags: number, attested?: Buffer): Buffer {
+  private authenticatorData(
+    rpId: string,
+    flags: number,
+    attested?: Buffer,
+  ): Buffer {
     const counter = Buffer.alloc(4);
     counter.writeUInt32BE(this.counter);
-    return Buffer.concat([sha256(rpId), Buffer.from([flags]), counter, ...(attested ? [attested] : [])]);
+    return Buffer.concat([
+      sha256(rpId),
+      Buffer.from([flags]),
+      counter,
+      ...(attested ? [attested] : []),
+    ]);
   }
 
   private clientData(type: string, challenge: string, origin: string): Buffer {
-    return Buffer.from(JSON.stringify({ type, challenge, origin, crossOrigin: false }));
+    return Buffer.from(
+      JSON.stringify({ type, challenge, origin, crossOrigin: false }),
+    );
   }
 
   /** `navigator.credentials.create()`'s answer to registration options. */
-  register(options: CeremonyOptions, { origin, uv = true }: CeremonyAnswer): Record<string, unknown> {
+  register(
+    options: CeremonyOptions,
+    { origin, uv = true }: CeremonyAnswer,
+  ): Record<string, unknown> {
     const rpId = options.rp?.id ?? new URL(origin).hostname;
-    const jwk = createPublicKey(this.privateKey).export({ format: "jwk" }) as { x: string; y: string };
+    const jwk = createPublicKey(this.privateKey).export({ format: "jwk" }) as {
+      x: string;
+      y: string;
+    };
     const coseKey = cbor(
       new Map<number, unknown>([
         [1, 2], // kty: EC2
@@ -139,8 +173,14 @@ export class SoftAuthenticator {
     );
     const idLength = Buffer.alloc(2);
     idLength.writeUInt16BE(this.credentialId.length);
-    const attested = Buffer.concat([Buffer.alloc(16), idLength, this.credentialId, coseKey]);
-    const flags = FLAG_USER_PRESENT | FLAG_ATTESTED_DATA | (uv ? FLAG_USER_VERIFIED : 0);
+    const attested = Buffer.concat([
+      Buffer.alloc(16),
+      idLength,
+      this.credentialId,
+      coseKey,
+    ]);
+    const flags =
+      FLAG_USER_PRESENT | FLAG_ATTESTED_DATA | (uv ? FLAG_USER_VERIFIED : 0);
     const attestationObject = cbor(
       new Map<string, unknown>([
         ["fmt", "none"],
@@ -153,7 +193,9 @@ export class SoftAuthenticator {
       rawId: this.id,
       type: "public-key",
       response: {
-        clientDataJSON: b64url(this.clientData("webauthn.create", options.challenge, origin)),
+        clientDataJSON: b64url(
+          this.clientData("webauthn.create", options.challenge, origin),
+        ),
         attestationObject: b64url(attestationObject),
         transports: ["internal"],
       },
@@ -163,12 +205,19 @@ export class SoftAuthenticator {
   }
 
   /** `navigator.credentials.get()`'s answer to authentication options. */
-  assert(options: CeremonyOptions, { origin, uv = true }: CeremonyAnswer): Record<string, unknown> {
+  assert(
+    options: CeremonyOptions,
+    { origin, uv = true }: CeremonyAnswer,
+  ): Record<string, unknown> {
     this.counter += 1;
     const rpId = options.rpId ?? new URL(origin).hostname;
     const flags = FLAG_USER_PRESENT | (uv ? FLAG_USER_VERIFIED : 0);
     const authenticatorData = this.authenticatorData(rpId, flags);
-    const clientDataJSON = this.clientData("webauthn.get", options.challenge, origin);
+    const clientDataJSON = this.clientData(
+      "webauthn.get",
+      options.challenge,
+      origin,
+    );
     const signature = sign(
       "sha256",
       Buffer.concat([authenticatorData, sha256(clientDataJSON)]),
@@ -208,8 +257,16 @@ async function read(response: Response): Promise<RouteAnswer> {
   }
   const setCookie = response.headers.getSetCookie();
   const code =
-    body && !Array.isArray(body) && typeof body.code === "string" ? body.code : undefined;
-  return { status: response.status, code, body, setCookie, cookieHeader: cookieHeaderFrom(setCookie) };
+    body && !Array.isArray(body) && typeof body.code === "string"
+      ? body.code
+      : undefined;
+  return {
+    status: response.status,
+    code,
+    body,
+    setCookie,
+    cookieHeader: cookieHeaderFrom(setCookie),
+  };
 }
 
 export interface BrowserState {
@@ -220,8 +277,13 @@ export interface BrowserState {
   address?: string;
 }
 
-function headersFor({ cookie, origin, address }: BrowserState, extra = ""): Headers {
-  const headers = new Headers({ "x-forwarded-for": address ?? freshTestAddress() });
+function headersFor(
+  { cookie, origin, address }: BrowserState,
+  extra = "",
+): Headers {
+  const headers = new Headers({
+    "x-forwarded-for": address ?? freshTestAddress(),
+  });
   const jar = [cookie ?? "", extra].filter(Boolean).join("; ");
   if (jar) headers.set("cookie", jar);
   headers.set("origin", origin ?? testOrigin());
@@ -229,8 +291,17 @@ function headersFor({ cookie, origin, address }: BrowserState, extra = ""): Head
 }
 
 /** A GET to the auth route, as the page's `fetch` sends it. */
-export async function authGet(path: string, state: BrowserState = {}): Promise<RouteAnswer> {
-  return read(await GET(new Request(`${testOrigin()}/api/auth${path}`, { headers: headersFor(state) })));
+export async function authGet(
+  path: string,
+  state: BrowserState = {},
+): Promise<RouteAnswer> {
+  return read(
+    await GET(
+      new Request(`${testOrigin()}/api/auth${path}`, {
+        headers: headersFor(state),
+      }),
+    ),
+  );
 }
 
 /** A JSON POST to the auth route, as the page's `fetch` sends it. */
@@ -270,10 +341,13 @@ export async function registerPasskey(
 ): Promise<PasskeyRegistration> {
   const options = await authGet("/passkey/generate-register-options", state);
   if (options.status !== 200) return { options, verified: null };
-  const response = authenticator.register(options.body as unknown as CeremonyOptions, {
-    origin: state.origin ?? testOrigin(),
-    uv,
-  });
+  const response = authenticator.register(
+    options.body as unknown as CeremonyOptions,
+    {
+      origin: state.origin ?? testOrigin(),
+      uv,
+    },
+  );
   const verified = await authPost(
     "/passkey/verify-registration",
     { response, name: "Probe", ...extraBody },
@@ -297,21 +371,35 @@ export interface PasskeySignIn {
 export async function signInWithPasskey(
   authenticator: SoftAuthenticator,
   state: BrowserState & { deviceId?: string } = {},
-  { uv = true, rememberMe, clientOrigin }: { uv?: boolean; rememberMe?: unknown; clientOrigin?: string } = {},
+  {
+    uv = true,
+    rememberMe,
+    clientOrigin,
+  }: { uv?: boolean; rememberMe?: unknown; clientOrigin?: string } = {},
 ): Promise<PasskeySignIn> {
   const browser: BrowserState = {
     ...state,
     address: state.address ?? freshTestAddress(),
-    cookie: [state.deviceId ? `${DEVICE_ID_COOKIE}=${state.deviceId}` : "", state.cookie ?? ""]
+    cookie: [
+      state.deviceId ? `${DEVICE_ID_COOKIE}=${state.deviceId}` : "",
+      state.cookie ?? "",
+    ]
       .filter(Boolean)
       .join("; "),
   };
-  const options = await authGet("/passkey/generate-authenticate-options", browser);
-  if (options.status !== 200) throw new Error(`options refused: ${options.status} ${options.code}`);
-  const response = authenticator.assert(options.body as unknown as CeremonyOptions, {
-    origin: clientOrigin ?? state.origin ?? testOrigin(),
-    uv,
-  });
+  const options = await authGet(
+    "/passkey/generate-authenticate-options",
+    browser,
+  );
+  if (options.status !== 200)
+    throw new Error(`options refused: ${options.status} ${options.code}`);
+  const response = authenticator.assert(
+    options.body as unknown as CeremonyOptions,
+    {
+      origin: clientOrigin ?? state.origin ?? testOrigin(),
+      uv,
+    },
+  );
   const verified = await authPost(
     "/passkey/verify-authentication",
     rememberMe === undefined ? { response } : { response, rememberMe },

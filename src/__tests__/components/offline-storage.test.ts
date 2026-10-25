@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach } from "bun:test";
-import {
-  MAX_BYTES,
-  createQueueStorage,
-  queueKey,
-} from "@/lib/offline/storage";
+import { MAX_BYTES, createQueueStorage, queueKey } from "@/lib/offline/storage";
 
 /**
  * The half of the queue's storage that needs a browser to exist at all.
@@ -62,7 +58,10 @@ describe("the browser's own storage", () => {
 
   it("brings a Date back as a Date", () => {
     const storage = createQueueStorage();
-    storage.write(USER, { pending: [{ at: new Date("2026-12-01") }], failed: [] });
+    storage.write(USER, {
+      pending: [{ at: new Date("2026-12-01") }],
+      failed: [],
+    });
 
     const read = storage.read(USER) as { pending: { at: unknown }[] };
 

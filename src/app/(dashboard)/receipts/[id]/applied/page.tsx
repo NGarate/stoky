@@ -53,7 +53,6 @@ export default function ReceiptAppliedPage({
   );
   const summary = query.data;
 
-
   const back = { href: "/receipts", label: t("backToReceipts") };
 
   /**
@@ -71,7 +70,10 @@ export default function ReceiptAppliedPage({
         error={query.error}
         fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
-        notFound={{ title: tReceipts("notFoundTitle"), body: tReceipts("notFoundBody") }}
+        notFound={{
+          title: tReceipts("notFoundTitle"),
+          body: tReceipts("notFoundBody"),
+        }}
         onRetry={() => void query.refetch()}
         title={t("loadingTitle")}
         width="detail"
@@ -112,13 +114,16 @@ export default function ReceiptAppliedPage({
           {hasFailed ? null : (
             <li>
               <Button asChild className="md:text-lg" variant="link">
-                <Link href={`/receipts/${receipt.id}/review`} > {t("pendingReviewLink")} </Link>
+                <Link href={`/receipts/${receipt.id}/review`}>
+                  {" "}
+                  {t("pendingReviewLink")}{" "}
+                </Link>
               </Button>
             </li>
           )}
           <li>
             <Button asChild className="md:text-lg" variant="link">
-              <Link href="/receipts/upload" > {t("nextUpload")} </Link>
+              <Link href="/receipts/upload"> {t("nextUpload")} </Link>
             </Button>
           </li>
         </ul>
@@ -135,9 +140,7 @@ export default function ReceiptAppliedPage({
         title={t("title")}
       />
 
-      <h2 className={`mt-8 ${sectionHeading()}`}>
-        {t("summaryTitle")}
-      </h2>
+      <h2 className={`mt-8 ${sectionHeading()}`}>{t("summaryTitle")}</h2>
       {/* One column on a phone, three from `md`: three numbers side by side at
           390px leaves no room for the label that makes them mean anything. */}
       <dl className="mt-2 grid gap-3 md:grid-cols-3">
@@ -160,9 +163,7 @@ export default function ReceiptAppliedPage({
         />
       </dl>
 
-      <h2 className={`mt-8 ${sectionHeading()}`}>
-        {t("detailsTitle")}
-      </h2>
+      <h2 className={`mt-8 ${sectionHeading()}`}>{t("detailsTitle")}</h2>
       <dl className="mt-2 space-y-3">
         <div>
           <dt className="text-sm font-medium text-muted-foreground md:text-base">
@@ -194,11 +195,11 @@ export default function ReceiptAppliedPage({
         </div>
       </dl>
 
-      <h2 className={`mt-8 ${sectionHeading()}`}>
-        {t("itemsTitle")}
-      </h2>
+      <h2 className={`mt-8 ${sectionHeading()}`}>{t("itemsTitle")}</h2>
       {summary.items.length === 0 ? (
-        <p className="mt-2 text-muted-foreground md:text-lg">{t("itemsEmpty")}</p>
+        <p className="mt-2 text-muted-foreground md:text-lg">
+          {t("itemsEmpty")}
+        </p>
       ) : (
         <ul className="mt-2 space-y-3">
           {summary.items.map((item) => {
@@ -249,28 +250,29 @@ export default function ReceiptAppliedPage({
         </p>
       )}
 
-      <h2 className={`mt-8 ${sectionHeading()}`}>
-        {t("nextTitle")}
-      </h2>
+      <h2 className={`mt-8 ${sectionHeading()}`}>{t("nextTitle")}</h2>
       <ul className="mt-2 space-y-2">
         <li>
           <Button asChild className="md:text-lg" variant="link">
-            <Link href="/inventory" > {t("nextInventory")} </Link>
+            <Link href="/inventory"> {t("nextInventory")} </Link>
           </Button>
         </li>
         <li>
           <Button asChild className="md:text-lg" variant="link">
-            <Link href="/prices" > {t("nextPrices")} </Link>
+            <Link href="/prices"> {t("nextPrices")} </Link>
           </Button>
         </li>
         <li>
           <Button asChild className="md:text-lg" variant="link">
-            <Link href={`/receipts/${receipt.id}/review`} > {t("nextReview")} </Link>
+            <Link href={`/receipts/${receipt.id}/review`}>
+              {" "}
+              {t("nextReview")}{" "}
+            </Link>
           </Button>
         </li>
         <li>
           <Button asChild className="md:text-lg" variant="link">
-            <Link href="/receipts/upload" > {t("nextUpload")} </Link>
+            <Link href="/receipts/upload"> {t("nextUpload")} </Link>
           </Button>
         </li>
       </ul>

@@ -24,7 +24,10 @@ interface Sent {
   accept: string | null;
 }
 
-function clientRecording(): { client: ReturnType<typeof createTRPCClient<AppRouter>>; sent: Sent[] } {
+function clientRecording(): {
+  client: ReturnType<typeof createTRPCClient<AppRouter>>;
+  sent: Sent[];
+} {
   const sent: Sent[] = [];
   const fakeFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const headers = new Headers(init?.headers);
@@ -32,7 +35,9 @@ function clientRecording(): { client: ReturnType<typeof createTRPCClient<AppRout
     // A tRPC answer for one call, in the transformer's shape; the streaming
     // link reads it as a failure, which is all the second test needs.
     return new Response(
-      JSON.stringify({ result: { data: SuperJSON.serialize({ success: true }) } }),
+      JSON.stringify({
+        result: { data: SuperJSON.serialize({ success: true }) },
+      }),
       { status: 200, headers: { "content-type": "application/json" } },
     );
   }) as typeof fetch;
@@ -54,7 +59,9 @@ describe("the browser client's links", () => {
     expect(answer).toEqual({ success: true });
     expect(sent).toHaveLength(1);
     const [only] = sent;
-    expect(new URL(only?.url ?? "").pathname).toBe("/api/trpc/auth.changePassword");
+    expect(new URL(only?.url ?? "").pathname).toBe(
+      "/api/trpc/auth.changePassword",
+    );
     expect(new URL(only?.url ?? "").searchParams.has("batch")).toBe(false);
     expect(only?.accept).toBeNull();
   });
@@ -77,7 +84,9 @@ describe("the browser client's links", () => {
 
     expect(sent).toHaveLength(1);
     const [only] = sent;
-    expect(new URL(only?.url ?? "").pathname).toBe("/api/trpc/auth.endSessions");
+    expect(new URL(only?.url ?? "").pathname).toBe(
+      "/api/trpc/auth.endSessions",
+    );
     expect(new URL(only?.url ?? "").searchParams.get("batch")).toBe("1");
     expect(only?.accept).toBe("application/jsonl");
   });

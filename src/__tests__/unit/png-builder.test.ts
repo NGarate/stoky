@@ -1,6 +1,10 @@
 import { describe, it, expect } from "bun:test";
 import { pngClaiming, pngNoise, pngOf } from "../utils/png";
-import { MAX_PIXELS, readImageMetadata, reencodeAsJpeg } from "@/server/services/image";
+import {
+  MAX_PIXELS,
+  readImageMetadata,
+  reencodeAsJpeg,
+} from "@/server/services/image";
 
 /**
  * The hand-assembled PNG, and the control that makes the bomb mean something.

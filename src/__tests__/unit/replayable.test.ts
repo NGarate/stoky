@@ -145,13 +145,21 @@ describe("the list and the sources agree", () => {
     // bare word stays as the pattern: it is what distinguishes a use from a
     // string that merely contains the name. `product` joined the list with
     // resolveScan (T7).
-    const holders = ["auth", "household", "inventory", "location", "price",
-      "product", "receipt", "shopping", "store"]
-      .filter((name) =>
-        withoutComments(
-          readFileSync(join(ROUTERS, `${name}.ts`), "utf8"),
-        ).includes("withReplay("),
-      );
+    const holders = [
+      "auth",
+      "household",
+      "inventory",
+      "location",
+      "price",
+      "product",
+      "receipt",
+      "shopping",
+      "store",
+    ].filter((name) =>
+      withoutComments(
+        readFileSync(join(ROUTERS, `${name}.ts`), "utf8"),
+      ).includes("withReplay("),
+    );
 
     expect(holders).toEqual(["inventory", "product", "shopping"]);
   });

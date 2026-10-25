@@ -123,7 +123,11 @@ export default function ReceiptsPage() {
                   ? [
                       {
                         label: t("totalAmount"),
-                        value: formatMoney(locale, receipt.totalAmount, DEFAULT_CURRENCY),
+                        value: formatMoney(
+                          locale,
+                          receipt.totalAmount,
+                          DEFAULT_CURRENCY,
+                        ),
                       },
                     ]
                   : []),

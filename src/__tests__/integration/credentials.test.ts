@@ -26,7 +26,9 @@ const NEW_PASSWORD = "nevera alacena despensa";
 let householdId = "";
 
 beforeAll(async () => {
-  householdId = (await prisma.household.create({ data: { name: `Credentials ${RUN}` } })).id;
+  householdId = (
+    await prisma.household.create({ data: { name: `Credentials ${RUN}` } })
+  ).id;
 });
 
 afterAll(async () => {
@@ -54,19 +56,30 @@ describe("an account made through the credentials module", () => {
       role: "MEMBER",
     });
     expect(await verifyPassword(credential?.passwordHash, PASSWORD)).toBe(true);
-    expect(await verifyPassword(credential?.passwordHash, NEW_PASSWORD)).toBe(false);
-    expect(await readPasswordHash(prisma, created.id)).toBe(credential?.passwordHash ?? "");
+    expect(await verifyPassword(credential?.passwordHash, NEW_PASSWORD)).toBe(
+      false,
+    );
+    expect(await readPasswordHash(prisma, created.id)).toBe(
+      credential?.passwordHash ?? "",
+    );
   });
 
   it("keeps the hash in one credential Account row keyed on the user's own id", async () => {
     const hash = await hashPassword(PASSWORD);
     const created = await createCredentialUser(
       prisma,
-      { email: `${RUN}.row@example.com`, name: "Fila", householdId, role: "MEMBER" },
+      {
+        email: `${RUN}.row@example.com`,
+        name: "Fila",
+        householdId,
+        role: "MEMBER",
+      },
       hash,
     );
 
-    const accounts = await prisma.account.findMany({ where: { userId: created.id } });
+    const accounts = await prisma.account.findMany({
+      where: { userId: created.id },
+    });
     expect(accounts).toHaveLength(1);
     expect(accounts[0]).toMatchObject({
       providerId: "credential",
@@ -80,7 +93,11 @@ describe("an account made through the credentials module", () => {
     // A user made some other way — a script, or a sign-in method added later —
     // has nothing to check a password against, and must read as no account.
     const bare = await prisma.user.create({
-      data: { email: `${RUN}.bare@example.com`, name: "Sin clave", householdId },
+      data: {
+        email: `${RUN}.bare@example.com`,
+        name: "Sin clave",
+        householdId,
+      },
     });
 
     expect(await findCredentialByEmail(prisma, bare.email)).toBeNull();
@@ -88,7 +105,9 @@ describe("an account made through the credentials module", () => {
   });
 
   it("answers null for an address with no account, and for an id with none", async () => {
-    expect(await findCredentialByEmail(prisma, `${RUN}.nobody@example.com`)).toBeNull();
+    expect(
+      await findCredentialByEmail(prisma, `${RUN}.nobody@example.com`),
+    ).toBeNull();
     expect(await readPasswordHash(prisma, `${RUN}-no-such-id`)).toBeNull();
   });
 });
@@ -98,12 +117,20 @@ describe("setPasswordAndEndSessions", () => {
     const original = await hashPassword(PASSWORD);
     const member = await createCredentialUser(
       prisma,
-      { email: `${RUN}.guarded@example.com`, name: "Miembro", householdId, role: "MEMBER" },
+      {
+        email: `${RUN}.guarded@example.com`,
+        name: "Miembro",
+        householdId,
+        role: "MEMBER",
+      },
       original,
     );
     await openTestSession(member.id);
     // Promoted after the caller checked it, while the new hash was being made.
-    await prisma.user.update({ where: { id: member.id }, data: { role: "OWNER" } });
+    await prisma.user.update({
+      where: { id: member.id },
+      data: { role: "OWNER" },
+    });
 
     const written = await setPasswordAndEndSessions(
       prisma,
@@ -112,14 +139,21 @@ describe("setPasswordAndEndSessions", () => {
     );
 
     expect(written).toBe(0);
-    expect(await prisma.session.count({ where: { userId: member.id } })).toBe(1);
+    expect(await prisma.session.count({ where: { userId: member.id } })).toBe(
+      1,
+    );
     expect(await readPasswordHash(prisma, member.id)).toBe(original);
   });
 
   it("sets the hash and ends the sessions in one write when the guard holds", async () => {
     const member = await createCredentialUser(
       prisma,
-      { email: `${RUN}.reset@example.com`, name: "Miembro", householdId, role: "MEMBER" },
+      {
+        email: `${RUN}.reset@example.com`,
+        name: "Miembro",
+        householdId,
+        role: "MEMBER",
+      },
       await hashPassword(PASSWORD),
     );
     await openTestSession(member.id);
@@ -132,8 +166,15 @@ describe("setPasswordAndEndSessions", () => {
     );
 
     expect(written).toBe(1);
-    expect(await prisma.session.count({ where: { userId: member.id } })).toBe(0);
-    const credential = await findCredentialByEmail(prisma, `${RUN}.reset@example.com`);
-    expect(await verifyPassword(credential?.passwordHash, NEW_PASSWORD)).toBe(true);
+    expect(await prisma.session.count({ where: { userId: member.id } })).toBe(
+      0,
+    );
+    const credential = await findCredentialByEmail(
+      prisma,
+      `${RUN}.reset@example.com`,
+    );
+    expect(await verifyPassword(credential?.passwordHash, NEW_PASSWORD)).toBe(
+      true,
+    );
   });
 });

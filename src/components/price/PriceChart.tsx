@@ -61,11 +61,7 @@ interface PriceDataPoint {
  * `foreground` too — where it used to label every row "Precio por unidad",
  * leaving the colour alone to say which shop a price was.
  */
-export function PriceChart({
-  data,
-}: {
-  data: PriceDataPoint[];
-}): JSX.Element {
+export function PriceChart({ data }: { data: PriceDataPoint[] }): JSX.Element {
   const t = useTranslations("prices.chart");
   const locale = useLocale();
   const [asTable, setAsTable] = useState(false);
@@ -156,56 +152,65 @@ export function PriceChart({
                 />
                 <Tooltip
                   {...CHART_TOOLTIP}
-                  formatter={(value, name) => [money(Number(value)), String(name)]}
+                  formatter={(value, name) => [
+                    money(Number(value)),
+                    String(name),
+                  ]}
                   labelFormatter={(label) => label}
                 />
                 {storeNames.map((storeName, index) => (
-                    <Line
-                      activeDot={{ r: 8 }}
-                      // A store seen once has no line — a line needs two
-                      // points — so the marker is the whole series. Its path
-                      // is `M271,37Z`, which draws nothing.
-                      dot={{ r: 5 }}
-                      dataKey={storeName}
-                      // Recharts holds every dot back until its line has
-                      // finished animating, so a single-observation series
-                      // was invisible for the first 1.5 seconds and — since
-                      // its line is a degenerate path — invisible after that
-                      // too. Measured: zero `<circle>` elements in the SVG.
-                      //
-                      // Turning the animation off is the fix and is right on
-                      // its own terms: `globals.css` suppresses motion under
-                      // `prefers-reduced-motion`, but it can only reach CSS,
-                      // and this animation is JavaScript. A price line is
-                      // read, not watched.
-                      isAnimationActive={false}
-                      // Rows are one per *date*, and a store only has a value
-                      // on the dates it was seen. So a shop recorded in
-                      // January and March had `undefined` on every row
-                      // belonging to some other shop in between, and Recharts
-                      // read each of those as the end of the line — two lone
-                      // points and no line at all, on the screen whose whole
-                      // job is comparing shops over time.
-                      //
-                      // Joining across them is also the honest reading: a
-                      // price series between two observations means "it went
-                      // from here to there", not "this shop ceased to exist
-                      // on the days a different shop was visited".
-                      connectNulls
-                      key={storeName}
-                      stroke={colours[index]}
-                      strokeWidth={2}
-                      type="monotone"
-                    />
+                  <Line
+                    activeDot={{ r: 8 }}
+                    // A store seen once has no line — a line needs two
+                    // points — so the marker is the whole series. Its path
+                    // is `M271,37Z`, which draws nothing.
+                    dot={{ r: 5 }}
+                    dataKey={storeName}
+                    // Recharts holds every dot back until its line has
+                    // finished animating, so a single-observation series
+                    // was invisible for the first 1.5 seconds and — since
+                    // its line is a degenerate path — invisible after that
+                    // too. Measured: zero `<circle>` elements in the SVG.
+                    //
+                    // Turning the animation off is the fix and is right on
+                    // its own terms: `globals.css` suppresses motion under
+                    // `prefers-reduced-motion`, but it can only reach CSS,
+                    // and this animation is JavaScript. A price line is
+                    // read, not watched.
+                    isAnimationActive={false}
+                    // Rows are one per *date*, and a store only has a value
+                    // on the dates it was seen. So a shop recorded in
+                    // January and March had `undefined` on every row
+                    // belonging to some other shop in between, and Recharts
+                    // read each of those as the end of the line — two lone
+                    // points and no line at all, on the screen whose whole
+                    // job is comparing shops over time.
+                    //
+                    // Joining across them is also the honest reading: a
+                    // price series between two observations means "it went
+                    // from here to there", not "this shop ceased to exist
+                    // on the days a different shop was visited".
+                    connectNulls
+                    key={storeName}
+                    stroke={colours[index]}
+                    strokeWidth={2}
+                    type="monotone"
+                  />
                 ))}
               </LineChart>
             </ResponsiveContainer>
           </div>
 
           {storeNames.length > 1 ? (
-            <ul aria-label={t("legend")} className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            <ul
+              aria-label={t("legend")}
+              className="mt-2 flex flex-wrap gap-x-4 gap-y-1"
+            >
               {storeNames.map((storeName, index) => (
-                <li className="flex items-center gap-2 text-sm text-foreground" key={storeName}>
+                <li
+                  className="flex items-center gap-2 text-sm text-foreground"
+                  key={storeName}
+                >
                   <span
                     aria-hidden="true"
                     className="inline-block size-3 shrink-0 rounded-full"

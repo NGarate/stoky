@@ -31,25 +31,35 @@ describe("nextExpiry", () => {
   });
 
   it("is never past a day after the sign-in, however recent the activity", () => {
-    const authenticatedAt = new Date(now.getTime() - (BROWSER_CAP_S * 1000 - 5 * MINUTE));
+    const authenticatedAt = new Date(
+      now.getTime() - (BROWSER_CAP_S * 1000 - 5 * MINUTE),
+    );
     expect(nextExpiry({ authenticatedAt, now }).getTime()).toBe(
       authenticatedAt.getTime() + BROWSER_CAP_S * 1000,
     );
   });
 
   it("is already past for a session signed in more than a day ago", () => {
-    const authenticatedAt = new Date(now.getTime() - BROWSER_CAP_S * 1000 - 1000);
-    expect(nextExpiry({ authenticatedAt, now }).getTime()).toBeLessThan(now.getTime());
+    const authenticatedAt = new Date(
+      now.getTime() - BROWSER_CAP_S * 1000 - 1000,
+    );
+    expect(nextExpiry({ authenticatedAt, now }).getTime()).toBeLessThan(
+      now.getTime(),
+    );
   });
 });
 
 describe("shouldSlide", () => {
   it("leaves an expiry that is still almost whole", () => {
-    expect(shouldSlide(new Date(now.getTime() + 14.5 * MINUTE), now)).toBe(false);
+    expect(shouldSlide(new Date(now.getTime() + 14.5 * MINUTE), now)).toBe(
+      false,
+    );
   });
 
   it("moves one that a minute or more of idleness has worn", () => {
-    expect(shouldSlide(new Date(now.getTime() + 13.9 * MINUTE), now)).toBe(true);
+    expect(shouldSlide(new Date(now.getTime() + 13.9 * MINUTE), now)).toBe(
+      true,
+    );
     expect(shouldSlide(new Date(now.getTime() + MINUTE), now)).toBe(true);
   });
 });
@@ -58,7 +68,11 @@ describe("deadlineKind", () => {
   const authenticatedAt = new Date(now.getTime() - 23 * 60 * MINUTE);
   const limit = authenticatedAt.getTime() + BROWSER_CAP_S * 1000;
   const kindAt = (expiresAt: number) =>
-    deadlineKind({ expiresAt: new Date(expiresAt), authenticatedAt, capS: BROWSER_CAP_S });
+    deadlineKind({
+      expiresAt: new Date(expiresAt),
+      authenticatedAt,
+      capS: BROWSER_CAP_S,
+    });
 
   it("is the limit when the expiry is the day after the sign-in", () => {
     expect(kindAt(limit)).toBe("cap");
@@ -119,23 +133,25 @@ describe("initialExpiry", () => {
   });
 
   it("is ninety days from now for a remembered sign-in", () => {
-    expect(initialExpiry({ persistent: true, authenticatedAt: now, now }).getTime()).toBe(
-      now.getTime() + 90 * DAY,
-    );
+    expect(
+      initialExpiry({ persistent: true, authenticatedAt: now, now }).getTime(),
+    ).toBe(now.getTime() + 90 * DAY);
   });
 
   it("is never past the year from the sign-in, on a re-create late in it", () => {
     const authenticatedAt = new Date(now.getTime() - 300 * DAY);
-    expect(initialExpiry({ persistent: true, authenticatedAt, now }).getTime()).toBe(
-      authenticatedAt.getTime() + 365 * DAY,
-    );
+    expect(
+      initialExpiry({ persistent: true, authenticatedAt, now }).getTime(),
+    ).toBe(authenticatedAt.getTime() + 365 * DAY);
   });
 });
 
 describe("clampRemembered", () => {
   it("lets Better Auth's ninety days stand while the year allows", () => {
     const proposed = new Date(now.getTime() + 90 * DAY);
-    expect(clampRemembered({ proposed, authenticatedAt: now })).toEqual(proposed);
+    expect(clampRemembered({ proposed, authenticatedAt: now })).toEqual(
+      proposed,
+    );
   });
 
   it("holds it to a year from the sign-in", () => {
@@ -164,16 +180,36 @@ describe("persistentAtCreate", () => {
 
   it("without the route's word, is remembered only with no cookie and Better Auth's ninety days", () => {
     const base = { remember: null, now };
-    expect(persistentAtCreate({ ...base, dontRememberCookie: false, proposedExpiresAt: ninetyDays })).toBe(true);
-    expect(persistentAtCreate({ ...base, dontRememberCookie: true, proposedExpiresAt: ninetyDays })).toBe(false);
-    expect(persistentAtCreate({ ...base, dontRememberCookie: false, proposedExpiresAt: oneDay })).toBe(false);
+    expect(
+      persistentAtCreate({
+        ...base,
+        dontRememberCookie: false,
+        proposedExpiresAt: ninetyDays,
+      }),
+    ).toBe(true);
+    expect(
+      persistentAtCreate({
+        ...base,
+        dontRememberCookie: true,
+        proposedExpiresAt: ninetyDays,
+      }),
+    ).toBe(false);
+    expect(
+      persistentAtCreate({
+        ...base,
+        dontRememberCookie: false,
+        proposedExpiresAt: oneDay,
+      }),
+    ).toBe(false);
   });
 
   it("reads Better Auth's day, with its minute's slack, as not remembered", () => {
     const base = { remember: null, dontRememberCookie: false, now };
     const justOver = new Date(now.getTime() + DAY + MINUTE);
     const over = new Date(now.getTime() + DAY + MINUTE + 1);
-    expect(persistentAtCreate({ ...base, proposedExpiresAt: justOver })).toBe(false);
+    expect(persistentAtCreate({ ...base, proposedExpiresAt: justOver })).toBe(
+      false,
+    );
     expect(persistentAtCreate({ ...base, proposedExpiresAt: over })).toBe(true);
   });
 });
@@ -181,7 +217,9 @@ describe("persistentAtCreate", () => {
 describe("rememberedRefreshDue", () => {
   it("is a day after the row was last written, and not a millisecond before", () => {
     expect(rememberedRefreshDue(new Date(now.getTime() - DAY), now)).toBe(true);
-    expect(rememberedRefreshDue(new Date(now.getTime() - DAY + 1), now)).toBe(false);
+    expect(rememberedRefreshDue(new Date(now.getTime() - DAY + 1), now)).toBe(
+      false,
+    );
     expect(rememberedRefreshDue(now, now)).toBe(false);
   });
 });
@@ -200,7 +238,11 @@ describe("deadlineKind for a remembered session", () => {
     const late = new Date(now.getTime() - 300 * DAY);
     expect(
       deadlineKind({
-        expiresAt: initialExpiry({ persistent: true, authenticatedAt: late, now }),
+        expiresAt: initialExpiry({
+          persistent: true,
+          authenticatedAt: late,
+          now,
+        }),
         authenticatedAt: late,
         capS: capFor(true),
       }),

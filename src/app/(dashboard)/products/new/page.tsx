@@ -41,7 +41,8 @@ interface CreatedProduct {
 function serverErrorKey(message: string | undefined): string {
   const normalized = message?.toLowerCase() ?? "";
 
-  if (normalized.includes("unique constraint")) return "errorBarcodeTakenServer";
+  if (normalized.includes("unique constraint"))
+    return "errorBarcodeTakenServer";
   if (normalized.includes("household")) return "errorNoHousehold";
 
   return "errorGeneric";
@@ -341,7 +342,9 @@ function NewProductForm(): JSX.Element {
           <p className="mt-1 font-mono text-lg font-semibold text-foreground">
             {scannedBarcode}
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">{t("scanContextIntro")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("scanContextIntro")}
+          </p>
         </div>
       ) : null}
 
@@ -376,7 +379,10 @@ function NewProductForm(): JSX.Element {
             {t("nameHint")}
           </p>
           {fieldErrors.name ? (
-            <p id={nameErrorId} className="mt-1 text-sm font-medium text-danger-foreground">
+            <p
+              id={nameErrorId}
+              className="mt-1 text-sm font-medium text-danger-foreground"
+            >
               {fieldErrors.name}
             </p>
           ) : null}
@@ -523,7 +529,10 @@ function NewProductForm(): JSX.Element {
             {t("unitHint")}
           </p>
           {fieldErrors.unit ? (
-            <p id={unitErrorId} className="mt-1 text-sm font-medium text-danger-foreground">
+            <p
+              id={unitErrorId}
+              className="mt-1 text-sm font-medium text-danger-foreground"
+            >
               {fieldErrors.unit}
             </p>
           ) : null}
@@ -566,18 +575,19 @@ function NewProductForm(): JSX.Element {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="submit"
-            disabled={createProduct.isPending}
-          >
+          <Button type="submit" disabled={createProduct.isPending}>
             {t("submit")}
           </Button>
           <Button asChild variant="outline">
-            <Link href="/products" > {t("cancel")} </Link>
+            <Link href="/products"> {t("cancel")} </Link>
           </Button>
           {/* Kept mounted so the message is announced when it appears, rather
               than the whole region arriving at once. */}
-          <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+          <p
+            role="status"
+            aria-live="polite"
+            className="text-sm text-muted-foreground"
+          >
             {createProduct.isPending ? t("submitting") : ""}
           </p>
         </div>

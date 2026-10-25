@@ -41,8 +41,10 @@ function statusOf(reason: FailureReason): {
   tone: "warn" | "danger";
   key: "unsavedStatusCheck" | "unsavedStatusName" | "unsavedStatusFailed";
 } {
-  if (reason === "needs-reconciliation") return { tone: "warn", key: "unsavedStatusCheck" };
-  if (reason === "needs-review") return { tone: "warn", key: "unsavedStatusName" };
+  if (reason === "needs-reconciliation")
+    return { tone: "warn", key: "unsavedStatusCheck" };
+  if (reason === "needs-review")
+    return { tone: "warn", key: "unsavedStatusName" };
   return { tone: "danger", key: "unsavedStatusFailed" };
 }
 
@@ -84,7 +86,6 @@ export default function UnsavedPage(): JSX.Element {
         <EmptyState body={t("unsavedEmptyHint")} title={t("unsavedEmpty")} />
       ) : (
         <>
-
           {/* `ItemRow`, the one list row: a hand-written card per change had
               its own title, its own meta paragraphs and no status at all. */}
           <ul className="mt-6 space-y-4">
@@ -96,7 +97,10 @@ export default function UnsavedPage(): JSX.Element {
                     label: t("unsavedWhenLabel"),
                     value: formatDateTime(locale, op.createdAt),
                   },
-                  { label: t("unsavedWhyLabel"), value: t(REASON_KEY[op.reason]) },
+                  {
+                    label: t("unsavedWhyLabel"),
+                    value: t(REASON_KEY[op.reason]),
+                  },
                 ]}
                 status={
                   <Badge tone={statusOf(op.reason).tone}>
@@ -107,21 +111,15 @@ export default function UnsavedPage(): JSX.Element {
                 actions={
                   <>
                     {op.reason === "needs-reconciliation" ? (
-                      <Button
-                        onClick={() => setReconciling(op)}
-                        type="button"
-                      >
+                      <Button onClick={() => setReconciling(op)} type="button">
                         {t("review")}
                       </Button>
                     ) : (
-                      <Button
-                        onClick={() => retry(op.id)}
-                        type="button"
-                      >
+                      <Button onClick={() => retry(op.id)} type="button">
                         {t("retry")}
                       </Button>
                     )}
-  
+
                     {/* Deletes the change once its undo has gone, so it is not
                         drawn in the colour of the retry beside it — and names
                         the change, because every row's says the same word. */}

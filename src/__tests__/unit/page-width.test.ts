@@ -50,7 +50,8 @@ describe("a dashboard screen states its width", () => {
     const unbounded = rendering()
       .filter(
         ({ source }) =>
-          !/max-w-[0-9a-z]+/.test(source) && !/<PageShell[^>]*width=/.test(source),
+          !/max-w-[0-9a-z]+/.test(source) &&
+          !/<PageShell[^>]*width=/.test(source),
       )
       .map(({ name }) => name);
 

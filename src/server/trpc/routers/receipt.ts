@@ -12,8 +12,14 @@ import type { PrismaClient, Prisma } from "@prisma/client";
 import { ReceiptStatus, MatchStatus, StockOperation } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { processReceiptOcr } from "@/server/services/ocr";
-import { parseReceiptText, saveParsedItems } from "@/server/services/receiptParser";
-import { matchReceiptItems, getItemCandidates } from "@/server/services/productMatcher";
+import {
+  parseReceiptText,
+  saveParsedItems,
+} from "@/server/services/receiptParser";
+import {
+  matchReceiptItems,
+  getItemCandidates,
+} from "@/server/services/productMatcher";
 import { uploadRateLimit } from "@/lib/rate-limit";
 import { enforceRateLimit } from "../throttle";
 import { reencodeAsJpeg } from "@/server/services/image";
@@ -244,7 +250,10 @@ export const receiptRouter = createTRPCRouter({
       }
 
       // Validate magic bytes
-      const isValidImage = await validateImageMagicBytes(buffer, input.mimeType);
+      const isValidImage = await validateImageMagicBytes(
+        buffer,
+        input.mimeType,
+      );
       if (!isValidImage) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -307,7 +316,10 @@ export const receiptRouter = createTRPCRouter({
 
       // Trigger async processing
       processReceiptAsync(receipt.id).catch((error: unknown) =>
-        console.error("Failed to mark receipt as failed:", describeError(error)),
+        console.error(
+          "Failed to mark receipt as failed:",
+          describeError(error),
+        ),
       );
 
       return receipt;
@@ -757,7 +769,9 @@ export const receiptRouter = createTRPCRouter({
         // the claim intends. Two statements shrink both the winner's hold
         // and the loser's wait; the rows written are the same.
         const appliable = items.filter(
-          (item): item is (typeof items)[number] & { matchedProductId: string } =>
+          (
+            item,
+          ): item is (typeof items)[number] & { matchedProductId: string } =>
             !!item.matchedProductId && item.matchStatus !== MatchStatus.SKIPPED,
         );
 
@@ -780,8 +794,11 @@ export const receiptRouter = createTRPCRouter({
           storeId === null
             ? []
             : appliable.filter(
-                (item): item is (typeof appliable)[number] & { parsedPrice: number } =>
-                  !!item.parsedPrice,
+                (
+                  item,
+                ): item is (typeof appliable)[number] & {
+                  parsedPrice: number;
+                } => !!item.parsedPrice,
               );
         const { count: priceRecordsCreated } = await tx.priceRecord.createMany({
           data: priced.map((item) => ({
@@ -886,15 +903,17 @@ export const receiptRouter = createTRPCRouter({
   list: householdProcedure
     .input(
       z.object({
-        status: z.enum([
-          "UPLOADING",
-          "PROCESSING",
-          "PARSED",
-          "NEEDS_REVIEW",
-          "CONFIRMED",
-          "APPLIED",
-          "FAILED",
-        ]).optional(),
+        status: z
+          .enum([
+            "UPLOADING",
+            "PROCESSING",
+            "PARSED",
+            "NEEDS_REVIEW",
+            "CONFIRMED",
+            "APPLIED",
+            "FAILED",
+          ])
+          .optional(),
         limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
         cursor: z.string().max(MAX_ID_LENGTH).optional(),
       }),
@@ -944,9 +963,18 @@ async function validateImageMagicBytes(
     "image/png": [[0x89, 0x50, 0x4e, 0x47]],
     "image/webp": [
       [
-        0x52, 0x49, 0x46, 0x46, // RIFF
-        null, null, null, null, // chunk size
-        0x57, 0x45, 0x42, 0x50, // WEBP
+        0x52,
+        0x49,
+        0x46,
+        0x46, // RIFF
+        null,
+        null,
+        null,
+        null, // chunk size
+        0x57,
+        0x45,
+        0x42,
+        0x50, // WEBP
       ],
     ],
   };

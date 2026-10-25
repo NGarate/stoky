@@ -70,7 +70,9 @@ const DEPENDABOT_BLOCKING_RULES = new Set([
  * exclusion that covers only some ecosystems is still reported.
  */
 function dependabotBranches(): string[] {
-  const config = Bun.YAML.parse(readFileSync(join(ROOT, ".github/dependabot.yml"), "utf8")) as {
+  const config = Bun.YAML.parse(
+    readFileSync(join(ROOT, ".github/dependabot.yml"), "utf8"),
+  ) as {
     updates?: { "package-ecosystem": string; directory?: string }[];
   };
   return (config.updates ?? []).map((update) => {
@@ -89,7 +91,11 @@ const MERGE_SETTINGS = {
   squash_merge_commit_message: "PR_BODY",
 } as const;
 
-const ACTIONS_PERMISSIONS = { enabled: true, allowed_actions: "selected", sha_pinning_required: true } as const;
+const ACTIONS_PERMISSIONS = {
+  enabled: true,
+  allowed_actions: "selected",
+  sha_pinning_required: true,
+} as const;
 
 const CODEQL = { state: "configured", query_suite: "extended" } as const;
 
@@ -100,14 +106,21 @@ const CODEQL = { state: "configured", query_suite: "extended" } as const;
  * drift well before it does: `apply` sets it again, which restarts the six
  * months.
  */
-const INTERACTION_LIMIT = { limit: "collaborators_only", expiry: "six_months" } as const;
+const INTERACTION_LIMIT = {
+  limit: "collaborators_only",
+  expiry: "six_months",
+} as const;
 const INTERACTION_LIMIT_NOTICE_DAYS = 30;
 
 /**
  * Nothing beyond the code, releases and issues. Issues stay: the owner files
  * them, and the interaction limit is what keeps other people out of them.
  */
-const FEATURES = { has_projects: false, has_wiki: false, has_discussions: false } as const;
+const FEATURES = {
+  has_projects: false,
+  has_wiki: false,
+  has_discussions: false,
+} as const;
 
 /**
  * The environment a publishing job waits on: one approval, by the repository's
@@ -118,7 +131,10 @@ const FEATURES = { has_projects: false, has_wiki: false, has_discussions: false 
 const RELEASE_ENVIRONMENT = "environments/release";
 const RELEASE_POLICIES = `${RELEASE_ENVIRONMENT}/deployment-branch-policies`;
 const RELEASE_REFS = [{ name: "v*", type: "tag" }] as const;
-const CUSTOM_BRANCH_POLICIES = { protected_branches: false, custom_branch_policies: true } as const;
+const CUSTOM_BRANCH_POLICIES = {
+  protected_branches: false,
+  custom_branch_policies: true,
+} as const;
 
 interface Environment {
   protection_rules?: {
@@ -126,7 +142,10 @@ interface Environment {
     prevent_self_review?: boolean;
     reviewers?: { type?: string; reviewer?: { id?: number } }[];
   }[];
-  deployment_branch_policy?: { protected_branches?: boolean; custom_branch_policies?: boolean } | null;
+  deployment_branch_policy?: {
+    protected_branches?: boolean;
+    custom_branch_policies?: boolean;
+  } | null;
 }
 
 interface DeploymentPolicy {
@@ -171,7 +190,10 @@ function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(join(ROOT, path), "utf8")) as T;
 }
 
-const RULESET_FILES = [".github/rulesets/release-tags-immutable.json", ".github/rulesets/release-tags-creation.json"];
+const RULESET_FILES = [
+  ".github/rulesets/release-tags-immutable.json",
+  ".github/rulesets/release-tags-creation.json",
+];
 const SELECTED_ACTIONS_FILE = ".github/selected-actions.json";
 
 /** A request GitHub refused, or one that could not be made. Exit 2, never drift. */
@@ -198,12 +220,17 @@ class GitHub {
     let proc;
     try {
       proc = Bun.spawnSync(args, {
-        stdin: body === undefined ? "ignore" : new TextEncoder().encode(JSON.stringify(body)),
+        stdin:
+          body === undefined
+            ? "ignore"
+            : new TextEncoder().encode(JSON.stringify(body)),
         stdout: "pipe",
         stderr: "pipe",
       });
     } catch {
-      throw new RequestError("`gh` was not found. Install the GitHub CLI and sign in with `gh auth login`.");
+      throw new RequestError(
+        "`gh` was not found. Install the GitHub CLI and sign in with `gh auth login`.",
+      );
     }
     // `--include` puts the status line first: the only reliable way to tell a
     // 404 that means "off" from one that means "no access", since gh's own
@@ -211,7 +238,9 @@ class GitHub {
     const output = proc.stdout.toString();
     const status = /^HTTP\/\S+ (\d{3})/.exec(output);
     if (!status) {
-      throw new RequestError(`${method} ${endpoint}: ${proc.stderr.toString().trim() || "no response from gh"}`);
+      throw new RequestError(
+        `${method} ${endpoint}: ${proc.stderr.toString().trim() || "no response from gh"}`,
+      );
     }
     const blank = output.search(/\r?\n\r?\n/);
     const text = blank === -1 ? "" : output.slice(blank).trim();
@@ -245,11 +274,16 @@ class GitHub {
       reply = this.request("GET", path);
       this.cache.set(path, reply);
     }
-    if (!GitHub.ok(reply) && !expected.includes(reply.status)) throw this.refused("GET", path, reply);
+    if (!GitHub.ok(reply) && !expected.includes(reply.status))
+      throw this.refused("GET", path, reply);
     return reply;
   }
 
-  write(method: "PUT" | "PATCH" | "POST" | "DELETE", path: string, body?: unknown) {
+  write(
+    method: "PUT" | "PATCH" | "POST" | "DELETE",
+    path: string,
+    body?: unknown,
+  ) {
     const reply = this.request(method, path, body);
     if (!GitHub.ok(reply)) throw this.refused(method, path, reply);
   }
@@ -265,7 +299,9 @@ interface Setting {
 function differs(field: string, actual: unknown, wanted: unknown): string[] {
   return JSON.stringify(actual) === JSON.stringify(wanted)
     ? []
-    : [`${field} is ${JSON.stringify(actual) ?? "absent"}, want ${JSON.stringify(wanted)}`];
+    : [
+        `${field} is ${JSON.stringify(actual) ?? "absent"}, want ${JSON.stringify(wanted)}`,
+      ];
 }
 
 function repository(gh: GitHub) {
@@ -292,14 +328,25 @@ function releaseEnvironment(gh: GitHub) {
 const refKey = (policy: DeploymentPolicy) => `${policy.type}:${policy.name}`;
 
 function releaseRefs(gh: GitHub): DeploymentPolicy[] {
-  return (gh.get(`${RELEASE_POLICIES}?per_page=100`).body as { branch_policies?: DeploymentPolicy[] }).branch_policies ?? [];
+  return (
+    (
+      gh.get(`${RELEASE_POLICIES}?per_page=100`).body as {
+        branch_policies?: DeploymentPolicy[];
+      }
+    ).branch_policies ?? []
+  );
 }
 
 /** `{"enabled": true}` endpoints that a bare PUT turns on. */
 function toggle(name: string, path: string): Setting {
   return {
     name,
-    drift: (gh) => differs("enabled", (gh.get(path).body as { enabled?: unknown }).enabled, true),
+    drift: (gh) =>
+      differs(
+        "enabled",
+        (gh.get(path).body as { enabled?: unknown }).enabled,
+        true,
+      ),
     apply: (gh) => gh.write("PUT", path),
   };
 }
@@ -320,13 +367,21 @@ function glob(pattern: string): RegExp {
 
 function refMatches(condition: RefCondition | undefined, ref: string): boolean {
   const hits = (pattern: string) =>
-    pattern === "~ALL" || (pattern !== "~DEFAULT_BRANCH" && glob(pattern).test(ref));
-  return (condition?.include ?? []).some(hits) && !(condition?.exclude ?? []).some(hits);
+    pattern === "~ALL" ||
+    (pattern !== "~DEFAULT_BRANCH" && glob(pattern).test(ref));
+  return (
+    (condition?.include ?? []).some(hits) &&
+    !(condition?.exclude ?? []).some(hits)
+  );
 }
 
 function rulesetByName(gh: GitHub, name: string): Ruleset | undefined {
-  const listed = (gh.get("rulesets?per_page=100").body as Ruleset[]).find((ruleset) => ruleset.name === name);
-  return listed?.id === undefined ? undefined : (gh.get(`rulesets/${listed.id}`).body as Ruleset);
+  const listed = (gh.get("rulesets?per_page=100").body as Ruleset[]).find(
+    (ruleset) => ruleset.name === name,
+  );
+  return listed?.id === undefined
+    ? undefined
+    : (gh.get(`rulesets/${listed.id}`).body as Ruleset);
 }
 
 /** The parts of a ruleset that decide what it does, order-independent. */
@@ -337,9 +392,18 @@ function rulesetShape(ruleset: Ruleset) {
     enforcement: ruleset.enforcement,
     include: sorted(ruleset.conditions?.ref_name?.include ?? []),
     exclude: sorted(ruleset.conditions?.ref_name?.exclude ?? []),
-    rules: sorted((ruleset.rules ?? []).map((rule) => JSON.stringify({ type: rule.type, parameters: rule.parameters ?? null }))),
+    rules: sorted(
+      (ruleset.rules ?? []).map((rule) =>
+        JSON.stringify({
+          type: rule.type,
+          parameters: rule.parameters ?? null,
+        }),
+      ),
+    ),
     bypass_actors: sorted(
-      (ruleset.bypass_actors ?? []).map((actor) => `${actor.actor_type}:${actor.actor_id}:${actor.bypass_mode}`),
+      (ruleset.bypass_actors ?? []).map(
+        (actor) => `${actor.actor_type}:${actor.actor_id}:${actor.bypass_mode}`,
+      ),
     ),
   };
 }
@@ -353,7 +417,9 @@ function rulesetSetting(file: string): Setting {
       if (!actual) return ["missing"];
       const have = rulesetShape(actual);
       const want = rulesetShape(wanted);
-      return (Object.keys(want) as (keyof typeof want)[]).flatMap((key) => differs(key, have[key], want[key]));
+      return (Object.keys(want) as (keyof typeof want)[]).flatMap((key) =>
+        differs(key, have[key], want[key]),
+      );
     },
     apply: (gh) => {
       const actual = rulesetByName(gh, wanted.name);
@@ -372,12 +438,18 @@ function rulesetSetting(file: string): Setting {
 function blockingDependabot(gh: GitHub): Ruleset[] {
   const branches = dependabotBranches();
   return (gh.get("rulesets?per_page=100").body as Ruleset[])
-    .filter((listed) => listed.target === "branch" && listed.enforcement === "active")
+    .filter(
+      (listed) => listed.target === "branch" && listed.enforcement === "active",
+    )
     .map((listed) => gh.get(`rulesets/${listed.id}`).body as Ruleset)
     .filter(
       (ruleset) =>
-        (ruleset.rules ?? []).some((rule) => DEPENDABOT_BLOCKING_RULES.has(rule.type)) &&
-        branches.some((branch) => refMatches(ruleset.conditions?.ref_name, branch)),
+        (ruleset.rules ?? []).some((rule) =>
+          DEPENDABOT_BLOCKING_RULES.has(rule.type),
+        ) &&
+        branches.some((branch) =>
+          refMatches(ruleset.conditions?.ref_name, branch),
+        ),
     );
 }
 
@@ -388,8 +460,8 @@ const SETTINGS: Setting[] = [
     name: "Secret scanning and push protection",
     drift: (gh) => {
       const analysis = repository(gh).security_and_analysis ?? {};
-      return ["secret_scanning", "secret_scanning_push_protection"].flatMap((feature) =>
-        differs(feature, analysis[feature]?.status, "enabled"),
+      return ["secret_scanning", "secret_scanning_push_protection"].flatMap(
+        (feature) => differs(feature, analysis[feature]?.status, "enabled"),
       );
     },
     apply: (gh) =>
@@ -403,38 +475,63 @@ const SETTINGS: Setting[] = [
   {
     // 204 when on, 404 when off: the endpoint has no body to read.
     name: "Dependabot alerts",
-    drift: (gh) => (gh.get("vulnerability-alerts", [404]).status === 404 ? ["disabled"] : []),
+    drift: (gh) =>
+      gh.get("vulnerability-alerts", [404]).status === 404 ? ["disabled"] : [],
     apply: (gh) => gh.write("PUT", "vulnerability-alerts"),
   },
   toggle("Dependabot security updates", "automated-security-fixes"),
   {
     name: "CodeQL default setup",
     drift: (gh) => {
-      const setup = gh.get("code-scanning/default-setup").body as Record<string, unknown>;
-      return [...differs("state", setup.state, CODEQL.state), ...differs("query_suite", setup.query_suite, CODEQL.query_suite)];
+      const setup = gh.get("code-scanning/default-setup").body as Record<
+        string,
+        unknown
+      >;
+      return [
+        ...differs("state", setup.state, CODEQL.state),
+        ...differs("query_suite", setup.query_suite, CODEQL.query_suite),
+      ];
     },
     apply: (gh) => gh.write("PATCH", "code-scanning/default-setup", CODEQL),
   },
   {
     name: "Actions allow-list and SHA pinning",
     drift: (gh) => {
-      const permissions = gh.get("actions/permissions").body as Record<string, unknown>;
-      const problems = (Object.keys(ACTIONS_PERMISSIONS) as (keyof typeof ACTIONS_PERMISSIONS)[]).flatMap((key) =>
+      const permissions = gh.get("actions/permissions").body as Record<
+        string,
+        unknown
+      >;
+      const problems = (
+        Object.keys(ACTIONS_PERMISSIONS) as (keyof typeof ACTIONS_PERMISSIONS)[]
+      ).flatMap((key) =>
         differs(key, permissions[key], ACTIONS_PERMISSIONS[key]),
       );
       // The list answers 409 unless the policy is `selected`; there is no
       // list to compare until it is.
       if (permissions.allowed_actions !== "selected") return problems;
-      const actual = gh.get("actions/permissions/selected-actions").body as SelectedActions;
+      const actual = gh.get("actions/permissions/selected-actions")
+        .body as SelectedActions;
       const wanted = readJson<SelectedActions>(SELECTED_ACTIONS_FILE);
       const have = new Set(actual.patterns_allowed ?? []);
       const want = new Set(wanted.patterns_allowed ?? []);
       return [
         ...problems,
-        ...differs("github_owned_allowed", actual.github_owned_allowed, wanted.github_owned_allowed),
-        ...differs("verified_allowed", actual.verified_allowed, wanted.verified_allowed),
-        ...[...want].filter((pattern) => !have.has(pattern)).map((pattern) => `${pattern} is not allowed`),
-        ...[...have].filter((pattern) => !want.has(pattern)).map((pattern) => `${pattern} is allowed but not listed`),
+        ...differs(
+          "github_owned_allowed",
+          actual.github_owned_allowed,
+          wanted.github_owned_allowed,
+        ),
+        ...differs(
+          "verified_allowed",
+          actual.verified_allowed,
+          wanted.verified_allowed,
+        ),
+        ...[...want]
+          .filter((pattern) => !have.has(pattern))
+          .map((pattern) => `${pattern} is not allowed`),
+        ...[...have]
+          .filter((pattern) => !want.has(pattern))
+          .map((pattern) => `${pattern} is allowed but not listed`),
       ];
     },
     // Back to back, policy first: the list cannot be written while every
@@ -442,7 +539,11 @@ const SETTINGS: Setting[] = [
     // may run.
     apply: (gh) => {
       gh.write("PUT", "actions/permissions", ACTIONS_PERMISSIONS);
-      gh.write("PUT", "actions/permissions/selected-actions", readJson<SelectedActions>(SELECTED_ACTIONS_FILE));
+      gh.write(
+        "PUT",
+        "actions/permissions/selected-actions",
+        readJson<SelectedActions>(SELECTED_ACTIONS_FILE),
+      );
     },
   },
   {
@@ -450,26 +551,36 @@ const SETTINGS: Setting[] = [
     drift: (gh) =>
       differs(
         "approval_policy",
-        (gh.get("actions/permissions/fork-pr-contributor-approval").body as { approval_policy?: unknown }).approval_policy,
+        (
+          gh.get("actions/permissions/fork-pr-contributor-approval").body as {
+            approval_policy?: unknown;
+          }
+        ).approval_policy,
         "all_external_contributors",
       ),
     apply: (gh) =>
-      gh.write("PUT", "actions/permissions/fork-pr-contributor-approval", { approval_policy: "all_external_contributors" }),
+      gh.write("PUT", "actions/permissions/fork-pr-contributor-approval", {
+        approval_policy: "all_external_contributors",
+      }),
   },
   {
     name: "Squash or rebase merges",
     drift: (gh) => {
       const repo = repository(gh);
-      return (Object.keys(MERGE_SETTINGS) as (keyof typeof MERGE_SETTINGS)[]).flatMap((key) =>
-        differs(key, repo[key], MERGE_SETTINGS[key]),
-      );
+      return (
+        Object.keys(MERGE_SETTINGS) as (keyof typeof MERGE_SETTINGS)[]
+      ).flatMap((key) => differs(key, repo[key], MERGE_SETTINGS[key]));
     },
     apply: (gh) => gh.write("PATCH", "", MERGE_SETTINGS),
   },
   ...RULESET_FILES.map(rulesetSetting),
   {
     name: "Dependabot can push its branches",
-    drift: (gh) => blockingDependabot(gh).map((ruleset) => `ruleset "${ruleset.name}" restricts ${DEPENDABOT_EXCLUDE}`),
+    drift: (gh) =>
+      blockingDependabot(gh).map(
+        (ruleset) =>
+          `ruleset "${ruleset.name}" restricts ${DEPENDABOT_EXCLUDE}`,
+      ),
     // Excluded rather than given a bypass: Dependabot also force-pushes when it
     // rebases its own pull request, which non_fast_forward would refuse.
     apply: (gh) => {
@@ -477,7 +588,10 @@ const SETTINGS: Setting[] = [
         const condition = ruleset.conditions?.ref_name ?? {};
         gh.write("PUT", `rulesets/${ruleset.id}`, {
           conditions: {
-            ref_name: { include: condition.include ?? [], exclude: [...(condition.exclude ?? []), DEPENDABOT_EXCLUDE] },
+            ref_name: {
+              include: condition.include ?? [],
+              exclude: [...(condition.exclude ?? []), DEPENDABOT_EXCLUDE],
+            },
           },
         });
       }
@@ -488,12 +602,17 @@ const SETTINGS: Setting[] = [
     // own, GitHub refuses this repository's PUT with 409.
     name: "Interactions limited to collaborators",
     drift: (gh) => {
-      const current = gh.get("interaction-limits").body as { limit?: string; expires_at?: string } | null;
+      const current = gh.get("interaction-limits").body as {
+        limit?: string;
+        expires_at?: string;
+      } | null;
       if (!current?.limit) return ["no limit"];
       const problems = differs("limit", current.limit, INTERACTION_LIMIT.limit);
       const left = Date.parse(current.expires_at ?? "") - Date.now();
       if (!(left > INTERACTION_LIMIT_NOTICE_DAYS * 86_400_000)) {
-        problems.push(`expires ${current.expires_at ?? "at an unknown date"}, within ${INTERACTION_LIMIT_NOTICE_DAYS} days`);
+        problems.push(
+          `expires ${current.expires_at ?? "at an unknown date"}, within ${INTERACTION_LIMIT_NOTICE_DAYS} days`,
+        );
       }
       return problems;
     },
@@ -503,7 +622,9 @@ const SETTINGS: Setting[] = [
     name: "Projects, wiki and discussions off",
     drift: (gh) => {
       const repo = repository(gh);
-      return (Object.keys(FEATURES) as (keyof typeof FEATURES)[]).flatMap((key) => differs(key, repo[key], FEATURES[key]));
+      return (Object.keys(FEATURES) as (keyof typeof FEATURES)[]).flatMap(
+        (key) => differs(key, repo[key], FEATURES[key]),
+      );
     },
     apply: (gh) => gh.write("PATCH", "", FEATURES),
   },
@@ -514,24 +635,44 @@ const SETTINGS: Setting[] = [
       if (reply.status === 404) return ["missing"];
       const environment = reply.body as Environment;
       const wanted = releaseEnvironment(gh);
-      const rule = environment.protection_rules?.find((candidate) => candidate.type === "required_reviewers");
+      const rule = environment.protection_rules?.find(
+        (candidate) => candidate.type === "required_reviewers",
+      );
       const policy = environment.deployment_branch_policy;
       const problems = [
         ...differs(
           "reviewers",
-          (rule?.reviewers ?? []).map((reviewer) => `${reviewer.type}:${reviewer.reviewer?.id}`).sort(),
+          (rule?.reviewers ?? [])
+            .map((reviewer) => `${reviewer.type}:${reviewer.reviewer?.id}`)
+            .sort(),
           wanted.reviewers.map((reviewer) => `${reviewer.type}:${reviewer.id}`),
         ),
-        ...differs("prevent_self_review", rule?.prevent_self_review, wanted.prevent_self_review),
+        ...differs(
+          "prevent_self_review",
+          rule?.prevent_self_review,
+          wanted.prevent_self_review,
+        ),
         ...differs(
           "deployment_branch_policy",
-          policy ? { protected_branches: policy.protected_branches, custom_branch_policies: policy.custom_branch_policies } : null,
+          policy
+            ? {
+                protected_branches: policy.protected_branches,
+                custom_branch_policies: policy.custom_branch_policies,
+              }
+            : null,
           CUSTOM_BRANCH_POLICIES,
         ),
       ];
       // The patterns apply, and can be listed, only while custom policies are on.
       if (policy?.custom_branch_policies !== true) return problems;
-      return [...problems, ...differs("policies", releaseRefs(gh).map(refKey).sort(), RELEASE_REFS.map(refKey))];
+      return [
+        ...problems,
+        ...differs(
+          "policies",
+          releaseRefs(gh).map(refKey).sort(),
+          RELEASE_REFS.map(refKey),
+        ),
+      ];
     },
     // The environment first: a policy can be added only once custom policies
     // are on. Then exactly the listed refs, removing the others first so a
@@ -541,10 +682,12 @@ const SETTINGS: Setting[] = [
       const current = releaseRefs(gh);
       const wanted = new Set(RELEASE_REFS.map(refKey));
       for (const policy of current) {
-        if (!wanted.has(refKey(policy))) gh.write("DELETE", `${RELEASE_POLICIES}/${policy.id}`);
+        if (!wanted.has(refKey(policy)))
+          gh.write("DELETE", `${RELEASE_POLICIES}/${policy.id}`);
       }
       for (const policy of RELEASE_REFS) {
-        if (!current.some((existing) => refKey(existing) === refKey(policy))) gh.write("POST", RELEASE_POLICIES, policy);
+        if (!current.some((existing) => refKey(existing) === refKey(policy)))
+          gh.write("POST", RELEASE_POLICIES, policy);
       }
     },
   },
@@ -552,9 +695,15 @@ const SETTINGS: Setting[] = [
 
 function main(argv: string[]): number {
   const [mode, ...rest] = argv;
-  const repoValid = rest.length === 0 || (rest.length === 2 && rest[0] === "--repo" && /^[\w.-]+\/[\w.-]+$/.test(rest[1]));
+  const repoValid =
+    rest.length === 0 ||
+    (rest.length === 2 &&
+      rest[0] === "--repo" &&
+      /^[\w.-]+\/[\w.-]+$/.test(rest[1]));
   if ((mode !== "check" && mode !== "apply") || !repoValid) {
-    console.error("usage: bun scripts/github-settings.ts check|apply [--repo OWNER/NAME]");
+    console.error(
+      "usage: bun scripts/github-settings.ts check|apply [--repo OWNER/NAME]",
+    );
     return 2;
   }
   const repo = rest[1] ?? DEFAULT_REPO;
@@ -590,7 +739,11 @@ function main(argv: string[]): number {
     );
     return 0;
   }
-  console.log(drifted === 0 ? `${repo}: in sync.` : `${repo}: ${drifted} setting(s) drifted.`);
+  console.log(
+    drifted === 0
+      ? `${repo}: in sync.`
+      : `${repo}: ${drifted} setting(s) drifted.`,
+  );
   return drifted === 0 ? 0 : 1;
 }
 

@@ -9,8 +9,14 @@ import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { SectionState } from "@/components/household/RouteState";
-import { ReauthDialog, type ReauthAction } from "@/components/session/ReauthDialog";
-import { EndSessionError, useEndSession } from "@/components/session/use-end-session";
+import {
+  ReauthDialog,
+  type ReauthAction,
+} from "@/components/session/ReauthDialog";
+import {
+  EndSessionError,
+  useEndSession,
+} from "@/components/session/use-end-session";
 import { useSessionName } from "@/components/session/session-name";
 import { api } from "@/lib/trpc/client";
 import { formatDateTime } from "@/lib/dates";
@@ -34,7 +40,9 @@ type Target =
  * must go through `useEndSession`, which purges this device before it leaves.
  */
 function includesCurrent(target: Target): boolean {
-  return target.scope === "all" || (target.scope === "one" && target.session.current);
+  return (
+    target.scope === "all" || (target.scope === "one" && target.session.current)
+  );
 }
 
 /**
@@ -119,7 +127,10 @@ export function DeviceList(): JSX.Element {
       : { currentPassword, scope: chosen.scope };
   }
 
-  async function submit(currentPassword: string, actionId: string): Promise<void> {
+  async function submit(
+    currentPassword: string,
+    actionId: string,
+  ): Promise<void> {
     if (target === null) return;
     const input = inputFor(target, currentPassword);
 
@@ -135,12 +146,15 @@ export function DeviceList(): JSX.Element {
       return;
     }
 
-    const result = await endSessions.mutateAsync(input).catch(async (error: unknown) => {
-      // Gone already — ended from another device, or expired — so the list
-      // this dialog was opened from is out of date either way.
-      if (codeOf(error) === "NOT_FOUND") await utils.auth.listSessions.invalidate();
-      throw error;
-    });
+    const result = await endSessions
+      .mutateAsync(input)
+      .catch(async (error: unknown) => {
+        // Gone already — ended from another device, or expired — so the list
+        // this dialog was opened from is out of date either way.
+        if (codeOf(error) === "NOT_FOUND")
+          await utils.auth.listSessions.invalidate();
+        throw error;
+      });
     await utils.auth.listSessions.invalidate();
     snackbar.show({
       kind: "confirm",
@@ -166,7 +180,9 @@ export function DeviceList(): JSX.Element {
     if (error instanceof EndSessionError && error.phase === "local") {
       // Said for what was ended: "the sessions" after this row's own ending
       // would tell somebody their other devices were signed out too.
-      return t("endFailedAfter", { scope: target?.scope === "all" ? "all" : "one" });
+      return t("endFailedAfter", {
+        scope: target?.scope === "all" ? "all" : "one",
+      });
     }
     // A `server` failure carries the server's refusal as its cause.
     const refusal = error instanceof EndSessionError ? error.cause : error;
@@ -189,7 +205,12 @@ export function DeviceList(): JSX.Element {
     ? [
         {
           id: "end",
-          label: target?.scope === "others" ? t("endOthers") : target?.scope === "one" ? t("endOne") : t("endAll"),
+          label:
+            target?.scope === "others"
+              ? t("endOthers")
+              : target?.scope === "one"
+                ? t("endOne")
+                : t("endAll"),
           variant: "destructive",
         },
       ]
@@ -239,16 +260,33 @@ export function DeviceList(): JSX.Element {
                 // The browser too, when the title is the screen: the kitchen
                 // tablet is named by its screen, and a second tablet that chose
                 // the same one is told apart by what it runs.
-                ...(session.screen ? [{ label: t("metaDevice"), value: deviceName(session) }] : []),
-                { label: t("metaLastUsed"), value: formatDateTime(locale, session.lastUsedAt) },
-                { label: t("metaSignedIn"), value: formatDateTime(locale, session.signedInAt) },
-                { label: t("metaExpires"), value: formatDateTime(locale, session.expiresAt) },
+                ...(session.screen
+                  ? [{ label: t("metaDevice"), value: deviceName(session) }]
+                  : []),
+                {
+                  label: t("metaLastUsed"),
+                  value: formatDateTime(locale, session.lastUsedAt),
+                },
+                {
+                  label: t("metaSignedIn"),
+                  value: formatDateTime(locale, session.signedInAt),
+                },
+                {
+                  label: t("metaExpires"),
+                  value: formatDateTime(locale, session.expiresAt),
+                },
                 {
                   label: t("metaKind"),
-                  value: session.remembered ? t("kindRemembered") : t("kindBrowser"),
+                  value: session.remembered
+                    ? t("kindRemembered")
+                    : t("kindBrowser"),
                 },
               ]}
-              status={session.current ? <Badge tone="neutral">{t("thisDevice")}</Badge> : undefined}
+              status={
+                session.current ? (
+                  <Badge tone="neutral">{t("thisDevice")}</Badge>
+                ) : undefined
+              }
               title={name}
               actions={
                 <Button
@@ -313,7 +351,11 @@ export function DeviceList(): JSX.Element {
                 ) : null}
               </p>
               {unsaved > 0 ? (
-                <Button asChild className="px-0 text-warn-foreground" variant="link">
+                <Button
+                  asChild
+                  className="px-0 text-warn-foreground"
+                  variant="link"
+                >
                   <Link href="/settings/unsaved">{tOffline("seeUnsaved")}</Link>
                 </Button>
               ) : null}
@@ -333,5 +375,7 @@ export function DeviceList(): JSX.Element {
 }
 
 function codeOf(error: unknown): string | undefined {
-  return error instanceof TRPCClientError ? (error.data?.code as string | undefined) : undefined;
+  return error instanceof TRPCClientError
+    ? (error.data?.code as string | undefined)
+    : undefined;
 }

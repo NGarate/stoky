@@ -1,11 +1,20 @@
 "use client";
 
 import { onlineManager } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useStore } from "zustand";
 import { api } from "@/lib/trpc/client";
 import { useComposer } from "./Composer";
-import { WriteQueueContext, type WriteQueueValue } from "@/lib/offline/queue-context";
+import {
+  WriteQueueContext,
+  type WriteQueueValue,
+} from "@/lib/offline/queue-context";
 import { openWriteQueue, type WriteQueue } from "@/lib/offline/queue";
 import { createOperationSender } from "@/lib/offline/sender";
 import type { JSX, ReactNode } from "react";
@@ -167,10 +176,13 @@ export function WriteQueueProvider({
     // bumping `retryTick`, which re-runs this effect — rather than by a
     // nested `setTimeout` whose cleanup a reader (and a linter) has to reason
     // about.
-    const id = setTimeout(() => {
-      drain();
-      setRetryTick((tick) => tick + 1);
-    }, Math.max(delay, 250));
+    const id = setTimeout(
+      () => {
+        drain();
+        setRetryTick((tick) => tick + 1);
+      },
+      Math.max(delay, 250),
+    );
 
     return () => clearTimeout(id);
   }, [pendingCount, needsSignin, online, retryTick, queue, drain]);

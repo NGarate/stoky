@@ -110,7 +110,9 @@ export function canonicalise(input: unknown): unknown {
   if (input === null || typeof input !== "object" || Array.isArray(input)) {
     return canonicaliseValue(input);
   }
-  const rest: Record<string, unknown> = { ...(input as Record<string, unknown>) };
+  const rest: Record<string, unknown> = {
+    ...(input as Record<string, unknown>),
+  };
   for (const key of ENVELOPE_KEYS) delete rest[key];
   return canonicaliseValue(rest);
 }

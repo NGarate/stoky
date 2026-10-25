@@ -64,7 +64,8 @@ function resolvedVersion(name: string): string | null {
 
 /** -1, 0 or 1, comparing two `x.y.z` versions numerically. */
 function compare(a: string, b: string): number {
-  const parts = (v: string) => v.split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const parts = (v: string) =>
+    v.split(".").map((part) => Number.parseInt(part, 10) || 0);
   const [aMajor = 0, aMinor = 0, aPatch = 0] = parts(a);
   const [bMajor = 0, bMinor = 0, bPatch = 0] = parts(b);
   if (aMajor !== bMajor) return aMajor < bMajor ? -1 : 1;
@@ -89,7 +90,10 @@ function satisfiesFloor(version: string, range: string): boolean {
     const floor = caret[1] as string;
     // A caret range pins the major deliberately — that is what makes the
     // deepmerge-ts entry a decision rather than a drift.
-    return version.split(".")[0] === floor.split(".")[0] && compare(version, floor) >= 0;
+    return (
+      version.split(".")[0] === floor.split(".")[0] &&
+      compare(version, floor) >= 0
+    );
   }
 
   const atLeast = /^>=\s*(.+)$/.exec(range);
@@ -134,7 +138,10 @@ describe("the dependency overrides", () => {
     for (const [name, range] of Object.entries(manifest.overrides ?? {})) {
       const version = resolvedVersion(name);
 
-      expect(version, `"${name}" is overridden in package.json but absent from bun.lock`).not.toBeNull();
+      expect(
+        version,
+        `"${name}" is overridden in package.json but absent from bun.lock`,
+      ).not.toBeNull();
       expect(
         satisfiesFloor(version as string, range),
         `"${name}" resolved to ${version}, below the ${range} the override asks for — the override did not take`,
@@ -149,7 +156,9 @@ describe("the dependency overrides", () => {
     // above, because it is the one whose removal would look reasonable.
     const version = resolvedVersion("deepmerge-ts");
     expect(version).not.toBeNull();
-    expect(Number.parseInt((version as string).split(".")[0], 10)).toBeGreaterThanOrEqual(8);
+    expect(
+      Number.parseInt((version as string).split(".")[0], 10),
+    ).toBeGreaterThanOrEqual(8);
   });
 });
 
@@ -206,13 +215,19 @@ describe("the release-age gate", () => {
   // minute earlier.
   // SECURITY.md § Supply chain has the reasoning.
   const bunfig = require(join(ROOT, "bunfig.toml")) as {
-    install?: { minimumReleaseAge?: unknown; minimumReleaseAgeExcludes?: unknown };
+    install?: {
+      minimumReleaseAge?: unknown;
+      minimumReleaseAgeExcludes?: unknown;
+    };
   };
   const THREE_DAYS = 3 * 24 * 60 * 60;
 
   it("holds back anything published in the last three days", () => {
     const age = bunfig.install?.minimumReleaseAge;
-    expect(typeof age, "bunfig.toml [install] minimumReleaseAge is missing").toBe("number");
+    expect(
+      typeof age,
+      "bunfig.toml [install] minimumReleaseAge is missing",
+    ).toBe("number");
     expect(age as number).toBeGreaterThanOrEqual(THREE_DAYS);
   });
 
@@ -221,7 +236,10 @@ describe("the release-age gate", () => {
     // too young for the gate goes in through `bun audit fix` or a one-off
     // `--minimum-release-age 0`, and the gate stays whole for the next update.
     const excludes = bunfig.install?.minimumReleaseAgeExcludes;
-    expect(excludes === undefined || (Array.isArray(excludes) && excludes.length === 0)).toBe(true);
+    expect(
+      excludes === undefined ||
+        (Array.isArray(excludes) && excludes.length === 0),
+    ).toBe(true);
   });
 
   it("is no longer than Dependabot's cooldown for the lockfile", () => {
@@ -232,11 +250,21 @@ describe("the release-age gate", () => {
     // the pull request exists to add.
     const dependabot = Bun.YAML.parse(
       readFileSync(join(ROOT, ".github", "dependabot.yml"), "utf8"),
-    ) as { updates: { "package-ecosystem": string; cooldown?: { "default-days"?: number } }[] };
-    const bun = dependabot.updates.find((update) => update["package-ecosystem"] === "bun");
+    ) as {
+      updates: {
+        "package-ecosystem": string;
+        cooldown?: { "default-days"?: number };
+      }[];
+    };
+    const bun = dependabot.updates.find(
+      (update) => update["package-ecosystem"] === "bun",
+    );
     const cooldownDays = bun?.cooldown?.["default-days"];
 
-    expect(typeof cooldownDays, "the bun entry in .github/dependabot.yml has no cooldown").toBe("number");
+    expect(
+      typeof cooldownDays,
+      "the bun entry in .github/dependabot.yml has no cooldown",
+    ).toBe("number");
     expect(bunfig.install?.minimumReleaseAge as number).toBeLessThanOrEqual(
       (cooldownDays as number) * 24 * 60 * 60,
     );

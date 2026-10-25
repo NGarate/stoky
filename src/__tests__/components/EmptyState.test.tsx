@@ -8,7 +8,9 @@ afterEach(cleanup);
 
 /** True when `a` comes before `b` in document order. */
 function precedes(a: Node, b: Node): boolean {
-  return Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+  return Boolean(
+    a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING,
+  );
 }
 
 describe("EmptyState", () => {
@@ -49,9 +51,17 @@ describe("EmptyState", () => {
   });
 
   it("is larger at the kitchen's distance", () => {
-    render(<EmptyState body="Nada caduca esta semana." density="touch" title="Esta semana" />);
+    render(
+      <EmptyState
+        body="Nada caduca esta semana."
+        density="touch"
+        title="Esta semana"
+      />,
+    );
 
     expect(screen.getByText("Esta semana").className).toContain("text-2xl");
-    expect(screen.getByText("Nada caduca esta semana.").className).toContain("text-xl");
+    expect(screen.getByText("Nada caduca esta semana.").className).toContain(
+      "text-xl",
+    );
   });
 });

@@ -129,10 +129,12 @@ if (Object.keys(light).length === 0) {
 }
 
 for (const name of Object.keys(light)) {
-  if (!(name in dark)) structural.push(`"${name}" is declared in light but not dark`);
+  if (!(name in dark))
+    structural.push(`"${name}" is declared in light but not dark`);
 }
 for (const name of Object.keys(dark)) {
-  if (!(name in light)) structural.push(`"${name}" is declared in dark but not light`);
+  if (!(name in light))
+    structural.push(`"${name}" is declared in dark but not light`);
 }
 
 for (const name of new Set([...Object.keys(dark), ...Object.keys(darkAuto)])) {
@@ -147,7 +149,9 @@ for (const name of new Set([...Object.keys(dark), ...Object.keys(darkAuto)])) {
 
 for (const [utility, token] of Object.entries(mappings)) {
   if (!(token in light)) {
-    structural.push(`@theme inline maps --color-${utility} to undefined --${token}`);
+    structural.push(
+      `@theme inline maps --color-${utility} to undefined --${token}`,
+    );
   }
 }
 const mapped = new Set(Object.values(mappings));
@@ -168,76 +172,271 @@ interface Pair {
 
 const PAIRS: Pair[] = [
   // Body copy.
-  { fg: "foreground", bg: "background", scale: "body", where: "body copy on the page" },
+  {
+    fg: "foreground",
+    bg: "background",
+    scale: "body",
+    where: "body copy on the page",
+  },
   { fg: "foreground", bg: "card", scale: "body", where: "body copy on a card" },
-  { fg: "foreground", bg: "muted", scale: "body", where: "body copy on the muted surface" },
+  {
+    fg: "foreground",
+    bg: "muted",
+    scale: "body",
+    where: "body copy on the muted surface",
+  },
   { fg: "card-foreground", bg: "card", scale: "body", where: "card body copy" },
-  { fg: "muted-foreground", bg: "background", scale: "body", where: "secondary copy and input placeholders" },
-  { fg: "muted-foreground", bg: "card", scale: "body", where: "secondary copy on a card" },
-  { fg: "muted-foreground", bg: "muted", scale: "body", where: "secondary copy on the muted surface" },
+  {
+    fg: "muted-foreground",
+    bg: "background",
+    scale: "body",
+    where: "secondary copy and input placeholders",
+  },
+  {
+    fg: "muted-foreground",
+    bg: "card",
+    scale: "body",
+    where: "secondary copy on a card",
+  },
+  {
+    fg: "muted-foreground",
+    bg: "muted",
+    scale: "body",
+    where: "secondary copy on the muted surface",
+  },
 
   // The welcome panel on /login and /register (UI-10). It carries the ordinary
   // ink on its own surface, so the three pairs below are what it actually
   // renders — the panel introduces no foreground token of its own.
-  { fg: "foreground", bg: "hero", scale: "body", where: "body copy on the welcome panel" },
-  { fg: "muted-foreground", bg: "hero", scale: "body", where: "the panel's subtitle and wordmark" },
+  {
+    fg: "foreground",
+    bg: "hero",
+    scale: "body",
+    where: "body copy on the welcome panel",
+  },
+  {
+    fg: "muted-foreground",
+    bg: "hero",
+    scale: "body",
+    where: "the panel's subtitle and wordmark",
+  },
 
   // Controls.
-  { fg: "primary-foreground", bg: "primary", scale: "body", where: "label on the primary button" },
-  { fg: "secondary-foreground", bg: "secondary", scale: "body", where: "label on the secondary button" },
-  { fg: "accent-foreground", bg: "accent", scale: "body", where: "label on a hovered ghost/outline button" },
-  { fg: "destructive-foreground", bg: "destructive", scale: "body", where: "label on the destructive button" },
-  { fg: "primary", bg: "background", scale: "body", where: "link-variant button and accent text" },
+  {
+    fg: "primary-foreground",
+    bg: "primary",
+    scale: "body",
+    where: "label on the primary button",
+  },
+  {
+    fg: "secondary-foreground",
+    bg: "secondary",
+    scale: "body",
+    where: "label on the secondary button",
+  },
+  {
+    fg: "accent-foreground",
+    bg: "accent",
+    scale: "body",
+    where: "label on a hovered ghost/outline button",
+  },
+  {
+    fg: "destructive-foreground",
+    bg: "destructive",
+    scale: "body",
+    where: "label on the destructive button",
+  },
+  {
+    fg: "primary",
+    bg: "background",
+    scale: "body",
+    where: "link-variant button and accent text",
+  },
   { fg: "primary", bg: "card", scale: "body", where: "accent text on a card" },
 
   // States. Always accompanied by a word, never colour alone.
-  { fg: "ok-foreground", bg: "ok", scale: "body", where: "healthy status pill" },
-  { fg: "warn-foreground", bg: "warn", scale: "body", where: "low-stock status pill" },
-  { fg: "danger-foreground", bg: "danger", scale: "body", where: "expiring / out-of-stock pill" },
+  {
+    fg: "ok-foreground",
+    bg: "ok",
+    scale: "body",
+    where: "healthy status pill",
+  },
+  {
+    fg: "warn-foreground",
+    bg: "warn",
+    scale: "body",
+    where: "low-stock status pill",
+  },
+  {
+    fg: "danger-foreground",
+    bg: "danger",
+    scale: "body",
+    where: "expiring / out-of-stock pill",
+  },
 
   // The same state inks off their own fill. The pills above are not where most
   // of them land: a stock amount, a form-field error, the kitchen's "nothing
   // urgent", a failed-upload line and every `variant="outline"` badge (which
   // sits on `bg-card`) put the ink straight on the page or on a card — some
   // thirty call sites that no row here measured until 2026-10-06.
-  { fg: "ok-foreground", bg: "background", scale: "body", where: "healthy-state text on the page" },
-  { fg: "ok-foreground", bg: "card", scale: "body", where: "healthy-state text, outline ok badge" },
-  { fg: "warn-foreground", bg: "background", scale: "body", where: "warning text on the page" },
-  { fg: "warn-foreground", bg: "card", scale: "body", where: "warning text, outline warn badge" },
-  { fg: "danger-foreground", bg: "background", scale: "body", where: "error text on the page" },
-  { fg: "danger-foreground", bg: "card", scale: "body", where: "error text, outline danger badge" },
+  {
+    fg: "ok-foreground",
+    bg: "background",
+    scale: "body",
+    where: "healthy-state text on the page",
+  },
+  {
+    fg: "ok-foreground",
+    bg: "card",
+    scale: "body",
+    where: "healthy-state text, outline ok badge",
+  },
+  {
+    fg: "warn-foreground",
+    bg: "background",
+    scale: "body",
+    where: "warning text on the page",
+  },
+  {
+    fg: "warn-foreground",
+    bg: "card",
+    scale: "body",
+    where: "warning text, outline warn badge",
+  },
+  {
+    fg: "danger-foreground",
+    bg: "background",
+    scale: "body",
+    where: "error text on the page",
+  },
+  {
+    fg: "danger-foreground",
+    bg: "card",
+    scale: "body",
+    where: "error text, outline danger badge",
+  },
 
   // `destructive` is a button fill, but a row's delete action writes it as
   // ink: at rest on the page or a card, and on the accent wash a ghost button
   // paints under the pointer.
-  { fg: "destructive", bg: "background", scale: "body", where: "destructive row action on the page" },
-  { fg: "destructive", bg: "card", scale: "body", where: "destructive row action on a card" },
-  { fg: "destructive", bg: "accent", scale: "body", where: "destructive row action, hovered" },
+  {
+    fg: "destructive",
+    bg: "background",
+    scale: "body",
+    where: "destructive row action on the page",
+  },
+  {
+    fg: "destructive",
+    bg: "card",
+    scale: "body",
+    where: "destructive row action on a card",
+  },
+  {
+    fg: "destructive",
+    bg: "accent",
+    scale: "body",
+    where: "destructive row action, hovered",
+  },
 
   // Display type — the kitchen screen reads from a metre away.
   { fg: "heading", bg: "background", scale: "large", where: "page heading" },
   { fg: "heading", bg: "card", scale: "large", where: "card heading" },
-  { fg: "heading", bg: "muted", scale: "large", where: "heading on the muted surface" },
-  { fg: "heading", bg: "hero", scale: "large", where: "the welcome panel's heading" },
+  {
+    fg: "heading",
+    bg: "muted",
+    scale: "large",
+    where: "heading on the muted surface",
+  },
+  {
+    fg: "heading",
+    bg: "hero",
+    scale: "large",
+    where: "the welcome panel's heading",
+  },
 
   // Non-text.
-  { fg: "input", bg: "background", scale: "nonText", where: "control border on the page" },
-  { fg: "input", bg: "card", scale: "nonText", where: "control border on a card" },
-  { fg: "input", bg: "muted", scale: "nonText", where: "control border on the muted surface" },
-  { fg: "ring", bg: "background", scale: "nonText", where: "focus outline against the page" },
-  { fg: "ring", bg: "card", scale: "nonText", where: "focus outline against a card" },
-  { fg: "ring", bg: "muted", scale: "nonText", where: "focus outline against the muted surface" },
-  { fg: "destructive", bg: "background", scale: "nonText", where: "destructive button fill against the page" },
-  { fg: "gauge", bg: "gauge-track", scale: "nonText", where: "stock gauge fill against its track" },
+  {
+    fg: "input",
+    bg: "background",
+    scale: "nonText",
+    where: "control border on the page",
+  },
+  {
+    fg: "input",
+    bg: "card",
+    scale: "nonText",
+    where: "control border on a card",
+  },
+  {
+    fg: "input",
+    bg: "muted",
+    scale: "nonText",
+    where: "control border on the muted surface",
+  },
+  {
+    fg: "ring",
+    bg: "background",
+    scale: "nonText",
+    where: "focus outline against the page",
+  },
+  {
+    fg: "ring",
+    bg: "card",
+    scale: "nonText",
+    where: "focus outline against a card",
+  },
+  {
+    fg: "ring",
+    bg: "muted",
+    scale: "nonText",
+    where: "focus outline against the muted surface",
+  },
+  {
+    fg: "destructive",
+    bg: "background",
+    scale: "nonText",
+    where: "destructive button fill against the page",
+  },
+  {
+    fg: "gauge",
+    bg: "gauge-track",
+    scale: "nonText",
+    where: "stock gauge fill against its track",
+  },
 
   // The snackbar. An inverse surface, so its own ink is the only ink that
   // ever lands on it, and both directions have to be measured — the light
   // theme's snackbar is dark and the dark theme's is light.
-  { fg: "snackbar-foreground", bg: "snackbar", scale: "body", where: "snackbar message" },
-  { fg: "snackbar-action", bg: "snackbar", scale: "body", where: "the snackbar's undo label" },
-  { fg: "snackbar-danger", bg: "snackbar", scale: "body", where: "a snackbar reporting a failure" },
-  { fg: "snackbar", bg: "background", scale: "nonText", where: "snackbar surface floating over the page" },
-  { fg: "snackbar", bg: "card", scale: "nonText", where: "snackbar surface floating over a card" },
+  {
+    fg: "snackbar-foreground",
+    bg: "snackbar",
+    scale: "body",
+    where: "snackbar message",
+  },
+  {
+    fg: "snackbar-action",
+    bg: "snackbar",
+    scale: "body",
+    where: "the snackbar's undo label",
+  },
+  {
+    fg: "snackbar-danger",
+    bg: "snackbar",
+    scale: "body",
+    where: "a snackbar reporting a failure",
+  },
+  {
+    fg: "snackbar",
+    bg: "background",
+    scale: "nonText",
+    where: "snackbar surface floating over the page",
+  },
+  {
+    fg: "snackbar",
+    bg: "card",
+    scale: "nonText",
+    where: "snackbar surface floating over a card",
+  },
 
   // NOT here: `--series-1` … `--series-4`.
   //
@@ -262,16 +461,41 @@ const PAIRS: Pair[] = [
   // — the mark spec puts a 2px gap of the surface between adjacent bars — so
   // what has to be distinguishable is each mark from its background, which is
   // what these four measure.
-  { fg: "chart-emphasis", bg: "card", scale: "nonText", where: "the answering series on a card" },
-  { fg: "chart-muted", bg: "card", scale: "nonText", where: "a context series on a card" },
-  { fg: "chart-emphasis", bg: "background", scale: "nonText", where: "the answering series on the page" },
-  { fg: "chart-muted", bg: "background", scale: "nonText", where: "a context series on the page" },
+  {
+    fg: "chart-emphasis",
+    bg: "card",
+    scale: "nonText",
+    where: "the answering series on a card",
+  },
+  {
+    fg: "chart-muted",
+    bg: "card",
+    scale: "nonText",
+    where: "a context series on a card",
+  },
+  {
+    fg: "chart-emphasis",
+    bg: "background",
+    scale: "nonText",
+    where: "the answering series on the page",
+  },
+  {
+    fg: "chart-muted",
+    bg: "background",
+    scale: "nonText",
+    where: "a context series on the page",
+  },
 
   // The two-step verification QR code. A camera reads it, not a person, so
   // 1.4.11's 3:1 is the floor and not the need: held to the body-text bar,
   // the strictest here, because a code scanned at an angle under a kitchen
   // light loses contrast before it loses anything else.
-  { fg: "qr-dark", bg: "qr-light", scale: "body", where: "the QR code's modules on its ground" },
+  {
+    fg: "qr-dark",
+    bg: "qr-light",
+    scale: "body",
+    where: "the QR code's modules on its ground",
+  },
 ];
 
 // --- run --------------------------------------------------------------------
@@ -288,9 +512,14 @@ const verbose = process.argv.includes("--verbose");
 const failures: Failure[] = [];
 let checks = 0;
 
-function token(tokens: Record<string, string>, name: string, mode: string): string {
+function token(
+  tokens: Record<string, string>,
+  name: string,
+  mode: string,
+): string {
   const value = tokens[name];
-  if (!value) throw new Error(`${mode}: token "--${name}" is not defined in globals.css`);
+  if (!value)
+    throw new Error(`${mode}: token "--${name}" is not defined in globals.css`);
   return value;
 }
 
@@ -327,7 +556,9 @@ if (structural.length === 0) {
 }
 
 if (structural.length > 0) {
-  console.error(`\n${structural.length} structural problem(s) in globals.css:\n`);
+  console.error(
+    `\n${structural.length} structural problem(s) in globals.css:\n`,
+  );
   for (const problem of structural) console.error(`  ${problem}`);
   process.exit(1);
 }

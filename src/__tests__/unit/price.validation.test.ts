@@ -18,6 +18,8 @@ describe("priceRecordSchema.quantity", () => {
   });
 
   it.each([0, -1, -0.5])("refuses %p", (quantity) => {
-    expect(priceRecordSchema.safeParse({ ...base, quantity }).success).toBe(false);
+    expect(priceRecordSchema.safeParse({ ...base, quantity }).success).toBe(
+      false,
+    );
   });
 });

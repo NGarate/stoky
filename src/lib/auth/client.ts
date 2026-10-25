@@ -33,7 +33,8 @@ import type { DeadlineKind } from "@/lib/auth/session-policy";
  *   own refusal codes (`SignInRefusedError`, `src/lib/auth/sign-in-policy.ts`).
  * - `unknown` — anything else; the form says the generic failure.
  */
-export type SignInRefusalCode = "invalid_credentials" | SignInRefusal | "unknown";
+export type SignInRefusalCode =
+  "invalid_credentials" | SignInRefusal | "unknown";
 
 /**
  * What a password step came to. `twoFactor` is neither a sign-in nor a
@@ -44,7 +45,12 @@ export type SignInRefusalCode = "invalid_credentials" | SignInRefusal | "unknown
 export type SignInResult =
   | { ok: true }
   | { ok: false; twoFactor: true }
-  | { ok: false; twoFactor?: undefined; code: SignInRefusalCode; retryAfterSeconds?: number };
+  | {
+      ok: false;
+      twoFactor?: undefined;
+      code: SignInRefusalCode;
+      retryAfterSeconds?: number;
+    };
 
 /**
  * Why a second step was refused (D148, D149), in words the form translates:
@@ -135,10 +141,15 @@ function refusalOf<Code extends string>(
   codes: Record<string, Code>,
 ): { ok: false; code: Code | "unknown"; retryAfterSeconds?: number } {
   const raw =
-    body && typeof body === "object" && "code" in body ? (body as { code: unknown }).code : null;
+    body && typeof body === "object" && "code" in body
+      ? (body as { code: unknown }).code
+      : null;
   const code = (typeof raw === "string" && codes[raw]) || "unknown";
 
-  const seconds = retryAfter !== null && /^\d+$/.test(retryAfter.trim()) ? Number(retryAfter) : null;
+  const seconds =
+    retryAfter !== null && /^\d+$/.test(retryAfter.trim())
+      ? Number(retryAfter)
+      : null;
   return seconds !== null && seconds > 0
     ? { ok: false, code, retryAfterSeconds: seconds }
     : { ok: false, code };
@@ -200,7 +211,11 @@ export async function signInWithPassword(
     credentials: "same-origin",
   });
   const body: unknown = await response.json().catch(() => null);
-  return signInResultFrom(response.status, body, response.headers.get("retry-after"));
+  return signInResultFrom(
+    response.status,
+    body,
+    response.headers.get("retry-after"),
+  );
 }
 
 /**
@@ -241,7 +256,11 @@ async function secondStep(
     credentials: "same-origin",
   });
   const body: unknown = await response.json().catch(() => null);
-  return secondStepResultFrom(response.status, body, response.headers.get("retry-after"));
+  return secondStepResultFrom(
+    response.status,
+    body,
+    response.headers.get("retry-after"),
+  );
 }
 
 /**
@@ -324,7 +343,11 @@ export interface TotpEnrolment {
 }
 
 /** POSTs `{ password }` to a change endpoint; the answer's body, or the refusal thrown. */
-async function accountChange(path: string, password: string, fetcher: typeof fetch): Promise<unknown> {
+async function accountChange(
+  path: string,
+  password: string,
+  fetcher: typeof fetch,
+): Promise<unknown> {
   const response = await fetcher(path, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -334,8 +357,15 @@ async function accountChange(path: string, password: string, fetcher: typeof fet
   });
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const refusal = refusalOf(body, response.headers.get("retry-after"), ACCOUNT_CHANGE_CODES);
-    throw new AccountChangeRefusedError(refusal.code, refusal.retryAfterSeconds);
+    const refusal = refusalOf(
+      body,
+      response.headers.get("retry-after"),
+      ACCOUNT_CHANGE_CODES,
+    );
+    throw new AccountChangeRefusedError(
+      refusal.code,
+      refusal.retryAfterSeconds,
+    );
   }
   return body;
 }
@@ -343,7 +373,11 @@ async function accountChange(path: string, password: string, fetcher: typeof fet
 /** The backup codes an answer carries, or a refusal: an answer without them is not one. */
 function backupCodesOf(body: unknown): string[] {
   const codes = (body as { backupCodes?: unknown } | null)?.backupCodes;
-  if (!Array.isArray(codes) || codes.length === 0 || !codes.every((code) => typeof code === "string")) {
+  if (
+    !Array.isArray(codes) ||
+    codes.length === 0 ||
+    !codes.every((code) => typeof code === "string")
+  ) {
     throw new AccountChangeRefusedError("unknown");
   }
   return codes as string[];
@@ -359,7 +393,11 @@ export async function startTotpEnrolment(
   password: string,
   fetcher: typeof fetch = fetch,
 ): Promise<TotpEnrolment> {
-  const body = await accountChange("/api/auth/two-factor/enable", password, fetcher);
+  const body = await accountChange(
+    "/api/auth/two-factor/enable",
+    password,
+    fetcher,
+  );
   const totpUri = (body as { totpURI?: unknown } | null)?.totpURI;
   if (typeof totpUri !== "string" || !totpUri.startsWith("otpauth://totp/")) {
     throw new AccountChangeRefusedError("unknown");
@@ -381,7 +419,11 @@ export async function replaceBackupCodes(
   fetcher: typeof fetch = fetch,
 ): Promise<string[]> {
   return backupCodesOf(
-    await accountChange("/api/auth/two-factor/generate-backup-codes", password, fetcher),
+    await accountChange(
+      "/api/auth/two-factor/generate-backup-codes",
+      password,
+      fetcher,
+    ),
   );
 }
 
@@ -430,26 +472,49 @@ async function passkeyRequest(
   const response = await fetcher(`/api/auth/passkey/${path}`, {
     method: init.method,
     ...(init.method === "POST"
-      ? { headers: { "content-type": "application/json" }, body: JSON.stringify(init.body) }
+      ? {
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(init.body),
+        }
       : {}),
     cache: "no-store",
     credentials: "same-origin",
   });
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const refusal = refusalOf(body, response.headers.get("retry-after"), PASSKEY_CODES);
-    throw new AccountChangeRefusedError(refusal.code, refusal.retryAfterSeconds);
+    const refusal = refusalOf(
+      body,
+      response.headers.get("retry-after"),
+      PASSKEY_CODES,
+    );
+    throw new AccountChangeRefusedError(
+      refusal.code,
+      refusal.retryAfterSeconds,
+    );
   }
   return body;
 }
 
 /** This account's passkeys, oldest first. Throws `AccountChangeRefusedError`. */
-export async function listPasskeys(fetcher: typeof fetch = fetch): Promise<PasskeySummary[]> {
-  const body = await passkeyRequest("list-user-passkeys", { method: "GET" }, fetcher);
+export async function listPasskeys(
+  fetcher: typeof fetch = fetch,
+): Promise<PasskeySummary[]> {
+  const body = await passkeyRequest(
+    "list-user-passkeys",
+    { method: "GET" },
+    fetcher,
+  );
   if (!Array.isArray(body)) throw new AccountChangeRefusedError("unknown");
   return body
     .filter(
-      (row): row is { id: string; name?: unknown; createdAt: string; backedUp?: unknown } =>
+      (
+        row,
+      ): row is {
+        id: string;
+        name?: unknown;
+        createdAt: string;
+        backedUp?: unknown;
+      } =>
         typeof row === "object" &&
         row !== null &&
         typeof (row as { id?: unknown }).id === "string" &&
@@ -457,7 +522,10 @@ export async function listPasskeys(fetcher: typeof fetch = fetch): Promise<Passk
     )
     .map((row) => ({
       id: row.id,
-      name: typeof row.name === "string" && row.name.trim() !== "" ? row.name : null,
+      name:
+        typeof row.name === "string" && row.name.trim() !== ""
+          ? row.name
+          : null,
       createdAt: row.createdAt,
       synced: row.backedUp === true,
     }))
@@ -474,7 +542,9 @@ export type CreateCredential = (optionsJSON: unknown) => Promise<unknown>;
 const createWithBrowser: CreateCredential = async (optionsJSON) => {
   const { startRegistration } = await import("@simplewebauthn/browser");
   return startRegistration({
-    optionsJSON: optionsJSON as Parameters<typeof startRegistration>[0]["optionsJSON"],
+    optionsJSON: optionsJSON as Parameters<
+      typeof startRegistration
+    >[0]["optionsJSON"],
   });
 };
 
@@ -489,11 +559,19 @@ export function browserRefusalOf(error: unknown): AccountChangeRefusalCode {
   const name =
     (error as { cause?: { name?: unknown } } | null)?.cause?.name ??
     (error as { name?: unknown } | null)?.name;
-  if (code === "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED" || name === "InvalidStateError") {
+  if (
+    code === "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED" ||
+    name === "InvalidStateError"
+  ) {
     return "already_registered";
   }
-  if (code === "ERROR_AUTHENTICATOR_MISSING_USER_VERIFICATION_SUPPORT") return "not_verified";
-  if (code === "ERROR_CEREMONY_ABORTED" || name === "NotAllowedError" || name === "AbortError") {
+  if (code === "ERROR_AUTHENTICATOR_MISSING_USER_VERIFICATION_SUPPORT")
+    return "not_verified";
+  if (
+    code === "ERROR_CEREMONY_ABORTED" ||
+    name === "NotAllowedError" ||
+    name === "AbortError"
+  ) {
     return "cancelled";
   }
   return "unknown";
@@ -512,9 +590,16 @@ export function browserRefusalOf(error: unknown): AccountChangeRefusalCode {
  */
 export async function addPasskey(
   name: string | null,
-  { fetcher = fetch, create = createWithBrowser }: { fetcher?: typeof fetch; create?: CreateCredential } = {},
+  {
+    fetcher = fetch,
+    create = createWithBrowser,
+  }: { fetcher?: typeof fetch; create?: CreateCredential } = {},
 ): Promise<void> {
-  const options = await passkeyRequest("generate-register-options", { method: "GET" }, fetcher);
+  const options = await passkeyRequest(
+    "generate-register-options",
+    { method: "GET" },
+    fetcher,
+  );
   let made: unknown;
   try {
     made = await create(options);
@@ -523,7 +608,8 @@ export async function addPasskey(
   }
   // Without `clientExtensionResults`, as Better Auth's own client sends it:
   // the route forwards `response` and `name` and nothing else.
-  const { clientExtensionResults: _extensions, ...response } = (made ?? {}) as Record<string, unknown>;
+  const { clientExtensionResults: _extensions, ...response } = (made ??
+    {}) as Record<string, unknown>;
   await passkeyRequest(
     "verify-registration",
     { method: "POST", body: name ? { response, name } : { response } },
@@ -537,15 +623,26 @@ export async function renamePasskey(
   name: string,
   fetcher: typeof fetch = fetch,
 ): Promise<void> {
-  await passkeyRequest("update-passkey", { method: "POST", body: { id, name } }, fetcher);
+  await passkeyRequest(
+    "update-passkey",
+    { method: "POST", body: { id, name } },
+    fetcher,
+  );
 }
 
 /**
  * Removes one of this account's passkeys. Needs a step-up first, like adding
  * one, and spends it.
  */
-export async function removePasskey(id: string, fetcher: typeof fetch = fetch): Promise<void> {
-  await passkeyRequest("delete-passkey", { method: "POST", body: { id } }, fetcher);
+export async function removePasskey(
+  id: string,
+  fetcher: typeof fetch = fetch,
+): Promise<void> {
+  await passkeyRequest(
+    "delete-passkey",
+    { method: "POST", body: { id } },
+    fetcher,
+  );
 }
 
 /**
@@ -598,7 +695,9 @@ export type GetCredential = (optionsJSON: unknown) => Promise<unknown>;
 const getWithBrowser: GetCredential = async (optionsJSON) => {
   const { startAuthentication } = await import("@simplewebauthn/browser");
   return startAuthentication({
-    optionsJSON: optionsJSON as Parameters<typeof startAuthentication>[0]["optionsJSON"],
+    optionsJSON: optionsJSON as Parameters<
+      typeof startAuthentication
+    >[0]["optionsJSON"],
   });
 };
 
@@ -618,16 +717,26 @@ const getWithBrowser: GetCredential = async (optionsJSON) => {
  */
 export async function signInWithPasskey(
   { rememberMe }: { rememberMe: boolean },
-  { fetcher = fetch, get = getWithBrowser }: { fetcher?: typeof fetch; get?: GetCredential } = {},
+  {
+    fetcher = fetch,
+    get = getWithBrowser,
+  }: { fetcher?: typeof fetch; get?: GetCredential } = {},
 ): Promise<PasskeySignInResult> {
-  const optionsResponse = await fetcher("/api/auth/passkey/generate-authenticate-options", {
-    method: "GET",
-    cache: "no-store",
-    credentials: "same-origin",
-  });
+  const optionsResponse = await fetcher(
+    "/api/auth/passkey/generate-authenticate-options",
+    {
+      method: "GET",
+      cache: "no-store",
+      credentials: "same-origin",
+    },
+  );
   const options: unknown = await optionsResponse.json().catch(() => null);
   if (!optionsResponse.ok) {
-    return refusalOf(options, optionsResponse.headers.get("retry-after"), PASSKEY_SIGN_IN_CODES);
+    return refusalOf(
+      options,
+      optionsResponse.headers.get("retry-after"),
+      PASSKEY_SIGN_IN_CODES,
+    );
   }
 
   let answer: unknown;
@@ -636,13 +745,17 @@ export async function signInWithPasskey(
   } catch (error) {
     return {
       ok: false,
-      code: browserRefusalOf(error) === "cancelled" ? "passkey_cancelled" : "passkey_failed",
+      code:
+        browserRefusalOf(error) === "cancelled"
+          ? "passkey_cancelled"
+          : "passkey_failed",
     };
   }
 
   // Without `clientExtensionResults`, as for a registration: the route
   // forwards `response` and nothing else of it.
-  const { clientExtensionResults: _extensions, ...response } = (answer ?? {}) as Record<string, unknown>;
+  const { clientExtensionResults: _extensions, ...response } = (answer ??
+    {}) as Record<string, unknown>;
   const verified = await fetcher("/api/auth/passkey/verify-authentication", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -652,7 +765,11 @@ export async function signInWithPasskey(
   });
   if (verified.ok) return { ok: true };
   const body: unknown = await verified.json().catch(() => null);
-  return refusalOf(body, verified.headers.get("retry-after"), PASSKEY_SIGN_IN_CODES);
+  return refusalOf(
+    body,
+    verified.headers.get("retry-after"),
+    PASSKEY_SIGN_IN_CODES,
+  );
 }
 
 /**
@@ -692,5 +809,8 @@ export async function readSessionExpiry(
   // Anything but an explicit "cap" is the idle deadline: the warning then
   // offers the button, and the worst a wrong guess costs is one press that
   // changes nothing. The other way round would hide a button that works.
-  return { expires: answer.expires, kind: answer.kind === "cap" ? "cap" : "idle" };
+  return {
+    expires: answer.expires,
+    kind: answer.kind === "cap" ? "cap" : "idle",
+  };
 }

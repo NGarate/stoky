@@ -34,7 +34,10 @@ const match = getMiddlewareRouteMatcher(
  * As `resolve-routes.js` asks it: the raw pathname, then the decoded one, and
  * the proxy runs if either matches.
  */
-export function proxyRuns(pathname: string, headers: Record<string, string> = {}): boolean {
+export function proxyRuns(
+  pathname: string,
+  headers: Record<string, string> = {},
+): boolean {
   // `matchHas` reads only `headers` off the request for a header condition.
   const request = { headers } as unknown as Parameters<typeof match>[1];
   return (

@@ -46,7 +46,10 @@ function usePageOrigin(): string | null {
 }
 
 /** Which password dialog is open, and for what. */
-type Asking = { kind: "add" } | { kind: "remove"; passkey: PasskeySummary; name: string } | null;
+type Asking =
+  | { kind: "add" }
+  | { kind: "remove"; passkey: PasskeySummary; name: string }
+  | null;
 
 /**
  * **Llaves de acceso** on `/settings/security` (PROGRESS D151): the account's
@@ -117,14 +120,19 @@ function Passkeys({ origin }: { origin: string }): JSX.Element {
   });
 
   const [asking, setAsking] = useState<Asking>(null);
-  const [renaming, setRenaming] = useState<{ passkey: PasskeySummary; name: string } | null>(null);
+  const [renaming, setRenaming] = useState<{
+    passkey: PasskeySummary;
+    name: string;
+  } | null>(null);
   const opener = useRef<HTMLButtonElement | null>(null);
   // Where focus goes when a removal took its row, and the row's "Quitar"
   // with it: the sentence that heads the section, which always stays.
   const explanation = useRef<HTMLParagraphElement>(null);
 
-  const reread = () => queryClient.invalidateQueries({ queryKey: PASSKEYS_KEY });
-  const nameOf = (passkey: PasskeySummary) => passkey.name ?? t("passkeysUnnamed");
+  const reread = () =>
+    queryClient.invalidateQueries({ queryKey: PASSKEYS_KEY });
+  const nameOf = (passkey: PasskeySummary) =>
+    passkey.name ?? t("passkeysUnnamed");
 
   /**
    * Why adding cannot work here, or null when it can. The address first:
@@ -133,7 +141,8 @@ function Passkeys({ origin }: { origin: string }): JSX.Element {
    */
   function obstacle(): string | null {
     if (support === "pending" || pageOrigin === null) return null;
-    if (pageOrigin !== origin) return t("passkeysOnlyAt", { host: new URL(origin).host });
+    if (pageOrigin !== origin)
+      return t("passkeysOnlyAt", { host: new URL(origin).host });
     if (support === "insecure") return t("passkeysInsecure");
     if (support === "unsupported") return t("passkeysUnsupported");
     return null;
@@ -153,13 +162,19 @@ function Passkeys({ origin }: { origin: string }): JSX.Element {
     if (asking.kind === "add") {
       // Named after where it was made, so the list tells two apart before
       // anybody renames one: "Chrome en Android".
-      const name = deviceName({ device: deviceLabel(navigator.userAgent), screen: null });
+      const name = deviceName({
+        device: deviceLabel(navigator.userAgent),
+        screen: null,
+      });
       await addPasskey(name).catch(async (error: unknown) => {
         await reread();
         throw error;
       });
       await reread();
-      snackbar.show({ kind: "confirm", message: { key: "security.passkeysAdded" } });
+      snackbar.show({
+        kind: "confirm",
+        message: { key: "security.passkeysAdded" },
+      });
     } else {
       const { passkey, name } = asking;
       await removePasskey(passkey.id).catch(async (error: unknown) => {
@@ -213,10 +228,15 @@ function Passkeys({ origin }: { origin: string }): JSX.Element {
                 <ItemRow
                   key={passkey.id}
                   meta={[
-                    { label: t("passkeysCreated"), value: formatDateTime(locale, passkey.createdAt) },
+                    {
+                      label: t("passkeysCreated"),
+                      value: formatDateTime(locale, passkey.createdAt),
+                    },
                     {
                       label: t("passkeysWhere"),
-                      value: passkey.synced ? t("passkeysSynced") : t("passkeysDeviceOnly"),
+                      value: passkey.synced
+                        ? t("passkeysSynced")
+                        : t("passkeysDeviceOnly"),
                     },
                   ]}
                   title={name}
@@ -237,7 +257,12 @@ function Passkeys({ origin }: { origin: string }): JSX.Element {
                       </Button>
                       <Button
                         aria-label={t("passkeysRemoveNamed", { name })}
-                        onClick={(event) => open({ kind: "remove", passkey, name }, event.currentTarget)}
+                        onClick={(event) =>
+                          open(
+                            { kind: "remove", passkey, name },
+                            event.currentTarget,
+                          )
+                        }
                         type="button"
                         variant="destructive-ghost"
                       >
@@ -259,7 +284,10 @@ function Passkeys({ origin }: { origin: string }): JSX.Element {
       )}
 
       {canAdd ? (
-        <Button onClick={(event) => open({ kind: "add" }, event.currentTarget)} type="button">
+        <Button
+          onClick={(event) => open({ kind: "add" }, event.currentTarget)}
+          type="button"
+        >
           {t("passkeysAdd")}
         </Button>
       ) : blocked ? (
@@ -269,11 +297,19 @@ function Passkeys({ origin }: { origin: string }): JSX.Element {
       <ReauthDialog
         actions={[
           asking?.kind === "remove"
-            ? { id: "remove", label: t("passkeysRemove"), variant: "destructive" }
+            ? {
+                id: "remove",
+                label: t("passkeysRemove"),
+                variant: "destructive",
+              }
             : { id: "add", label: t("passkeysAddAction") },
         ]}
         describe={describe}
-        description={asking?.kind === "remove" ? t("passkeysRemoveBody") : t("passkeysAddBody")}
+        description={
+          asking?.kind === "remove"
+            ? t("passkeysRemoveBody")
+            : t("passkeysAddBody")
+        }
         notice={
           asking?.kind === "add" ? (
             <p className="mb-3 rounded border border-warn-foreground bg-warn p-3 text-sm text-warn-foreground">
@@ -298,7 +334,10 @@ function Passkeys({ origin }: { origin: string }): JSX.Element {
         onClose={() => setRenaming(null)}
         onRenamed={async () => {
           await reread();
-          snackbar.show({ kind: "confirm", message: { key: "security.passkeysRenamed" } });
+          snackbar.show({
+            kind: "confirm",
+            message: { key: "security.passkeysRenamed" },
+          });
           setRenaming(null);
         }}
         returnFocus={opener}
@@ -357,7 +396,8 @@ function RenameDialog({
       .then(onRenamed)
       .catch((error: unknown) => {
         refuse(
-          error instanceof AccountChangeRefusedError && error.code === "passkey_gone"
+          error instanceof AccountChangeRefusedError &&
+            error.code === "passkey_gone"
             ? t("passkeysGone")
             : tReauth("failed"),
         );
@@ -389,8 +429,17 @@ function RenameDialog({
         messages={refusal ? [refusal] : []}
         title={tReauth("refusedTitle")}
       />
-      <form className="mt-3 space-y-2" id={formId} method="post" noValidate onSubmit={handleSubmit}>
-        <label className="text-sm font-medium text-foreground" htmlFor={`${fieldId}-name`}>
+      <form
+        className="mt-3 space-y-2"
+        id={formId}
+        method="post"
+        noValidate
+        onSubmit={handleSubmit}
+      >
+        <label
+          className="text-sm font-medium text-foreground"
+          htmlFor={`${fieldId}-name`}
+        >
           {t("passkeysNameLabel")}
         </label>
         <Input

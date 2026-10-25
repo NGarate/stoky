@@ -53,13 +53,15 @@ function mergeJar(jar: string, setCookie: string[]): string {
   for (const line of setCookie) {
     const pair = line.split(";")[0].trim();
     const name = pair.split("=", 1)[0];
-    if (/;\s*max-age=0\b/i.test(line) || pair.endsWith("=")) cookies.delete(name);
+    if (/;\s*max-age=0\b/i.test(line) || pair.endsWith("="))
+      cookies.delete(name);
     else cookies.set(name, pair);
   }
   return [...cookies.values()].join("; ");
 }
 
-const code = (secret: string, steps = 0) => hotp(secret, totpStep(Date.now()) + steps);
+const code = (secret: string, steps = 0) =>
+  hotp(secret, totpStep(Date.now()) + steps);
 
 async function household(label: string): Promise<string> {
   return (await createTestHousehold({ name: `${MARKER} ${label}` })).id;
@@ -71,10 +73,22 @@ interface Account {
   caller: Caller;
 }
 
-async function account(label: string, householdId: string, role: HouseholdRole): Promise<Account> {
+async function account(
+  label: string,
+  householdId: string,
+  role: HouseholdRole,
+): Promise<Account> {
   const email = generateTestEmail(`${MARKER}-${label}`);
-  const user = await createTestUser({ email, name: `Removal ${label}`, password: PASSWORD, householdId, role });
-  const row = await prisma.household.findUniqueOrThrow({ where: { id: householdId } });
+  const user = await createTestUser({
+    email,
+    name: `Removal ${label}`,
+    password: PASSWORD,
+    householdId,
+    role,
+  });
+  const row = await prisma.household.findUniqueOrThrow({
+    where: { id: householdId },
+  });
   const ctx = await createTRPCContext({
     session: createMockSession({ ...user, household: row }),
     headers: new Headers({ "x-forwarded-for": "203.0.113.32" }),
@@ -90,16 +104,31 @@ interface Enrolled extends Account {
 }
 
 /** A member with an authenticator, signed in on the browser that set it up. */
-async function enrolled(label: string, householdId: string, role: HouseholdRole = "MEMBER"): Promise<Enrolled> {
+async function enrolled(
+  label: string,
+  householdId: string,
+  role: HouseholdRole = "MEMBER",
+): Promise<Enrolled> {
   const member = await account(label, householdId, role);
-  const signedIn = await signInWith({ email: member.email, password: PASSWORD });
+  const signedIn = await signInWith({
+    email: member.email,
+    password: PASSWORD,
+  });
   expect(signedIn.status).toBe(200);
   let jar = signedIn.cookieHeader;
 
   const auth = getAuth();
-  await auth.api.enableTwoFactor({ body: { password: PASSWORD }, headers: new Headers({ cookie: jar }) });
-  const row = await prisma.twoFactor.findUniqueOrThrow({ where: { userId: member.id } });
-  const secret = await symmetricDecrypt({ key: (await auth.$context).secretConfig, data: row.secret });
+  await auth.api.enableTwoFactor({
+    body: { password: PASSWORD },
+    headers: new Headers({ cookie: jar }),
+  });
+  const row = await prisma.twoFactor.findUniqueOrThrow({
+    where: { userId: member.id },
+  });
+  const secret = await symmetricDecrypt({
+    key: (await auth.$context).secretConfig,
+    data: row.secret,
+  });
   const verified = await auth.api.verifyTOTP({
     body: { code: code(secret) },
     headers: new Headers({ cookie: jar }),
@@ -112,10 +141,13 @@ async function enrolled(label: string, householdId: string, role: HouseholdRole 
 }
 
 const signedInAs = async (jar: string) =>
-  (await readSession(new Headers({ cookie: jar }), { refresh: false }))?.user.id ?? null;
+  (await readSession(new Headers({ cookie: jar }), { refresh: false }))?.user
+    .id ?? null;
 
 /** A password step on a fresh browser that stops for the code; its jar. */
-async function pendingChallenge(member: Pick<Account, "email">): Promise<string> {
+async function pendingChallenge(
+  member: Pick<Account, "email">,
+): Promise<string> {
   const answer = await signInWith({ email: member.email, password: PASSWORD });
   expect(answer.status).toBe(200);
   expect(answer.body).toMatchObject({ twoFactorRedirect: true });
@@ -136,11 +168,16 @@ async function verifyTotp(jar: string, totp: string) {
       body: JSON.stringify({ code: totp }),
     }),
   );
-  return { status: response.status, jar: mergeJar(jar, response.headers.getSetCookie()) };
+  return {
+    status: response.status,
+    jar: mergeJar(jar, response.headers.getSetCookie()),
+  };
 }
 
 const challenges = (userId: string) =>
-  prisma.verification.count({ where: { identifier: { startsWith: "2fa-" }, value: userId } });
+  prisma.verification.count({
+    where: { identifier: { startsWith: "2fa-" }, value: userId },
+  });
 
 /** What the member's account holds of two-step verification. */
 async function twoFactorOf(userId: string) {
@@ -211,10 +248,18 @@ describe("an admin removing a member's two-step verification", () => {
 
     // Who did it to whom, and how many sessions went; never the code, the
     // secret, a password or an email address.
-    expect(events.filter((line) => line.event === "auth.twofactor.removed")).toEqual([
-      expect.objectContaining({ userId: admin.id, targetUserId: ana.id, householdId: home }),
+    expect(
+      events.filter((line) => line.event === "auth.twofactor.removed"),
+    ).toEqual([
+      expect.objectContaining({
+        userId: admin.id,
+        targetUserId: ana.id,
+        householdId: home,
+      }),
     ]);
-    expect(events.filter((line) => line.event === "auth.session.ended")).toEqual([
+    expect(
+      events.filter((line) => line.event === "auth.session.ended"),
+    ).toEqual([
       expect.objectContaining({
         userId: admin.id,
         targetUserId: ana.id,
@@ -223,7 +268,14 @@ describe("an admin removing a member's two-step verification", () => {
         count: "1",
       }),
     ]);
-    for (const secret of [ana.secret, code(ana.secret), code(ana.secret, 1), ana.email, admin.email, PASSWORD]) {
+    for (const secret of [
+      ana.secret,
+      code(ana.secret),
+      code(ana.secret, 1),
+      ana.email,
+      admin.email,
+      PASSWORD,
+    ]) {
       expect(raw).not.toContain(secret);
     }
 
@@ -240,7 +292,10 @@ describe("an admin removing a member's two-step verification", () => {
     const coOwner = await enrolled("owners-co", home, "OWNER");
 
     expect(await remove(owner, coOwner.id)).toEqual({ ended: 1 });
-    expect(await twoFactorOf(coOwner.id)).toEqual({ enabled: false, row: false });
+    expect(await twoFactorOf(coOwner.id)).toEqual({
+      enabled: false,
+      row: false,
+    });
     expect(await signedInAs(coOwner.jar)).toBeNull();
   });
 });
@@ -259,14 +314,20 @@ describe("what it refuses, changing nothing", () => {
     expect(refused).toBe("BAD_REQUEST");
     expect(await twoFactorOf(ana.id)).toEqual({ enabled: true, row: true });
     expect(await signedInAs(ana.jar)).toBe(ana.id);
-    expect(events.filter((line) => line.event === "auth.reauth.refused")).toEqual([
+    expect(
+      events.filter((line) => line.event === "auth.reauth.refused"),
+    ).toEqual([
       expect.objectContaining({ userId: admin.id, via: "member-two-factor" }),
     ]);
-    expect(events.some((line) => line.event === "auth.twofactor.removed")).toBe(false);
+    expect(events.some((line) => line.event === "auth.twofactor.removed")).toBe(
+      false,
+    );
 
     // The password is asked before the member is looked up, so a session
     // somebody else holds learns nothing about which ids exist.
-    expect(await codeOf(remove(admin, "no-such-member", WRONG_PASSWORD))).toBe("BAD_REQUEST");
+    expect(await codeOf(remove(admin, "no-such-member", WRONG_PASSWORD))).toBe(
+      "BAD_REQUEST",
+    );
   });
 
   it("refuses an admin acting on an owner", async () => {
@@ -294,7 +355,10 @@ describe("what it refuses, changing nothing", () => {
     expect(await codeOf(remove(owner, owner.id))).toBe("BAD_REQUEST");
 
     for (const person of [owner, ana, outsider]) {
-      expect(await twoFactorOf(person.id)).toEqual({ enabled: true, row: true });
+      expect(await twoFactorOf(person.id)).toEqual({
+        enabled: true,
+        row: true,
+      });
       expect(await signedInAs(person.jar)).toBe(person.id);
     }
   });
@@ -313,7 +377,11 @@ describe("what it refuses, changing nothing", () => {
 
     expect(refused).toBe("CONFLICT");
     expect(await signedInAs(signedIn.cookieHeader)).toBe(bea.id);
-    expect(events.some((line) => line.event === "auth.session.ended")).toBe(false);
-    expect(events.some((line) => line.event === "auth.twofactor.removed")).toBe(false);
+    expect(events.some((line) => line.event === "auth.session.ended")).toBe(
+      false,
+    );
+    expect(events.some((line) => line.event === "auth.twofactor.removed")).toBe(
+      false,
+    );
   });
 });

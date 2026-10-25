@@ -7,10 +7,7 @@ import {
   MAX_SEARCH_LENGTH,
 } from "@/lib/validations/bounds";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
-import {
-  priceRecordSchema,
-  priceHistorySchema,
-} from "@/lib/validations/price";
+import { priceRecordSchema, priceHistorySchema } from "@/lib/validations/price";
 import { inUnit, withUnitPrices } from "@/lib/prices/unitPrice";
 
 /**
@@ -123,7 +120,11 @@ export const priceRouter = createTRPCRouter({
         },
       });
 
-      const unit = await comparisonUnit(ctx.db, input.productId, ctx.householdId);
+      const unit = await comparisonUnit(
+        ctx.db,
+        input.productId,
+        ctx.householdId,
+      );
       return unit === null ? [] : withUnitPrices(inUnit(history, unit));
     }),
 
@@ -152,7 +153,11 @@ export const priceRouter = createTRPCRouter({
 
       // Converted before the per-store pick, for the same reason as the
       // quantity filter above: the latest *comparable* sighting is reported.
-      const unit = await comparisonUnit(ctx.db, input.productId, ctx.householdId);
+      const unit = await comparisonUnit(
+        ctx.db,
+        input.productId,
+        ctx.householdId,
+      );
       if (unit === null) return [];
       const comparable = inUnit(latestPrices, unit);
 
@@ -181,7 +186,7 @@ export const priceRouter = createTRPCRouter({
       z.object({
         search: z.string().trim().max(MAX_SEARCH_LENGTH).optional(),
         limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(50),
-      })
+      }),
     )
     .query(async ({ ctx, input }) => {
       const products = await ctx.db.product.findMany({
@@ -211,7 +216,9 @@ export const priceRouter = createTRPCRouter({
 
       return products.map((product) => ({
         ...product,
-        priceRecords: withUnitPrices(inUnit(product.priceRecords, product.defaultUnit)),
+        priceRecords: withUnitPrices(
+          inUnit(product.priceRecords, product.defaultUnit),
+        ),
       }));
     }),
 });

@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, spyOn } from "bun:test";
-import { OpenFoodFactsClient, openFoodFacts } from "@/server/services/openFoodFacts";
-import { memoryProductCache, type ProductCache } from "@/server/services/product-cache";
+import {
+  OpenFoodFactsClient,
+  openFoodFacts,
+} from "@/server/services/openFoodFacts";
+import {
+  memoryProductCache,
+  type ProductCache,
+} from "@/server/services/product-cache";
 
 describe("OpenFoodFacts Service", () => {
   let client: OpenFoodFactsClient;
@@ -73,7 +79,12 @@ describe("OpenFoodFacts Service", () => {
         };
       }) as unknown as typeof fetch;
 
-      return { calls, restore: () => { global.fetch = originalFetch; } };
+      return {
+        calls,
+        restore: () => {
+          global.fetch = originalFetch;
+        },
+      };
     }
 
     it("carries the rating fields through the schema", async () => {
@@ -230,7 +241,10 @@ describe("OpenFoodFacts Service", () => {
       const { beforeFetch, asked } = meter(true);
       try {
         expect(
-          await new OpenFoodFactsClient(cache).getProductByBarcode(barcode, beforeFetch),
+          await new OpenFoodFactsClient(cache).getProductByBarcode(
+            barcode,
+            beforeFetch,
+          ),
         ).toBeNull();
         expect(asked()).toBe(0);
         expect(calls).toHaveLength(0);
@@ -303,7 +317,10 @@ describe("OpenFoodFacts Service", () => {
       originalFetch = global.fetch;
       global.fetch = ((url: string | URL, init?: RequestInit) => {
         const { pathname, search } = new URL(String(url));
-        return originalFetch(`http://127.0.0.1:${server.port}${pathname}${search}`, init);
+        return originalFetch(
+          `http://127.0.0.1:${server.port}${pathname}${search}`,
+          init,
+        );
       }) as typeof fetch;
     }
 
@@ -371,7 +388,9 @@ describe("OpenFoodFacts Service", () => {
           new Response(
             new ReadableStream({
               start(controller) {
-                controller.enqueue(new TextEncoder().encode(`{"code":"${barcode}",`));
+                controller.enqueue(
+                  new TextEncoder().encode(`{"code":"${barcode}",`),
+                );
               },
             }),
             { headers: { "content-type": "application/json" } },

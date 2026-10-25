@@ -64,9 +64,7 @@ mock.module("@/lib/trpc/client", () => ({
       list: {
         useQuery: () => ({
           data: {
-            products: [
-              { id: "p1", name: "Leche entera", defaultUnit: "L" },
-            ],
+            products: [{ id: "p1", name: "Leche entera", defaultUnit: "L" }],
           },
           isPending: false,
         }),
@@ -115,9 +113,8 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
-const { default: AddStockPage } = await import(
-  "@/app/(dashboard)/inventory/add/page"
-);
+const { default: AddStockPage } =
+  await import("@/app/(dashboard)/inventory/add/page");
 
 beforeEach(() => {
   addStockCalls = [];

@@ -61,7 +61,9 @@ const ALLOWED: Record<string, string> = {
 
 /** Every seven-hex-digit token in backticks, which is how this repo writes a sha. */
 function shasIn(text: string): string[] {
-  return [...text.matchAll(/`([0-9a-f]{7})`/g)].map((match) => match[1] as string);
+  return [...text.matchAll(/`([0-9a-f]{7})`/g)].map(
+    (match) => match[1] as string,
+  );
 }
 
 const REGION =
@@ -96,12 +98,19 @@ function git(args: string[]): string {
 
 /** The branch's ref, local or remote-tracking, or null once it is gone. */
 function refOf(branch: string): string | null {
-  const refs = git(["for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes"])
+  const refs = git([
+    "for-each-ref",
+    "--format=%(refname)",
+    "refs/heads",
+    "refs/remotes",
+  ])
     .split("\n")
     .filter(Boolean);
   return (
     refs.find((ref) => ref === `refs/heads/${branch}`) ??
-    refs.find((ref) => ref.endsWith(`/${branch}`) && ref.startsWith("refs/remotes/")) ??
+    refs.find(
+      (ref) => ref.endsWith(`/${branch}`) && ref.startsWith("refs/remotes/"),
+    ) ??
     null
   );
 }
@@ -138,7 +147,9 @@ describe("the shas the documents cite", () => {
 
     // `--all` rather than `HEAD`: a sha on any branch or tag survives a clone,
     // and one that is only in this machine's reflog does not.
-    const reachable = new Set(git(["log", "--format=%h", "--all"]).split("\n").filter(Boolean));
+    const reachable = new Set(
+      git(["log", "--format=%h", "--all"]).split("\n").filter(Boolean),
+    );
 
     const dangling = cited.filter(
       (sha) => !reachable.has(sha) && !ALLOWED[sha],
@@ -155,9 +166,12 @@ describe("the shas the documents cite", () => {
   });
 
   it("cites, inside a branch-commit region, only that branch's own commits", () => {
-    const shallow = git(["rev-parse", "--is-shallow-repository"]).trim() === "true";
+    const shallow =
+      git(["rev-parse", "--is-shallow-repository"]).trim() === "true";
     if (shallow) {
-      console.warn("ledger-shas: shallow clone, branch-commit regions not checked");
+      console.warn(
+        "ledger-shas: shallow clone, branch-commit regions not checked",
+      );
       expect(shallow).toBe(true);
       return;
     }
@@ -172,9 +186,12 @@ describe("the shas the documents cite", () => {
         );
         continue;
       }
-      const own = git(["log", "--format=%H", `${region.base}..${ref}`]).split("\n").filter(Boolean);
+      const own = git(["log", "--format=%H", `${region.base}..${ref}`])
+        .split("\n")
+        .filter(Boolean);
       for (const sha of region.shas) {
-        if (!own.some((full) => full.startsWith(sha))) misplaced.push(`${region.file}: ${sha}`);
+        if (!own.some((full) => full.startsWith(sha)))
+          misplaced.push(`${region.file}: ${sha}`);
       }
     }
 

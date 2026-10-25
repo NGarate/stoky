@@ -52,7 +52,9 @@ describe("RadioOption", () => {
 
     // A two-letter option is the width case, the same one that caught
     // ItemRow's title.
-    expect(container.querySelector("label")?.className).toContain("min-w-[48px]");
+    expect(container.querySelector("label")?.className).toContain(
+      "min-w-[48px]",
+    );
   });
 
   it("reports the choice when it is made", () => {
@@ -77,7 +79,9 @@ describe("RadioOption", () => {
 
     // Weight as well as fill: a reader who cannot tell the two greens apart
     // still sees which one is bolder.
-    expect(container.querySelector("label")?.className).toContain("font-semibold");
+    expect(container.querySelector("label")?.className).toContain(
+      "font-semibold",
+    );
   });
 
   it("keeps the label from swallowing the click", () => {

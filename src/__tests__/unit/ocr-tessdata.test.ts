@@ -97,7 +97,9 @@ describe("the image carries one", () => {
 
   it("bakes the model in at build time", () => {
     expect(dockerfile).toContain("/app/tessdata/spa.traineddata");
-    expect(dockerfile).toContain("COPY --from=builder /app/tessdata ./tessdata");
+    expect(dockerfile).toContain(
+      "COPY --from=builder /app/tessdata ./tessdata",
+    );
   });
 
   it("tells the application where it put it", () => {

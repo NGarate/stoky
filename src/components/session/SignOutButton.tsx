@@ -77,10 +77,7 @@ export function SignOutButton(): JSX.Element {
   if (!asking) {
     return (
       <div>
-        <Button
-          onClick={() => setAsking(true)}
-          type="button"
-        >
+        <Button onClick={() => setAsking(true)} type="button">
           {t("signOut")}
         </Button>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -125,8 +122,13 @@ export function SignOutButton(): JSX.Element {
       ) : null}
 
       {failed !== null ? (
-        <p className="mt-2 text-sm font-semibold text-warn-foreground" role="alert">
-          {t(failed === "unsent" ? "signOutFailedUnsent" : "signOutFailedAfter")}
+        <p
+          className="mt-2 text-sm font-semibold text-warn-foreground"
+          role="alert"
+        >
+          {t(
+            failed === "unsent" ? "signOutFailedUnsent" : "signOutFailedAfter",
+          )}
         </p>
       ) : null}
 

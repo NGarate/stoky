@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, spyOn } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  spyOn,
+} from "bun:test";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
@@ -90,7 +98,9 @@ async function eventsDuring(run: () => Promise<unknown>) {
 }
 
 beforeAll(async () => {
-  const household = await prisma.household.create({ data: { name: "People A" } });
+  const household = await prisma.household.create({
+    data: { name: "People A" },
+  });
   const other = await prisma.household.create({ data: { name: "People B" } });
   HOUSEHOLD.id = household.id;
   OTHER.id = other.id;
@@ -155,7 +165,12 @@ describe("creating a kitchen account", () => {
     const created = await api.household.addMember(newAccount("KITCHEN"));
 
     expect(JSON.stringify(created)).not.toContain("argon2");
-    expect(Object.keys(created).sort()).toEqual(["email", "id", "name", "role"]);
+    expect(Object.keys(created).sort()).toEqual([
+      "email",
+      "id",
+      "name",
+      "role",
+    ]);
   });
 
   it("refuses a password built from the person's own name, and creates nothing", async () => {
@@ -163,7 +178,11 @@ describe("creating a kitchen account", () => {
     // it (security review, 2026-10-12). Through the router, so the procedure's
     // `.input()` is what is proved to use it, not only the schema in isolation.
     const api = await callerFor(HOUSEHOLD.ownerId, HOUSEHOLD.id);
-    const account = { ...newAccount("MEMBER"), name: "Rosalía", password: "rosalía despensa 2026" };
+    const account = {
+      ...newAccount("MEMBER"),
+      name: "Rosalía",
+      password: "rosalía despensa 2026",
+    };
 
     let refusal: unknown;
     try {
@@ -174,8 +193,12 @@ describe("creating a kitchen account", () => {
 
     expect(refusal).toBeInstanceOf(TRPCError);
     expect((refusal as TRPCError).code).toBe("BAD_REQUEST");
-    expect(isPasswordIdentityRefusal((refusal as TRPCError).message)).toBe(true);
-    expect(await prisma.user.count({ where: { email: account.email } })).toBe(0);
+    expect(isPasswordIdentityRefusal((refusal as TRPCError).message)).toBe(
+      true,
+    );
+    expect(await prisma.user.count({ where: { email: account.email } })).toBe(
+      0,
+    );
   });
 
   it("refuses an address that already has an account", async () => {
@@ -208,7 +231,8 @@ describe("how many accounts an admin may create", () => {
   });
 
   afterAll(() => {
-    if (original === undefined) delete process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS;
+    if (original === undefined)
+      delete process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS;
     else process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS = original;
   });
 
@@ -251,7 +275,9 @@ describe("how many accounts an admin may create", () => {
     const retryAfter = retryAfterSeconds([refusal]);
     expect(retryAfter).toBeGreaterThan(0);
     expect(retryAfter).toBeLessThanOrEqual(3600);
-    expect(await prisma.user.count({ where: { email: account.email } })).toBe(0);
+    expect(await prisma.user.count({ where: { email: account.email } })).toBe(
+      0,
+    );
   });
 
   it("counts an address that is already taken, which costs the same hash", async () => {
@@ -282,9 +308,9 @@ describe("how many accounts an admin may create", () => {
     for (let i = 0; i < ATTEMPTS; i++) {
       await spending.household.addMember(newAccount("KITCHEN"));
     }
-    expect(await codeOf(spending.household.addMember(newAccount("KITCHEN")))).toBe(
-      "TOO_MANY_REQUESTS",
-    );
+    expect(
+      await codeOf(spending.household.addMember(newAccount("KITCHEN"))),
+    ).toBe("TOO_MANY_REQUESTS");
 
     const created = await api.household.addMember(newAccount("KITCHEN"));
     expect(created.role).toBe("KITCHEN");
@@ -428,8 +454,12 @@ describe("setting a member's password", () => {
     expect(after.sessions).toBe(0);
     expect(await readSession(cookie, { refresh: false })).toBeNull();
 
-    expect((await signInWith({ email: member.email, password: NEW })).status).toBe(200);
-    expect((await signInWith({ email: member.email, password: OLD })).status).toBe(401);
+    expect(
+      (await signInWith({ email: member.email, password: NEW })).status,
+    ).toBe(200);
+    expect(
+      (await signInWith({ email: member.email, password: OLD })).status,
+    ).toBe(401);
 
     // Who did it, to whom — and neither password.
     const reset = events.filter((e) => e.event === "auth.password.reset");
@@ -444,14 +474,25 @@ describe("setting a member's password", () => {
     // A passkey signs in with no password at all, so a reset that left one
     // standing would leave whoever it is meant to shut out a way back in.
     const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "reset-passkeys-admin");
-    const member = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-passkeys-target");
-    const bystander = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-passkeys-bystander");
+    const member = await makeUser(
+      HOUSEHOLD.id,
+      "MEMBER",
+      "reset-passkeys-target",
+    );
+    const bystander = await makeUser(
+      HOUSEHOLD.id,
+      "MEMBER",
+      "reset-passkeys-bystander",
+    );
     await passkeyFor(member.id);
     await passkeyFor(member.id);
     await passkeyFor(bystander.id);
     const api = await callerFor(admin.id, HOUSEHOLD.id);
 
-    await api.household.resetMemberPassword({ userId: member.id, newPassword: NEW });
+    await api.household.resetMemberPassword({
+      userId: member.id,
+      newPassword: NEW,
+    });
 
     expect((await stored(member.id)).passkeys).toBe(0);
     expect((await stored(bystander.id)).passkeys).toBe(1);
@@ -464,7 +505,10 @@ describe("setting a member's password", () => {
     const before = await stored(HOUSEHOLD.memberId);
 
     const refusal = await refusalOf(
-      api.household.resetMemberPassword({ userId: HOUSEHOLD.memberId, newPassword: NEW }),
+      api.household.resetMemberPassword({
+        userId: HOUSEHOLD.memberId,
+        newPassword: NEW,
+      }),
     );
 
     expect(refusal.code).toBe("NOT_FOUND");
@@ -478,7 +522,10 @@ describe("setting a member's password", () => {
     const before = await stored(HOUSEHOLD.ownerId);
 
     const refusal = await refusalOf(
-      api.household.resetMemberPassword({ userId: HOUSEHOLD.ownerId, newPassword: NEW }),
+      api.household.resetMemberPassword({
+        userId: HOUSEHOLD.ownerId,
+        newPassword: NEW,
+      }),
     );
 
     expect(refusal.code).toBe("FORBIDDEN");
@@ -492,9 +539,14 @@ describe("setting a member's password", () => {
     const other = await makeUser(HOUSEHOLD.id, "OWNER", "reset-owner-target");
     const api = await callerFor(owner.id, HOUSEHOLD.id);
 
-    await api.household.resetMemberPassword({ userId: other.id, newPassword: NEW });
+    await api.household.resetMemberPassword({
+      userId: other.id,
+      newPassword: NEW,
+    });
 
-    expect(await argon2.verify((await stored(other.id)).passwordHash, NEW)).toBe(true);
+    expect(
+      await argon2.verify((await stored(other.id)).passwordHash, NEW),
+    ).toBe(true);
   });
 
   it("refuses the caller's own account, which changes through its current password", async () => {
@@ -516,7 +568,12 @@ describe("setting a member's password", () => {
     const target = await makeUser(HOUSEHOLD.id, "KITCHEN", "reset-by-member");
 
     expect(
-      await codeOf(api.household.resetMemberPassword({ userId: target.id, newPassword: NEW })),
+      await codeOf(
+        api.household.resetMemberPassword({
+          userId: target.id,
+          newPassword: NEW,
+        }),
+      ),
     ).toBe("FORBIDDEN");
   });
 
@@ -524,7 +581,11 @@ describe("setting a member's password", () => {
     // The input names the member by id only, so the schema cannot apply the
     // identity rule; the procedure loads the member and applies it itself.
     const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "reset-identity");
-    const member = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-identity-target");
+    const member = await makeUser(
+      HOUSEHOLD.id,
+      "MEMBER",
+      "reset-identity-target",
+    );
     const api = await callerFor(admin.id, HOUSEHOLD.id);
     const before = await stored(member.id);
 
@@ -555,13 +616,19 @@ describe("setting a member's password", () => {
     const hash = spyOn(argon2, "hash").mockImplementation((async (
       ...args: Parameters<typeof argon2.hash>
     ) => {
-      await prisma.user.update({ where: { id: member.id }, data: { householdId: OTHER.id } });
+      await prisma.user.update({
+        where: { id: member.id },
+        data: { householdId: OTHER.id },
+      });
       return realHash(...args);
     }) as typeof argon2.hash);
     let refusal: TRPCError;
     try {
       refusal = await refusalOf(
-        api.household.resetMemberPassword({ userId: member.id, newPassword: NEW }),
+        api.household.resetMemberPassword({
+          userId: member.id,
+          newPassword: NEW,
+        }),
       );
     } finally {
       hash.mockRestore();
@@ -578,7 +645,11 @@ describe("setting a member's password", () => {
     // stands between an ADMIN and the password of somebody who is now an
     // owner: the escalation `assertMayActOnOwner` refuses, reached by timing.
     const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "reset-race-role");
-    const member = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-race-role-target");
+    const member = await makeUser(
+      HOUSEHOLD.id,
+      "MEMBER",
+      "reset-race-role-target",
+    );
     const api = await callerFor(admin.id, HOUSEHOLD.id);
     // A session the reset would end, so "ends nothing" can be seen.
     await openTestSession(member.id);
@@ -588,13 +659,19 @@ describe("setting a member's password", () => {
     const hash = spyOn(argon2, "hash").mockImplementation((async (
       ...args: Parameters<typeof argon2.hash>
     ) => {
-      await prisma.user.update({ where: { id: member.id }, data: { role: "OWNER" } });
+      await prisma.user.update({
+        where: { id: member.id },
+        data: { role: "OWNER" },
+      });
       return realHash(...args);
     }) as typeof argon2.hash);
     let refusal: TRPCError;
     try {
       refusal = await refusalOf(
-        api.household.resetMemberPassword({ userId: member.id, newPassword: NEW }),
+        api.household.resetMemberPassword({
+          userId: member.id,
+          newPassword: NEW,
+        }),
       );
     } finally {
       hash.mockRestore();
@@ -615,7 +692,8 @@ describe("setting a member's password", () => {
     });
 
     afterAll(() => {
-      if (original === undefined) delete process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS;
+      if (original === undefined)
+        delete process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS;
       else process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS = original;
     });
 
@@ -623,11 +701,18 @@ describe("setting a member's password", () => {
       // Both run Argon2id at 64 MiB per call; two budgets would be twice the
       // hashes one admin can ask for.
       const admin = await makeUser(HOUSEHOLD.id, "OWNER", "reset-metered");
-      const member = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-metered-target");
+      const member = await makeUser(
+        HOUSEHOLD.id,
+        "MEMBER",
+        "reset-metered-target",
+      );
       const api = await callerFor(admin.id, HOUSEHOLD.id);
 
       await api.household.addMember(newAccount("KITCHEN"));
-      await api.household.resetMemberPassword({ userId: member.id, newPassword: NEW });
+      await api.household.resetMemberPassword({
+        userId: member.id,
+        newPassword: NEW,
+      });
       const before = await stored(member.id);
 
       const hash = spyOn(argon2, "hash");
@@ -635,7 +720,10 @@ describe("setting a member's password", () => {
       let refusal: TRPCError;
       try {
         refusal = await refusalOf(
-          api.household.resetMemberPassword({ userId: member.id, newPassword: OLD }),
+          api.household.resetMemberPassword({
+            userId: member.id,
+            newPassword: OLD,
+          }),
         );
       } finally {
         hashed = hash.mock.calls.length;
@@ -671,7 +759,11 @@ describe("removing a member", () => {
   it("signs them out on every device, leaves everyone else signed in, and says who did it", async () => {
     const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "remove-admin");
     const member = await makeUser(HOUSEHOLD.id, "MEMBER", "remove-target");
-    const bystander = await makeUser(HOUSEHOLD.id, "MEMBER", "remove-bystander");
+    const bystander = await makeUser(
+      HOUSEHOLD.id,
+      "MEMBER",
+      "remove-bystander",
+    );
     const api = await callerFor(admin.id, HOUSEHOLD.id);
     try {
       const phone = await browser(member.email);
@@ -687,7 +779,9 @@ describe("removing a member", () => {
         api.household.removeMember({ userId: member.id }),
       );
 
-      expect(await prisma.session.count({ where: { userId: member.id } })).toBe(0);
+      expect(await prisma.session.count({ where: { userId: member.id } })).toBe(
+        0,
+      );
       expect(await readSession(phone, { refresh: false })).toBeNull();
       expect(await readSession(tablet, { refresh: false })).toBeNull();
       expect(await readSession(stays, { refresh: false })).not.toBeNull();
@@ -701,10 +795,14 @@ describe("removing a member", () => {
       expect(ended[0]?.count).toBe("2");
 
       // The account stays: the person can sign in again, to no household.
-      const again = await signInWith({ email: member.email, password: PASSWORD });
+      const again = await signInWith({
+        email: member.email,
+        password: PASSWORD,
+      });
       expect(again.status).toBe(200);
       expect(
-        (await prisma.user.findUniqueOrThrow({ where: { id: member.id } })).householdId,
+        (await prisma.user.findUniqueOrThrow({ where: { id: member.id } }))
+          .householdId,
       ).toBeNull();
     } finally {
       // Out of the household, so `afterAll` no longer finds the account.
@@ -728,6 +826,8 @@ describe("removing a member", () => {
     expect(code).toBe("FORBIDDEN");
     expect(await readSession(signedIn, { refresh: false })).not.toBeNull();
     expect(await prisma.session.count({ where: { userId: owner.id } })).toBe(1);
-    expect(events.filter((e) => e.event === "auth.session.ended")).toHaveLength(0);
+    expect(events.filter((e) => e.event === "auth.session.ended")).toHaveLength(
+      0,
+    );
   });
 });

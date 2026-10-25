@@ -128,7 +128,9 @@ beforeAll(async () => {
   admin = appRouter.createCaller(
     await createTRPCContext({ session: createMockSession(adminUser) }),
   );
-  anonymous = appRouter.createCaller(await createTRPCContext({ session: null }));
+  anonymous = appRouter.createCaller(
+    await createTRPCContext({ session: null }),
+  );
 
   const receipt = await prisma.receipt.create({
     data: {
@@ -366,7 +368,9 @@ describe("a refused sign-in", () => {
   }
 
   it("names the account by its tag, not by the address", async () => {
-    expect((await signInWith({ email: ownerEmail, password: WRONG })).status).toBe(401);
+    expect(
+      (await signInWith({ email: ownerEmail, password: WRONG })).status,
+    ).toBe(401);
 
     const failed = lines.find((line) => line.event === "auth.signin.failed");
     expect(failed).toBeDefined();
@@ -374,7 +378,10 @@ describe("a refused sign-in", () => {
     expect(failed).not.toHaveProperty("email");
     expect(written()).not.toContain(ownerEmail.split("@")[0]);
 
-    await resetRateLimit(loginAccountRateLimit(), accountIdentifier(ownerEmail));
+    await resetRateLimit(
+      loginAccountRateLimit(),
+      accountIdentifier(ownerEmail),
+    );
   });
 
   it("does the same for an address nobody registered", async () => {
@@ -382,7 +389,9 @@ describe("a refused sign-in", () => {
     // database has never held, written into the log in full.
     const stranger = generateTestEmail("seclog-nobody");
 
-    expect((await signInWith({ email: stranger, password: WRONG })).status).toBe(401);
+    expect(
+      (await signInWith({ email: stranger, password: WRONG })).status,
+    ).toBe(401);
 
     const failed = lines.find((line) => line.event === "auth.signin.failed");
     expect(failed?.account).toBe(accountTag(stranger));
@@ -397,17 +406,25 @@ describe("a refused sign-in", () => {
     const stranger = generateTestEmail("seclog-throttled");
 
     try {
-      expect((await signInWith({ email: stranger, password: WRONG })).status).toBe(401);
+      expect(
+        (await signInWith({ email: stranger, password: WRONG })).status,
+      ).toBe(401);
       const refused = await signInWith({ email: stranger, password: WRONG });
       expect(refused.status).toBe(429);
       expect(refused.code).toBe("ACCOUNT_RATE_LIMITED");
     } finally {
-      if (original === undefined) delete process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
+      if (original === undefined)
+        delete process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
       else process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS = original;
-      await resetRateLimit(loginAccountRateLimit(), accountIdentifier(stranger));
+      await resetRateLimit(
+        loginAccountRateLimit(),
+        accountIdentifier(stranger),
+      );
     }
 
-    const throttled = lines.find((line) => line.event === "auth.signin.throttled");
+    const throttled = lines.find(
+      (line) => line.event === "auth.signin.throttled",
+    );
     expect(throttled).toBeDefined();
     expect(throttled?.account).toBe(accountTag(stranger));
     expect(throttled).not.toHaveProperty("email");
@@ -430,7 +447,9 @@ describe("an accepted sign-in", () => {
     );
     expect(user.status).toBe(200);
 
-    const succeeded = lines.filter((line) => line.event === "auth.signin.succeeded");
+    const succeeded = lines.filter(
+      (line) => line.event === "auth.signin.succeeded",
+    );
     expect(succeeded).toHaveLength(1);
     expect(succeeded[0]).toMatchObject({
       method: "password",
@@ -444,11 +463,17 @@ describe("an accepted sign-in", () => {
 
   it("is not recorded for a refused one", async () => {
     expect(
-      (await signInWith({ email: ownerEmail, password: "no es la contraseña" })).status,
+      (await signInWith({ email: ownerEmail, password: "no es la contraseña" }))
+        .status,
     ).toBe(401);
 
-    expect(lines.some((line) => line.event === "auth.signin.succeeded")).toBe(false);
-    await resetRateLimit(loginAccountRateLimit(), accountIdentifier(ownerEmail));
+    expect(lines.some((line) => line.event === "auth.signin.succeeded")).toBe(
+      false,
+    );
+    await resetRateLimit(
+      loginAccountRateLimit(),
+      accountIdentifier(ownerEmail),
+    );
   });
 });
 
@@ -471,18 +496,28 @@ describe("ten wrong passwords", () => {
     let library: string[];
     try {
       for (let i = 0; i < 10; i++) {
-        expect((await signInWith({ email: ownerEmail, password: WRONG_TEN })).status).toBe(401);
+        expect(
+          (await signInWith({ email: ownerEmail, password: WRONG_TEN })).status,
+        ).toBe(401);
       }
     } finally {
-      library = [...errors.mock.calls, ...logs.mock.calls].map((call) => call.map(String).join(" "));
+      library = [...errors.mock.calls, ...logs.mock.calls].map((call) =>
+        call.map(String).join(" "),
+      );
       errors.mockRestore();
       logs.mockRestore();
-      if (original === undefined) delete process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
+      if (original === undefined)
+        delete process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
       else process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS = original;
-      await resetRateLimit(loginAccountRateLimit(), accountIdentifier(ownerEmail));
+      await resetRateLimit(
+        loginAccountRateLimit(),
+        accountIdentifier(ownerEmail),
+      );
     }
 
-    expect(lines.filter((line) => line.event === "auth.signin.failed")).toHaveLength(10);
+    expect(
+      lines.filter((line) => line.event === "auth.signin.failed"),
+    ).toHaveLength(10);
     expect(lines).toHaveLength(10);
     expect(library).toEqual([]);
   });
@@ -513,7 +548,9 @@ describe("what the auth library writes", () => {
 
   /** Every console line written while `run` ran, rendered as a terminal would show it. */
   async function consoleDuring(run: () => Promise<void>): Promise<string> {
-    const spies = METHODS.map((method) => spyOn(console, method).mockImplementation(() => {}));
+    const spies = METHODS.map((method) =>
+      spyOn(console, method).mockImplementation(() => {}),
+    );
     let calls: unknown[][] = [];
     try {
       await run();
@@ -523,7 +560,11 @@ describe("what the auth library writes", () => {
       for (const spy of spies) spy.mockRestore();
     }
     return calls
-      .map((call) => call.map((arg) => (typeof arg === "string" ? arg : Bun.inspect(arg))).join(" "))
+      .map((call) =>
+        call
+          .map((arg) => (typeof arg === "string" ? arg : Bun.inspect(arg)))
+          .join(" "),
+      )
       .join("\n");
   }
 
@@ -533,7 +574,9 @@ describe("what the auth library writes", () => {
       .split("; ")
       .find((cookie) => cookie.startsWith("stoky.session_token="));
     if (!pair) return [];
-    const signed = decodeURIComponent(pair.slice("stoky.session_token=".length));
+    const signed = decodeURIComponent(
+      pair.slice("stoky.session_token=".length),
+    );
     return [signed, signed.split(".")[0]];
   }
 
@@ -547,14 +590,21 @@ describe("what the auth library writes", () => {
 
   /** Every session token the account holds in the database. */
   async function storedTokens(userId: string): Promise<string[]> {
-    return (await prisma.session.findMany({ where: { userId }, select: { token: true } })).map(
-      (row) => row.token,
-    );
+    return (
+      await prisma.session.findMany({
+        where: { userId },
+        select: { token: true },
+      })
+    ).map((row) => row.token);
   }
 
   async function account(label: string) {
     const email = generateTestEmail(`seclog-lib-${label}`);
-    const user = await createTestUser({ email, name: `Security Log ${label}`, password: PASSWORD });
+    const user = await createTestUser({
+      email,
+      name: `Security Log ${label}`,
+      password: PASSWORD,
+    });
     return { id: user.id, email };
   }
 
@@ -562,7 +612,9 @@ describe("what the auth library writes", () => {
     const stranger = generateTestEmail("seclog-lib-nobody");
 
     const text = await consoleDuring(async () => {
-      expect((await signInWith({ email: stranger, password: PASSWORD })).status).toBe(401);
+      expect(
+        (await signInWith({ email: stranger, password: PASSWORD })).status,
+      ).toBe(401);
     });
 
     // Read, not silence: the security log's own line, which names a tag.
@@ -580,8 +632,13 @@ describe("what the auth library writes", () => {
       body: { password: PASSWORD },
       headers: new Headers({ cookie: signedIn.cookieHeader }),
     });
-    const row = await prisma.twoFactor.findUniqueOrThrow({ where: { userId: who.id } });
-    const secret = await symmetricDecrypt({ key: (await auth.$context).secretConfig, data: row.secret });
+    const row = await prisma.twoFactor.findUniqueOrThrow({
+      where: { userId: who.id },
+    });
+    const secret = await symmetricDecrypt({
+      key: (await auth.$context).secretConfig,
+      data: row.secret,
+    });
     const step = totpStep(Date.now());
     const enrolled = await auth.api.verifyTOTP({
       body: { code: hotp(secret, step) },
@@ -589,22 +646,33 @@ describe("what the auth library writes", () => {
       asResponse: true,
     });
     expect(enrolled.status).toBe(200);
-    const near = new Set([-2, -1, 0, 1, 2].map((steps) => hotp(secret, step + steps)));
+    const near = new Set(
+      [-2, -1, 0, 1, 2].map((steps) => hotp(secret, step + steps)),
+    );
     let wrong = "000000";
     for (let n = 0; near.has(wrong); n += 1) wrong = String(n).padStart(6, "0");
 
     let challenge = "";
     const text = await consoleDuring(async () => {
-      const password = await signInWith({ email: who.email, password: PASSWORD });
+      const password = await signInWith({
+        email: who.email,
+        password: PASSWORD,
+      });
       expect(password.body).toMatchObject({ twoFactorRedirect: true });
       challenge = password.cookieHeader;
-      const refused = await authPost("/two-factor/verify-totp", { code: wrong }, { cookie: challenge });
+      const refused = await authPost(
+        "/two-factor/verify-totp",
+        { code: wrong },
+        { cookie: challenge },
+      );
       expect(refused.status).toBe(401);
       expect(refused.code).toBe("INVALID_CODE");
     });
 
     expect(text).toContain('"event":"auth.twofactor.failed"');
-    const challengeValue = challenge.split("; ").find((pair) => pair.startsWith("stoky.two_factor="));
+    const challengeValue = challenge
+      .split("; ")
+      .find((pair) => pair.startsWith("stoky.two_factor="));
     expect(challengeValue).toBeDefined();
     expectNoneOf(text, who.email, [
       secret,
@@ -620,23 +688,36 @@ describe("what the auth library writes", () => {
     const who = await account("passkey");
     const signedIn = await signInWith({ email: who.email, password: PASSWORD });
     expect(signedIn.status).toBe(200);
-    const session = await readSession(new Headers({ cookie: signedIn.cookieHeader }), { refresh: false });
+    const session = await readSession(
+      new Headers({ cookie: signedIn.cookieHeader }),
+      { refresh: false },
+    );
     if (!session) throw new Error("the sign-in left no session");
     await appRouter
       .createCaller(
         await createTRPCContext({
           session,
-          headers: new Headers({ "x-forwarded-for": "203.0.113.34", cookie: signedIn.cookieHeader }),
+          headers: new Headers({
+            "x-forwarded-for": "203.0.113.34",
+            cookie: signedIn.cookieHeader,
+          }),
         }),
       )
       .auth.confirmPassword({ currentPassword: PASSWORD });
     const authenticator = SoftAuthenticator.create();
-    expect((await registerPasskey(authenticator, { cookie: signedIn.cookieHeader })).verified?.status).toBe(200);
+    expect(
+      (await registerPasskey(authenticator, { cookie: signedIn.cookieHeader }))
+        .verified?.status,
+    ).toBe(200);
 
     const text = await consoleDuring(async () => {
       // An answer signed for another site: the library's verifier throws, and
       // the library logs what it caught — the path that hands it an error.
-      const { verified } = await signInWithPasskey(authenticator, {}, { clientOrigin: "https://otro.example" });
+      const { verified } = await signInWithPasskey(
+        authenticator,
+        {},
+        { clientOrigin: "https://otro.example" },
+      );
       expect(verified.status).toBe(400);
       expect(verified.code).toBe("AUTHENTICATION_FAILED");
     });
@@ -657,7 +738,10 @@ describe("what the auth library writes", () => {
     let cookie = "";
     let bearer: string | null = null;
     const text = await consoleDuring(async () => {
-      const signedIn = await signInWith({ email: who.email, password: PASSWORD });
+      const signedIn = await signInWith({
+        email: who.email,
+        password: PASSWORD,
+      });
       expect(signedIn.status).toBe(200);
       cookie = signedIn.cookieHeader;
       bearer = signedIn.headers.get("set-auth-token");
@@ -665,7 +749,12 @@ describe("what the auth library writes", () => {
     });
 
     expect(text).toContain('"event":"auth.signin.succeeded"');
-    expect(await readSession(new Headers({ cookie }), { refresh: false })).toBeNull();
-    expectNoneOf(text, who.email, [...sessionTokens(cookie), ...(bearer ? [bearer] : [])]);
+    expect(
+      await readSession(new Headers({ cookie }), { refresh: false }),
+    ).toBeNull();
+    expectNoneOf(text, who.email, [
+      ...sessionTokens(cookie),
+      ...(bearer ? [bearer] : []),
+    ]);
   });
 });

@@ -117,7 +117,10 @@ function isLoopbackHostname(hostname: string): boolean {
 export function parsePublicUrls(env: Env): PublicUrls {
   const { value, name } = readRenamed(env, URLS_VARIABLE);
   if (value === undefined) return { variable: name, entries: [] };
-  return { variable: name, entries: value.split(",").map((entry) => entry.trim()) };
+  return {
+    variable: name,
+    entries: value.split(",").map((entry) => entry.trim()),
+  };
 }
 
 /** What one entry is. */
@@ -136,11 +139,18 @@ export function classifyUrl(raw: string): PublicUrlEntry {
   }
   // The origin, never the raw value: it drops any `user:password@` and path.
   const { origin } = url;
-  if (url.username || url.password || url.search || url.hash || url.pathname !== "/") {
+  if (
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    url.pathname !== "/"
+  ) {
     return { kind: "not-an-origin", origin };
   }
   if (url.protocol === "https:") return { kind: "https", origin };
-  if (isLoopbackHostname(url.hostname)) return { kind: "loopback-http", origin };
+  if (isLoopbackHostname(url.hostname))
+    return { kind: "loopback-http", origin };
   return { kind: "insecure-http", origin };
 }
 

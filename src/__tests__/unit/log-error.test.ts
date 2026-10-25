@@ -43,7 +43,9 @@ describe("describeError", () => {
     expect(line).not.toContain("MARKERROLE");
     expect(line).toContain("PrismaClientValidationError (Prisma 6.19.3)");
     expect(line).toContain("Invalid `prisma.user.findMany()` invocation");
-    expect(line).toContain("Invalid value for argument `role`. Expected HouseholdRole.");
+    expect(line).toContain(
+      "Invalid value for argument `role`. Expected HouseholdRole.",
+    );
     // The frames survive; a 500 nobody can place is a 500 nobody can fix.
     expect(line).toMatch(/\n\s+at /);
   });

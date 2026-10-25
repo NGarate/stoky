@@ -64,7 +64,9 @@ export function QuantityStepper({
         data-testid="stepper-value"
       >
         {value}{" "}
-        <span className="text-sm font-normal text-muted-foreground">{unit}</span>
+        <span className="text-sm font-normal text-muted-foreground">
+          {unit}
+        </span>
       </p>
 
       <Button onClick={onAdd} size="icon" type="button" variant="outline">

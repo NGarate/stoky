@@ -55,15 +55,25 @@ function defOf(schema: z.ZodType): Def {
 
 /** The kinds of check, on a string or an array, that set a maximum. */
 function hasMaximum(def: Def): boolean {
-  return (def.checks ?? []).some(({ _zod: { def: check } }) =>
-    check.check === "max_length" ||
-    check.check === "length_equals" ||
-    (check.check === "string_format" && check.format === "uuid"),
+  return (def.checks ?? []).some(
+    ({ _zod: { def: check } }) =>
+      check.check === "max_length" ||
+      check.check === "length_equals" ||
+      (check.check === "string_format" && check.format === "uuid"),
   );
 }
 
 /** Types that cannot carry an unbounded amount of caller data. */
-const LEAVES = new Set(["number", "boolean", "date", "enum", "literal", "void", "undefined", "null"]);
+const LEAVES = new Set([
+  "number",
+  "boolean",
+  "date",
+  "enum",
+  "literal",
+  "void",
+  "undefined",
+  "null",
+]);
 
 /** The paths under `schema` that accept an unbounded string or array. */
 function unboundedPaths(schema: z.ZodType, path: string): string[] {
@@ -130,19 +140,25 @@ function unboundedPaths(schema: z.ZodType, path: string): string[] {
 
     // A discriminated union is a union with a discriminator in Zod 4.
     case "union":
-      return (def.options as z.ZodType[]).flatMap((option) => unboundedPaths(option, path));
+      return (def.options as z.ZodType[]).flatMap((option) =>
+        unboundedPaths(option, path),
+      );
 
     default:
       return [`${path || "(root)"} (${def.type}: not understood by this walk)`];
   }
 }
 
-const procedures = appRouter._def.procedures as unknown as Record<string, AnyProcedure>;
+const procedures = appRouter._def.procedures as unknown as Record<
+  string,
+  AnyProcedure
+>;
 
 function inputsOf(path: string): z.ZodType[] {
   const procedure = procedures[path];
   expect(procedure, `${path} is not a procedure`).toBeDefined();
-  return (procedure as unknown as { _def: { inputs: z.ZodType[] } })._def.inputs;
+  return (procedure as unknown as { _def: { inputs: z.ZodType[] } })._def
+    .inputs;
 }
 
 describe("every procedure's input is bounded", () => {
@@ -154,7 +170,9 @@ describe("every procedure's input is bounded", () => {
 
   for (const path of Object.keys(procedures).sort()) {
     it(`${path} takes no unbounded string or array`, () => {
-      const unbounded = inputsOf(path).flatMap((input) => unboundedPaths(input, ""));
+      const unbounded = inputsOf(path).flatMap((input) =>
+        unboundedPaths(input, ""),
+      );
       expect(unbounded).toEqual([]);
     });
   }
@@ -183,14 +201,21 @@ describe("the walk itself", () => {
   });
 
   it("names an array without a maximum, and keys a passthrough object keeps", () => {
-    expect(unboundedPaths(z.object({ ids: z.array(z.string().max(1)) }), "")).toEqual(["ids"]);
-    expect(unboundedPaths(z.object({}).passthrough(), "")).toEqual(["(root).* (passthrough)"]);
+    expect(
+      unboundedPaths(z.object({ ids: z.array(z.string().max(1)) }), ""),
+    ).toEqual(["ids"]);
+    expect(unboundedPaths(z.object({}).passthrough(), "")).toEqual([
+      "(root).* (passthrough)",
+    ]);
   });
 
   it("refuses to pass a type it does not understand", () => {
-    expect(unboundedPaths(z.object({ blob: z.record(z.string(), z.string().max(1)) }), "")).toEqual([
-      "blob (record: not understood by this walk)",
-    ]);
+    expect(
+      unboundedPaths(
+        z.object({ blob: z.record(z.string(), z.string().max(1)) }),
+        "",
+      ),
+    ).toEqual(["blob (record: not understood by this walk)"]);
   });
 });
 
@@ -209,23 +234,59 @@ describe("the bounds on inputs declared beside their procedure", () => {
   };
 
   it("bounds a transfer's note, unit and ids", () => {
-    expect(accepts("inventory.transferStock", { ...transfer, note: "n".repeat(MAX_NOTE_LENGTH) })).toBe(true);
-    expect(accepts("inventory.transferStock", { ...transfer, note: "n".repeat(MAX_NOTE_LENGTH + 1) })).toBe(false);
-    expect(accepts("inventory.transferStock", { ...transfer, unit: "u".repeat(MAX_UNIT_LENGTH + 1) })).toBe(false);
-    expect(accepts("inventory.transferStock", { ...transfer, toLocationId: "b".repeat(MAX_ID_LENGTH + 1) })).toBe(false);
+    expect(
+      accepts("inventory.transferStock", {
+        ...transfer,
+        note: "n".repeat(MAX_NOTE_LENGTH),
+      }),
+    ).toBe(true);
+    expect(
+      accepts("inventory.transferStock", {
+        ...transfer,
+        note: "n".repeat(MAX_NOTE_LENGTH + 1),
+      }),
+    ).toBe(false);
+    expect(
+      accepts("inventory.transferStock", {
+        ...transfer,
+        unit: "u".repeat(MAX_UNIT_LENGTH + 1),
+      }),
+    ).toBe(false);
+    expect(
+      accepts("inventory.transferStock", {
+        ...transfer,
+        toLocationId: "b".repeat(MAX_ID_LENGTH + 1),
+      }),
+    ).toBe(false);
   });
 
   it("bounds an upload's declared type before the allowlist is consulted", () => {
     const upload = { fileBase64: "" };
-    expect(accepts("receipt.upload", { ...upload, mimeType: "image/jpeg" })).toBe(true);
-    expect(accepts("receipt.upload", { ...upload, mimeType: "x".repeat(MAX_MIME_TYPE_LENGTH + 1) })).toBe(false);
+    expect(
+      accepts("receipt.upload", { ...upload, mimeType: "image/jpeg" }),
+    ).toBe(true);
+    expect(
+      accepts("receipt.upload", {
+        ...upload,
+        mimeType: "x".repeat(MAX_MIME_TYPE_LENGTH + 1),
+      }),
+    ).toBe(false);
   });
 
   it("bounds the ids every lookup by id takes", () => {
-    for (const path of ["product.getById", "store.delete", "location.delete", "shopping.getById"]) {
+    for (const path of [
+      "product.getById",
+      "store.delete",
+      "location.delete",
+      "shopping.getById",
+    ]) {
       expect(accepts(path, { id: "c".repeat(MAX_ID_LENGTH) })).toBe(true);
       expect(accepts(path, { id: "c".repeat(MAX_ID_LENGTH + 1) })).toBe(false);
     }
-    expect(accepts("receipt.getStatus", { receiptId: "r".repeat(MAX_ID_LENGTH + 1) })).toBe(false);
+    expect(
+      accepts("receipt.getStatus", {
+        receiptId: "r".repeat(MAX_ID_LENGTH + 1),
+      }),
+    ).toBe(false);
   });
 });

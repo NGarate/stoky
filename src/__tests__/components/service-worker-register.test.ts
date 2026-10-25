@@ -89,7 +89,10 @@ describe("shouldRegisterServiceWorker", () => {
 
   it("does not register in development", () => {
     expect(
-      shouldRegisterServiceWorker({ nodeEnv: "development", forced: undefined }),
+      shouldRegisterServiceWorker({
+        nodeEnv: "development",
+        forced: undefined,
+      }),
     ).toBe(false);
   });
 

@@ -1,4 +1,11 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, symlinkSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  symlinkSync,
+} from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 
 interface PackageManifest {
@@ -7,7 +14,11 @@ interface PackageManifest {
 }
 
 /** Copy the installed runtime graph, preserving nested versions and cycles. */
-export function stageRuntimeDependencies(entry: string, output: string, projectRoot = process.cwd()): void {
+export function stageRuntimeDependencies(
+  entry: string,
+  output: string,
+  projectRoot = process.cwd(),
+): void {
   const destination = resolve(output);
   const copied = new Map<string, string>();
 
@@ -19,7 +30,8 @@ export function stageRuntimeDependencies(entry: string, output: string, projectR
     while (true) {
       if (basename(directory) !== "node_modules") {
         const candidate = join(directory, "node_modules", name);
-        if (existsSync(join(candidate, "package.json"))) return realpathSync(candidate);
+        if (existsSync(join(candidate, "package.json")))
+          return realpathSync(candidate);
       }
       const ancestor = dirname(directory);
       if (ancestor === directory) break;
@@ -28,11 +40,18 @@ export function stageRuntimeDependencies(entry: string, output: string, projectR
     return undefined;
   }
 
-  function copy(name: string, parent: string, target: string, optional = false): void {
+  function copy(
+    name: string,
+    parent: string,
+    target: string,
+    optional = false,
+  ): void {
     const source = locate(name, parent);
     if (!source) {
       if (optional) return;
-      throw new Error(`Missing runtime dependency ${name} required by ${parent}`);
+      throw new Error(
+        `Missing runtime dependency ${name} required by ${parent}`,
+      );
     }
     mkdirSync(dirname(target), { recursive: true });
     const previous = copied.get(source);
@@ -48,13 +67,20 @@ export function stageRuntimeDependencies(entry: string, output: string, projectR
       dereference: true,
       filter: (path) => path !== join(source, "node_modules"),
     });
-    const manifest: PackageManifest = JSON.parse(readFileSync(join(source, "package.json"), "utf8"));
+    const manifest: PackageManifest = JSON.parse(
+      readFileSync(join(source, "package.json"), "utf8"),
+    );
     const optionalDependencies = manifest.optionalDependencies ?? {};
     for (const dependency of new Set([
       ...Object.keys(manifest.dependencies ?? {}),
       ...Object.keys(optionalDependencies),
     ])) {
-      copy(dependency, source, join(target, "node_modules", dependency), dependency in optionalDependencies);
+      copy(
+        dependency,
+        source,
+        join(target, "node_modules", dependency),
+        dependency in optionalDependencies,
+      );
     }
   }
 
@@ -63,6 +89,9 @@ export function stageRuntimeDependencies(entry: string, output: string, projectR
 
 if (import.meta.main) {
   const [entry, output] = process.argv.slice(2);
-  if (!entry || !output) throw new Error("Usage: bun scripts/stage-runtime-deps.ts PACKAGE OUTPUT_DIRECTORY");
+  if (!entry || !output)
+    throw new Error(
+      "Usage: bun scripts/stage-runtime-deps.ts PACKAGE OUTPUT_DIRECTORY",
+    );
   stageRuntimeDependencies(entry, output);
 }

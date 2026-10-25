@@ -81,7 +81,10 @@ describe("what one entry is", () => {
       "https://a.example/#top",
       "https://admin:s3cret@a.example",
     ]) {
-      expect(classifyUrl(url)).toEqual({ kind: "not-an-origin", origin: "https://a.example" });
+      expect(classifyUrl(url)).toEqual({
+        kind: "not-an-origin",
+        origin: "https://a.example",
+      });
     }
   });
 
@@ -101,18 +104,27 @@ describe("the list", () => {
   it("takes the first entry as canonical and trusts every entry's origin", () => {
     const env = { NODE_ENV: "development", STOKY_URLS: TWO };
     expect(canonicalUrl(env)).toBe("https://a.example");
-    expect(trustedAuthOrigins(env)).toEqual(["https://a.example", "http://192.168.1.10:3000"]);
+    expect(trustedAuthOrigins(env)).toEqual([
+      "https://a.example",
+      "http://192.168.1.10:3000",
+    ]);
   });
 
   it("trims the whitespace around each entry", () => {
-    expect(parsePublicUrls({ STOKY_URLS: "  https://a.example ,http://b.lan:3000  " })).toEqual({
+    expect(
+      parsePublicUrls({
+        STOKY_URLS: "  https://a.example ,http://b.lan:3000  ",
+      }),
+    ).toEqual({
       variable: "STOKY_URLS",
       entries: ["https://a.example", "http://b.lan:3000"],
     });
   });
 
   it("names the empty entry a trailing comma leaves", () => {
-    const problems = publicUrlProblems(production({ STOKY_URLS: "https://a.example," }));
+    const problems = publicUrlProblems(
+      production({ STOKY_URLS: "https://a.example," }),
+    );
     expect(problems.map((problem) => problem.message)).toEqual([
       "STOKY_URLS entry 2 is empty. Remove the extra comma.",
     ]);
@@ -131,9 +143,14 @@ describe("the list", () => {
   });
 
   it("prefers STOKY_URLS when both are set", () => {
-    const env = { STOKY_URLS: "https://new.example", NEXTAUTH_URL: "https://old.example" };
+    const env = {
+      STOKY_URLS: "https://new.example",
+      NEXTAUTH_URL: "https://old.example",
+    };
     expect(canonicalUrl(env)).toBe("https://new.example");
-    expect(trustedAuthOrigins(production(env))).toEqual(["https://new.example"]);
+    expect(trustedAuthOrigins(production(env))).toEqual([
+      "https://new.example",
+    ]);
     expect(renamedVariableWarnings(env)).toEqual([
       "[config] STOKY_URLS and NEXTAUTH_URL are both set; STOKY_URLS is used and NEXTAUTH_URL is ignored. Remove it.",
     ]);
@@ -150,11 +167,15 @@ describe("the list", () => {
     expect(classifyPublicUrls(env)).toEqual([
       { kind: "https", origin: "https://stoky.example.com" },
     ]);
-    expect(trustedAuthOrigins(production(env))).toEqual(["https://stoky.example.com"]);
+    expect(trustedAuthOrigins(production(env))).toEqual([
+      "https://stoky.example.com",
+    ]);
   });
 
   it("is the dev server's own address outside production, and nothing in production", () => {
-    expect(canonicalUrl({ NODE_ENV: "development" })).toBe("http://localhost:3000");
+    expect(canonicalUrl({ NODE_ENV: "development" })).toBe(
+      "http://localhost:3000",
+    );
     expect(canonicalUrl({ NODE_ENV: "development", STOKY_URLS: " " })).toBe(
       "http://localhost:3000",
     );
@@ -167,7 +188,10 @@ describe("the origins the auth API trusts", () => {
   it("never include DEV_ALLOWED_ORIGIN in production", () => {
     expect(
       trustedAuthOrigins(
-        production({ STOKY_URLS: "https://stoky.example.com", DEV_ALLOWED_ORIGIN: "192.168.1.20" }),
+        production({
+          STOKY_URLS: "https://stoky.example.com",
+          DEV_ALLOWED_ORIGIN: "192.168.1.20",
+        }),
       ),
     ).toEqual(["https://stoky.example.com"]);
   });
@@ -190,7 +214,9 @@ describe("the origins the auth API trusts", () => {
   });
 
   it("are the dev server's own address outside production when none is listed", () => {
-    expect(trustedAuthOrigins({ NODE_ENV: "development" })).toEqual(["http://localhost:3000"]);
+    expect(trustedAuthOrigins({ NODE_ENV: "development" })).toEqual([
+      "http://localhost:3000",
+    ]);
   });
 });
 
@@ -202,7 +228,11 @@ describe("what production refuses", () => {
     // The cookie is Secure because of the first entry; a browser drops it
     // over plain HTTP, so sign-in at the second address would loop.
     expect(
-      messages(production({ STOKY_URLS: "https://a.example, http://192.168.1.10:3000" })),
+      messages(
+        production({
+          STOKY_URLS: "https://a.example, http://192.168.1.10:3000",
+        }),
+      ),
     ).toEqual([
       expect.stringMatching(
         /^STOKY_URLS starts with an https address but also lists http:\/\/192\.168\.1\.10:3000, plain HTTP/,
@@ -212,24 +242,34 @@ describe("what production refuses", () => {
 
   it("accepts loopback http beside an https first entry", () => {
     // Chromium and Firefox accept a Secure cookie on localhost.
-    expect(messages(production({ STOKY_URLS: "https://a.example, http://localhost:3000" }))).toEqual(
-      [],
-    );
+    expect(
+      messages(
+        production({ STOKY_URLS: "https://a.example, http://localhost:3000" }),
+      ),
+    ).toEqual([]);
   });
 
   it("accepts a plain-HTTP LAN install reached by name and by address", () => {
     // The case the list exists for (D84, D138).
     expect(
-      messages(production({ STOKY_URLS: "http://stoky.lan:3000, http://192.168.1.10:3000" })),
+      messages(
+        production({
+          STOKY_URLS: "http://stoky.lan:3000, http://192.168.1.10:3000",
+        }),
+      ),
     ).toEqual([]);
   });
 
   it("names the variable the list came from", () => {
-    expect(messages(production({}))).toEqual([expect.stringMatching(/^STOKY_URLS is not set/)]);
-    expect(messages(production({ NEXTAUTH_URL: "stoky.example.com" }))).toEqual([
-      expect.stringMatching(/^NEXTAUTH_URL is not a URL/),
+    expect(messages(production({}))).toEqual([
+      expect.stringMatching(/^STOKY_URLS is not set/),
     ]);
-    expect(messages(production({ STOKY_URLS: "https://a.example/path" }))).toEqual([
+    expect(messages(production({ NEXTAUTH_URL: "stoky.example.com" }))).toEqual(
+      [expect.stringMatching(/^NEXTAUTH_URL is not a URL/)],
+    );
+    expect(
+      messages(production({ STOKY_URLS: "https://a.example/path" })),
+    ).toEqual([
       "STOKY_URLS has a path, query, fragment or credentials. List the address alone: https://a.example.",
     ]);
   });
@@ -245,8 +285,12 @@ describe("what production refuses", () => {
     expect(everywhere("ftp://a.example")).toEqual([
       "STOKY_URLS uses the ftp scheme. Each address must be https, or http.",
     ]);
-    expect(everywhere("https://a.example, stoky.example.com, https://a.example/x")).toEqual([]);
-    expect(everywhere("https://a.example, http://192.168.1.10:3000")).toEqual([]);
+    expect(
+      everywhere("https://a.example, stoky.example.com, https://a.example/x"),
+    ).toEqual([]);
+    expect(everywhere("https://a.example, http://192.168.1.10:3000")).toEqual(
+      [],
+    );
     // And nothing is missing outside production: the dev server's address is used.
     expect(publicUrlProblems({ NODE_ENV: "development" })).toEqual([]);
   });
@@ -255,31 +299,55 @@ describe("what production refuses", () => {
 describe("the warnings", () => {
   it("are one per entry that is plain HTTP to another machine, in production", () => {
     const warnings = publicUrlWarnings(
-      production({ STOKY_URLS: "http://stoky.lan:3000, http://localhost:3000, http://192.168.1.10:3000" }),
+      production({
+        STOKY_URLS:
+          "http://stoky.lan:3000, http://localhost:3000, http://192.168.1.10:3000",
+      }),
     );
     expect(warnings).toEqual([
-      expect.stringMatching(/^\[auth\] warning: STOKY_URLS entry 1 is http:\/\/stoky\.lan:3000, plain HTTP/),
-      expect.stringMatching(/^\[auth\] warning: STOKY_URLS entry 3 is http:\/\/192\.168\.1\.10:3000, plain HTTP/),
+      expect.stringMatching(
+        /^\[auth\] warning: STOKY_URLS entry 1 is http:\/\/stoky\.lan:3000, plain HTTP/,
+      ),
+      expect.stringMatching(
+        /^\[auth\] warning: STOKY_URLS entry 3 is http:\/\/192\.168\.1\.10:3000, plain HTTP/,
+      ),
     ]);
   });
 
   it("are not given for https or loopback", () => {
-    expect(publicUrlWarnings(production({ STOKY_URLS: "https://stoky.example.com" }))).toEqual([]);
-    expect(publicUrlWarnings(production({ STOKY_URLS: "http://127.0.0.1:3000" }))).toEqual([]);
+    expect(
+      publicUrlWarnings(
+        production({ STOKY_URLS: "https://stoky.example.com" }),
+      ),
+    ).toEqual([]);
+    expect(
+      publicUrlWarnings(production({ STOKY_URLS: "http://127.0.0.1:3000" })),
+    ).toEqual([]);
   });
 
   it("are not given outside production", () => {
     // `bun run dev` and the suites run without a URL, or with any URL to hand.
     expect(publicUrlWarnings({ NODE_ENV: "development" })).toEqual([]);
-    expect(publicUrlWarnings({ NODE_ENV: "test", STOKY_URLS: "http://192.168.1.10" })).toEqual([]);
+    expect(
+      publicUrlWarnings({
+        NODE_ENV: "test",
+        STOKY_URLS: "http://192.168.1.10",
+      }),
+    ).toEqual([]);
   });
 
   it("over plain http, name the consequences and the way out", () => {
-    const [warning] = publicUrlWarnings(production({ STOKY_URLS: "http://192.168.1.10:3000" }));
+    const [warning] = publicUrlWarnings(
+      production({ STOKY_URLS: "http://192.168.1.10:3000" }),
+    );
     expect(warning).toContain("STOKY_URLS is http://192.168.1.10:3000");
     expect(warning).toMatch(/not marked Secure/);
-    expect(warning).toMatch(/password and session cookie across the network in cleartext/);
-    expect(warning).toMatch(/barcode camera and offline support are unavailable/);
+    expect(warning).toMatch(
+      /password and session cookie across the network in cleartext/,
+    );
+    expect(warning).toMatch(
+      /barcode camera and offline support are unavailable/,
+    );
     expect(warning).toMatch(/X-Forwarded-For/);
   });
 
@@ -287,25 +355,36 @@ describe("the warnings", () => {
     // Only the first entry decides Secure, so listing the public https
     // address second would quietly downgrade its cookie.
     const warnings = publicUrlWarnings(
-      production({ STOKY_URLS: "http://localhost:3000, https://stoky.example.com" }),
+      production({
+        STOKY_URLS: "http://localhost:3000, https://stoky.example.com",
+      }),
     );
     expect(warnings).toEqual([
-      expect.stringMatching(/^\[auth\] warning: STOKY_URLS lists https:\/\/stoky\.example\.com, but its first entry is not https/),
+      expect.stringMatching(
+        /^\[auth\] warning: STOKY_URLS lists https:\/\/stoky\.example\.com, but its first entry is not https/,
+      ),
     ]);
   });
 
   it("are not given when the list is missing or malformed, which start-up refuses instead", () => {
     // The refusal names the variable on a line of its own.
     expect(publicUrlWarnings(production({}))).toEqual([]);
-    expect(publicUrlWarnings(production({ STOKY_URLS: "stoky.example.com" }))).toEqual([]);
+    expect(
+      publicUrlWarnings(production({ STOKY_URLS: "stoky.example.com" })),
+    ).toEqual([]);
   });
 
   it("never repeat credentials written into an entry", () => {
     // The log outlives the configuration file it came from, and a
     // `user:password@` in a URL is someone's password. Such an entry is
     // refused, and the refusal prints only its origin too.
-    const env = production({ STOKY_URLS: "http://admin:s3cret@192.168.1.10:3000/path" });
-    const lines = [...publicUrlWarnings(env), ...publicUrlProblems(env).map((p) => p.message)];
+    const env = production({
+      STOKY_URLS: "http://admin:s3cret@192.168.1.10:3000/path",
+    });
+    const lines = [
+      ...publicUrlWarnings(env),
+      ...publicUrlProblems(env).map((p) => p.message),
+    ];
     expect(lines.length).toBeGreaterThan(0);
     for (const line of lines) {
       expect(line).not.toContain("s3cret");
@@ -339,7 +418,9 @@ describe("the session cookie", () => {
       },
     });
     if (child.exitCode !== 0) throw new Error(child.stderr.toString());
-    const cookie = JSON.parse(child.stdout.toString().trim().split("\n").at(-1)!) as {
+    const cookie = JSON.parse(
+      child.stdout.toString().trim().split("\n").at(-1)!,
+    ) as {
       name: string;
       attributes: { secure: boolean };
     };
@@ -348,16 +429,22 @@ describe("the session cookie", () => {
   }
 
   it("is marked Secure exactly when the first entry is https", () => {
-    expect(sessionCookieName("https://stoky.example.com")).toBe("__Secure-stoky.session_token");
-    expect(sessionCookieName("http://192.168.1.10:3000")).toBe("stoky.session_token");
-    expect(sessionCookieName("http://127.0.0.1:3100")).toBe("stoky.session_token");
-    // The first decides, whatever follows it.
-    expect(sessionCookieName("https://stoky.example.com, http://localhost:3000")).toBe(
+    expect(sessionCookieName("https://stoky.example.com")).toBe(
       "__Secure-stoky.session_token",
     );
-    expect(sessionCookieName("http://localhost:3000, https://stoky.example.com")).toBe(
+    expect(sessionCookieName("http://192.168.1.10:3000")).toBe(
       "stoky.session_token",
     );
+    expect(sessionCookieName("http://127.0.0.1:3100")).toBe(
+      "stoky.session_token",
+    );
+    // The first decides, whatever follows it.
+    expect(
+      sessionCookieName("https://stoky.example.com, http://localhost:3000"),
+    ).toBe("__Secure-stoky.session_token");
+    expect(
+      sessionCookieName("http://localhost:3000, https://stoky.example.com"),
+    ).toBe("stoky.session_token");
   });
 });
 
@@ -379,8 +466,9 @@ describe("at start-up", () => {
       expect(warned[0]).toMatch(/cleartext/);
 
       warned.length = 0;
-      warnAboutRiskyConfiguration(production({ STOKY_URLS: "https://stoky.example.com" }), (m) =>
-        warned.push(m),
+      warnAboutRiskyConfiguration(
+        production({ STOKY_URLS: "https://stoky.example.com" }),
+        (m) => warned.push(m),
       );
       expect(warned).toEqual([]);
       expect(exit).not.toHaveBeenCalled();
@@ -399,11 +487,16 @@ describe("at start-up", () => {
 
     try {
       warnAboutRiskyConfiguration(
-        { NODE_ENV: "development", STOKY_URLS: "https://a.example, http://192.168.1.10:3000" },
+        {
+          NODE_ENV: "development",
+          STOKY_URLS: "https://a.example, http://192.168.1.10:3000",
+        },
         (message) => warned.push(message),
       );
       expect(warned).toEqual([
-        expect.stringMatching(/^\[auth\] warning: STOKY_URLS starts with an https address/),
+        expect.stringMatching(
+          /^\[auth\] warning: STOKY_URLS starts with an https address/,
+        ),
       ]);
       expect(exit).not.toHaveBeenCalled();
     } finally {

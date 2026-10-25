@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { prisma } from "@/lib/prisma";
 import { processReceiptOcr, terminateWorker } from "@/server/services/ocr";
-import { parseReceiptText, saveParsedItems } from "@/server/services/receiptParser";
+import {
+  parseReceiptText,
+  saveParsedItems,
+} from "@/server/services/receiptParser";
 import { matchReceiptItems } from "@/server/services/productMatcher";
 import { ReceiptStatus } from "@prisma/client";
 import { randomUUID } from "node:crypto";
@@ -166,7 +169,7 @@ Pan 0,95
                 uploadedBy: testUserId,
               },
             });
-          })
+          }),
       );
 
       const startTime = performance.now();
@@ -176,7 +179,7 @@ Pan 0,95
           const parsed = parseReceiptText(ocrText);
           await saveParsedItems(receipt.id, parsed);
           await matchReceiptItems(receipt.id);
-        })
+        }),
       );
 
       const endTime = performance.now();
@@ -212,7 +215,10 @@ Pan 0,95
 Fecha: 15/03/2024
 ${Array(100)
   .fill(null)
-  .map((_, i) => `Producto ${i + 1} con descripción muy larga y detallada ${(Math.random() * 20).toFixed(2)}`)
+  .map(
+    (_, i) =>
+      `Producto ${i + 1} con descripción muy larga y detallada ${(Math.random() * 20).toFixed(2)}`,
+  )
   .join("\n")}
 TOTAL: 1000,00 EUR`;
 
@@ -493,7 +499,7 @@ Leche 1,25
                 uploadedBy: testUserId,
               },
             });
-          })
+          }),
       );
 
       const results = await Promise.all(
@@ -505,7 +511,7 @@ Leche 1,25
           } catch (error) {
             return { success: false, receiptId: receipt.id, error };
           }
-        })
+        }),
       );
 
       const successCount = results.filter((r) => r.success).length;

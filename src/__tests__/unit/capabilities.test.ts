@@ -278,13 +278,19 @@ describe("capability matrix", () => {
       (total, table) => total + Object.keys(table).length,
       0,
     );
-    expect(actual, "the router and the matrix disagree on the count").toBe(tabled);
+    expect(actual, "the router and the matrix disagree on the count").toBe(
+      tabled,
+    );
 
     for (const { file, pattern } of DOCUMENTED_COUNTS) {
-      const claims = [...readFileSync(join(ROOT, file), "utf8").matchAll(pattern)];
+      const claims = [
+        ...readFileSync(join(ROOT, file), "utf8").matchAll(pattern),
+      ];
       // Exactly one: a reworded sentence must fail here rather than quietly
       // take its number out of this check.
-      expect(claims.length, `${file} must state ${pattern} exactly once`).toBe(1);
+      expect(claims.length, `${file} must state ${pattern} exactly once`).toBe(
+        1,
+      );
       expect(
         Number(claims[0]?.[1]),
         `${file} states a procedure count the router does not have`,

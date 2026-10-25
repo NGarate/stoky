@@ -26,7 +26,13 @@ import { envelope } from "../utils/test-helpers";
  * says so.
  */
 
-const A = { userId: "", householdId: "", productId: "", listId: "", itemId: "" };
+const A = {
+  userId: "",
+  householdId: "",
+  productId: "",
+  listId: "",
+  itemId: "",
+};
 const B = { userId: "", householdId: "", storeId: "" };
 
 async function callerFor(account: { userId: string; householdId: string }) {
@@ -72,7 +78,11 @@ beforeAll(async () => {
   Object.assign(B, await makeHousehold("B"));
 
   const product = await prisma.product.create({
-    data: { name: "Leche entera", defaultUnit: "L", householdId: A.householdId },
+    data: {
+      name: "Leche entera",
+      defaultUnit: "L",
+      householdId: A.householdId,
+    },
   });
   A.productId = product.id;
 

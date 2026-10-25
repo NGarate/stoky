@@ -64,9 +64,16 @@ beforeAll(async () => {
     },
   });
   await prisma.twoFactor.create({
-    data: { userId: ownerUser.id, secret: AUTHENTICATOR_SECRET, backupCodes: AUTHENTICATOR_SECRET },
+    data: {
+      userId: ownerUser.id,
+      secret: AUTHENTICATOR_SECRET,
+      backupCodes: AUTHENTICATOR_SECRET,
+    },
   });
-  await prisma.user.update({ where: { id: ownerUser.id }, data: { twoFactorEnabled: true } });
+  await prisma.user.update({
+    where: { id: ownerUser.id },
+    data: { twoFactorEnabled: true },
+  });
 
   owner = appRouter.createCaller(
     await createTRPCContext({ session: createMockSession(ownerUser) }),
@@ -109,7 +116,11 @@ beforeAll(async () => {
     },
   });
   await prisma.receiptItem.create({
-    data: { receiptId: receipt.id, rawText: "LECHE ENTERA 1,19", parsedPrice: 1.19 },
+    data: {
+      receiptId: receipt.id,
+      rawText: "LECHE ENTERA 1,19",
+      parsedPrice: 1.19,
+    },
   });
   const list = await prisma.shoppingList.create({
     data: { name: "Semana", householdId },
@@ -126,14 +137,24 @@ afterAll(async () => {
   });
   const ids = households.map((h) => h.id);
 
-  await prisma.receiptItem.deleteMany({ where: { receipt: { householdId: { in: ids } } } });
+  await prisma.receiptItem.deleteMany({
+    where: { receipt: { householdId: { in: ids } } },
+  });
   await prisma.receipt.deleteMany({ where: { householdId: { in: ids } } });
-  await prisma.shoppingItem.deleteMany({ where: { shoppingList: { householdId: { in: ids } } } });
+  await prisma.shoppingItem.deleteMany({
+    where: { shoppingList: { householdId: { in: ids } } },
+  });
   await prisma.shoppingList.deleteMany({ where: { householdId: { in: ids } } });
-  await prisma.priceRecord.deleteMany({ where: { product: { householdId: { in: ids } } } });
-  await prisma.stockEntry.deleteMany({ where: { product: { householdId: { in: ids } } } });
+  await prisma.priceRecord.deleteMany({
+    where: { product: { householdId: { in: ids } } },
+  });
+  await prisma.stockEntry.deleteMany({
+    where: { product: { householdId: { in: ids } } },
+  });
   await prisma.product.deleteMany({ where: { householdId: { in: ids } } });
-  await prisma.storageLocation.deleteMany({ where: { householdId: { in: ids } } });
+  await prisma.storageLocation.deleteMany({
+    where: { householdId: { in: ids } },
+  });
   await prisma.store.deleteMany({ where: { householdId: { in: ids } } });
   await prisma.user.deleteMany({ where: { householdId: { in: ids } } });
   await prisma.household.deleteMany({ where: { id: { in: ids } } });
@@ -142,8 +163,12 @@ afterAll(async () => {
 /** Every object key anywhere inside `value`, however deep. */
 function keysOf(value: unknown): string[] {
   if (Array.isArray(value)) return value.flatMap(keysOf);
-  if (value === null || typeof value !== "object" || value instanceof Date) return [];
-  return Object.entries(value).flatMap(([key, inner]) => [key, ...keysOf(inner)]);
+  if (value === null || typeof value !== "object" || value instanceof Date)
+    return [];
+  return Object.entries(value).flatMap(([key, inner]) => [
+    key,
+    ...keysOf(inner),
+  ]);
 }
 
 describe("what must never be in the file", () => {
@@ -163,7 +188,9 @@ describe("what must never be in the file", () => {
     // the sentence saying hashes are never exported, is not one of them.)
     expect(dump).not.toContain("$argon2");
     expect(
-      keysOf(exported).filter((key) => /^(password|passwordHash|accounts)$/i.test(key)),
+      keysOf(exported).filter((key) =>
+        /^(password|passwordHash|accounts)$/i.test(key),
+      ),
     ).toEqual([]);
   });
 
@@ -174,7 +201,9 @@ describe("what must never be in the file", () => {
 
     expect(JSON.stringify(exported)).not.toContain(AUTHENTICATOR_SECRET);
     expect(
-      keysOf(exported).filter((key) => /^(twoFactor|secret|backupCodes)$/i.test(key)),
+      keysOf(exported).filter((key) =>
+        /^(twoFactor|secret|backupCodes)$/i.test(key),
+      ),
     ).toEqual([]);
   });
 
@@ -185,7 +214,9 @@ describe("what must never be in the file", () => {
 
     expect(JSON.stringify(exported)).not.toContain(PASSKEY_PUBLIC_KEY);
     expect(
-      keysOf(exported).filter((key) => /^(passkeys?|publicKey|credentialID)$/i.test(key)),
+      keysOf(exported).filter((key) =>
+        /^(passkeys?|publicKey|credentialID)$/i.test(key),
+      ),
     ).toEqual([]);
   });
 
@@ -281,7 +312,11 @@ describe("who may take it", () => {
   it("gives an admin only their own household", async () => {
     const other = await createTestHousehold({ name: OTHER });
     await prisma.product.create({
-      data: { name: "Secreto ajeno", defaultUnit: "unit", householdId: other.id },
+      data: {
+        name: "Secreto ajeno",
+        defaultUnit: "unit",
+        householdId: other.id,
+      },
     });
 
     const dump = JSON.stringify(await owner.data.exportHousehold());

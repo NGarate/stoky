@@ -82,7 +82,9 @@ describe("StoreComparison", () => {
     // It was `text-ok-foreground`: the healthy-state ink on a ranking.
     const label = screen.getByText("Mejor precio");
     expect(label.className).toContain("bg-muted");
-    expect(label.className).not.toMatch(/\b(?:text|bg|border)-(?:ok|warn|danger)(?:-foreground)?\b/);
+    expect(label.className).not.toMatch(
+      /\b(?:text|bg|border)-(?:ok|warn|danger)(?:-foreground)?\b/,
+    );
   });
 
   it("writes every price as text, so the bars add nothing that is only a bar", () => {

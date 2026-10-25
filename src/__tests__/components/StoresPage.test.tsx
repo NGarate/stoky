@@ -76,7 +76,9 @@ mock.module("@/lib/offline/queue-context", () => ({
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({
-      store: { list: { invalidate: async () => void invalidated.push("store.list") } },
+      store: {
+        list: { invalidate: async () => void invalidated.push("store.list") },
+      },
     }),
     // The screen asks who is looking before it draws an admin's controls.
     auth: { me: { useQuery: () => ({ data: { role } }) } },
@@ -90,7 +92,8 @@ mock.module("@/lib/trpc/client", () => ({
 }));
 
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
-const StoresPage = (await import("@/app/(dashboard)/settings/stores/page")).default;
+const StoresPage = (await import("@/app/(dashboard)/settings/stores/page"))
+  .default;
 
 const renderPage = () =>
   renderWithIntl(
@@ -136,7 +139,9 @@ describe("the stores settings screen", () => {
   it("refetches the list after deleting one", async () => {
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: /Eliminar Mercadona/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /Eliminar Mercadona/ }),
+    );
 
     expect(deleteCalls).toHaveLength(1);
     expect(invalidated).toContain("store.list");
@@ -151,7 +156,9 @@ describe("the stores settings screen", () => {
 
     // Naming it is the point: "Guardado" over a list you cannot see change
     // is what this screen already had, which was nothing.
-    expect(await screen.findAllByText(/Creaste la tienda «Lidl»/)).not.toHaveLength(0);
+    expect(
+      await screen.findAllByText(/Creaste la tienda «Lidl»/),
+    ).not.toHaveLength(0);
   });
 
   it("offers a member none of the three things the server refuses", async () => {
@@ -189,20 +196,26 @@ describe("the stores settings screen", () => {
 
     // A failure left the form open with the data still in it and said
     // nothing, so a refused write looked like a form nobody had finished.
-    expect(await screen.findAllByText(/No se ha podido guardar/)).not.toHaveLength(0);
+    expect(
+      await screen.findAllByText(/No se ha podido guardar/),
+    ).not.toHaveLength(0);
   });
 
   it("explains a refused delete only when it knows the reason", async () => {
     failure = { data: { code: "FORBIDDEN" } };
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: /Eliminar Mercadona/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /Eliminar Mercadona/ }),
+    );
 
     // "Todavía hay precios o tickets de esa tienda" is true of a CONFLICT and
     // a guess about anything else. It was shown for every failure, so a
     // refused permission was explained as data that does not exist.
     expect(
-      await screen.findAllByText(/No se ha podido eliminar «Mercadona». Vuelve/),
+      await screen.findAllByText(
+        /No se ha podido eliminar «Mercadona». Vuelve/,
+      ),
     ).not.toHaveLength(0);
     expect(screen.queryByText(/Todavía hay precios/)).toBeAbsent();
   });
@@ -211,7 +224,9 @@ describe("the stores settings screen", () => {
     failure = { data: { code: "CONFLICT" } };
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: /Eliminar Mercadona/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /Eliminar Mercadona/ }),
+    );
 
     expect(
       await screen.findAllByText(/Todavía hay precios o tickets/),
@@ -221,7 +236,9 @@ describe("the stores settings screen", () => {
   it("names the store it deleted, which is in neither the input nor the result", async () => {
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: /Eliminar Mercadona/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /Eliminar Mercadona/ }),
+    );
 
     expect(
       await screen.findAllByText(/Eliminaste la tienda «Mercadona»/),

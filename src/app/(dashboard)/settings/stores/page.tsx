@@ -152,152 +152,172 @@ export default function StoresPage() {
         title={t("stores.title")}
       />
       <div className="space-y-6">
-
-      {/* Said once, plainly, rather than left to be discovered by pressing
+        {/* Said once, plainly, rather than left to be discovered by pressing
           something. A reader who cannot change the shops can still read
           them — which is the whole of what this screen is for them. */}
-      {!canManage && me.data ? (
-        <p className="rounded border border-border bg-card p-4 text-muted-foreground">
-          {t("stores.readOnly")}
-        </p>
-      ) : null}
+        {!canManage && me.data ? (
+          <p className="rounded border border-border bg-card p-4 text-muted-foreground">
+            {t("stores.readOnly")}
+          </p>
+        ) : null}
 
-      {canManage && isCreating && (
-        <form onSubmit={handleSubmit} className="rounded-lg border border-border bg-card p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-heading">
-            {editingStore ? t("stores.edit") : t("stores.create")}
-          </h2>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="store-name" className="mb-1 block text-sm font-medium">{t("stores.name")} *</label>
-              <Input
-                id="store-name"
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                required
-                type="text"
-                value={formData.name}
-              />
+        {canManage && isCreating && (
+          <form
+            onSubmit={handleSubmit}
+            className="rounded-lg border border-border bg-card p-6 shadow-sm"
+          >
+            <h2 className="mb-4 text-lg font-semibold text-heading">
+              {editingStore ? t("stores.edit") : t("stores.create")}
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <label
+                  htmlFor="store-name"
+                  className="mb-1 block text-sm font-medium"
+                >
+                  {t("stores.name")} *
+                </label>
+                <Input
+                  id="store-name"
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  required
+                  type="text"
+                  value={formData.name}
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="store-address"
+                  className="mb-1 block text-sm font-medium"
+                >
+                  {t("stores.address")}
+                </label>
+                <Input
+                  id="store-address"
+                  onChange={(e) =>
+                    setFormData({ ...formData, address: e.target.value })
+                  }
+                  type="text"
+                  value={formData.address}
+                />
+              </div>
             </div>
-            <div>
-              <label htmlFor="store-address" className="mb-1 block text-sm font-medium">{t("stores.address")}</label>
-              <Input
-                id="store-address"
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                type="text"
-                value={formData.address}
-              />
-            </div>
-          </div>
-          <div className="mt-6 flex gap-3">
-            <Button
-              disabled={createMutation.isPending || updateMutation.isPending}
-              type="submit"
-            >
-              {t("common.save")}
-            </Button>
-            {/* Was a bare button with no `min-h` at all — the one control on
+            <div className="mt-6 flex gap-3">
+              <Button
+                disabled={createMutation.isPending || updateMutation.isPending}
+                type="submit"
+              >
+                {t("common.save")}
+              </Button>
+              {/* Was a bare button with no `min-h` at all — the one control on
                 this screen that undoes a mistake, and the only one under the
                 target floor. */}
-            <Button onClick={handleCancel} type="button" variant="outline">
-              {t("common.cancel")}
-            </Button>
-          </div>
-        </form>
-      )}
+              <Button onClick={handleCancel} type="button" variant="outline">
+                {t("common.cancel")}
+              </Button>
+            </div>
+          </form>
+        )}
 
-      {/* No card around the cards. `ItemRow` draws each row as one, so a
+        {/* No card around the cards. `ItemRow` draws each row as one, so a
           bordered, shadowed box holding them put a card inside a card —
           two frames for one list, and the owner's rule is no card without a
           concrete reason (DESIGN_AUDIT A5.4). The inventory and the
           catalogue already list into a bare `<ul>`. */}
-      <div>
-        {stores.length === 0 ? (
-          <EmptyState
-            action={
-              canManage && !isCreating ? (
-                <Button onClick={() => setIsCreating(true)} type="button" variant="outline">
-                  {t("stores.create")}
-                </Button>
-              ) : undefined
-            }
-            body={t("stores.addFirst")}
-            title={t("stores.noStores")}
-          />
-        ) : (
-          <ul className="space-y-3">
-            {stores.map((store: Store) => (
-              <ItemRow
-                actions={
-                  canManage ? (
-                  <>
-                    <Button
-                      onClick={() => handleEdit(store)}
-                      size="sm"
-                      type="button"
-                      variant="ghost"
-                    >
-                      {t("common.edit")}
-                      <span className="sr-only"> {store.name}</span>
-                    </Button>
-                    <Button
-                      disabled={deleteMutation.isPending}
-                      onClick={() =>
-                        deleteMutation.mutate(
-                          { id: store.id },
-                          {
-                            onSuccess: async () => {
-                              await utils.store.list.invalidate();
-                              snackbar.show({
-                                kind: "confirm",
-                                message: {
-                                  key: "stores.deleted",
-                                  values: { name: store.name },
+        <div>
+          {stores.length === 0 ? (
+            <EmptyState
+              action={
+                canManage && !isCreating ? (
+                  <Button
+                    onClick={() => setIsCreating(true)}
+                    type="button"
+                    variant="outline"
+                  >
+                    {t("stores.create")}
+                  </Button>
+                ) : undefined
+              }
+              body={t("stores.addFirst")}
+              title={t("stores.noStores")}
+            />
+          ) : (
+            <ul className="space-y-3">
+              {stores.map((store: Store) => (
+                <ItemRow
+                  actions={
+                    canManage ? (
+                      <>
+                        <Button
+                          onClick={() => handleEdit(store)}
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          {t("common.edit")}
+                          <span className="sr-only"> {store.name}</span>
+                        </Button>
+                        <Button
+                          disabled={deleteMutation.isPending}
+                          onClick={() =>
+                            deleteMutation.mutate(
+                              { id: store.id },
+                              {
+                                onSuccess: async () => {
+                                  await utils.store.list.invalidate();
+                                  snackbar.show({
+                                    kind: "confirm",
+                                    message: {
+                                      key: "stores.deleted",
+                                      values: { name: store.name },
+                                    },
+                                  });
                                 },
-                              });
-                            },
-                            // The specific sentence only for the specific
-                            // failure. "Todavía hay precios o tickets de esa
-                            // tienda" is true of a CONFLICT and a guess about
-                            // anything else — it was shown for every failure,
-                            // so a refused permission or a dropped connection
-                            // was explained as data that does not exist.
-                            onError: (error) =>
-                              snackbar.show({
-                                kind: "confirm",
-                                tone: "danger",
-                                message: {
-                                  key:
-                                    error.data?.code === "CONFLICT"
-                                      ? "stores.deleteFailed"
-                                      : "stores.deleteFailedUnknown",
-                                  values: { name: store.name },
-                                },
-                              }),
-                          },
-                        )
-                      }
-                      size="sm"
-                      type="button"
-                      variant="destructive-ghost"
-                    >
-                      {t("common.delete")}
-                      <span className="sr-only"> {store.name}</span>
-                    </Button>
-                  </>
-                  ) : undefined
-                }
-                key={store.id}
-                meta={
-                  store.address
-                    ? [{ label: t("stores.address"), value: store.address }]
-                    : undefined
-                }
-                title={store.name}
-              />
-            ))}
-          </ul>
-        )}
-      </div>
+                                // The specific sentence only for the specific
+                                // failure. "Todavía hay precios o tickets de esa
+                                // tienda" is true of a CONFLICT and a guess about
+                                // anything else — it was shown for every failure,
+                                // so a refused permission or a dropped connection
+                                // was explained as data that does not exist.
+                                onError: (error) =>
+                                  snackbar.show({
+                                    kind: "confirm",
+                                    tone: "danger",
+                                    message: {
+                                      key:
+                                        error.data?.code === "CONFLICT"
+                                          ? "stores.deleteFailed"
+                                          : "stores.deleteFailedUnknown",
+                                      values: { name: store.name },
+                                    },
+                                  }),
+                              },
+                            )
+                          }
+                          size="sm"
+                          type="button"
+                          variant="destructive-ghost"
+                        >
+                          {t("common.delete")}
+                          <span className="sr-only"> {store.name}</span>
+                        </Button>
+                      </>
+                    ) : undefined
+                  }
+                  key={store.id}
+                  meta={
+                    store.address
+                      ? [{ label: t("stores.address"), value: store.address }]
+                      : undefined
+                  }
+                  title={store.name}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </PageShell>
   );

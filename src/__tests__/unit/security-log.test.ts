@@ -87,7 +87,9 @@ describe("what never reaches a line", () => {
   it("does not care how a credential key was capitalised", () => {
     const smuggled = { PassWord: "secreto" } as unknown as SecurityDetails;
 
-    expect(securityLine("access.denied", smuggled, AT)).not.toContain("secreto");
+    expect(securityLine("access.denied", smuggled, AT)).not.toContain(
+      "secreto",
+    );
   });
 });
 
@@ -96,7 +98,8 @@ describe("the address a sign-in tried", () => {
   // `auth.signin.throttled` carried the submitted address in plain text —
   // for every well-formed address, registered or not. The line names a keyed
   // tag instead, and the writer refuses the address outright.
-  const SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  const SECRET =
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
   const ADDRESS = "vecina.del.quinto@example.org";
 
   it("is dropped, however a caller hands it in", () => {
@@ -153,7 +156,8 @@ describe("the address a sign-in tried", () => {
   it("cannot be computed without the instance's secret", () => {
     // An unkeyed hash of a guessable address is reversed by guessing. Under
     // another key the same address is another tag.
-    const other = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+    const other =
+      "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
 
     expect(accountTag(ADDRESS, other)).not.toBe(accountTag(ADDRESS, SECRET));
   });
@@ -163,7 +167,8 @@ describe("the address a sign-in tried", () => {
     // installation still on NEXTAUTH_SECRET must tag with the same value it
     // will carry once install.sh renames the line (D137).
     const env = process.env as Record<string, string | undefined>;
-    const other = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+    const other =
+      "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
     const saved = { current: env.STOKY_SECRET, legacy: env.NEXTAUTH_SECRET };
     try {
       env.STOKY_SECRET = SECRET;
@@ -235,9 +240,9 @@ describe("how long a value can be", () => {
   it("leaves a value at the bound whole", () => {
     const exact = "y".repeat(MAX_VALUE_LENGTH);
 
-    expect(JSON.parse(securityLine("access.denied", { path: exact }, AT)).path).toBe(
-      exact,
-    );
+    expect(
+      JSON.parse(securityLine("access.denied", { path: exact }, AT)).path,
+    ).toBe(exact);
   });
 });
 

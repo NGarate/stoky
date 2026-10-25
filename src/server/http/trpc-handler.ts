@@ -3,7 +3,11 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { AppSession } from "@/lib/auth/session";
 import { MAX_TRPC_BATCH_SIZE } from "@/lib/trpc/batch";
 import { retryAfterSeconds } from "@/server/trpc/throttle";
-import { MAX_TRPC_BODY_BYTES, initWithBody, readBodyWithin } from "./body-limit";
+import {
+  MAX_TRPC_BODY_BYTES,
+  initWithBody,
+  readBodyWithin,
+} from "./body-limit";
 import { refuseCrossSite, refuseNonJson } from "./request-guards";
 
 /**
@@ -37,7 +41,8 @@ export function createTrpcHandler<TRouter extends AnyTRPCRouter>({
     // Who sent it and in what form, before anything else: both are headers,
     // so refusing on them costs nothing, and a request that should not be here
     // has its body neither read nor held.
-    const refused = refuseCrossSite(incoming, "/api/trpc") ?? refuseNonJson(incoming);
+    const refused =
+      refuseCrossSite(incoming, "/api/trpc") ?? refuseNonJson(incoming);
     if (refused) return refused;
 
     // Then the body, before the session or anything else costs a thing:
@@ -72,7 +77,9 @@ export function createTrpcHandler<TRouter extends AnyTRPCRouter>({
        */
       responseMeta: ({ errors }) => {
         const seconds = retryAfterSeconds(errors);
-        return seconds === null ? {} : { headers: { "retry-after": String(seconds) } };
+        return seconds === null
+          ? {}
+          : { headers: { "retry-after": String(seconds) } };
       },
     });
   };

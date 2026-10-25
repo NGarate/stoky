@@ -26,7 +26,13 @@ let cookie: string;
 
 beforeAll(async () => {
   email = generateTestEmail(MARKER);
-  userId = (await createTestUser({ email, name: `Surface ${MARKER}`, password: PASSWORD })).id;
+  userId = (
+    await createTestUser({
+      email,
+      name: `Surface ${MARKER}`,
+      password: PASSWORD,
+    })
+  ).id;
   const signedIn = await signInWith({ email, password: PASSWORD });
   expect(signedIn.status).toBe(200);
   cookie = signedIn.cookieHeader;
@@ -69,8 +75,14 @@ const ANSWERED = new Set([
 async function snapshot() {
   return {
     user: await prisma.user.findUnique({ where: { id: userId } }),
-    accounts: await prisma.account.findMany({ where: { userId }, orderBy: { id: "asc" } }),
-    sessions: await prisma.session.findMany({ where: { userId }, orderBy: { id: "asc" } }),
+    accounts: await prisma.account.findMany({
+      where: { userId },
+      orderBy: { id: "asc" },
+    }),
+    sessions: await prisma.session.findMany({
+      where: { userId },
+      orderBy: { id: "asc" },
+    }),
     verifications: await prisma.verification.count(),
     twoFactor: await prisma.twoFactor.findMany({ where: { userId } }),
   };
@@ -94,14 +106,25 @@ function mountedEndpoints(): string[] {
 
 function request(endpoint: string): Request {
   const [method, path] = endpoint.split(" ");
-  const headers = new Headers({ cookie, origin: testOrigin(), "x-forwarded-for": "203.0.113.50" });
+  const headers = new Headers({
+    cookie,
+    origin: testOrigin(),
+    "x-forwarded-for": "203.0.113.50",
+  });
   if (method === "POST") headers.set("content-type", "application/json");
   return new Request(`${testOrigin()}/api/auth${path}`, {
     method,
     headers,
     body:
       method === "POST"
-        ? JSON.stringify({ email, password: PASSWORD, newPassword: `${PASSWORD} nueva`, currentPassword: PASSWORD, name: "x", revokeOtherSessions: true })
+        ? JSON.stringify({
+            email,
+            password: PASSWORD,
+            newPassword: `${PASSWORD} nueva`,
+            currentPassword: PASSWORD,
+            name: "x",
+            revokeOtherSessions: true,
+          })
         : undefined,
   });
 }
@@ -128,7 +151,8 @@ describe("the endpoints Better Auth mounts", () => {
       if (ANSWERED.has(endpoint)) continue;
       const handle = endpoint.startsWith("GET") ? GET : POST;
       const response = await handle(request(endpoint));
-      if (response.status !== 404) answered.push(`${endpoint} → ${response.status}`);
+      if (response.status !== 404)
+        answered.push(`${endpoint} → ${response.status}`);
     }
 
     expect(answered).toEqual([]);
@@ -136,9 +160,13 @@ describe("the endpoints Better Auth mounts", () => {
     // And the browser is still signed in, which a forwarded sign-out or
     // revocation would have ended.
     const session = await GET(
-      new Request(`${testOrigin()}/api/auth/get-session`, { headers: { cookie } }),
+      new Request(`${testOrigin()}/api/auth/get-session`, {
+        headers: { cookie },
+      }),
     );
-    expect(((await session.json()) as { user?: { id: string } }).user?.id).toBe(userId);
+    expect(((await session.json()) as { user?: { id: string } }).user?.id).toBe(
+      userId,
+    );
   });
 });
 
@@ -158,7 +186,9 @@ describe("a sign-in from a browser that already holds a cookie", () => {
 
     expect(answer.status).toBe(403);
     expect(answer.code).toBe("INVALID_ORIGIN");
-    expect(answer.setCookie.some((line) => line.startsWith("stoky.session_token="))).toBe(false);
+    expect(
+      answer.setCookie.some((line) => line.startsWith("stoky.session_token=")),
+    ).toBe(false);
   });
 
   it("is refused with no origin at all", async () => {
@@ -175,11 +205,16 @@ describe("a sign-in from a browser that already holds a cookie", () => {
     );
 
     expect(response.status).toBe(403);
-    expect(((await response.json()) as { code: string }).code).toBe("MISSING_OR_NULL_ORIGIN");
+    expect(((await response.json()) as { code: string }).code).toBe(
+      "MISSING_OR_NULL_ORIGIN",
+    );
   });
 
   it("is accepted from the instance's own origin", async () => {
-    const answer = await signInWith({ email, password: PASSWORD }, { deviceId: device() });
+    const answer = await signInWith(
+      { email, password: PASSWORD },
+      { deviceId: device() },
+    );
 
     expect(answer.status).toBe(200);
   });

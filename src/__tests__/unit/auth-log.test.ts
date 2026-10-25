@@ -55,7 +55,9 @@ describe("logEndpointError", () => {
     expect(line).not.toContain("MARKERTOKEN");
     expect(line).not.toContain("maria.garcia@example.com");
     // What is left still says which call failed, and why.
-    expect(line).toContain("[auth] error PrismaClientValidationError (Prisma 6.19.3)");
+    expect(line).toContain(
+      "[auth] error PrismaClientValidationError (Prisma 6.19.3)",
+    );
     expect(line).toContain("Invalid `prisma.session.create()` invocation");
     expect(line).toContain("Invalid value for argument `expiresAt`");
     expect(errors).toHaveBeenCalledTimes(1);
@@ -66,12 +68,16 @@ describe("logEndpointError", () => {
     logEndpointError(new Error(`the cache\nanswered ${"x".repeat(400)}`));
 
     const line = logged();
-    expect(line.startsWith("[auth] error Error: the cache answered xxx")).toBe(true);
+    expect(line.startsWith("[auth] error Error: the cache answered xxx")).toBe(
+      true,
+    );
     expect(line.length).toBeLessThanOrEqual("[auth] error ".length + 300);
   });
 
   it("writes nothing for a refusal", () => {
-    logEndpointError(new APIError("UNAUTHORIZED", { message: "Invalid password" }));
+    logEndpointError(
+      new APIError("UNAUTHORIZED", { message: "Invalid password" }),
+    );
 
     expect(errors).not.toHaveBeenCalled();
   });

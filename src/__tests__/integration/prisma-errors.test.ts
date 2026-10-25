@@ -1,4 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+} from "bun:test";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
@@ -70,7 +77,9 @@ beforeEach(async () => {
   await prisma.shoppingList.deleteMany({
     where: { householdId: OWNER.householdId },
   });
-  await prisma.product.deleteMany({ where: { householdId: OWNER.householdId } });
+  await prisma.product.deleteMany({
+    where: { householdId: OWNER.householdId },
+  });
   await prisma.mutationReplay.deleteMany({ where: { userId: OWNER.userId } });
 
   const list = await prisma.shoppingList.create({
@@ -94,7 +103,9 @@ afterAll(async () => {
   await prisma.shoppingList.deleteMany({
     where: { householdId: OWNER.householdId },
   });
-  await prisma.product.deleteMany({ where: { householdId: OWNER.householdId } });
+  await prisma.product.deleteMany({
+    where: { householdId: OWNER.householdId },
+  });
   await prisma.mutationReplay.deleteMany({ where: { userId: OWNER.userId } });
   await prisma.user.deleteMany({ where: { id: OWNER.userId } });
   await prisma.household.deleteMany({ where: { id: OWNER.householdId } });
@@ -197,9 +208,9 @@ describe("what is not translated", () => {
 
     // The routers decide this one themselves (DEBT-4), and the middleware must
     // not reach past a decision that has already been made.
-    expect(
-      await codeOf(api.shopping.getById({ id: "does-not-exist" })),
-    ).toBe("NOT_FOUND");
+    expect(await codeOf(api.shopping.getById({ id: "does-not-exist" }))).toBe(
+      "NOT_FOUND",
+    );
 
     expect(
       await codeOf(
@@ -208,7 +219,6 @@ describe("what is not translated", () => {
           productId: OWNER.productId,
           quantity: 99,
           unit: "L",
-
         }),
       ),
     ).toBe("CONFLICT");
@@ -218,8 +228,6 @@ describe("what is not translated", () => {
     const api = await caller();
 
     // A validation failure is neither Prisma's nor the router's opinion.
-    expect(
-      await codeOf(api.shopping.create({ name: "" })),
-    ).toBe("BAD_REQUEST");
+    expect(await codeOf(api.shopping.create({ name: "" }))).toBe("BAD_REQUEST");
   });
 });

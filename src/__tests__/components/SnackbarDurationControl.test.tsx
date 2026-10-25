@@ -43,9 +43,8 @@ const {
   hydrateSnackbarDuration,
 } = await import("@/lib/snackbar-duration");
 
-const { SnackbarDurationControl } = await import(
-  "@/components/ui/SnackbarDurationControl"
-);
+const { SnackbarDurationControl } =
+  await import("@/components/ui/SnackbarDurationControl");
 
 beforeEach(() => {
   written.length = 0;

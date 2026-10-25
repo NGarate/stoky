@@ -43,7 +43,9 @@ describe("upgrade-insecure-requests follows the deployment's transport", () => {
 
 describe("where a page may connect", () => {
   const connectSrc = (policy: string) =>
-    policy.split("; ").find((directive) => directive.startsWith("connect-src "));
+    policy
+      .split("; ")
+      .find((directive) => directive.startsWith("connect-src "));
 
   it("is its own origin and nothing else in production", () => {
     // Exact, not a substring: Open Food Facts lookups run on the server, so a
@@ -110,10 +112,7 @@ describe("what the worker must not weaken", () => {
 });
 
 describe("the middleware's matcher", () => {
-  const source = readFileSync(
-    join(import.meta.dir, "../../proxy.ts"),
-    "utf8",
-  );
+  const source = readFileSync(join(import.meta.dir, "../../proxy.ts"), "utf8");
 
   // Which paths it runs on — `/sw.js` left alone, which is the half that makes
   // the worker's own policy do anything — is `proxy-matcher.test.ts`, which

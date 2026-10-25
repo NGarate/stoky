@@ -62,10 +62,7 @@ async function callerFor(account: { userId: string; householdId: string }) {
   return appRouter.createCaller(await createTRPCContext({ session }));
 }
 
-async function makeHousehold(
-  label: string,
-  target: typeof A,
-): Promise<void> {
+async function makeHousehold(label: string, target: typeof A): Promise<void> {
   const household = await prisma.household.create({
     data: { name: `Cross household ${label}` },
   });
@@ -147,7 +144,9 @@ afterAll(async () => {
   await prisma.stockEntry.deleteMany({
     where: { product: { householdId: { in: households } } },
   });
-  await prisma.product.deleteMany({ where: { householdId: { in: households } } });
+  await prisma.product.deleteMany({
+    where: { householdId: { in: households } },
+  });
   await prisma.store.deleteMany({ where: { householdId: { in: households } } });
   await prisma.storageLocation.deleteMany({
     where: { householdId: { in: households } },
@@ -245,15 +244,15 @@ describe("writes never reach across households", () => {
       api.product.update({ id: B.productId, name: "Renombrado por A" }),
     );
     expect(error.code).toBe("NOT_FOUND");
-    const after = await prisma.product.findUnique({ where: { id: B.productId } });
+    const after = await prisma.product.findUnique({
+      where: { id: B.productId },
+    });
     expect(after?.name).toBe("Producto secreto de B");
   });
 
   it("product.delete (as admin) refuses a foreign id and the product survives", async () => {
     const api = await callerFor(A);
-    const error = await refusal(() =>
-      api.product.delete({ id: B.productId }),
-    );
+    const error = await refusal(() => api.product.delete({ id: B.productId }));
     expect(error.code).toBe("NOT_FOUND");
     expect(
       await prisma.product.findUnique({ where: { id: B.productId } }),

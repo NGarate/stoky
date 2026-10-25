@@ -27,13 +27,16 @@ import {
  */
 
 const LIST = { shoppingListId: "list-1", quantity: 1 };
-const ENVELOPE = { idempotencyKey: randomUUID(), composedByUserId: "clttttttttttttttttttttttt" };
+const ENVELOPE = {
+  idempotencyKey: randomUUID(),
+  composedByUserId: "clttttttttttttttttttttttt",
+};
 
 describe("what makes an item nameable", () => {
   it("accepts a product", () => {
-    expect(shoppingItemSchema.safeParse({ ...LIST, productId: "p1" }).success).toBe(
-      true,
-    );
+    expect(
+      shoppingItemSchema.safeParse({ ...LIST, productId: "p1" }).success,
+    ).toBe(true);
   });
 
   it("refuses an item with no product", () => {

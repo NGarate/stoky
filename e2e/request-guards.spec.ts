@@ -32,7 +32,9 @@ import { test, expect } from "@playwright/test";
 const PASSWORD = "E2EGuards123!";
 const END_ALL = "/api/trpc/auth.endSessions";
 /** Every session, with the right password: superjson's envelope, as the client sends it. */
-const END_ALL_BODY = JSON.stringify({ json: { currentPassword: PASSWORD, scope: "all" } });
+const END_ALL_BODY = JSON.stringify({
+  json: { currentPassword: PASSWORD, scope: "all" },
+});
 
 function freshEmail(): string {
   const worker = test.info().parallelIndex;
@@ -65,7 +67,10 @@ test("a cross-site or form-encoded call is refused and the session survives it",
   // `page.request` carries this context's session cookie, as a forged
   // request from a sibling subdomain would under SameSite=Lax.
   const crossSite = await page.request.post(END_ALL, {
-    headers: { "content-type": "application/json", "sec-fetch-site": "cross-site" },
+    headers: {
+      "content-type": "application/json",
+      "sec-fetch-site": "cross-site",
+    },
     data: END_ALL_BODY,
   });
   expect(crossSite.status(), "a call another site sent reached tRPC").toBe(403);
@@ -88,11 +93,16 @@ test("a cross-site or form-encoded call is refused and the session survives it",
 
   // -------------------------------------------------------------- control --
   const sameOrigin = await page.request.post(END_ALL, {
-    headers: { "content-type": "application/json", "sec-fetch-site": "same-origin" },
+    headers: {
+      "content-type": "application/json",
+      "sec-fetch-site": "same-origin",
+    },
     data: END_ALL_BODY,
   });
   expect(sameOrigin.status()).toBe(200);
-  expect(await (await page.request.get("/api/auth/get-session")).json()).toBeNull();
+  expect(
+    await (await page.request.get("/api/auth/get-session")).json(),
+  ).toBeNull();
   await page.goto("/dashboard");
   await expect(
     page,

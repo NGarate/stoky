@@ -79,7 +79,11 @@ export interface SignInOptions {
 /** The cookies a `Set-Cookie` list leaves a browser holding, as a `Cookie` header. */
 export function cookieHeaderFrom(setCookie: string[]): string {
   return setCookie
-    .filter((line) => !/;\s*max-age=0\b/i.test(line) && !/expires=thu, 01 jan 1970/i.test(line))
+    .filter(
+      (line) =>
+        !/;\s*max-age=0\b/i.test(line) &&
+        !/expires=thu, 01 jan 1970/i.test(line),
+    )
     .map((line) => line.split(";")[0].trim())
     .filter((pair) => pair.includes("=") && !pair.endsWith("="))
     .join("; ");
@@ -102,7 +106,8 @@ export async function signInWith(
   const origin = options.origin ?? (cookies.length ? testOrigin() : undefined);
   if (origin) headers.set("origin", origin);
   if (options.fetchSite) headers.set("sec-fetch-site", options.fetchSite);
-  if (options.authorization) headers.set("authorization", options.authorization);
+  if (options.authorization)
+    headers.set("authorization", options.authorization);
   if (options.userAgent) headers.set("user-agent", options.userAgent);
 
   const response = await POST(
@@ -116,13 +121,16 @@ export async function signInWith(
   let body: Record<string, unknown> | null = null;
   try {
     const parsed: unknown = await response.json();
-    if (parsed && typeof parsed === "object") body = parsed as Record<string, unknown>;
+    if (parsed && typeof parsed === "object")
+      body = parsed as Record<string, unknown>;
   } catch {
     body = null;
   }
   const setCookie = response.headers.getSetCookie();
   const user =
-    body?.user && typeof body.user === "object" ? (body.user as Record<string, unknown>) : undefined;
+    body?.user && typeof body.user === "object"
+      ? (body.user as Record<string, unknown>)
+      : undefined;
 
   return {
     status: response.status,

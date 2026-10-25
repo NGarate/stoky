@@ -1,4 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+} from "bun:test";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
@@ -50,7 +57,7 @@ async function expectCode(call: Promise<unknown>, code: TRPCError["code"]) {
 async function createTestContext(
   userId: string,
   householdId?: string,
-  role: HouseholdRole = "OWNER"
+  role: HouseholdRole = "OWNER",
 ): Promise<{
   ctx: Awaited<ReturnType<typeof createTRPCContext>>;
   caller: ReturnType<typeof appRouter.createCaller>;
@@ -90,7 +97,7 @@ async function createTestContext(
 async function createTestUserWithHousehold(
   email: string,
   name: string,
-  householdName: string
+  householdName: string,
 ) {
   const passwordHash = await hashPassword("TestPassword123!");
 
@@ -113,7 +120,11 @@ async function createTestUserWithHousehold(
 async function createTestUserWithoutHousehold(email: string, name: string) {
   const passwordHash = await hashPassword("TestPassword123!");
 
-  const user = await createCredentialUser(prisma, { email, name, role: "MEMBER" }, passwordHash);
+  const user = await createCredentialUser(
+    prisma,
+    { email, name, role: "MEMBER" },
+    passwordHash,
+  );
 
   testData.users.push(user.id);
   return { user };
@@ -320,7 +331,7 @@ describe("tRPC Router Integration Tests", () => {
       it("should reject duplicate email registration", async () => {
         await createTestUserWithoutHousehold(
           "duplicate@example.com",
-          "Duplicate User"
+          "Duplicate User",
         );
 
         const { ctx } = await createTestContext("anon");
@@ -331,7 +342,7 @@ describe("tRPC Router Integration Tests", () => {
             email: "duplicate@example.com",
             name: "Another User",
             password: "TestPassword123!",
-          })
+          }),
         ).rejects.toThrow("Email already registered");
         // The code, not just the wording: a duplicate email is a conflict the
         // client can act on, not a server fault (ISSUES.md DEBT-4).
@@ -341,7 +352,7 @@ describe("tRPC Router Integration Tests", () => {
             name: "Another User",
             password: "TestPassword123!",
           }),
-          "CONFLICT"
+          "CONFLICT",
         );
       });
 
@@ -354,7 +365,7 @@ describe("tRPC Router Integration Tests", () => {
             email: "invalid-email",
             name: "Test User",
             password: "TestPassword123!",
-          })
+          }),
         ).rejects.toThrow();
       });
 
@@ -367,7 +378,7 @@ describe("tRPC Router Integration Tests", () => {
             email: "shortpass@example.com",
             name: "Test User",
             password: "short",
-          })
+          }),
         ).rejects.toThrow();
       });
     });
@@ -382,7 +393,7 @@ describe("tRPC Router Integration Tests", () => {
       it("accepts valid credentials and returns the identity a session needs", async () => {
         const { user } = await createTestUserWithoutHousehold(
           "logintest@example.com",
-          "Login Test User"
+          "Login Test User",
         );
 
         const result = await signInWith({
@@ -399,7 +410,7 @@ describe("tRPC Router Integration Tests", () => {
       it("refuses a wrong password", async () => {
         await createTestUserWithoutHousehold(
           "wrongpass@example.com",
-          "Wrong Password User"
+          "Wrong Password User",
         );
 
         const result = await signInWith({
@@ -438,7 +449,7 @@ describe("tRPC Router Integration Tests", () => {
         // of Better Auth.
         const { user } = await createTestUserWithoutHousehold(
           "limited@example.com",
-          "Limited User"
+          "Limited User",
         );
         const address = freshTestAddress();
         const attempts = loginRateLimit().attempts;
@@ -446,7 +457,7 @@ describe("tRPC Router Integration Tests", () => {
         for (let i = 0; i < attempts; i++) {
           await signInWith(
             { email: "limited@example.com", password: "NotThePassword123!" },
-            { address }
+            { address },
           );
         }
 
@@ -455,7 +466,7 @@ describe("tRPC Router Integration Tests", () => {
         // instead of "wrong password".
         const refused = await signInWith(
           { email: "limited@example.com", password: "TestPassword123!" },
-          { address }
+          { address },
         );
         expect(refused.status).toBe(429);
         expect(refused.code).toBe("RATE_LIMITED");
@@ -470,12 +481,12 @@ describe("tRPC Router Integration Tests", () => {
       });
     });
 
-  describe("me", () => {
+    describe("me", () => {
       it("should return current user data when authenticated", async () => {
         const { user, householdId } = await createTestUserWithHousehold(
           "metest@example.com",
           "Me Test User",
-          "Me Test Household"
+          "Me Test Household",
         );
 
         const { caller } = await createTestContext(user.id, householdId);
@@ -504,7 +515,7 @@ describe("tRPC Router Integration Tests", () => {
       it("should logout successfully when authenticated", async () => {
         const { user } = await createTestUserWithoutHousehold(
           "logout@example.com",
-          "Logout User"
+          "Logout User",
         );
         const { caller } = await createTestContext(user.id);
 
@@ -530,14 +541,16 @@ describe("tRPC Router Integration Tests", () => {
       it("refuses an input", async () => {
         const { user } = await createTestUserWithoutHousehold(
           "logout-input@example.com",
-          "Logout Input User"
+          "Logout Input User",
         );
         const { caller } = await createTestContext(user.id);
         const form = new FormData();
         form.set("anything", "1");
 
         // The cast is the point: the type already says no, the runtime must too.
-        const logout = caller.auth.logout as (input: unknown) => Promise<unknown>;
+        const logout = caller.auth.logout as (
+          input: unknown,
+        ) => Promise<unknown>;
         await expectCode(logout({}), "BAD_REQUEST");
         await expectCode(logout(form), "BAD_REQUEST");
         expect(await logout(undefined)).toEqual({ success: true });
@@ -550,7 +563,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "product@example.com",
         "Product User",
-        "Product Household"
+        "Product Household",
       );
       const { caller } = await createTestContext(user.id, householdId);
 
@@ -572,9 +585,11 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "product2@example.com",
         "Product User 2",
-        "Product Household 2"
+        "Product Household 2",
       );
-      const product = await createTestProduct(householdId, { name: "Test Product" });
+      const product = await createTestProduct(householdId, {
+        name: "Test Product",
+      });
       const { caller } = await createTestContext(user.id, householdId);
 
       const result = await caller.product.getById({ id: product.id });
@@ -587,9 +602,11 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "product3@example.com",
         "Product User 3",
-        "Product Household 3"
+        "Product Household 3",
       );
-      const product = await createTestProduct(householdId, { name: "Old Name" });
+      const product = await createTestProduct(householdId, {
+        name: "Old Name",
+      });
       const { caller } = await createTestContext(user.id, householdId);
 
       const result = await caller.product.update({
@@ -604,7 +621,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "product3b@example.com",
         "Product User 3b",
-        "Product Household 3b"
+        "Product Household 3b",
       );
       // The edit screen's clear case: a wrong barcode has to be removable, and
       // before the schema accepted null there was no way to say so — omitting
@@ -633,7 +650,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "product4b@example.com",
         "Product User 4b",
-        "Product Household 4b"
+        "Product Household 4b",
       );
       const member = await prisma.user.create({
         data: {
@@ -643,11 +660,15 @@ describe("tRPC Router Integration Tests", () => {
           role: "MEMBER",
         },
       });
-      const product = await createTestProduct(householdId, { name: "Protegido" });
+      const product = await createTestProduct(householdId, {
+        name: "Protegido",
+      });
       const { caller } = await createTestContext(member.id, householdId);
 
       await expect(caller.product.delete({ id: product.id })).rejects.toThrow();
-      const still = await prisma.product.findUnique({ where: { id: product.id } });
+      const still = await prisma.product.findUnique({
+        where: { id: product.id },
+      });
       expect(still).not.toBeNull();
 
       await prisma.user.delete({ where: { id: member.id } });
@@ -658,9 +679,11 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "product4@example.com",
         "Product User 4",
-        "Product Household 4"
+        "Product Household 4",
       );
-      const product = await createTestProduct(householdId, { name: "To Delete" });
+      const product = await createTestProduct(householdId, {
+        name: "To Delete",
+      });
       const { caller } = await createTestContext(user.id, householdId);
 
       const result = await caller.product.delete({ id: product.id });
@@ -675,7 +698,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "product5@example.com",
         "Product User 5",
-        "Product Household 5"
+        "Product Household 5",
       );
       await createTestProduct(householdId, { name: "Product A" });
       await createTestProduct(householdId, { name: "Product B" });
@@ -691,7 +714,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "product6@example.com",
         "Product User 6",
-        "Product Household 6"
+        "Product Household 6",
       );
       await createTestProduct(householdId, {
         name: "Barcoded Product",
@@ -699,23 +722,34 @@ describe("tRPC Router Integration Tests", () => {
       });
       const { caller } = await createTestContext(user.id, householdId);
 
-      const result = await caller.product.getByBarcode({ barcode: "123456789" });
+      const result = await caller.product.getByBarcode({
+        barcode: "123456789",
+      });
 
       expect(result).not.toBeNull();
       expect(result?.barcode).toBe("123456789");
     });
 
     it("should reject access to product from different household", async () => {
-      const { householdId: household1 } =
-        await createTestUserWithHousehold("product7a@example.com", "User 1", "Household 1");
+      const { householdId: household1 } = await createTestUserWithHousehold(
+        "product7a@example.com",
+        "User 1",
+        "Household 1",
+      );
       const { user: user2, householdId: household2 } =
-        await createTestUserWithHousehold("product7b@example.com", "User 2", "Household 2");
+        await createTestUserWithHousehold(
+          "product7b@example.com",
+          "User 2",
+          "Household 2",
+        );
 
-      const product = await createTestProduct(household1, { name: "Private Product" });
+      const product = await createTestProduct(household1, {
+        name: "Private Product",
+      });
       const { caller } = await createTestContext(user2.id, household2);
 
       await expect(caller.product.getById({ id: product.id })).rejects.toThrow(
-        "Product not found"
+        "Product not found",
       );
     });
   });
@@ -725,11 +759,14 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "inv1@example.com",
         "Inventory User 1",
-        "Inventory Household 1"
+        "Inventory Household 1",
       );
       const product = await createTestProduct(householdId);
       const location = await createTestLocation(householdId);
-      const { caller, envelope } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(
+        user.id,
+        householdId,
+      );
 
       const result = await caller.inventory.addStock({
         ...envelope(),
@@ -737,7 +774,6 @@ describe("tRPC Router Integration Tests", () => {
         quantity: 10,
         unit: "unit",
         locationId: location.id,
-
       });
 
       expect(result.quantity).toBe(10);
@@ -749,11 +785,14 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "inv2@example.com",
         "Inventory User 2",
-        "Inventory Household 2"
+        "Inventory Household 2",
       );
       const product = await createTestProduct(householdId);
       const location = await createTestLocation(householdId);
-      const { caller, envelope } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(
+        user.id,
+        householdId,
+      );
 
       // First add stock
       const addResult = await caller.inventory.addStock({
@@ -762,7 +801,6 @@ describe("tRPC Router Integration Tests", () => {
         quantity: 10,
         unit: "unit",
         locationId: location.id,
-
       });
       testData.stockEntries.push(addResult.id);
 
@@ -772,7 +810,6 @@ describe("tRPC Router Integration Tests", () => {
         productId: product.id,
         quantity: 5,
         unit: "unit",
-
       });
 
       expect(consumeResult.quantity).toBe(-5);
@@ -783,29 +820,30 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "inv3@example.com",
         "Inventory User 3",
-        "Inventory Household 3"
+        "Inventory Household 3",
       );
       const product = await createTestProduct(householdId);
-      const { caller, envelope } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(
+        user.id,
+        householdId,
+      );
 
       await expect(
         caller.inventory.consumeStock({
-        ...envelope(),
+          ...envelope(),
           productId: product.id,
           quantity: 100,
           unit: "unit",
-
-        })
+        }),
       ).rejects.toThrow("Not enough stock available");
       await expectCode(
         caller.inventory.consumeStock({
-        ...envelope(),
+          ...envelope(),
           productId: product.id,
           quantity: 1000,
           unit: "unit",
-
         }),
-        "CONFLICT"
+        "CONFLICT",
       );
     });
 
@@ -813,7 +851,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "inv4@example.com",
         "Inventory User 4",
-        "Inventory Household 4"
+        "Inventory Household 4",
       );
       const product = await createTestProduct(householdId);
       const { caller } = await createTestContext(user.id, householdId);
@@ -835,10 +873,13 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "inv5@example.com",
         "Inventory User 5",
-        "Inventory Household 5"
+        "Inventory Household 5",
       );
       const product = await createTestProduct(householdId, { minStock: 10 });
-      const { caller, envelope } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(
+        user.id,
+        householdId,
+      );
 
       // Add some stock first
       const entry = await caller.inventory.addStock({
@@ -846,7 +887,6 @@ describe("tRPC Router Integration Tests", () => {
         productId: product.id,
         quantity: 5,
         unit: "unit",
-
       });
       testData.stockEntries.push(entry.id);
 
@@ -862,10 +902,13 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "inv6@example.com",
         "Inventory User 6",
-        "Inventory Household 6"
+        "Inventory Household 6",
       );
       const product = await createTestProduct(householdId, { minStock: 10 });
-      const { caller, envelope } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(
+        user.id,
+        householdId,
+      );
 
       // Add low stock
       const entry = await caller.inventory.addStock({
@@ -873,7 +916,6 @@ describe("tRPC Router Integration Tests", () => {
         productId: product.id,
         quantity: 3,
         unit: "unit",
-
       });
       testData.stockEntries.push(entry.id);
 
@@ -891,14 +933,25 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "inv6b@example.com",
         "Inventory User 6b",
-        "Inventory Household 6b"
+        "Inventory Household 6b",
       );
       // Three shapes: healthy, below its minimum, and — the case `lowStock`
       // misses — run out with no minimum set at all.
-      const healthy = await createTestProduct(householdId, { name: "Sano", minStock: 1 });
-      const low = await createTestProduct(householdId, { name: "Bajo", minStock: 10 });
-      const outNoMin = await createTestProduct(householdId, { name: "Agotado sin mínimo" });
-      const { caller, envelope } = await createTestContext(user.id, householdId);
+      const healthy = await createTestProduct(householdId, {
+        name: "Sano",
+        minStock: 1,
+      });
+      const low = await createTestProduct(householdId, {
+        name: "Bajo",
+        minStock: 10,
+      });
+      const outNoMin = await createTestProduct(householdId, {
+        name: "Agotado sin mínimo",
+      });
+      const { caller, envelope } = await createTestContext(
+        user.id,
+        householdId,
+      );
 
       for (const [product, quantity] of [
         [healthy, 5],
@@ -928,7 +981,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "inv6c@example.com",
         "Inventory User 6c",
-        "Inventory Household 6c"
+        "Inventory Household 6c",
       );
       await createTestProduct(householdId, { name: "Uno" });
       await createTestProduct(householdId, { name: "Dos" });
@@ -944,11 +997,14 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "inv6d@example.com",
         "Inventory User 6d",
-        "Inventory Household 6d"
+        "Inventory Household 6d",
       );
       const product = await createTestProduct(householdId);
       const store = await createTestStore(householdId, { name: "Tienda 6d" });
-      const { caller, envelope } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(
+        user.id,
+        householdId,
+      );
 
       // PRICE-1's nuance: price 0 used to pass validation and write no
       // PriceRecord — a save that looks like it worked and quietly did not.
@@ -960,7 +1016,7 @@ describe("tRPC Router Integration Tests", () => {
           unit: "unit",
           price: 0,
           storeId: store.id,
-        })
+        }),
       ).rejects.toThrow();
     });
 
@@ -968,13 +1024,18 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "inv6e@example.com",
         "Inventory User 6e",
-        "Inventory Household 6e"
+        "Inventory Household 6e",
       );
       // Counted in kg, so the purchase below is in the product's own unit;
       // a unit the product is not counted in is refused.
-      const product = await createTestProduct(householdId, { defaultUnit: "kg" });
+      const product = await createTestProduct(householdId, {
+        defaultUnit: "kg",
+      });
       const store = await createTestStore(householdId, { name: "Tienda 6e" });
-      const { caller, envelope } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(
+        user.id,
+        householdId,
+      );
 
       const entry = await caller.inventory.addStock({
         ...envelope(),
@@ -1000,12 +1061,19 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "inv7@example.com",
         "Inventory User 7",
-        "Inventory Household 7"
+        "Inventory Household 7",
       );
       const product = await createTestProduct(householdId);
-      const location1 = await createTestLocation(householdId, { name: "Location 1" });
-      const location2 = await createTestLocation(householdId, { name: "Location 2" });
-      const { caller, envelope } = await createTestContext(user.id, householdId);
+      const location1 = await createTestLocation(householdId, {
+        name: "Location 1",
+      });
+      const location2 = await createTestLocation(householdId, {
+        name: "Location 2",
+      });
+      const { caller, envelope } = await createTestContext(
+        user.id,
+        householdId,
+      );
 
       // Add stock to location 1 first
       const entry = await caller.inventory.addStock({
@@ -1014,7 +1082,6 @@ describe("tRPC Router Integration Tests", () => {
         quantity: 20,
         unit: "unit",
         locationId: location1.id,
-
       });
       testData.stockEntries.push(entry.id);
 
@@ -1043,7 +1110,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "loc1@example.com",
         "Location User 1",
-        "Location Household 1"
+        "Location Household 1",
       );
       const { caller } = await createTestContext(user.id, householdId);
 
@@ -1059,7 +1126,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "loc2@example.com",
         "Location User 2",
-        "Location Household 2"
+        "Location Household 2",
       );
       const parent = await createTestLocation(householdId, { name: "Kitchen" });
       const { caller } = await createTestContext(user.id, householdId);
@@ -1078,7 +1145,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "loc3@example.com",
         "Location User 3",
-        "Location Household 3"
+        "Location Household 3",
       );
       await createTestLocation(householdId, { name: "Root 1" });
       await createTestLocation(householdId, { name: "Root 2" });
@@ -1094,9 +1161,11 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "loc4@example.com",
         "Location User 4",
-        "Location Household 4"
+        "Location Household 4",
       );
-      const location = await createTestLocation(householdId, { name: "Old Name" });
+      const location = await createTestLocation(householdId, {
+        name: "Old Name",
+      });
       const { caller } = await createTestContext(user.id, householdId);
 
       const result = await caller.location.update({
@@ -1111,22 +1180,26 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "loc5@example.com",
         "Location User 5",
-        "Location Household 5"
+        "Location Household 5",
       );
-      const location = await createTestLocation(householdId, { name: "To Delete" });
+      const location = await createTestLocation(householdId, {
+        name: "To Delete",
+      });
       const { caller } = await createTestContext(user.id, householdId);
 
       const result = await caller.location.delete({ id: location.id });
 
       expect(result.success).toBe(true);
-      testData.locations = testData.locations.filter((id) => id !== location.id);
+      testData.locations = testData.locations.filter(
+        (id) => id !== location.id,
+      );
     });
 
     it("should reject deleting location with children", async () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "loc6@example.com",
         "Location User 6",
-        "Location Household 6"
+        "Location Household 6",
       );
       const parent = await createTestLocation(householdId, { name: "Parent" });
       const child = await createTestLocation(householdId, {
@@ -1138,7 +1211,7 @@ describe("tRPC Router Integration Tests", () => {
       const { caller } = await createTestContext(user.id, householdId);
 
       await expect(caller.location.delete({ id: parent.id })).rejects.toThrow(
-        "Cannot delete location with sub-locations"
+        "Cannot delete location with sub-locations",
       );
     });
 
@@ -1146,7 +1219,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "loc7@example.com",
         "Location User 7",
-        "Location Household 7"
+        "Location Household 7",
       );
       const parent = await createTestLocation(householdId, { name: "Parent" });
       const child = await createTestLocation(householdId, {
@@ -1161,7 +1234,7 @@ describe("tRPC Router Integration Tests", () => {
         caller.location.update({
           id: parent.id,
           parentId: child.id,
-        })
+        }),
       ).rejects.toThrow("Cannot move a location to its own descendant");
     });
   });
@@ -1171,7 +1244,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "rec1@example.com",
         "Receipt User 1",
-        "Receipt Household 1"
+        "Receipt Household 1",
       );
       const { caller } = await createTestContext(user.id, householdId);
 
@@ -1185,7 +1258,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "rec2@example.com",
         "Receipt User 2",
-        "Receipt Household 2"
+        "Receipt Household 2",
       );
       const { caller } = await createTestContext(user.id, householdId);
 
@@ -1200,7 +1273,7 @@ describe("tRPC Router Integration Tests", () => {
     it("should reject receipt upload without household", async () => {
       const { user } = await createTestUserWithoutHousehold(
         "rec3@example.com",
-        "Receipt User 3"
+        "Receipt User 3",
       );
       const { caller } = await createTestContext(user.id);
 
@@ -1215,7 +1288,7 @@ describe("tRPC Router Integration Tests", () => {
           fileBase64: base64,
           mimeType: "image/jpeg",
         }),
-        "PRECONDITION_FAILED"
+        "PRECONDITION_FAILED",
       );
     });
 
@@ -1223,7 +1296,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "rec4@example.com",
         "Receipt User 4",
-        "Receipt Household 4"
+        "Receipt Household 4",
       );
       const { caller } = await createTestContext(user.id, householdId);
 
@@ -1231,7 +1304,7 @@ describe("tRPC Router Integration Tests", () => {
         caller.receipt.upload({
           fileBase64: "invalid",
           mimeType: "image/gif",
-        })
+        }),
       ).rejects.toThrow("Invalid file type");
     });
   });
@@ -1241,7 +1314,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "store1@example.com",
         "Store User 1",
-        "Store Household 1"
+        "Store Household 1",
       );
       const { caller } = await createTestContext(user.id, householdId);
 
@@ -1259,7 +1332,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "store2@example.com",
         "Store User 2",
-        "Store Household 2"
+        "Store Household 2",
       );
       await createTestStore(householdId, { name: "Store A" });
       await createTestStore(householdId, { name: "Store B" });
@@ -1274,7 +1347,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "store3@example.com",
         "Store User 3",
-        "Store Household 3"
+        "Store Household 3",
       );
       await createTestStore(householdId, { name: "Special Store" });
       const { caller } = await createTestContext(user.id, householdId);
@@ -1288,7 +1361,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "store4@example.com",
         "Store User 4",
-        "Store Household 4"
+        "Store Household 4",
       );
       const store = await createTestStore(householdId, { name: "Old Name" });
       const { caller } = await createTestContext(user.id, householdId);
@@ -1305,7 +1378,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "store5@example.com",
         "Store User 5",
-        "Store Household 5"
+        "Store Household 5",
       );
       const store = await createTestStore(householdId, { name: "To Delete" });
       const { caller } = await createTestContext(user.id, householdId);
@@ -1317,12 +1390,21 @@ describe("tRPC Router Integration Tests", () => {
     });
 
     it("should reject accessing store from different household", async () => {
-      const { householdId: household1 } =
-        await createTestUserWithHousehold("store6a@example.com", "User 1", "Household 1");
+      const { householdId: household1 } = await createTestUserWithHousehold(
+        "store6a@example.com",
+        "User 1",
+        "Household 1",
+      );
       const { user: user2, householdId: household2 } =
-        await createTestUserWithHousehold("store6b@example.com", "User 2", "Household 2");
+        await createTestUserWithHousehold(
+          "store6b@example.com",
+          "User 2",
+          "Household 2",
+        );
 
-      const store = await createTestStore(household1, { name: "Private Store" });
+      const store = await createTestStore(household1, {
+        name: "Private Store",
+      });
       const { caller } = await createTestContext(user2.id, household2);
 
       // This should either return empty list or not include the store
@@ -1336,7 +1418,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "price1@example.com",
         "Price User 1",
-        "Price Household 1"
+        "Price Household 1",
       );
       const product = await createTestProduct(householdId);
       const store = await createTestStore(householdId);
@@ -1360,7 +1442,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "price2@example.com",
         "Price User 2",
-        "Price Household 2"
+        "Price Household 2",
       );
       const store = await createTestStore(householdId);
       const { caller } = await createTestContext(user.id, householdId);
@@ -1371,7 +1453,7 @@ describe("tRPC Router Integration Tests", () => {
           storeId: store.id,
           price: 9.99,
           unit: "unit",
-        })
+        }),
       ).rejects.toThrow("Product not found");
     });
 
@@ -1379,7 +1461,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "price3@example.com",
         "Price User 3",
-        "Price Household 3"
+        "Price Household 3",
       );
       const product = await createTestProduct(householdId);
       const { caller } = await createTestContext(user.id, householdId);
@@ -1390,7 +1472,7 @@ describe("tRPC Router Integration Tests", () => {
           storeId: "invalid-store-id",
           price: 9.99,
           unit: "unit",
-        })
+        }),
       ).rejects.toThrow("Store not found");
     });
 
@@ -1398,7 +1480,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "price4@example.com",
         "Price User 4",
-        "Price Household 4"
+        "Price Household 4",
       );
       const product = await createTestProduct(householdId);
       const store = await createTestStore(householdId);
@@ -1426,7 +1508,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "price5@example.com",
         "Price User 5",
-        "Price Household 5"
+        "Price Household 5",
       );
       const product = await createTestProduct(householdId);
       const store = await createTestStore(householdId);
@@ -1454,7 +1536,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "shop1@example.com",
         "Shopping User 1",
-        "Shopping Household 1"
+        "Shopping Household 1",
       );
       const { caller } = await createTestContext(user.id, householdId);
 
@@ -1471,7 +1553,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "shop2@example.com",
         "Shopping User 2",
-        "Shopping Household 2"
+        "Shopping Household 2",
       );
       await createTestShoppingList(householdId, { name: "List A" });
       await createTestShoppingList(householdId, { name: "List B" });
@@ -1487,9 +1569,11 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "shop3@example.com",
         "Shopping User 3",
-        "Shopping Household 3"
+        "Shopping Household 3",
       );
-      const list = await createTestShoppingList(householdId, { name: "Test List" });
+      const list = await createTestShoppingList(householdId, {
+        name: "Test List",
+      });
       const { caller } = await createTestContext(user.id, householdId);
 
       const result = await caller.shopping.getById({ id: list.id });
@@ -1502,11 +1586,14 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "shop4@example.com",
         "Shopping User 4",
-        "Shopping Household 4"
+        "Shopping Household 4",
       );
       const list = await createTestShoppingList(householdId);
       const product = await createTestProduct(householdId);
-      const { caller, envelope } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(
+        user.id,
+        householdId,
+      );
 
       const result = await caller.shopping.addItem({
         ...envelope(),
@@ -1525,11 +1612,16 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "shop5@example.com",
         "Shopping User 5",
-        "Shopping Household 5"
+        "Shopping Household 5",
       );
       const list = await createTestShoppingList(householdId);
-      const { caller, envelope } = await createTestContext(user.id, householdId);
-      const product = await createTestProduct(householdId, { name: "Bombillas LED" });
+      const { caller, envelope } = await createTestContext(
+        user.id,
+        householdId,
+      );
+      const product = await createTestProduct(householdId, {
+        name: "Bombillas LED",
+      });
 
       const result = await caller.shopping.addItem({
         ...envelope(),
@@ -1550,11 +1642,14 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "shop6@example.com",
         "Shopping User 6",
-        "Shopping Household 6"
+        "Shopping Household 6",
       );
       const list = await createTestShoppingList(householdId);
       const product = await createTestProduct(householdId);
-      const { caller, envelope } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(
+        user.id,
+        householdId,
+      );
 
       // Add item
       const item = await caller.shopping.addItem({
@@ -1588,11 +1683,14 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "shop7@example.com",
         "Shopping User 7",
-        "Shopping Household 7"
+        "Shopping Household 7",
       );
       const list = await createTestShoppingList(householdId);
       const product = await createTestProduct(householdId);
-      const { caller, envelope } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(
+        user.id,
+        householdId,
+      );
 
       const item = await caller.shopping.addItem({
         ...envelope(),
@@ -1602,7 +1700,9 @@ describe("tRPC Router Integration Tests", () => {
       });
 
       const result = await caller.shopping.removeItem({
-        ...envelope(), id: item.id });
+        ...envelope(),
+        id: item.id,
+      });
 
       expect(result.success).toBe(true);
     });
@@ -1611,9 +1711,11 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "shop8@example.com",
         "Shopping User 8",
-        "Shopping Household 8"
+        "Shopping Household 8",
       );
-      const list = await createTestShoppingList(householdId, { name: "Old Name" });
+      const list = await createTestShoppingList(householdId, {
+        name: "Old Name",
+      });
       const { caller } = await createTestContext(user.id, householdId);
 
       const result = await caller.shopping.update({
@@ -1628,22 +1730,26 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "shop9@example.com",
         "Shopping User 9",
-        "Shopping Household 9"
+        "Shopping Household 9",
       );
-      const list = await createTestShoppingList(householdId, { name: "To Delete" });
+      const list = await createTestShoppingList(householdId, {
+        name: "To Delete",
+      });
       const { caller } = await createTestContext(user.id, householdId);
 
       const result = await caller.shopping.delete({ id: list.id });
 
       expect(result.success).toBe(true);
-      testData.shoppingLists = testData.shoppingLists.filter((id) => id !== list.id);
+      testData.shoppingLists = testData.shoppingLists.filter(
+        (id) => id !== list.id,
+      );
     });
 
     it("should generate auto list from low stock", async () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "shop10@example.com",
         "Shopping User 10",
-        "Shopping Household 10"
+        "Shopping Household 10",
       );
       const product = await createTestProduct(householdId, {
         name: "Low Stock Product",
@@ -1651,13 +1757,15 @@ describe("tRPC Router Integration Tests", () => {
       });
 
       // Add some low stock
-      const { caller, envelope } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(
+        user.id,
+        householdId,
+      );
       const entry = await caller.inventory.addStock({
         ...envelope(),
         productId: product.id,
         quantity: 3,
         unit: "unit",
-
       });
       testData.stockEntries.push(entry.id);
 
@@ -1674,7 +1782,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "shop11@example.com",
         "Shopping User 11",
-        "Shopping Household 11"
+        "Shopping Household 11",
       );
 
       // Create auto list
@@ -1697,45 +1805,54 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "shop12@example.com",
         "Shopping User 12",
-        "Shopping Household 12"
+        "Shopping Household 12",
       );
       const product = await createTestProduct(householdId);
-      const { caller, envelope } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(
+        user.id,
+        householdId,
+      );
 
       await expect(
         caller.shopping.addItem({
-        ...envelope(),
+          ...envelope(),
           shoppingListId: "invalid-list-id",
           productId: product.id,
           quantity: 1,
-        })
+        }),
       ).rejects.toThrow("Shopping list not found");
     });
 
     it("should reject adding product from different household", async () => {
-      const { user: user1, householdId: household1 } = await createTestUserWithHousehold(
-        "shop13a@example.com",
-        "User 1",
-        "Household 1"
-      );
+      const { user: user1, householdId: household1 } =
+        await createTestUserWithHousehold(
+          "shop13a@example.com",
+          "User 1",
+          "Household 1",
+        );
       const { householdId: household2 } = await createTestUserWithHousehold(
         "shop13b@example.com",
         "User 2",
-        "Household 2"
+        "Household 2",
       );
 
       const list = await createTestShoppingList(household1);
-      const product = await createTestProduct(household2, { name: "Private Product" });
+      const product = await createTestProduct(household2, {
+        name: "Private Product",
+      });
 
-      const { caller, envelope } = await createTestContext(user1.id, household1);
+      const { caller, envelope } = await createTestContext(
+        user1.id,
+        household1,
+      );
 
       await expect(
         caller.shopping.addItem({
-        ...envelope(),
+          ...envelope(),
           shoppingListId: list.id,
           productId: product.id,
           quantity: 1,
-        })
+        }),
       ).rejects.toThrow("Product not found");
     });
   });
@@ -1753,7 +1870,7 @@ describe("tRPC Router Integration Tests", () => {
       await expectCode(caller.store.list({}), "UNAUTHORIZED");
       await expectCode(
         caller.price.getHistory({ productId: "test", days: 30 }),
-        "UNAUTHORIZED"
+        "UNAUTHORIZED",
       );
       await expectCode(caller.shopping.list({}), "UNAUTHORIZED");
     });
@@ -1761,30 +1878,44 @@ describe("tRPC Router Integration Tests", () => {
     it("should require household membership for household-scoped operations", async () => {
       const { user } = await createTestUserWithoutHousehold(
         "nohousehold@example.com",
-        "No Household User"
+        "No Household User",
       );
       const { caller } = await createTestContext(user.id);
 
       // These should fail without household membership. PRECONDITION_FAILED
       // rather than FORBIDDEN: nothing is wrong with the account, it is
       // missing a household, and that is a state the client can resolve.
-      await expectCode(caller.product.create({ name: "Test" }), "PRECONDITION_FAILED");
-      await expectCode(caller.inventory.getStockOverview({}), "PRECONDITION_FAILED");
-      await expectCode(caller.location.create({ name: "Test" }), "PRECONDITION_FAILED");
-      await expectCode(caller.store.create({ name: "Test" }), "PRECONDITION_FAILED");
+      await expectCode(
+        caller.product.create({ name: "Test" }),
+        "PRECONDITION_FAILED",
+      );
+      await expectCode(
+        caller.inventory.getStockOverview({}),
+        "PRECONDITION_FAILED",
+      );
+      await expectCode(
+        caller.location.create({ name: "Test" }),
+        "PRECONDITION_FAILED",
+      );
+      await expectCode(
+        caller.store.create({ name: "Test" }),
+        "PRECONDITION_FAILED",
+      );
     });
 
     it("should isolate data between households", async () => {
-      const { user: user1, householdId: household1 } = await createTestUserWithHousehold(
-        "isolate1@example.com",
-        "User 1",
-        "Household 1"
-      );
-      const { user: user2, householdId: household2 } = await createTestUserWithHousehold(
-        "isolate2@example.com",
-        "User 2",
-        "Household 2"
-      );
+      const { user: user1, householdId: household1 } =
+        await createTestUserWithHousehold(
+          "isolate1@example.com",
+          "User 1",
+          "Household 1",
+        );
+      const { user: user2, householdId: household2 } =
+        await createTestUserWithHousehold(
+          "isolate2@example.com",
+          "User 2",
+          "Household 2",
+        );
 
       // Create product in household 1
       const product1 = await createTestProduct(household1, {
@@ -1815,7 +1946,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "edge1@example.com",
         "Edge User 1",
-        "Edge Household 1"
+        "Edge Household 1",
       );
       const { caller } = await createTestContext(user.id, householdId);
 
@@ -1829,12 +1960,12 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "edge2@example.com",
         "Edge User 2",
-        "Edge Household 2"
+        "Edge Household 2",
       );
       const { caller } = await createTestContext(user.id, householdId);
 
       await expect(
-        caller.product.getById({ id: "nonexistent-id" })
+        caller.product.getById({ id: "nonexistent-id" }),
       ).rejects.toThrow("Product not found");
     });
 
@@ -1842,17 +1973,19 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "edge3@example.com",
         "Edge User 3",
-        "Edge Household 3"
+        "Edge Household 3",
       );
       const product = await createTestProduct(householdId);
-      const { caller, envelope } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(
+        user.id,
+        householdId,
+      );
 
       const result = await caller.inventory.addStock({
         ...envelope(),
         productId: product.id,
         quantity: 999999,
         unit: "unit",
-
       });
 
       expect(result.quantity).toBe(999999);
@@ -1863,7 +1996,7 @@ describe("tRPC Router Integration Tests", () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "edge4@example.com",
         "Edge User 4",
-        "Edge Household 4"
+        "Edge Household 4",
       );
       const { caller } = await createTestContext(user.id, householdId);
 

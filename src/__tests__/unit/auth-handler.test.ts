@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  mock,
+  spyOn,
+} from "bun:test";
 import { Prisma } from "@prisma/client";
 import { DEVICE_ID_COOKIE, mintDeviceId } from "@/lib/device";
 import {
@@ -44,7 +52,13 @@ function fakeLimiter(
       calls.push(["consume", limit.prefix, identifier]);
       const answer = consume[limit.prefix];
       if (answer instanceof Error) throw answer;
-      return { allowed: true, remaining: 1, retryAfterSeconds: 0, window: 7, ...answer };
+      return {
+        allowed: true,
+        remaining: 1,
+        retryAfterSeconds: 0,
+        window: 7,
+        ...answer,
+      };
     },
     refund: async (limit, identifier, window) => {
       calls.push(["refund", limit.prefix, identifier, window]);
@@ -61,7 +75,9 @@ function fakeLimiter(
 }
 
 /** A handler that records what reached it and answers `answer`. */
-function fakeHandler(answer: () => Response = () => Response.json({ ok: true })) {
+function fakeHandler(
+  answer: () => Response = () => Response.json({ ok: true }),
+) {
   const seen: Request[] = [];
   const handle = mock(async (req: Request) => {
     seen.push(req);
@@ -70,16 +86,28 @@ function fakeHandler(answer: () => Response = () => Response.json({ ok: true }))
   return { handler: () => handle as AuthEndpointHandler, handle, seen };
 }
 
-function post(path: string, body: string, headers: Record<string, string> = {}): Request {
+function post(
+  path: string,
+  body: string,
+  headers: Record<string, string> = {},
+): Request {
   return new Request(`${BASE}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.9", ...headers },
+    headers: {
+      "content-type": "application/json",
+      "x-forwarded-for": "203.0.113.9",
+      ...headers,
+    },
     body,
   });
 }
 
 const signedIn = () =>
-  Response.json({ redirect: false, token: "raw-token", user: { id: "user-1", email: "a@b.es" } });
+  Response.json({
+    redirect: false,
+    token: "raw-token",
+    user: { id: "user-1", email: "a@b.es" },
+  });
 
 let securityLines: ReturnType<typeof spyOn<Console, "warn">>;
 let errors: ReturnType<typeof spyOn<Console, "error">>;
@@ -149,24 +177,30 @@ describe("which endpoints answer", () => {
   it("passes an allowed read through", async () => {
     const { handler, handle } = fakeHandler(() => Response.json(null));
 
-    const response = await handleAuthRequest(new Request(`${BASE}/get-session`), { handler });
+    const response = await handleAuthRequest(
+      new Request(`${BASE}/get-session`),
+      { handler },
+    );
 
     expect(response.status).toBe(200);
     expect(handle).toHaveBeenCalledTimes(1);
   });
 
   it("answers 503 when the instance refuses its environment", async () => {
-    const response = await handleAuthRequest(new Request(`${BASE}/get-session`), {
-      handler: () => {
-        throw new Error("[auth] unavailable: STOKY_URLS is not set.");
+    const response = await handleAuthRequest(
+      new Request(`${BASE}/get-session`),
+      {
+        handler: () => {
+          throw new Error("[auth] unavailable: STOKY_URLS is not set.");
+        },
       },
-    });
+    );
 
     expect(response.status).toBe(503);
     expect(await response.json()).toMatchObject({ code: "AUTH_UNAVAILABLE" });
-    expect(securityLines.mock.calls.map((call) => String(call[0])).join("\n")).toContain(
-      '"event":"auth.unavailable"',
-    );
+    expect(
+      securityLines.mock.calls.map((call) => String(call[0])).join("\n"),
+    ).toContain('"event":"auth.unavailable"');
   });
 });
 
@@ -175,9 +209,13 @@ describe("what a POST must be", () => {
     const { handler, handle } = fakeHandler();
 
     const response = await handleAuthRequest(
-      post("/sign-in/email", JSON.stringify({ email: "a@b.es", password: "x" }), {
-        "sec-fetch-site": "cross-site",
-      }),
+      post(
+        "/sign-in/email",
+        JSON.stringify({ email: "a@b.es", password: "x" }),
+        {
+          "sec-fetch-site": "cross-site",
+        },
+      ),
       { handler, limiter: fakeLimiter().limiter },
     );
 
@@ -188,9 +226,15 @@ describe("what a POST must be", () => {
   it("is refused 415 unless it is JSON, which no form can send", async () => {
     const { handler, handle } = fakeHandler();
 
-    for (const type of ["text/plain", "application/x-www-form-urlencoded", "multipart/form-data"]) {
+    for (const type of [
+      "text/plain",
+      "application/x-www-form-urlencoded",
+      "multipart/form-data",
+    ]) {
       const response = await handleAuthRequest(
-        post("/sign-in/email", "email=a%40b.es&password=x", { "content-type": type }),
+        post("/sign-in/email", "email=a%40b.es&password=x", {
+          "content-type": type,
+        }),
         { handler, limiter: fakeLimiter().limiter },
       );
       expect(response.status, type).toBe(415);
@@ -200,8 +244,12 @@ describe("what a POST must be", () => {
 
   it("is never cached, refusals included", async () => {
     const { handler } = fakeHandler();
-    const refused = await handleAuthRequest(post("/nowhere", "{}"), { handler });
-    const answered = await handleAuthRequest(new Request(`${BASE}/ok`), { handler });
+    const refused = await handleAuthRequest(post("/nowhere", "{}"), {
+      handler,
+    });
+    const answered = await handleAuthRequest(new Request(`${BASE}/ok`), {
+      handler,
+    });
 
     expect(refused.headers.get("cache-control")).toBe("no-store");
     expect(answered.headers.get("cache-control")).toBe("no-store");
@@ -237,10 +285,15 @@ describe("a password sign-in", () => {
 
   it("is refused 429 with Retry-After when the address has no attempts left", async () => {
     const { handler, handle } = fakeHandler(signedIn);
-    const { limiter } = fakeLimiter({ [ADDRESS]: { allowed: false, retryAfterSeconds: 437 } });
+    const { limiter } = fakeLimiter({
+      [ADDRESS]: { allowed: false, retryAfterSeconds: 437 },
+    });
 
     const response = await handleAuthRequest(
-      post("/sign-in/email", JSON.stringify({ email: "a@b.es", password: "x" })),
+      post(
+        "/sign-in/email",
+        JSON.stringify({ email: "a@b.es", password: "x" }),
+      ),
       { handler, limiter },
     );
 
@@ -252,10 +305,15 @@ describe("a password sign-in", () => {
 
   it("is refused 503 without Retry-After when the limiter cannot be reached", async () => {
     const { handler, handle } = fakeHandler(signedIn);
-    const { limiter } = fakeLimiter({ [ADDRESS]: new RateLimitUnavailableError(new Error("down")) });
+    const { limiter } = fakeLimiter({
+      [ADDRESS]: new RateLimitUnavailableError(new Error("down")),
+    });
 
     const response = await handleAuthRequest(
-      post("/sign-in/email", JSON.stringify({ email: "a@b.es", password: "x" })),
+      post(
+        "/sign-in/email",
+        JSON.stringify({ email: "a@b.es", password: "x" }),
+      ),
       { handler, limiter },
     );
 
@@ -269,10 +327,13 @@ describe("a password sign-in", () => {
     const { handler, handle } = fakeHandler(signedIn);
     const { limiter, calls } = fakeLimiter();
 
-    const response = await handleAuthRequest(post("/sign-in/email", "{not json"), {
-      handler,
-      limiter,
-    });
+    const response = await handleAuthRequest(
+      post("/sign-in/email", "{not json"),
+      {
+        handler,
+        limiter,
+      },
+    );
 
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ code: "INVALID_REQUEST" });
@@ -288,9 +349,13 @@ describe("a password sign-in", () => {
     const { limiter, calls } = fakeLimiter();
 
     await handleAuthRequest(
-      post("/sign-in/email", JSON.stringify({ email: "a@b.es", password: "x" }), {
-        cookie: `${DEVICE_ID_COOKIE}=${deviceId}`,
-      }),
+      post(
+        "/sign-in/email",
+        JSON.stringify({ email: "a@b.es", password: "x" }),
+        {
+          cookie: `${DEVICE_ID_COOKIE}=${deviceId}`,
+        },
+      ),
       { handler, limiter },
     );
 
@@ -306,14 +371,19 @@ describe("a password sign-in", () => {
     const { limiter, calls } = fakeLimiter();
 
     const response = await handleAuthRequest(
-      post("/sign-in/email", JSON.stringify({ email: "a@b.es", password: "x" })),
+      post(
+        "/sign-in/email",
+        JSON.stringify({ email: "a@b.es", password: "x" }),
+      ),
       { handler, limiter },
     );
 
     expect(response.status).toBe(401);
     expect(calls.map(([what]) => what)).not.toContain("refund");
     // And it is on record as a failure, under the account's tag.
-    const written = securityLines.mock.calls.map((call) => String(call[0])).join("\n");
+    const written = securityLines.mock.calls
+      .map((call) => String(call[0]))
+      .join("\n");
     expect(written).toContain('"event":"auth.signin.failed"');
     expect(written).not.toContain("a@b.es");
   });
@@ -321,7 +391,10 @@ describe("a password sign-in", () => {
 
 describe("remember-me", () => {
   const DONT_REMEMBER = "__Secure-stoky.dont_remember";
-  const dontRememberCookie = async () => ({ name: DONT_REMEMBER, secure: true });
+  const dontRememberCookie = async () => ({
+    name: DONT_REMEMBER,
+    secure: true,
+  });
 
   async function signInWithBody(
     body: Record<string, unknown>,
@@ -330,7 +403,11 @@ describe("remember-me", () => {
   ) {
     const { handler, seen } = fakeHandler(answer);
     const response = await handleAuthRequest(
-      post("/sign-in/email", JSON.stringify({ email: "a@b.es", password: "x", ...body }), headers),
+      post(
+        "/sign-in/email",
+        JSON.stringify({ email: "a@b.es", password: "x", ...body }),
+        headers,
+      ),
       { handler, limiter: fakeLimiter().limiter, dontRememberCookie },
     );
     return { response, forwarded: seen[0] };
@@ -347,10 +424,14 @@ describe("remember-me", () => {
       [1, false],
       ["on", false],
     ] as const) {
-      const { forwarded } = await signInWithBody(value === undefined ? {} : { rememberMe: value });
+      const { forwarded } = await signInWithBody(
+        value === undefined ? {} : { rememberMe: value },
+      );
       const label = JSON.stringify(value);
       expect((await forwarded.json()).rememberMe, label).toBe(expected);
-      expect(forwarded.headers.get("x-stoky-remember"), label).toBe(expected ? "1" : "0");
+      expect(forwarded.headers.get("x-stoky-remember"), label).toBe(
+        expected ? "1" : "0",
+      );
     }
   });
 
@@ -362,13 +443,19 @@ describe("remember-me", () => {
   it("never lets a client's header through on any other path", async () => {
     const { handler, seen } = fakeHandler();
     await handleAuthRequest(
-      new Request(`${BASE}/get-session`, { headers: { "x-stoky-remember": "1" } }),
+      new Request(`${BASE}/get-session`, {
+        headers: { "x-stoky-remember": "1" },
+      }),
       { handler },
     );
-    await handleAuthRequest(post("/sign-out", "{}", { "x-stoky-remember": "1" }), { handler });
+    await handleAuthRequest(
+      post("/sign-out", "{}", { "x-stoky-remember": "1" }),
+      { handler },
+    );
 
     expect(seen).toHaveLength(2);
-    for (const request of seen) expect(request.headers.get("x-stoky-remember")).toBeNull();
+    for (const request of seen)
+      expect(request.headers.get("x-stoky-remember")).toBeNull();
   });
 
   it("ticked, takes dont_remember out of what Better Auth reads, and nothing else", async () => {
@@ -376,7 +463,9 @@ describe("remember-me", () => {
       { rememberMe: true },
       { cookie: `stoky_device=abc; ${DONT_REMEMBER}=true.sig; odd; other=1` },
     );
-    expect(forwarded.headers.get("cookie")).toBe("stoky_device=abc; odd; other=1");
+    expect(forwarded.headers.get("cookie")).toBe(
+      "stoky_device=abc; odd; other=1",
+    );
   });
 
   it("ticked, with dont_remember the only cookie, sends none", async () => {
@@ -397,11 +486,17 @@ describe("remember-me", () => {
   it("ticked on plain HTTP, expires it without Secure", async () => {
     const { handler } = fakeHandler(signedIn);
     const response = await handleAuthRequest(
-      post("/sign-in/email", JSON.stringify({ email: "a@b.es", password: "x", rememberMe: true })),
+      post(
+        "/sign-in/email",
+        JSON.stringify({ email: "a@b.es", password: "x", rememberMe: true }),
+      ),
       {
         handler,
         limiter: fakeLimiter().limiter,
-        dontRememberCookie: async () => ({ name: "stoky.dont_remember", secure: false }),
+        dontRememberCookie: async () => ({
+          name: "stoky.dont_remember",
+          secure: false,
+        }),
       },
     );
     expect(response.headers.getSetCookie()).toContain(
@@ -411,7 +506,10 @@ describe("remember-me", () => {
 
   it("unticked, leaves the cookies alone both ways", async () => {
     const cookie = `stoky_device=abc; ${DONT_REMEMBER}=true.sig`;
-    const { response, forwarded } = await signInWithBody({ rememberMe: false }, { cookie });
+    const { response, forwarded } = await signInWithBody(
+      { rememberMe: false },
+      { cookie },
+    );
     expect(forwarded.headers.get("cookie")).toBe(cookie);
     expect(response.headers.getSetCookie()).toEqual([]);
   });
@@ -428,7 +526,10 @@ describe("remember-me", () => {
 describe("what a sign-in ends", () => {
   /** Sessions that record the order things happened in. */
   function fakeSessions(
-    presented: { id: string; userId: string } | null = { id: "s-old", userId: "user-9" },
+    presented: { id: string; userId: string } | null = {
+      id: "s-old",
+      userId: "user-9",
+    },
     tidy: (input: unknown) => Promise<unknown> = async () => 1,
   ) {
     const order: string[] = [];
@@ -470,7 +571,11 @@ describe("what a sign-in ends", () => {
 
     expect(order).toEqual(["presented", "better-auth", "tidy"]);
     expect(tidied).toEqual([
-      { previous: { id: "s-old", userId: "user-9" }, userId: "user-1", newToken: "raw-token" },
+      {
+        previous: { id: "s-old", userId: "user-9" },
+        userId: "user-1",
+        newToken: "raw-token",
+      },
     ]);
     // Read for the tidy, still never handed to the page.
     expect(JSON.stringify(await response.json())).not.toContain("raw-token");
@@ -479,12 +584,21 @@ describe("what a sign-in ends", () => {
   it("finds the token inside the session when the answer carries it there", async () => {
     const { sessions, tidied } = fakeSessions(null);
     const { handler } = fakeHandler(() =>
-      Response.json({ session: { token: "nested-token" }, user: { id: "user-1" } }),
+      Response.json({
+        session: { token: "nested-token" },
+        user: { id: "user-1" },
+      }),
     );
 
-    await handleAuthRequest(signInRequest(), { handler, limiter: fakeLimiter().limiter, sessions });
+    await handleAuthRequest(signInRequest(), {
+      handler,
+      limiter: fakeLimiter().limiter,
+      sessions,
+    });
 
-    expect(tidied).toEqual([{ previous: null, userId: "user-1", newToken: "nested-token" }]);
+    expect(tidied).toEqual([
+      { previous: null, userId: "user-1", newToken: "nested-token" },
+    ]);
   });
 
   it("ends nothing when Better Auth refuses the password", async () => {
@@ -493,7 +607,11 @@ describe("what a sign-in ends", () => {
       Response.json({ code: "INVALID_EMAIL_OR_PASSWORD" }, { status: 401 }),
     );
 
-    await handleAuthRequest(signInRequest(), { handler, limiter: fakeLimiter().limiter, sessions });
+    await handleAuthRequest(signInRequest(), {
+      handler,
+      limiter: fakeLimiter().limiter,
+      sessions,
+    });
 
     expect(order).not.toContain("tidy");
   });
@@ -504,16 +622,26 @@ describe("what a sign-in ends", () => {
       Response.json({ redirect: false, user: { id: "user-1" } }),
     );
 
-    await handleAuthRequest(signInRequest(), { handler, limiter: fakeLimiter().limiter, sessions });
+    await handleAuthRequest(signInRequest(), {
+      handler,
+      limiter: fakeLimiter().limiter,
+      sessions,
+    });
 
     expect(order).not.toContain("tidy");
   });
 
   it("reads nothing for a sign-in refused before Better Auth", async () => {
     const { sessions, order } = fakeSessions();
-    const { limiter } = fakeLimiter({ [ADDRESS]: { allowed: false, retryAfterSeconds: 9 } });
+    const { limiter } = fakeLimiter({
+      [ADDRESS]: { allowed: false, retryAfterSeconds: 9 },
+    });
 
-    await handleAuthRequest(signInRequest(), { handler: fakeHandler(signedIn).handler, limiter, sessions });
+    await handleAuthRequest(signInRequest(), {
+      handler: fakeHandler(signedIn).handler,
+      limiter,
+      sessions,
+    });
 
     expect(order).toEqual([]);
   });
@@ -524,7 +652,10 @@ describe("what a sign-in ends", () => {
     });
     const { handler } = fakeHandler(() => {
       const response = signedIn();
-      response.headers.append("set-cookie", "stoky.session_token=new; Path=/; HttpOnly");
+      response.headers.append(
+        "set-cookie",
+        "stoky.session_token=new; Path=/; HttpOnly",
+      );
       return response;
     });
 
@@ -536,9 +667,9 @@ describe("what a sign-in ends", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.getSetCookie()).toHaveLength(1);
-    expect(errors.mock.calls.map((call) => String(call[0])).join("\n")).toContain(
-      "sign-in tidy failed: Error: database went away",
-    );
+    expect(
+      errors.mock.calls.map((call) => String(call[0])).join("\n"),
+    ).toContain("sign-in tidy failed: Error: database went away");
   });
 
   it("does not write the arguments of a Prisma call that failed the tidy to the log", async () => {
@@ -577,8 +708,12 @@ describe("what a sign-in ends", () => {
     const logged = errors.mock.calls.flat().map(String).join("\n");
     expect(logged).not.toContain("MARKERTOKEN");
     // What is left still says which call failed, and why.
-    expect(logged).toContain("sign-in tidy failed: PrismaClientValidationError (Prisma 6.19.3)");
-    expect(logged).toContain("Invalid `prisma.session.deleteMany()` invocation");
+    expect(logged).toContain(
+      "sign-in tidy failed: PrismaClientValidationError (Prisma 6.19.3)",
+    );
+    expect(logged).toContain(
+      "Invalid `prisma.session.deleteMany()` invocation",
+    );
     expect(logged).toContain("Invalid value for argument `createdAt`");
   });
 });
@@ -588,13 +723,23 @@ describe("what an answer may carry", () => {
     const { handler } = fakeHandler(() =>
       Response.json({
         token: "top-level",
-        session: { id: "s1", token: "nested", expiresAt: "2099-01-01T00:00:00.000Z" },
+        session: {
+          id: "s1",
+          token: "nested",
+          expiresAt: "2099-01-01T00:00:00.000Z",
+        },
         user: { id: "user-1" },
       }),
     );
 
-    const response = await handleAuthRequest(new Request(`${BASE}/get-session`), { handler });
-    const body = (await response.json()) as Record<string, Record<string, unknown>>;
+    const response = await handleAuthRequest(
+      new Request(`${BASE}/get-session`),
+      { handler },
+    );
+    const body = (await response.json()) as Record<
+      string,
+      Record<string, unknown>
+    >;
 
     expect(body.token).toBeUndefined();
     expect(body.session.token).toBeUndefined();
@@ -615,12 +760,16 @@ describe("what an answer may carry", () => {
     );
 
     const response = await handleAuthRequest(
-      new Request(`${BASE}/get-session`, { headers: { cookie: "stoky.session_token=x" } }),
+      new Request(`${BASE}/get-session`, {
+        headers: { cookie: "stoky.session_token=x" },
+      }),
       { handler },
     );
 
     expect(response.headers.get("set-auth-token")).toBeNull();
-    expect(response.headers.get("access-control-expose-headers")).toBe("x-other");
+    expect(response.headers.get("access-control-expose-headers")).toBe(
+      "x-other",
+    );
   });
 
   it("keeps every cookie Better Auth sets", async () => {
@@ -628,11 +777,16 @@ describe("what an answer may carry", () => {
       const headers = new Headers({ "content-type": "application/json" });
       headers.append("set-cookie", "stoky.session_token=a; Path=/; HttpOnly");
       headers.append("set-cookie", "stoky.dont_remember=b; Path=/; HttpOnly");
-      return new Response(JSON.stringify({ user: { id: "user-1" } }), { headers });
+      return new Response(JSON.stringify({ user: { id: "user-1" } }), {
+        headers,
+      });
     });
 
     const response = await handleAuthRequest(
-      post("/sign-in/email", JSON.stringify({ email: "a@b.es", password: "x" })),
+      post(
+        "/sign-in/email",
+        JSON.stringify({ email: "a@b.es", password: "x" }),
+      ),
       { handler, limiter: fakeLimiter().limiter },
     );
 
@@ -651,14 +805,19 @@ describe("the body bound", () => {
 
   it("lets a body of exactly the limit through", async () => {
     const { handler, handle } = fakeHandler();
-    const response = await handleAuthRequest(signOutOf(MAX_AUTH_BODY_BYTES), { handler });
+    const response = await handleAuthRequest(signOutOf(MAX_AUTH_BODY_BYTES), {
+      handler,
+    });
     expect(response.status).toBe(200);
     expect(handle).toHaveBeenCalledTimes(1);
   });
 
   it("refuses one byte more with 413, unread by Better Auth", async () => {
     const { handler, handle } = fakeHandler();
-    const response = await handleAuthRequest(signOutOf(MAX_AUTH_BODY_BYTES + 1), { handler });
+    const response = await handleAuthRequest(
+      signOutOf(MAX_AUTH_BODY_BYTES + 1),
+      { handler },
+    );
     expect(response.status).toBe(413);
     expect(handle).not.toHaveBeenCalled();
   });
@@ -692,7 +851,10 @@ describe("the body bound", () => {
 describe("two-step verification", () => {
   const CHALLENGE = "stoky.two_factor";
   const SESSION = "stoky.session_token";
-  const twoFactorCookies = async () => ({ challenge: CHALLENGE, session: SESSION });
+  const twoFactorCookies = async () => ({
+    challenge: CHALLENGE,
+    session: SESSION,
+  });
 
   /** Sessions that record what the route asked of them. */
   function recordingSessions(presented: { id: string; userId: string } | null) {
@@ -719,14 +881,25 @@ describe("two-step verification", () => {
     });
 
   const challenged = () =>
-    Response.json({ twoFactorRedirect: true, twoFactorMethods: ["totp"] }, {
-      headers: { "set-cookie": `${CHALLENGE}=abc.sig; Max-Age=600; Path=/; HttpOnly` },
-    });
+    Response.json(
+      { twoFactorRedirect: true, twoFactorMethods: ["totp"] },
+      {
+        headers: {
+          "set-cookie": `${CHALLENGE}=abc.sig; Max-Age=600; Path=/; HttpOnly`,
+        },
+      },
+    );
 
   /** Better Auth's answer to a code that signed somebody in. */
   const signedInByCode = () => {
-    const response = Response.json({ token: "raw-token", user: { id: "user-1", email: "ana@example.com" } });
-    response.headers.append("set-cookie", `${SESSION}=new.sig; Path=/; HttpOnly; SameSite=Lax`);
+    const response = Response.json({
+      token: "raw-token",
+      user: { id: "user-1", email: "ana@example.com" },
+    });
+    response.headers.append(
+      "set-cookie",
+      `${SESSION}=new.sig; Path=/; HttpOnly; SameSite=Lax`,
+    );
     response.headers.append("set-cookie", `${CHALLENGE}=; Max-Age=0; Path=/`);
     return response;
   };
@@ -738,12 +911,19 @@ describe("two-step verification", () => {
     it("settles the charge, ends the presented session and is logged as challenged", async () => {
       const { handler } = fakeHandler(challenged);
       const { limiter, calls } = fakeLimiter();
-      const { sessions, asked } = recordingSessions({ id: "s-old", userId: "user-9" });
+      const { sessions, asked } = recordingSessions({
+        id: "s-old",
+        userId: "user-9",
+      });
 
       const response = await handleAuthRequest(
-        post("/sign-in/email", JSON.stringify({ email: "a@b.es", password: "x" }), {
-          cookie: `${SESSION}=old.sig`,
-        }),
+        post(
+          "/sign-in/email",
+          JSON.stringify({ email: "a@b.es", password: "x" }),
+          {
+            cookie: `${SESSION}=old.sig`,
+          },
+        ),
         { handler, limiter, sessions },
       );
 
@@ -754,7 +934,9 @@ describe("two-step verification", () => {
       expect(kinds).toContain("refund");
       // But the browser is not a known device yet: it has not got in.
       expect(kinds).not.toContain("rememberDevice");
-      expect(asked).toEqual([["end", { id: "s-old", userId: "user-9" }, expect.any(String)]]);
+      expect(asked).toEqual([
+        ["end", { id: "s-old", userId: "user-9" }, expect.any(String)],
+      ]);
       const written = events().map((line) => line.event);
       expect(written).toContain("auth.signin.challenged");
       expect(written).not.toContain("auth.signin.succeeded");
@@ -765,8 +947,15 @@ describe("two-step verification", () => {
       const { sessions, asked } = recordingSessions(null);
 
       await handleAuthRequest(
-        post("/sign-in/email", JSON.stringify({ email: "a@b.es", password: "x" })),
-        { handler: fakeHandler(challenged).handler, limiter: fakeLimiter().limiter, sessions },
+        post(
+          "/sign-in/email",
+          JSON.stringify({ email: "a@b.es", password: "x" }),
+        ),
+        {
+          handler: fakeHandler(challenged).handler,
+          limiter: fakeLimiter().limiter,
+          sessions,
+        },
       );
 
       expect(asked).toEqual([]);
@@ -775,13 +964,20 @@ describe("two-step verification", () => {
 
   describe("the second step", () => {
     it("reaches Better Auth with the code and nothing else", async () => {
-      for (const path of ["/two-factor/verify-totp", "/two-factor/verify-backup-code"]) {
+      for (const path of [
+        "/two-factor/verify-totp",
+        "/two-factor/verify-backup-code",
+      ]) {
         const { handler, seen } = fakeHandler(signedInByCode);
 
         await handleAuthRequest(
           post(
             `${path}?callbackURL=https://evil.example`,
-            JSON.stringify({ code: "123456", trustDevice: true, disableSession: true }),
+            JSON.stringify({
+              code: "123456",
+              trustDevice: true,
+              disableSession: true,
+            }),
             { cookie: `${CHALLENGE}=abc.sig`, "x-stoky-remember": "1" },
           ),
           { handler, limiter: fakeLimiter().limiter, twoFactorCookies },
@@ -797,11 +993,16 @@ describe("two-step verification", () => {
     it("is charged against the address alone", async () => {
       const { limiter, calls } = fakeLimiter();
 
-      await handleAuthRequest(code("/two-factor/verify-totp", { code: "123456" }), {
-        handler: fakeHandler(() => Response.json({ code: "INVALID_CODE" }, { status: 401 })).handler,
-        limiter,
-        twoFactorCookies,
-      });
+      await handleAuthRequest(
+        code("/two-factor/verify-totp", { code: "123456" }),
+        {
+          handler: fakeHandler(() =>
+            Response.json({ code: "INVALID_CODE" }, { status: 401 }),
+          ).handler,
+          limiter,
+          twoFactorCookies,
+        },
+      );
 
       expect(calls.filter(([what]) => what === "consume")).toEqual([
         ["consume", ADDRESS, "203.0.113.9"],
@@ -810,13 +1011,18 @@ describe("two-step verification", () => {
 
     it("is refused 429 before Better Auth when the address has no attempts left", async () => {
       const { handler, handle } = fakeHandler(signedInByCode);
-      const { limiter } = fakeLimiter({ [ADDRESS]: { allowed: false, retryAfterSeconds: 12 } });
-
-      const response = await handleAuthRequest(code("/two-factor/verify-totp", { code: "123456" }), {
-        handler,
-        limiter,
-        twoFactorCookies,
+      const { limiter } = fakeLimiter({
+        [ADDRESS]: { allowed: false, retryAfterSeconds: 12 },
       });
+
+      const response = await handleAuthRequest(
+        code("/two-factor/verify-totp", { code: "123456" }),
+        {
+          handler,
+          limiter,
+          twoFactorCookies,
+        },
+      );
 
       expect(response.status).toBe(429);
       expect(response.headers.get("retry-after")).toBe("12");
@@ -827,9 +1033,15 @@ describe("two-step verification", () => {
       const { handler, handle } = fakeHandler(signedInByCode);
       const { limiter, calls } = fakeLimiter();
 
-      for (const body of ["{not json", JSON.stringify({ code: 123456 }), JSON.stringify({})]) {
+      for (const body of [
+        "{not json",
+        JSON.stringify({ code: 123456 }),
+        JSON.stringify({}),
+      ]) {
         const response = await handleAuthRequest(
-          post("/two-factor/verify-totp", body, { cookie: `${CHALLENGE}=abc.sig` }),
+          post("/two-factor/verify-totp", body, {
+            cookie: `${CHALLENGE}=abc.sig`,
+          }),
           { handler, limiter, twoFactorCookies },
         );
         expect(response.status, body).toBe(400);
@@ -850,8 +1062,17 @@ describe("two-step verification", () => {
         const { sessions, asked } = recordingSessions(null);
 
         const response = await handleAuthRequest(
-          code(path, { code: "123456" }, `${CHALLENGE}=abc.sig; ${DEVICE_ID_COOKIE}=${deviceId}`),
-          { handler: fakeHandler(signedInByCode).handler, limiter, sessions, twoFactorCookies },
+          code(
+            path,
+            { code: "123456" },
+            `${CHALLENGE}=abc.sig; ${DEVICE_ID_COOKIE}=${deviceId}`,
+          ),
+          {
+            handler: fakeHandler(signedInByCode).handler,
+            limiter,
+            sessions,
+            twoFactorCookies,
+          },
         );
 
         expect(response.status).toBe(200);
@@ -863,15 +1084,23 @@ describe("two-step verification", () => {
         ]);
         // The presented session ended at the password step; the tidy is the
         // account's expired rows and the cap, never the new session.
-        expect(asked).toEqual([["tidy", { previous: null, userId: "user-1", newToken: "raw-token" }]]);
-        expect(events().find((line) => line.event === "auth.signin.succeeded")).toMatchObject({
+        expect(asked).toEqual([
+          ["tidy", { previous: null, userId: "user-1", newToken: "raw-token" }],
+        ]);
+        expect(
+          events().find((line) => line.event === "auth.signin.succeeded"),
+        ).toMatchObject({
           userId: "user-1",
           method,
           address: "203.0.113.9",
         });
         // The token is read for the tidy and still never handed to the page.
-        expect(JSON.stringify(await response.json())).not.toContain("raw-token");
-        expect(securityLines.mock.calls.join("\n")).not.toContain("ana@example.com");
+        expect(JSON.stringify(await response.json())).not.toContain(
+          "raw-token",
+        );
+        expect(securityLines.mock.calls.join("\n")).not.toContain(
+          "ana@example.com",
+        );
       }
     });
 
@@ -879,50 +1108,79 @@ describe("two-step verification", () => {
       const { limiter, calls } = fakeLimiter();
       const { sessions, asked } = recordingSessions(null);
 
-      await handleAuthRequest(code("/two-factor/verify-totp", { code: "123456" }, ""), {
-        handler: fakeHandler(signedInByCode).handler,
-        limiter,
-        sessions,
-        twoFactorCookies,
-      });
+      await handleAuthRequest(
+        code("/two-factor/verify-totp", { code: "123456" }, ""),
+        {
+          handler: fakeHandler(signedInByCode).handler,
+          limiter,
+          sessions,
+          twoFactorCookies,
+        },
+      );
 
       expect(calls.map(([what]) => what)).not.toContain("refund");
       expect(asked).toEqual([]);
-      expect(events().map((line) => line.event)).not.toContain("auth.signin.succeeded");
+      expect(events().map((line) => line.event)).not.toContain(
+        "auth.signin.succeeded",
+      );
     });
 
     it("is not a sign-in when the answer sets no session cookie", async () => {
       const { limiter, calls } = fakeLimiter();
       const { sessions, asked } = recordingSessions(null);
 
-      await handleAuthRequest(code("/two-factor/verify-totp", { code: "123456" }), {
-        handler: fakeHandler(() =>
-          Response.json({ token: "raw-token", user: { id: "user-1", email: "ana@example.com" } }),
-        ).handler,
-        limiter,
-        sessions,
-        twoFactorCookies,
-      });
+      await handleAuthRequest(
+        code("/two-factor/verify-totp", { code: "123456" }),
+        {
+          handler: fakeHandler(() =>
+            Response.json({
+              token: "raw-token",
+              user: { id: "user-1", email: "ana@example.com" },
+            }),
+          ).handler,
+          limiter,
+          sessions,
+          twoFactorCookies,
+        },
+      );
 
       expect(calls.map(([what]) => what)).not.toContain("refund");
       expect(asked).toEqual([]);
-      expect(events().map((line) => line.event)).not.toContain("auth.signin.succeeded");
+      expect(events().map((line) => line.event)).not.toContain(
+        "auth.signin.succeeded",
+      );
     });
 
     it("is an enrolment when a signed-in session's first code re-creates it", async () => {
-      const { sessions, asked } = recordingSessions({ id: "s-1", userId: "user-1" });
+      const { sessions, asked } = recordingSessions({
+        id: "s-1",
+        userId: "user-1",
+      });
 
       await handleAuthRequest(
-        code("/two-factor/verify-totp", { code: "123456" }, `${SESSION}=old.sig`),
-        { handler: fakeHandler(signedInByCode).handler, limiter: fakeLimiter().limiter, sessions, twoFactorCookies },
+        code(
+          "/two-factor/verify-totp",
+          { code: "123456" },
+          `${SESSION}=old.sig`,
+        ),
+        {
+          handler: fakeHandler(signedInByCode).handler,
+          limiter: fakeLimiter().limiter,
+          sessions,
+          twoFactorCookies,
+        },
       );
 
       expect(asked).toEqual([]);
       const written = events();
-      expect(written.find((line) => line.event === "auth.twofactor.enabled")).toMatchObject({
+      expect(
+        written.find((line) => line.event === "auth.twofactor.enabled"),
+      ).toMatchObject({
         userId: "user-1",
       });
-      expect(written.map((line) => line.event)).not.toContain("auth.signin.succeeded");
+      expect(written.map((line) => line.event)).not.toContain(
+        "auth.signin.succeeded",
+      );
     });
 
     it("charges a signed-in session's code to its re-entry budgets, never sign-in's address", async () => {
@@ -936,8 +1194,17 @@ describe("two-step verification", () => {
       ] as const) {
         const { limiter, calls } = fakeLimiter();
         await handleAuthRequest(
-          code("/two-factor/verify-totp", { code: "123456" }, `${SESSION}=old.sig`),
-          { handler: fakeHandler(answer).handler, limiter, sessions, twoFactorCookies },
+          code(
+            "/two-factor/verify-totp",
+            { code: "123456" },
+            `${SESSION}=old.sig`,
+          ),
+          {
+            handler: fakeHandler(answer).handler,
+            limiter,
+            sessions,
+            twoFactorCookies,
+          },
         );
 
         expect(calls.filter(([what]) => what === "consume")).toEqual([
@@ -955,11 +1222,18 @@ describe("two-step verification", () => {
       const { sessions } = recordingSessions({ id: "s-1", userId: "user-1" });
       const { handler, handle } = fakeHandler(signedInByCode);
       const { limiter } = fakeLimiter({
-        [reauthAccountRateLimit().prefix]: { allowed: false, retryAfterSeconds: 42 },
+        [reauthAccountRateLimit().prefix]: {
+          allowed: false,
+          retryAfterSeconds: 42,
+        },
       });
 
       const response = await handleAuthRequest(
-        code("/two-factor/verify-totp", { code: "123456" }, `${SESSION}=old.sig`),
+        code(
+          "/two-factor/verify-totp",
+          { code: "123456" },
+          `${SESSION}=old.sig`,
+        ),
         { handler, limiter, sessions, twoFactorCookies },
       );
 
@@ -970,11 +1244,22 @@ describe("two-step verification", () => {
 
     it("leaves sign-in's address budget alone when the address has none left and a session enrols", async () => {
       const { sessions } = recordingSessions({ id: "s-1", userId: "user-1" });
-      const { limiter } = fakeLimiter({ [ADDRESS]: { allowed: false, retryAfterSeconds: 9 } });
+      const { limiter } = fakeLimiter({
+        [ADDRESS]: { allowed: false, retryAfterSeconds: 9 },
+      });
 
       const response = await handleAuthRequest(
-        code("/two-factor/verify-totp", { code: "123456" }, `${SESSION}=old.sig`),
-        { handler: fakeHandler(signedInByCode).handler, limiter, sessions, twoFactorCookies },
+        code(
+          "/two-factor/verify-totp",
+          { code: "123456" },
+          `${SESSION}=old.sig`,
+        ),
+        {
+          handler: fakeHandler(signedInByCode).handler,
+          limiter,
+          sessions,
+          twoFactorCookies,
+        },
       );
 
       expect(response.status).toBe(200);
@@ -992,16 +1277,25 @@ describe("two-step verification", () => {
       for (const [status, refusal, event] of cases) {
         securityLines.mockClear();
 
-        const response = await handleAuthRequest(code("/two-factor/verify-totp", { code: "123456" }), {
-          handler: fakeHandler(() => Response.json({ code: refusal }, { status })).handler,
-          limiter: fakeLimiter().limiter,
-          twoFactorCookies,
-        });
+        const response = await handleAuthRequest(
+          code("/two-factor/verify-totp", { code: "123456" }),
+          {
+            handler: fakeHandler(() =>
+              Response.json({ code: refusal }, { status }),
+            ).handler,
+            limiter: fakeLimiter().limiter,
+            twoFactorCookies,
+          },
+        );
 
         expect(response.status, refusal).toBe(status);
-        const twoFactor = events().filter((line) => line.event.startsWith("auth.twofactor."));
+        const twoFactor = events().filter((line) =>
+          line.event.startsWith("auth.twofactor."),
+        );
         // The guard writes `unreadable` itself, inside Better Auth.
-        expect(twoFactor, refusal).toEqual(event ? [expect.objectContaining({ event, code: refusal })] : []);
+        expect(twoFactor, refusal).toEqual(
+          event ? [expect.objectContaining({ event, code: refusal })] : [],
+        );
       }
     });
   });
@@ -1018,7 +1312,9 @@ describe("a change to two-step verification", () => {
   const SESSION = { id: "s-kitchen", userId: "user-kitchen" };
 
   /** Sessions that present `presented` and are never asked to end anything. */
-  function presenting(presented: { id: string; userId: string } | null): SignInSessions {
+  function presenting(
+    presented: { id: string; userId: string } | null,
+  ): SignInSessions {
     return {
       presented: async () => presented,
       tidy: async () => {
@@ -1039,22 +1335,38 @@ describe("a change to two-step verification", () => {
       }
     });
 
-  const change = (path: string, body: unknown = { password: "cocina despensa" }) =>
+  const change = (
+    path: string,
+    body: unknown = { password: "cocina despensa" },
+  ) =>
     post(path, JSON.stringify(body), { cookie: "stoky.session_token=abc.sig" });
 
   it("reaches Better Auth with the password and nothing else", async () => {
     for (const path of PATHS) {
-      const { handler, seen } = fakeHandler(() => Response.json({ status: true }));
+      const { handler, seen } = fakeHandler(() =>
+        Response.json({ status: true }),
+      );
 
       const response = await handleAuthRequest(
-        change(path, { password: "cocina despensa", issuer: "Otro", method: "otp", trustDevice: true }),
-        { handler, limiter: fakeLimiter().limiter, sessions: presenting(SESSION) },
+        change(path, {
+          password: "cocina despensa",
+          issuer: "Otro",
+          method: "otp",
+          trustDevice: true,
+        }),
+        {
+          handler,
+          limiter: fakeLimiter().limiter,
+          sessions: presenting(SESSION),
+        },
       );
 
       expect(response.status, path).toBe(200);
       expect(seen, path).toHaveLength(1);
       expect(new URL(seen[0].url).pathname, path).toBe(`/api/auth${path}`);
-      expect(await seen[0].json(), path).toEqual({ password: "cocina despensa" });
+      expect(await seen[0].json(), path).toEqual({
+        password: "cocina despensa",
+      });
     }
   });
 
@@ -1100,7 +1412,9 @@ describe("a change to two-step verification", () => {
   it("is refused 429 with Retry-After when either budget is spent", async () => {
     for (const spent of [REAUTH, REAUTH_ACCOUNT]) {
       const { handler, handle } = fakeHandler();
-      const { limiter } = fakeLimiter({ [spent]: { allowed: false, retryAfterSeconds: 42.2 } });
+      const { limiter } = fakeLimiter({
+        [spent]: { allowed: false, retryAfterSeconds: 42.2 },
+      });
 
       const response = await handleAuthRequest(change("/two-factor/disable"), {
         handler,
@@ -1110,14 +1424,18 @@ describe("a change to two-step verification", () => {
 
       expect(response.status, spent).toBe(429);
       expect(response.headers.get("retry-after"), spent).toBe("43");
-      expect(((await response.json()) as { code: string }).code, spent).toBe("REAUTH_RATE_LIMITED");
+      expect(((await response.json()) as { code: string }).code, spent).toBe(
+        "REAUTH_RATE_LIMITED",
+      );
       expect(handle, spent).not.toHaveBeenCalled();
     }
   });
 
   it("is refused 503 when the limiter cannot be reached", async () => {
     const { handler, handle } = fakeHandler();
-    const { limiter } = fakeLimiter({ [REAUTH]: new RateLimitUnavailableError(new Error("down")) });
+    const { limiter } = fakeLimiter({
+      [REAUTH]: new RateLimitUnavailableError(new Error("down")),
+    });
 
     const response = await handleAuthRequest(change("/two-factor/enable"), {
       handler,
@@ -1134,11 +1452,14 @@ describe("a change to two-step verification", () => {
     const { handler, handle } = fakeHandler();
     const { limiter, calls } = fakeLimiter();
 
-    const response = await handleAuthRequest(change("/two-factor/enable", { code: "123456" }), {
-      handler,
-      limiter,
-      sessions: presenting(SESSION),
-    });
+    const response = await handleAuthRequest(
+      change("/two-factor/enable", { code: "123456" }),
+      {
+        handler,
+        limiter,
+        sessions: presenting(SESSION),
+      },
+    );
 
     expect(response.status).toBe(400);
     expect(handle).not.toHaveBeenCalled();
@@ -1149,12 +1470,16 @@ describe("a change to two-step verification", () => {
     const { limiter, calls } = fakeLimiter();
 
     await handleAuthRequest(change("/two-factor/generate-backup-codes"), {
-      handler: fakeHandler(() => Response.json({ status: true, backupCodes: ["A"] })).handler,
+      handler: fakeHandler(() =>
+        Response.json({ status: true, backupCodes: ["A"] }),
+      ).handler,
       limiter,
       sessions: presenting(SESSION),
     });
 
-    expect(calls.filter(([what]) => what === "refund")).toEqual([["refund", REAUTH, SESSION.id, 7]]);
+    expect(calls.filter(([what]) => what === "refund")).toEqual([
+      ["refund", REAUTH, SESSION.id, 7],
+    ]);
   });
 
   it("logs a wrong password as a refused re-entry, and gives nothing back", async () => {
@@ -1163,13 +1488,18 @@ describe("a change to two-step verification", () => {
       const { limiter, calls } = fakeLimiter();
 
       const response = await handleAuthRequest(change("/two-factor/enable"), {
-        handler: fakeHandler(() => Response.json({ code: refusal }, { status: 400 })).handler,
+        handler: fakeHandler(() =>
+          Response.json({ code: refusal }, { status: 400 }),
+        ).handler,
         limiter,
         sessions: presenting(SESSION),
       });
 
       expect(response.status, refusal).toBe(400);
-      expect(calls.map(([what]) => what), refusal).not.toContain("refund");
+      expect(
+        calls.map(([what]) => what),
+        refusal,
+      ).not.toContain("refund");
       expect(events(), refusal).toEqual([
         expect.objectContaining({
           event: "auth.reauth.refused",
@@ -1197,14 +1527,18 @@ describe("a change to two-step verification", () => {
       });
 
       expect(events(), path).toEqual(
-        event ? [expect.objectContaining({ event, userId: SESSION.userId })] : [],
+        event
+          ? [expect.objectContaining({ event, userId: SESSION.userId })]
+          : [],
       );
     }
   });
 
   it("never logs a refusal that is not about the password as one", async () => {
     await handleAuthRequest(change("/two-factor/enable"), {
-      handler: fakeHandler(() => Response.json({ code: "TOTP_ALREADY_ENABLED" }, { status: 400 })).handler,
+      handler: fakeHandler(() =>
+        Response.json({ code: "TOTP_ALREADY_ENABLED" }, { status: 400 }),
+      ).handler,
       limiter: fakeLimiter().limiter,
       sessions: presenting(SESSION),
     });
@@ -1216,11 +1550,19 @@ describe("a change to two-step verification", () => {
 describe("passkeys (D151)", () => {
   const DONT_REMEMBER = "stoky.dont_remember";
   const SESSION = "stoky.session_token";
-  const dontRememberCookie = async () => ({ name: DONT_REMEMBER, secure: false });
+  const dontRememberCookie = async () => ({
+    name: DONT_REMEMBER,
+    secure: false,
+  });
   const OPTIONS = passkeyOptionsRateLimit().prefix;
 
   /** A WebAuthn answer, as the browser sends it; its content is Better Auth's to check. */
-  const assertion = { id: "cred-1", rawId: "cred-1", type: "public-key", response: { signature: "sig" } };
+  const assertion = {
+    id: "cred-1",
+    rawId: "cred-1",
+    type: "public-key",
+    response: { signature: "sig" },
+  };
 
   /** Better Auth's answer to a passkey that signed somebody in. */
   const signedInByPasskey = () => {
@@ -1228,7 +1570,10 @@ describe("passkeys (D151)", () => {
       session: { id: "s-new", token: "raw-token" },
       user: { id: "user-1", email: "ana@example.com" },
     });
-    response.headers.append("set-cookie", `${SESSION}=raw-token.sig; Path=/; HttpOnly; SameSite=Lax`);
+    response.headers.append(
+      "set-cookie",
+      `${SESSION}=raw-token.sig; Path=/; HttpOnly; SameSite=Lax`,
+    );
     return response;
   };
 
@@ -1257,12 +1602,17 @@ describe("passkeys (D151)", () => {
 
   describe("the options of a sign-in", () => {
     it("are charged per address against a budget of their own, and take no query", async () => {
-      const { handler, seen } = fakeHandler(() => Response.json({ challenge: "c" }));
+      const { handler, seen } = fakeHandler(() =>
+        Response.json({ challenge: "c" }),
+      );
       const { limiter, calls } = fakeLimiter();
 
       const response = await handleAuthRequest(
         new Request(`${BASE}/passkey/generate-authenticate-options?context=x`, {
-          headers: { "x-forwarded-for": "203.0.113.9", "x-stoky-remember": "1" },
+          headers: {
+            "x-forwarded-for": "203.0.113.9",
+            "x-stoky-remember": "1",
+          },
         }),
         { handler, limiter },
       );
@@ -1279,12 +1629,18 @@ describe("passkeys (D151)", () => {
       // household's own address: charged, thirty of them would keep everyone
       // there from signing in with a passkey for a quarter of an hour.
       for (const site of ["cross-site", "same-site"]) {
-        const { handler, handle } = fakeHandler(() => Response.json({ challenge: "c" }));
+        const { handler, handle } = fakeHandler(() =>
+          Response.json({ challenge: "c" }),
+        );
         const { limiter, calls } = fakeLimiter();
 
         const response = await handleAuthRequest(
           new Request(`${BASE}/passkey/generate-authenticate-options`, {
-            headers: { "x-forwarded-for": "203.0.113.9", "sec-fetch-site": site, "sec-fetch-dest": "image" },
+            headers: {
+              "x-forwarded-for": "203.0.113.9",
+              "sec-fetch-site": site,
+              "sec-fetch-dest": "image",
+            },
           }),
           { handler, limiter },
         );
@@ -1296,10 +1652,17 @@ describe("passkeys (D151)", () => {
     });
 
     it("are answered to the page's own fetch, and to a client that sends no Fetch Metadata", async () => {
-      for (const headers of [{ "sec-fetch-site": "same-origin" }, {}] as Record<string, string>[]) {
-        const { handler } = fakeHandler(() => Response.json({ challenge: "c" }));
+      for (const headers of [{ "sec-fetch-site": "same-origin" }, {}] as Record<
+        string,
+        string
+      >[]) {
+        const { handler } = fakeHandler(() =>
+          Response.json({ challenge: "c" }),
+        );
         const response = await handleAuthRequest(
-          new Request(`${BASE}/passkey/generate-authenticate-options`, { headers }),
+          new Request(`${BASE}/passkey/generate-authenticate-options`, {
+            headers,
+          }),
           { handler, limiter: fakeLimiter().limiter },
         );
         expect(response.status, JSON.stringify(headers)).toBe(200);
@@ -1308,7 +1671,9 @@ describe("passkeys (D151)", () => {
 
     it("are refused 429 with Retry-After when that budget is spent", async () => {
       const { handler, handle } = fakeHandler();
-      const { limiter } = fakeLimiter({ [OPTIONS]: { allowed: false, retryAfterSeconds: 30 } });
+      const { limiter } = fakeLimiter({
+        [OPTIONS]: { allowed: false, retryAfterSeconds: 30 },
+      });
 
       const response = await handleAuthRequest(
         new Request(`${BASE}/passkey/generate-authenticate-options`),
@@ -1334,9 +1699,17 @@ describe("passkeys (D151)", () => {
       ] as const) {
         const { handler, seen } = fakeHandler(signedInByPasskey);
         await handleAuthRequest(
-          signIn({ response: assertion, rememberMe, createSession: true, callbackURL: "x" }, {
-            "x-stoky-remember": "1",
-          }),
+          signIn(
+            {
+              response: assertion,
+              rememberMe,
+              createSession: true,
+              callbackURL: "x",
+            },
+            {
+              "x-stoky-remember": "1",
+            },
+          ),
           { handler, limiter: fakeLimiter().limiter, dontRememberCookie },
         );
 
@@ -1349,9 +1722,12 @@ describe("passkeys (D151)", () => {
     it("ticked, takes dont_remember out of the request and out of the browser", async () => {
       const { handler, seen } = fakeHandler(signedInByPasskey);
       const response = await handleAuthRequest(
-        signIn({ response: assertion, rememberMe: true }, {
-          cookie: `stoky_device=abc; ${DONT_REMEMBER}=true.sig`,
-        }),
+        signIn(
+          { response: assertion, rememberMe: true },
+          {
+            cookie: `stoky_device=abc; ${DONT_REMEMBER}=true.sig`,
+          },
+        ),
         { handler, limiter: fakeLimiter().limiter, dontRememberCookie },
       );
 
@@ -1363,9 +1739,14 @@ describe("passkeys (D151)", () => {
 
     it("is charged against sign-in's address budget, and refused 429 before Better Auth", async () => {
       const { handler, handle } = fakeHandler(signedInByPasskey);
-      const { limiter, calls } = fakeLimiter({ [ADDRESS]: { allowed: false, retryAfterSeconds: 9 } });
+      const { limiter, calls } = fakeLimiter({
+        [ADDRESS]: { allowed: false, retryAfterSeconds: 9 },
+      });
 
-      const response = await handleAuthRequest(signIn({ response: assertion }), { handler, limiter });
+      const response = await handleAuthRequest(
+        signIn({ response: assertion }),
+        { handler, limiter },
+      );
 
       expect(calls.filter(([what]) => what === "consume")).toEqual([
         ["consume", ADDRESS, "203.0.113.9"],
@@ -1379,26 +1760,42 @@ describe("passkeys (D151)", () => {
       const { handler, handle } = fakeHandler(signedInByPasskey);
       const { limiter, calls } = fakeLimiter();
 
-      for (const body of ["{not json", JSON.stringify({}), JSON.stringify({ response: "x" }), JSON.stringify({ response: [] })]) {
-        const response = await handleAuthRequest(post("/passkey/verify-authentication", body), {
-          handler,
-          limiter,
-        });
+      for (const body of [
+        "{not json",
+        JSON.stringify({}),
+        JSON.stringify({ response: "x" }),
+        JSON.stringify({ response: [] }),
+      ]) {
+        const response = await handleAuthRequest(
+          post("/passkey/verify-authentication", body),
+          {
+            handler,
+            limiter,
+          },
+        );
         expect(response.status, body).toBe(400);
       }
 
       expect(handle).not.toHaveBeenCalled();
       expect(calls.filter(([what]) => what === "consume")).toHaveLength(4);
-      expect(events().filter((line) => line.event === "auth.passkey.signin-failed")).toHaveLength(4);
+      expect(
+        events().filter((line) => line.event === "auth.passkey.signin-failed"),
+      ).toHaveLength(4);
     });
 
     it("is a sign-in when Better Auth issues a session: refunded, remembered, tidied, logged", async () => {
       const deviceId = mintDeviceId();
       const { limiter, calls } = fakeLimiter();
-      const { sessions, asked } = recordingSessions({ id: "s-old", userId: "user-9" });
+      const { sessions, asked } = recordingSessions({
+        id: "s-old",
+        userId: "user-9",
+      });
 
       const response = await handleAuthRequest(
-        signIn({ response: assertion }, { cookie: `${DEVICE_ID_COOKIE}=${deviceId}; ${SESSION}=old` }),
+        signIn(
+          { response: assertion },
+          { cookie: `${DEVICE_ID_COOKIE}=${deviceId}; ${SESSION}=old` },
+        ),
         { handler: fakeHandler(signedInByPasskey).handler, limiter, sessions },
       );
 
@@ -1411,37 +1808,61 @@ describe("passkeys (D151)", () => {
       ]);
       // The presented session ends, as at a password sign-in, and the new one never.
       expect(asked).toEqual([
-        ["tidy", { previous: { id: "s-old", userId: "user-9" }, userId: "user-1", newToken: "raw-token" }],
+        [
+          "tidy",
+          {
+            previous: { id: "s-old", userId: "user-9" },
+            userId: "user-1",
+            newToken: "raw-token",
+          },
+        ],
       ]);
-      expect(events().find((line) => line.event === "auth.signin.succeeded")).toMatchObject({
+      expect(
+        events().find((line) => line.event === "auth.signin.succeeded"),
+      ).toMatchObject({
         userId: "user-1",
         method: "passkey",
         address: "203.0.113.9",
       });
       expect(JSON.stringify(await response.json())).not.toContain("raw-token");
-      expect(securityLines.mock.calls.join("\n")).not.toContain("ana@example.com");
+      expect(securityLines.mock.calls.join("\n")).not.toContain(
+        "ana@example.com",
+      );
     });
 
     it("is logged as failed with Better Auth's code, refunds nothing and ends nothing", async () => {
       const { limiter, calls } = fakeLimiter();
-      const { sessions, asked } = recordingSessions({ id: "s-old", userId: "user-9" });
-
-      const response = await handleAuthRequest(signIn({ response: assertion }), {
-        handler: fakeHandler(() =>
-          Response.json({ code: "USER_VERIFICATION_REQUIRED" }, { status: 401 }),
-        ).handler,
-        limiter,
-        sessions,
+      const { sessions, asked } = recordingSessions({
+        id: "s-old",
+        userId: "user-9",
       });
+
+      const response = await handleAuthRequest(
+        signIn({ response: assertion }),
+        {
+          handler: fakeHandler(() =>
+            Response.json(
+              { code: "USER_VERIFICATION_REQUIRED" },
+              { status: 401 },
+            ),
+          ).handler,
+          limiter,
+          sessions,
+        },
+      );
 
       expect(response.status).toBe(401);
       expect(calls.map(([what]) => what)).toEqual(["consume"]);
       expect(asked).toEqual([]);
-      expect(events().find((line) => line.event === "auth.passkey.signin-failed")).toMatchObject({
+      expect(
+        events().find((line) => line.event === "auth.passkey.signin-failed"),
+      ).toMatchObject({
         code: "USER_VERIFICATION_REQUIRED",
         address: "203.0.113.9",
       });
-      expect(events().map((line) => line.event)).not.toContain("auth.signin.succeeded");
+      expect(events().map((line) => line.event)).not.toContain(
+        "auth.signin.succeeded",
+      );
     });
   });
 
@@ -1450,13 +1871,28 @@ describe("passkeys (D151)", () => {
       for (const [path, body, expected] of [
         [
           "/passkey/verify-registration",
-          { response: { id: "c" }, name: "Móvil", createSession: true, context: "x" },
+          {
+            response: { id: "c" },
+            name: "Móvil",
+            createSession: true,
+            context: "x",
+          },
           { response: { id: "c" }, name: "Móvil" },
         ],
-        ["/passkey/delete-passkey", { id: "pk-1", userId: "someone" }, { id: "pk-1" }],
-        ["/passkey/update-passkey", { id: "pk-1", name: "Portátil", extra: 1 }, { id: "pk-1", name: "Portátil" }],
+        [
+          "/passkey/delete-passkey",
+          { id: "pk-1", userId: "someone" },
+          { id: "pk-1" },
+        ],
+        [
+          "/passkey/update-passkey",
+          { id: "pk-1", name: "Portátil", extra: 1 },
+          { id: "pk-1", name: "Portátil" },
+        ],
       ] as const) {
-        const { handler, seen } = fakeHandler(() => Response.json({ status: true }));
+        const { handler, seen } = fakeHandler(() =>
+          Response.json({ status: true }),
+        );
         await handleAuthRequest(post(path, JSON.stringify(body)), { handler });
         expect(await seen[0].json(), path).toEqual(expected);
       }
@@ -1464,7 +1900,10 @@ describe("passkeys (D151)", () => {
 
     it("answers a body that is not an object 400 without Better Auth", async () => {
       const { handler, handle } = fakeHandler();
-      const response = await handleAuthRequest(post("/passkey/delete-passkey", "[1]"), { handler });
+      const response = await handleAuthRequest(
+        post("/passkey/delete-passkey", "[1]"),
+        { handler },
+      );
       expect(response.status).toBe(400);
       expect(handle).not.toHaveBeenCalled();
     });
@@ -1473,11 +1912,19 @@ describe("passkeys (D151)", () => {
       // Better Auth only trims a name, and the column has no bound: without
       // this a session could store 64 KiB, or a right-to-left override, as a
       // row title.
-      for (const path of ["/passkey/verify-registration", "/passkey/update-passkey"]) {
+      for (const path of [
+        "/passkey/verify-registration",
+        "/passkey/update-passkey",
+      ]) {
         for (const name of ["x".repeat(65), "   ", 7, "‮evil", "a\u0000b"]) {
-          const { handler, handle } = fakeHandler(() => Response.json({ status: true }));
+          const { handler, handle } = fakeHandler(() =>
+            Response.json({ status: true }),
+          );
           const response = await handleAuthRequest(
-            post(path, JSON.stringify({ id: "pk-1", response: { id: "c" }, name })),
+            post(
+              path,
+              JSON.stringify({ id: "pk-1", response: { id: "c" }, name }),
+            ),
             { handler },
           );
           const label = `${path} ${JSON.stringify(name).slice(0, 20)}`;
@@ -1490,11 +1937,24 @@ describe("passkeys (D151)", () => {
     it("forwards a name of exactly the limit, trimmed, and a registration with none", async () => {
       const longest = "ñ".repeat(64);
       for (const [path, body, expected] of [
-        ["/passkey/update-passkey", { id: "pk-1", name: `  ${longest} ` }, { id: "pk-1", name: longest }],
-        ["/passkey/verify-registration", { response: { id: "c" } }, { response: { id: "c" } }],
+        [
+          "/passkey/update-passkey",
+          { id: "pk-1", name: `  ${longest} ` },
+          { id: "pk-1", name: longest },
+        ],
+        [
+          "/passkey/verify-registration",
+          { response: { id: "c" } },
+          { response: { id: "c" } },
+        ],
       ] as const) {
-        const { handler, seen } = fakeHandler(() => Response.json({ status: true }));
-        const response = await handleAuthRequest(post(path, JSON.stringify(body)), { handler });
+        const { handler, seen } = fakeHandler(() =>
+          Response.json({ status: true }),
+        );
+        const response = await handleAuthRequest(
+          post(path, JSON.stringify(body)),
+          { handler },
+        );
         expect(response.status, path).toBe(200);
         expect(await seen[0].json(), path).toEqual(expected);
       }
@@ -1502,17 +1962,26 @@ describe("passkeys (D151)", () => {
 
     it("logs an added and a removed passkey with whose it was, and a refusal not at all", async () => {
       const { sessions } = recordingSessions({ id: "s-1", userId: "user-1" });
-      for (const path of ["/passkey/verify-registration", "/passkey/delete-passkey"]) {
-        await handleAuthRequest(post(path, JSON.stringify({ id: "pk-1", response: {} })), {
-          handler: fakeHandler(() => Response.json({ status: true })).handler,
-          sessions,
-        });
-        await handleAuthRequest(post(path, JSON.stringify({ id: "pk-1", response: {} })), {
-          handler: fakeHandler(() =>
-            Response.json({ code: "STEP_UP_REQUIRED" }, { status: 403 }),
-          ).handler,
-          sessions,
-        });
+      for (const path of [
+        "/passkey/verify-registration",
+        "/passkey/delete-passkey",
+      ]) {
+        await handleAuthRequest(
+          post(path, JSON.stringify({ id: "pk-1", response: {} })),
+          {
+            handler: fakeHandler(() => Response.json({ status: true })).handler,
+            sessions,
+          },
+        );
+        await handleAuthRequest(
+          post(path, JSON.stringify({ id: "pk-1", response: {} })),
+          {
+            handler: fakeHandler(() =>
+              Response.json({ code: "STEP_UP_REQUIRED" }, { status: 403 }),
+            ).handler,
+            sessions,
+          },
+        );
       }
 
       expect(
@@ -1533,7 +2002,9 @@ describe("passkeys (D151)", () => {
         ),
         { handler },
       );
-      expect(new URL(seen[0].url).search).toBe("?authenticatorAttachment=platform");
+      expect(new URL(seen[0].url).search).toBe(
+        "?authenticatorAttachment=platform",
+      );
     });
   });
 });

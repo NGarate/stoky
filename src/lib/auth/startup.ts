@@ -4,7 +4,10 @@ import {
   ignoredAuthVariableWarnings,
 } from "@/lib/auth/environment";
 import { publicUrlWarnings } from "@/lib/auth/public-url";
-import { REGISTRATION_ENV, assertKnownRegistrationMode } from "@/lib/auth/registration";
+import {
+  REGISTRATION_ENV,
+  assertKnownRegistrationMode,
+} from "@/lib/auth/registration";
 import { assertUsableSecret, configuredSecret } from "@/lib/auth/secret";
 import { renamedVariableWarnings } from "@/lib/env-names";
 
@@ -76,8 +79,19 @@ export function refuseToStartMisconfigured(
 
   const secret = configuredSecret(env);
   for (const check of [
-    () => assertUsableSecret(secret.value, env.NODE_ENV, env.NEXT_PHASE, secret.name),
-    () => assertKnownRegistrationMode(env[REGISTRATION_ENV], env.NODE_ENV, env.NEXT_PHASE),
+    () =>
+      assertUsableSecret(
+        secret.value,
+        env.NODE_ENV,
+        env.NEXT_PHASE,
+        secret.name,
+      ),
+    () =>
+      assertKnownRegistrationMode(
+        env[REGISTRATION_ENV],
+        env.NODE_ENV,
+        env.NEXT_PHASE,
+      ),
   ]) {
     try {
       check();

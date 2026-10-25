@@ -44,11 +44,16 @@ class LoginPage {
   }
 
   async fillPassword(password: string) {
-    await this.page.fill('input[type="password"], input[name="password"]', password);
+    await this.page.fill(
+      'input[type="password"], input[name="password"]',
+      password,
+    );
   }
 
   async clickSubmit() {
-    await this.page.click('button[type="submit"], button:has-text("Login"), button:has-text("Iniciar sesión")');
+    await this.page.click(
+      'button[type="submit"], button:has-text("Login"), button:has-text("Iniciar sesión")',
+    );
   }
 
   async login(email: string, password: string) {
@@ -70,7 +75,10 @@ class RegisterPage {
   }
 
   async fillName(name: string) {
-    await this.page.fill('input[name="name"], input[placeholder*="nombre" i]', name);
+    await this.page.fill(
+      'input[name="name"], input[placeholder*="nombre" i]',
+      name,
+    );
   }
 
   async fillEmail(email: string) {
@@ -78,21 +86,33 @@ class RegisterPage {
   }
 
   async fillPassword(password: string) {
-    await this.page.fill('input[type="password"], input[name="password"]', password);
+    await this.page.fill(
+      'input[type="password"], input[name="password"]',
+      password,
+    );
   }
 
   async fillHouseholdName(name: string) {
-    const householdInput = this.page.locator('input[name="householdName"], input[placeholder*="hogar" i]');
+    const householdInput = this.page.locator(
+      'input[name="householdName"], input[placeholder*="hogar" i]',
+    );
     if (await householdInput.isVisible().catch(() => false)) {
       await householdInput.fill(name);
     }
   }
 
   async clickSubmit() {
-    await this.page.click('button[type="submit"], button:has-text("Register"), button:has-text("Registrarse")');
+    await this.page.click(
+      'button[type="submit"], button:has-text("Register"), button:has-text("Registrarse")',
+    );
   }
 
-  async register(name: string, email: string, password: string, householdName?: string) {
+  async register(
+    name: string,
+    email: string,
+    password: string,
+    householdName?: string,
+  ) {
     await this.fillName(name);
     await this.fillEmail(email);
     await this.fillPassword(password);
@@ -138,7 +158,9 @@ class DashboardPage {
    * on the same context has already answered and goes straight there.
    */
   async expectLoaded() {
-    await expect(this.page).toHaveURL(/\/(start|dashboard)/, { timeout: 15_000 });
+    await expect(this.page).toHaveURL(/\/(start|dashboard)/, {
+      timeout: 15_000,
+    });
     if (new URL(this.page.url()).pathname === "/start") {
       await this.page
         .getByRole("button", { name: new RegExp(es.start.dashboard) })
@@ -197,25 +219,34 @@ class ProductsPage {
   }
 
   async fillProductName(name: string) {
-    await this.page.fill('input[name="name"], input[placeholder*="nombre" i]', name);
+    await this.page.fill(
+      'input[name="name"], input[placeholder*="nombre" i]',
+      name,
+    );
   }
 
   async selectCategory(category: string) {
-    const categorySelect = this.page.locator('select[name="category"], input[name="category"]');
+    const categorySelect = this.page.locator(
+      'select[name="category"], input[name="category"]',
+    );
     if (await categorySelect.isVisible().catch(() => false)) {
       await categorySelect.fill(category);
     }
   }
 
   async fillBarcode(barcode: string) {
-    const barcodeInput = this.page.locator('input[name="barcode"], input[placeholder*="código" i]');
+    const barcodeInput = this.page.locator(
+      'input[name="barcode"], input[placeholder*="código" i]',
+    );
     if (await barcodeInput.isVisible().catch(() => false)) {
       await barcodeInput.fill(barcode);
     }
   }
 
   async clickSave() {
-    await this.page.click('button[type="submit"], button:has-text("Save"), button:has-text("Guardar")');
+    await this.page.click(
+      'button[type="submit"], button:has-text("Save"), button:has-text("Guardar")',
+    );
   }
 
   async createProduct(name: string, category?: string, barcode?: string) {
@@ -236,7 +267,9 @@ class ProductsPage {
     const dialog = this.page.getByRole("dialog");
     await expect(dialog).toBeVisible({ timeout: 30_000 });
     await expect(dialog).toContainText(name);
-    await dialog.getByRole("link", { name: es.products.new.successViewProducts }).click();
+    await dialog
+      .getByRole("link", { name: es.products.new.successViewProducts })
+      .click();
     await this.page.waitForURL(/\/products$/);
   }
 
@@ -275,16 +308,22 @@ class InventoryPage {
     await select.waitFor();
     await this.page.waitForFunction(
       () =>
-        (document.querySelector('select[name="productId"]') as HTMLSelectElement | null)
-          ?.options.length ?? 0,
+        (
+          document.querySelector(
+            'select[name="productId"]',
+          ) as HTMLSelectElement | null
+        )?.options.length ?? 0,
       undefined,
       { timeout: 30_000 },
     );
     await this.page.waitForFunction(
       (name) =>
         Array.from(
-          (document.querySelector('select[name="productId"]') as HTMLSelectElement | null)
-            ?.options ?? [],
+          (
+            document.querySelector(
+              'select[name="productId"]',
+            ) as HTMLSelectElement | null
+          )?.options ?? [],
         ).some((o) => o.text.includes(name)),
       productName,
       { timeout: 30_000 },
@@ -373,11 +412,9 @@ class InventoryPage {
   }
 }
 
-
-
 /**
  * E2E Critical Path Tests
- * 
+ *
  * These tests cover the most important user flows:
  * 1. Onboarding Flow: Register → Create household → Choose a screen → Land on dashboard
  * 2. Product Creation: Login → Navigate to products → Add product → Verify in list
@@ -385,39 +422,50 @@ class InventoryPage {
  */
 
 test.describe("Onboarding Flow", () => {
-  test("should complete full onboarding journey", { tag: "@smoke" }, async ({ page }) => {
-    const registerPage = new RegisterPage(page);
-    const dashboardPage = new DashboardPage(page);
+  test(
+    "should complete full onboarding journey",
+    { tag: "@smoke" },
+    async ({ page }) => {
+      const registerPage = new RegisterPage(page);
+      const dashboardPage = new DashboardPage(page);
 
-    const testEmail = generateTestEmail("e2e-onboarding");
-    const testName = generateTestName("E2E Test User");
-    const testPassword = "E2ETestPassword123!";
-    const householdName = generateTestName("E2E Test Household");
+      const testEmail = generateTestEmail("e2e-onboarding");
+      const testName = generateTestName("E2E Test User");
+      const testPassword = "E2ETestPassword123!";
+      const householdName = generateTestName("E2E Test Household");
 
-    // Navigate to registration
-    await registerPage.goto();
-    await expect(page).toHaveURL(/\/register/);
+      // Navigate to registration
+      await registerPage.goto();
+      await expect(page).toHaveURL(/\/register/);
 
-    // Fill registration form with household
-    await registerPage.register(testName, testEmail, testPassword, householdName);
+      // Fill registration form with household
+      await registerPage.register(
+        testName,
+        testEmail,
+        testPassword,
+        householdName,
+      );
 
-    // Asked which screen to start on, then on the one chosen
-    await dashboardPage.expectLoaded();
+      // Asked which screen to start on, then on the one chosen
+      await dashboardPage.expectLoaded();
 
-    // Verify navigation items are present
-    const navItems = await dashboardPage.getNavigationItems();
-    expect(await navItems.count()).toBeGreaterThan(0);
-  });
+      // Verify navigation items are present
+      const navItems = await dashboardPage.getNavigationItems();
+      expect(await navItems.count()).toBeGreaterThan(0);
+    },
+  );
 
   test("should redirect unauthenticated users to login", async ({ page }) => {
     // Try to access dashboard directly
     await page.goto("/dashboard");
-    
+
     // Should be redirected to login
     await expect(page).toHaveURL(/\/login/);
   });
 
-  test("should show error for duplicate email registration", async ({ page }) => {
+  test("should show error for duplicate email registration", async ({
+    page,
+  }) => {
     const registerPage = new RegisterPage(page);
 
     const testEmail = generateTestEmail("e2e-duplicate");
@@ -432,7 +480,11 @@ test.describe("Onboarding Flow", () => {
 
     // Second registration with same email
     await registerPage.goto();
-    await registerPage.register("Different Name", testEmail, "DifferentPassword123!");
+    await registerPage.register(
+      "Different Name",
+      testEmail,
+      "DifferentPassword123!",
+    );
 
     // Should surface the duplicate-email message rather than signing in
     await registerPage.expectErrorMessage(es.auth.emailExists);
@@ -487,7 +539,9 @@ test.describe("Product Creation Flow", () => {
     await productsPage.expectProductInList(productName);
   });
 
-  test("should edit a product and see the change on its detail", async ({ page }) => {
+  test("should edit a product and see the change on its detail", async ({
+    page,
+  }) => {
     const registerPage = new RegisterPage(page);
     const dashboardPage = new DashboardPage(page);
     const productsPage = new ProductsPage(page);
@@ -516,7 +570,9 @@ test.describe("Product Creation Flow", () => {
     await page.waitForURL(/\/products\/[^/]+$/);
 
     // No second screen to go to: the fields are edited where they are read.
-    await page.getByRole("button", { name: es.products.detail.editFields }).click();
+    await page
+      .getByRole("button", { name: es.products.detail.editFields })
+      .click();
 
     const editedName = `${originalName} (editado)`;
     await page.getByLabel(es.products.edit.nameLabel).fill(editedName);
@@ -535,7 +591,9 @@ test.describe("Product Creation Flow", () => {
     await expect(page.getByText("Marca E2E")).toBeVisible();
   });
 
-  test("should delete an unused product, as the household's admin, twice asked", async ({ page }) => {
+  test("should delete an unused product, as the household's admin, twice asked", async ({
+    page,
+  }) => {
     const registerPage = new RegisterPage(page);
     const dashboardPage = new DashboardPage(page);
     const productsPage = new ProductsPage(page);
@@ -568,9 +626,7 @@ test.describe("Product Creation Flow", () => {
     await expect(
       page.getByText(es.products.detail.deleteConfirmBody),
     ).toBeVisible();
-    await page.click(
-      `button:has-text("${es.products.detail.deleteConfirm}")`,
-    );
+    await page.click(`button:has-text("${es.products.detail.deleteConfirm}")`);
 
     // The page described a product that no longer exists, so it leaves — and
     // the confirmation travels with it, because the snackbar is mounted above
@@ -583,13 +639,15 @@ test.describe("Product Creation Flow", () => {
     // And the catalogue no longer lists it.
     await page.goto("/products");
     await settle(page);
-    await expect(page.getByRole("link", { name: productName, exact: true })).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: productName, exact: true }),
+    ).toHaveCount(0);
   });
 
   test("should require authentication for product pages", async ({ page }) => {
     // Try to access products without authentication
     await page.goto("/products");
-    
+
     // Should redirect to login
     await expect(page).toHaveURL(/\/login/);
   });
@@ -700,7 +758,9 @@ test.describe("Journey 4 — stock changes without a form", () => {
    * undo affordance, and — the property Journey 6 depends on — the ledger
    * receives **two purchases of one**, not one write that set the total.
    */
-  test("the ± stepper books deltas, confirmed in words with undo", async ({ page }) => {
+  test("the ± stepper books deltas, confirmed in words with undo", async ({
+    page,
+  }) => {
     const registerPage = new RegisterPage(page);
     const dashboardPage = new DashboardPage(page);
     const productsPage = new ProductsPage(page);
@@ -752,22 +812,33 @@ test.describe("Journey 4 — stock changes without a form", () => {
     // After the hold drains: the ledger says two purchases of +1, not one
     // write of two. The queue holds each press ten seconds for its undo, so
     // the rows are allowed to take that long to arrive.
-    await page.getByRole("link", { name: es.products.detail.stockHistoryLink }).click();
+    await page
+      .getByRole("link", { name: es.products.detail.stockHistoryLink })
+      .click();
     await page.waitForURL(/\/history$/);
     await expect(
-      page.getByRole("cell", { name: es.products.history.opPURCHASE, exact: true }),
+      page.getByRole("cell", {
+        name: es.products.history.opPURCHASE,
+        exact: true,
+      }),
     ).toHaveCount(2, { timeout: 30_000 });
     await expect(page.getByRole("cell", { name: /^\+1\b/ })).toHaveCount(2);
   });
 });
 
-
-test("a recount leaves unknown details blank and two kitchen taps consume two eggs", async ({ page }) => {
+test("a recount leaves unknown details blank and two kitchen taps consume two eggs", async ({
+  page,
+}) => {
   const register = new RegisterPage(page);
   const dashboard = new DashboardPage(page);
   const products = new ProductsPage(page);
   await register.goto();
-  await register.register(generateTestName("Stock integrity"), generateTestEmail("stock-integrity"), "E2ETestPassword123!", generateTestName("Stock household"));
+  await register.register(
+    generateTestName("Stock integrity"),
+    generateTestEmail("stock-integrity"),
+    "E2ETestPassword123!",
+    generateTestName("Stock household"),
+  );
   await dashboard.expectLoaded();
   await dashboard.navigateToProducts();
   await products.clickAddProduct();
@@ -775,7 +846,10 @@ test("a recount leaves unknown details blank and two kitchen taps consume two eg
   await products.fillProductName(name);
   await page.locator('[name="defaultUnit"]').fill("docena");
   await products.clickSave();
-  await page.getByRole("dialog").getByRole("link", { name: es.products.new.successViewProducts }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("link", { name: es.products.new.successViewProducts })
+    .click();
   await page.getByRole("link", { name, exact: true }).click();
   await page.waitForURL(/\/products\/[^/]+$/);
   const productUrl = page.url();
@@ -787,15 +861,23 @@ test("a recount leaves unknown details blank and two kitchen taps consume two eg
   await page.locator('[name="expirationDate"]').fill(date);
   await page.locator("summary").click();
   await page.locator('[name="unit"]').fill("docena");
-  await page.getByRole("button", { name: es.inventory.add.submit, exact: true }).click();
+  await page
+    .getByRole("button", { name: es.inventory.add.submit, exact: true })
+    .click();
   await expect(page.getByRole("dialog")).toBeVisible();
 
   await page.goto("/kitchen");
-  const use = page.getByRole("button", { name: new RegExp(`He usado.*${name}`) });
+  const use = page.getByRole("button", {
+    name: new RegExp(`He usado.*${name}`),
+  });
   const card = page.locator("li").filter({ has: use });
   await expect(card).toContainText("Quedan 36 unidades");
   for (const left of [35, 34]) {
-    const saved = page.waitForResponse((response) => response.url().includes("inventory.consumeStock") && response.request().method() === "POST");
+    const saved = page.waitForResponse(
+      (response) =>
+        response.url().includes("inventory.consumeStock") &&
+        response.request().method() === "POST",
+    );
     await use.click();
     expect((await saved).ok()).toBe(true);
     await expect(card).toContainText(`Quedan ${left} unidades`);
@@ -803,54 +885,75 @@ test("a recount leaves unknown details blank and two kitchen taps consume two eg
   await page.reload();
   await expect(card).toContainText("Quedan 34 unidades");
   await page.goto(`${productUrl}/history`);
-  await expect(page.getByRole("cell", { name: es.products.history.opCONSUME, exact: true })).toHaveCount(2);
+  await expect(
+    page.getByRole("cell", {
+      name: es.products.history.opCONSUME,
+      exact: true,
+    }),
+  ).toHaveCount(2);
 
   await page.goto("/products");
-  const row = page.locator("tr:visible, li:visible").filter({ has: page.getByRole("link", { name, exact: true }) });
+  const row = page
+    .locator("tr:visible, li:visible")
+    .filter({ has: page.getByRole("link", { name, exact: true }) });
   await row.getByRole("link", { name: /^Ajustar/ }).click();
-  await page.getByLabel(es.products.adjust.actualLabel, { exact: true }).fill("35");
-  await page.getByLabel(es.products.adjust.reasonLabel, { exact: true }).fill("Recuento real");
-  await page.getByRole("button", { name: es.products.adjust.submit, exact: true }).click();
+  await page
+    .getByLabel(es.products.adjust.actualLabel, { exact: true })
+    .fill("35");
+  await page
+    .getByLabel(es.products.adjust.reasonLabel, { exact: true })
+    .fill("Recuento real");
+  await page
+    .getByRole("button", { name: es.products.adjust.submit, exact: true })
+    .click();
   await expect(page.getByTestId("snackbar")).toContainText("35 unidades");
   await page.goto(productUrl);
   await expect(page.getByTestId("stepper-value")).toContainText("35");
   // Only the 34 eggs left in the dated purchase have a known expiry. The
   // recounted extra egg acquires neither its date nor a location.
-  await expect(page.getByText("34 unidades · Sin ubicación", { exact: true })).toBeVisible();
-  await expect(page.getByText("35 unidades · Sin ubicación", { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByText("34 unidades · Sin ubicación", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("35 unidades · Sin ubicación", { exact: true }),
+  ).toHaveCount(0);
 });
 
 test.describe("Login Flow", () => {
-  test("should login with valid credentials", { tag: "@smoke" }, async ({ page }) => {
-    const registerPage = new RegisterPage(page);
-    const loginPage = new LoginPage(page);
-    const dashboardPage = new DashboardPage(page);
+  test(
+    "should login with valid credentials",
+    { tag: "@smoke" },
+    async ({ page }) => {
+      const registerPage = new RegisterPage(page);
+      const loginPage = new LoginPage(page);
+      const dashboardPage = new DashboardPage(page);
 
-    // Setup: Create user
-    const testEmail = generateTestEmail("e2e-login");
-    const testName = generateTestName("E2E Login User");
-    const testPassword = "E2ETestPassword123!";
+      // Setup: Create user
+      const testEmail = generateTestEmail("e2e-login");
+      const testName = generateTestName("E2E Login User");
+      const testPassword = "E2ETestPassword123!";
 
-    await registerPage.goto();
-    // A household is required, not optional decoration: every product and stock
-    // procedure resolves through householdId. Registering without one produces
-    // an account that cannot use these screens at all — see ISSUES.md HOUSE-1.
-    await registerPage.register(
-      testName,
-      testEmail,
-      testPassword,
-      generateTestName("E2E Household"),
-    );
-    await dashboardPage.expectLoaded();
+      await registerPage.goto();
+      // A household is required, not optional decoration: every product and stock
+      // procedure resolves through householdId. Registering without one produces
+      // an account that cannot use these screens at all — see ISSUES.md HOUSE-1.
+      await registerPage.register(
+        testName,
+        testEmail,
+        testPassword,
+        generateTestName("E2E Household"),
+      );
+      await dashboardPage.expectLoaded();
 
-    // Logout first (if there's a logout button)
-    // Then login again
-    await page.goto("/login");
-    await loginPage.login(testEmail, testPassword);
+      // Logout first (if there's a logout button)
+      // Then login again
+      await page.goto("/login");
+      await loginPage.login(testEmail, testPassword);
 
-    // Already answered on this context, so straight to the panel
-    await dashboardPage.expectLoaded();
-  });
+      // Already answered on this context, so straight to the panel
+      await dashboardPage.expectLoaded();
+    },
+  );
 
   test("should show error for invalid credentials", async ({ page }) => {
     const loginPage = new LoginPage(page);
@@ -883,12 +986,18 @@ test.describe("Internationalization", () => {
     expect(html).toBe("es");
   });
 
-  test("should display Spanish content on login page", { tag: "@smoke" }, async ({ page }) => {
-    await page.goto("/login");
-    const bodyText = await page.locator("body").textContent();
-    // Check for Spanish keywords (adjust based on actual translations)
-    expect(bodyText?.toLowerCase()).toMatch(/iniciar|sesión|email|contraseña/);
-  });
+  test(
+    "should display Spanish content on login page",
+    { tag: "@smoke" },
+    async ({ page }) => {
+      await page.goto("/login");
+      const bodyText = await page.locator("body").textContent();
+      // Check for Spanish keywords (adjust based on actual translations)
+      expect(bodyText?.toLowerCase()).toMatch(
+        /iniciar|sesión|email|contraseña/,
+      );
+    },
+  );
 });
 
 /**
@@ -926,9 +1035,14 @@ test.describe("The Panel summarises; its lists are the doors", () => {
   // Desktop width for the same reason as the low-stock suite below: the
   // filtered list renders a table at lg and cards under it, and the row-based
   // assertions need the visible copy to be the table.
-  test.use({ storageState: SESSION_FILE, viewport: { width: 1280, height: 900 } });
+  test.use({
+    storageState: SESSION_FILE,
+    viewport: { width: 1280, height: 900 },
+  });
 
-  test("what needs attention is the sections, not a count above them", async ({ page }) => {
+  test("what needs attention is the sections, not a count above them", async ({
+    page,
+  }) => {
     // Three owner passes each cut a layer of the same redundancy: the alert
     // rows went in the second, the sentence that replaced them in the third.
     // "3 productos por reponer" above a section headed "Necesita reposición"
@@ -942,7 +1056,9 @@ test.describe("The Panel summarises; its lists are the doors", () => {
     // What survives is Phase 8 item 2's invariant, not its wording: the rows
     // here come from the same `needsRestock` question the filtered inventory
     // asks, so the two cannot disagree. The seed holds three such products.
-    const section = page.getByRole("region", { name: es.dashboard.restockTitle });
+    const section = page.getByRole("region", {
+      name: es.dashboard.restockTitle,
+    });
     await expect(section).toBeVisible();
     for (const product of [
       "Leche entera",
@@ -956,7 +1072,9 @@ test.describe("The Panel summarises; its lists are the doors", () => {
     }
   });
 
-  test("the restock filter shows exactly the summarised set", async ({ page }) => {
+  test("the restock filter shows exactly the summarised set", async ({
+    page,
+  }) => {
     // Reached from the Panel's overflow note when its five rows are not
     // everything; driven by URL here because the seed's three below-minimum
     // products all fit on the Panel.
@@ -964,7 +1082,9 @@ test.describe("The Panel summarises; its lists are the doors", () => {
     await settle(page);
 
     // The filter is loud: it names itself and offers the way back.
-    await expect(page.getByText(es.inventory.filterRestockActive)).toBeVisible();
+    await expect(
+      page.getByText(es.inventory.filterRestockActive),
+    ).toBeVisible();
     await expect(
       page.getByRole("link", { name: es.inventory.filterClear }),
     ).toBeVisible();
@@ -995,7 +1115,10 @@ test.describe("Low stock, as the seeded household", () => {
   // The card tier gets its own test below, at its own width, rather than a
   // selector here that matches whichever copy happens to be visible — that
   // would hide the next instance of this instead of catching it (TEST-4).
-  test.use({ storageState: SESSION_FILE, viewport: { width: 1280, height: 900 } });
+  test.use({
+    storageState: SESSION_FILE,
+    viewport: { width: 1280, height: 900 },
+  });
 
   test("marks the products that are below their minimum", async ({ page }) => {
     await page.goto("/inventory");
@@ -1026,7 +1149,9 @@ test.describe("Low stock, as the seeded household", () => {
     // Arroz is at 5 of a minimum of 2. If everything were marked, the assertions
     // above would pass while meaning nothing.
     await expect(
-      page.getByRole("row", { name: /Arroz redondo/ }).getByText(es.inventory.lowStock),
+      page
+        .getByRole("row", { name: /Arroz redondo/ })
+        .getByText(es.inventory.lowStock),
     ).toHaveCount(0);
   });
 });
@@ -1045,7 +1170,10 @@ test.describe("Low stock, as the seeded household", () => {
  * them apart (PROGRESS D34).
  */
 test.describe("Low stock on the card tier", () => {
-  test.use({ storageState: SESSION_FILE, viewport: { width: 390, height: 844 } });
+  test.use({
+    storageState: SESSION_FILE,
+    viewport: { width: 390, height: 844 },
+  });
 
   test("marks the same products on a phone", async ({ page }) => {
     await page.goto("/inventory");

@@ -33,14 +33,21 @@ function countedStream(chunks: number, size: number) {
 }
 
 function post(body: BodyInit | null, headers?: HeadersInit): Request {
-  return new Request("http://localhost/api/trpc/x", { method: "POST", body, headers });
+  return new Request("http://localhost/api/trpc/x", {
+    method: "POST",
+    body,
+    headers,
+  });
 }
 
 describe("a declared length over the limit", () => {
   it("is refused with 413 without a byte of the body read", async () => {
     const { stream, state } = countedStream(100, LIMIT);
 
-    const read = await readBodyWithin(post(stream, { "content-length": String(LIMIT + 1) }), LIMIT);
+    const read = await readBodyWithin(
+      post(stream, { "content-length": String(LIMIT + 1) }),
+      LIMIT,
+    );
 
     expect(read.ok).toBe(false);
     if (read.ok) return;
@@ -49,7 +56,10 @@ describe("a declared length over the limit", () => {
   });
 
   it("asks for the connection to be closed rather than drained", async () => {
-    const read = await readBodyWithin(post("x", { "content-length": String(LIMIT * 10) }), LIMIT);
+    const read = await readBodyWithin(
+      post("x", { "content-length": String(LIMIT * 10) }),
+      LIMIT,
+    );
 
     expect(read.ok).toBe(false);
     if (read.ok) return;
@@ -83,7 +93,10 @@ describe("a body that declares no length", () => {
     // A declared length is the caller's claim, not a measurement.
     const { stream } = countedStream(8, LIMIT / 2);
 
-    const read = await readBodyWithin(post(stream, { "content-length": "10" }), LIMIT);
+    const read = await readBodyWithin(
+      post(stream, { "content-length": "10" }),
+      LIMIT,
+    );
 
     expect(read.ok).toBe(false);
   });
@@ -105,7 +118,8 @@ describe("a body within the limit", () => {
     const pieces = ['{"json":', '{"name":', '"Leche"}}'];
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        for (const piece of pieces) controller.enqueue(new TextEncoder().encode(piece));
+        for (const piece of pieces)
+          controller.enqueue(new TextEncoder().encode(piece));
         controller.close();
       },
     });
@@ -114,11 +128,16 @@ describe("a body within the limit", () => {
 
     expect(read.ok).toBe(true);
     if (!read.ok) return;
-    expect(new TextDecoder().decode(read.body!)).toBe('{"json":{"name":"Leche"}}');
+    expect(new TextDecoder().decode(read.body!)).toBe(
+      '{"json":{"name":"Leche"}}',
+    );
   });
 
   it("is null when there is none", async () => {
-    const read = await readBodyWithin(new Request("http://localhost/x", { method: "POST" }), LIMIT);
+    const read = await readBodyWithin(
+      new Request("http://localhost/x", { method: "POST" }),
+      LIMIT,
+    );
 
     expect(read).toEqual({ ok: true, body: null });
   });
@@ -129,7 +148,10 @@ describe("the request rebuilt around a body already read", () => {
     const controller = new AbortController();
     const original = new Request("http://localhost/api/trpc/x", {
       method: "POST",
-      headers: { "transfer-encoding": "chunked", "x-forwarded-for": "203.0.113.7" },
+      headers: {
+        "transfer-encoding": "chunked",
+        "x-forwarded-for": "203.0.113.7",
+      },
       body: "abc",
       signal: controller.signal,
     });

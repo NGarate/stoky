@@ -13,14 +13,17 @@ export interface LedgerEntry {
  * withdrawal is ambiguous. Expiry order is never evidence of what was used.
  * A location-only withdrawal can be resolved when just one batch existed there.
  */
-export function remainingByBatch(entries: readonly LedgerEntry[]): Map<string, number | null> {
+export function remainingByBatch(
+  entries: readonly LedgerEntry[],
+): Map<string, number | null> {
   const remaining = new Map<string, number | null>();
   const batches = new Map<string, LedgerEntry>();
   // Stable sorting preserves the supplied order when timestamps tie. Untimed
   // callers supply purchases first, then withdrawals.
-  const ordered = [...entries].sort((a, b) =>
-    (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0) ||
-    Number(b.quantity > 0) - Number(a.quantity > 0),
+  const ordered = [...entries].sort(
+    (a, b) =>
+      (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0) ||
+      Number(b.quantity > 0) - Number(a.quantity > 0),
   );
   for (const entry of ordered) {
     if (entry.quantity > 0) {
@@ -29,16 +32,22 @@ export function remainingByBatch(entries: readonly LedgerEntry[]): Map<string, n
       continue;
     }
     if (entry.quantity === 0) continue;
-    const candidates = [...batches.values()].filter((batch) =>
-      remaining.get(batch.id) !== 0 &&
-      (entry.batchId ? batch.id === entry.batchId :
-        !entry.locationId || batch.locationId === entry.locationId),
+    const candidates = [...batches.values()].filter(
+      (batch) =>
+        remaining.get(batch.id) !== 0 &&
+        (entry.batchId
+          ? batch.id === entry.batchId
+          : !entry.locationId || batch.locationId === entry.locationId),
     );
     if (candidates.length === 1) {
       const id = candidates[0]!.id;
       const previous = remaining.get(id);
-      remaining.set(id, previous == null ? null :
-        Math.max(0, Math.round((previous + entry.quantity) * 100) / 100));
+      remaining.set(
+        id,
+        previous == null
+          ? null
+          : Math.max(0, Math.round((previous + entry.quantity) * 100) / 100),
+      );
     } else {
       for (const batch of candidates) remaining.set(batch.id, null);
     }
@@ -68,11 +77,18 @@ export function allocateFefo<T extends LedgerEntry>(
 ): { parts: Array<{ batch: T; quantity: number }>; unassigned: number } {
   const remaining = remainingByBatch(entries);
   const candidates = entries
-    .filter((entry) => entry.quantity > 0 && entry.locationId === locationId &&
-      (remaining.get(entry.id) ?? 0) > 0)
-    .sort((a, b) =>
-      (a.expirationDate?.getTime() ?? Infinity) - (b.expirationDate?.getTime() ?? Infinity) ||
-      (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
+    .filter(
+      (entry) =>
+        entry.quantity > 0 &&
+        entry.locationId === locationId &&
+        (remaining.get(entry.id) ?? 0) > 0,
+    )
+    .sort(
+      (a, b) =>
+        (a.expirationDate?.getTime() ?? Infinity) -
+          (b.expirationDate?.getTime() ?? Infinity) ||
+        (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0),
+    );
 
   const parts: Array<{ batch: T; quantity: number }> = [];
   let left = Math.round(quantity * 100) / 100;
@@ -114,7 +130,10 @@ function dayOf(date: Date): number {
  * Today on the household's calendar, as UTC midnight of that date — the same
  * representation an expiry date is stored in, so the two compare directly.
  */
-export function startOfToday(now: Date = new Date(), timeZone: string = EXPIRY_TIME_ZONE): Date {
+export function startOfToday(
+  now: Date = new Date(),
+  timeZone: string = EXPIRY_TIME_ZONE,
+): Date {
   // Parts, not a formatted string, so no locale is chosen for anyone; the
   // calendar and digits are pinned instead, which is what the arithmetic needs.
   const parts = new Intl.DateTimeFormat(undefined, {
@@ -125,7 +144,8 @@ export function startOfToday(now: Date = new Date(), timeZone: string = EXPIRY_T
     month: "numeric",
     day: "numeric",
   }).formatToParts(now);
-  const part = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  const part = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value);
   return new Date(Date.UTC(part("year"), part("month") - 1, part("day")));
 }
 

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { RENAMED, SECRET_VARIABLE, readRenamed, renamedVariableWarnings } from "@/lib/env-names";
+import {
+  RENAMED,
+  SECRET_VARIABLE,
+  readRenamed,
+  renamedVariableWarnings,
+} from "@/lib/env-names";
 
 /**
  * The `STOKY_` rename and the old names it keeps reading (PROGRESS D137).
@@ -24,14 +29,20 @@ describe("readRenamed", () => {
 
   it("prefers the new name when both are set", () => {
     expect(
-      readRenamed({ STOKY_SECRET: KEPT, NEXTAUTH_SECRET: OTHER }, SECRET_VARIABLE),
+      readRenamed(
+        { STOKY_SECRET: KEPT, NEXTAUTH_SECRET: OTHER },
+        SECRET_VARIABLE,
+      ),
     ).toEqual({ value: KEPT, name: "STOKY_SECRET", from: "current" });
   });
 
   it("treats an empty new name as unset, the way Compose passes ${STOKY_SECRET:-}", () => {
     for (const empty of ["", "   "]) {
       expect(
-        readRenamed({ STOKY_SECRET: empty, NEXTAUTH_SECRET: KEPT }, SECRET_VARIABLE).value,
+        readRenamed(
+          { STOKY_SECRET: empty, NEXTAUTH_SECRET: KEPT },
+          SECRET_VARIABLE,
+        ).value,
       ).toBe(KEPT);
     }
   });
@@ -45,7 +56,9 @@ describe("readRenamed", () => {
   });
 
   it("returns the value as written, so the account tag keyed with it does not move", () => {
-    expect(readRenamed({ STOKY_SECRET: ` ${KEPT} ` }, SECRET_VARIABLE).value).toBe(` ${KEPT} `);
+    expect(
+      readRenamed({ STOKY_SECRET: ` ${KEPT} ` }, SECRET_VARIABLE).value,
+    ).toBe(` ${KEPT} `);
   });
 });
 
@@ -59,7 +72,10 @@ describe("renamedVariableWarnings", () => {
   });
 
   it("says the legacy name is ignored when both are set", () => {
-    const warnings = renamedVariableWarnings({ STOKY_SECRET: KEPT, NEXTAUTH_SECRET: OTHER });
+    const warnings = renamedVariableWarnings({
+      STOKY_SECRET: KEPT,
+      NEXTAUTH_SECRET: OTHER,
+    });
     expect(warnings).toEqual([
       "[config] STOKY_SECRET and NEXTAUTH_SECRET are both set; STOKY_SECRET is used and NEXTAUTH_SECRET is ignored. Remove it.",
     ]);
@@ -69,7 +85,9 @@ describe("renamedVariableWarnings", () => {
 
   it("says nothing when only the new name is set, or the legacy one is empty", () => {
     expect(renamedVariableWarnings({ STOKY_SECRET: KEPT })).toEqual([]);
-    expect(renamedVariableWarnings({ STOKY_SECRET: KEPT, NEXTAUTH_SECRET: "" })).toEqual([]);
+    expect(
+      renamedVariableWarnings({ STOKY_SECRET: KEPT, NEXTAUTH_SECRET: "" }),
+    ).toEqual([]);
     expect(renamedVariableWarnings({})).toEqual([]);
   });
 

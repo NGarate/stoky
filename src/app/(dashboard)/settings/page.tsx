@@ -111,10 +111,10 @@ export default function SettingsPage(): JSX.Element {
           in the top bar and in the "Más" sheet as well, which put settings
           controls across the top of every screen — including the household
           overview, whose whole job is what to buy and what is running out. */}
-      <h2 className={`mt-8 ${sectionHeading()}`}>
-        {t("preferencesTitle")}
-      </h2>
-      <p className="mt-2 text-muted-foreground">{t("preferencesDescription")}</p>
+      <h2 className={`mt-8 ${sectionHeading()}`}>{t("preferencesTitle")}</h2>
+      <p className="mt-2 text-muted-foreground">
+        {t("preferencesDescription")}
+      </p>
       <PreferencesCluster className="mt-4" />
 
       {/* Beside the cluster rather than inside it: this one needs an account

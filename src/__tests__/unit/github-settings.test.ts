@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -22,21 +29,33 @@ interface Ruleset {
   enforcement: string;
   conditions: { ref_name: { include: string[]; exclude: string[] } };
   rules: { type: string }[];
-  bypass_actors: { actor_id: number; actor_type: string; bypass_mode: string }[];
+  bypass_actors: {
+    actor_id: number;
+    actor_type: string;
+    bypass_mode: string;
+  }[];
 }
 
-const readJson = <T>(path: string) => JSON.parse(readFileSync(join(root, path), "utf8")) as T;
-const immutable = readJson<Ruleset>(".github/rulesets/release-tags-immutable.json");
-const creation = readJson<Ruleset>(".github/rulesets/release-tags-creation.json");
-const selectedActions = readJson<{ github_owned_allowed: boolean; verified_allowed: boolean; patterns_allowed: string[] }>(
-  ".github/selected-actions.json",
+const readJson = <T>(path: string) =>
+  JSON.parse(readFileSync(join(root, path), "utf8")) as T;
+const immutable = readJson<Ruleset>(
+  ".github/rulesets/release-tags-immutable.json",
 );
+const creation = readJson<Ruleset>(
+  ".github/rulesets/release-tags-creation.json",
+);
+const selectedActions = readJson<{
+  github_owned_allowed: boolean;
+  verified_allowed: boolean;
+  patterns_allowed: string[];
+}>(".github/selected-actions.json");
 
 type Reply = { status: number; body?: unknown };
 type State = Record<string, Reply>;
 
 /** An ISO date `days` from now, as GitHub writes `expires_at`. */
-const daysFromNow = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
+const daysFromNow = (days: number) =>
+  new Date(Date.now() + days * 86_400_000).toISOString();
 
 const interactionLimit = (limit: string, days: number) => ({
   status: 200,
@@ -45,12 +64,19 @@ const interactionLimit = (limit: string, days: number) => ({
 
 /** Not 24436231: the reviewer must be read from the repository, not written down. */
 const OWNER_ID = 583231;
-const RELEASE_POLICIES = "environments/release/deployment-branch-policies?per_page=100";
+const RELEASE_POLICIES =
+  "environments/release/deployment-branch-policies?per_page=100";
 
 /** GET environments/release as GitHub answers it, with fields the script must ignore. */
 const releaseEnvironment = (
-  rule: { prevent_self_review?: boolean; reviewers?: { type: string; reviewer: { id: number } }[] } | null,
-  policy: { protected_branches: boolean; custom_branch_policies: boolean } | null = {
+  rule: {
+    prevent_self_review?: boolean;
+    reviewers?: { type: string; reviewer: { id: number } }[];
+  } | null,
+  policy: {
+    protected_branches: boolean;
+    custom_branch_policies: boolean;
+  } | null = {
     protected_branches: false,
     custom_branch_policies: true,
   },
@@ -63,7 +89,9 @@ const releaseEnvironment = (
     created_at: "2026-10-23T00:00:00Z",
     updated_at: "2026-10-23T00:00:00Z",
     protection_rules: [
-      ...(rule ? [{ id: 10, node_id: "GA_10", type: "required_reviewers", ...rule }] : []),
+      ...(rule
+        ? [{ id: 10, node_id: "GA_10", type: "required_reviewers", ...rule }]
+        : []),
       ...(policy ? [{ id: 11, node_id: "GA_11", type: "branch_policy" }] : []),
     ],
     deployment_branch_policy: policy,
@@ -75,9 +103,17 @@ const ownerReviews = (id = OWNER_ID) => ({
   reviewers: [{ type: "User", reviewer: { id } }],
 });
 
-const releasePolicies = (...policies: { id: number; name: string; type: string }[]) => ({
+const releasePolicies = (
+  ...policies: { id: number; name: string; type: string }[]
+) => ({
   status: 200,
-  body: { total_count: policies.length, branch_policies: policies.map((policy) => ({ node_id: `P_${policy.id}`, ...policy })) },
+  body: {
+    total_count: policies.length,
+    branch_policies: policies.map((policy) => ({
+      node_id: `P_${policy.id}`,
+      ...policy,
+    })),
+  },
 });
 
 const BRANCH_RULESET = {
@@ -85,7 +121,9 @@ const BRANCH_RULESET = {
   name: "Block All except me",
   target: "branch",
   enforcement: "active",
-  conditions: { ref_name: { include: ["~ALL"], exclude: ["refs/heads/dependabot/**"] } },
+  conditions: {
+    ref_name: { include: ["~ALL"], exclude: ["refs/heads/dependabot/**"] },
+  },
   rules: [
     { type: "non_fast_forward" },
     { type: "creation" },
@@ -93,12 +131,18 @@ const BRANCH_RULESET = {
     { type: "deletion" },
     { type: "required_signatures" },
   ],
-  bypass_actors: [{ actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always" }],
+  bypass_actors: [
+    { actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always" },
+  ],
 };
 
 /** Every setting as the script wants it, in the shapes GitHub answers with. */
 function inSync(): State {
-  const rulesets = [BRANCH_RULESET, { ...immutable, id: 101 }, { ...creation, id: 102 }];
+  const rulesets = [
+    BRANCH_RULESET,
+    { ...immutable, id: 101 },
+    { ...creation, id: 102 },
+  ];
   return {
     "": {
       status: 200,
@@ -122,15 +166,35 @@ function inSync(): State {
       },
     },
     "private-vulnerability-reporting": { status: 200, body: { enabled: true } },
-    "immutable-releases": { status: 200, body: { enabled: true, enforced_by_owner: false } },
+    "immutable-releases": {
+      status: 200,
+      body: { enabled: true, enforced_by_owner: false },
+    },
     "vulnerability-alerts": { status: 204 },
-    "automated-security-fixes": { status: 200, body: { enabled: true, paused: false } },
+    "automated-security-fixes": {
+      status: 200,
+      body: { enabled: true, paused: false },
+    },
     "code-scanning/default-setup": {
       status: 200,
-      body: { state: "configured", languages: ["actions", "javascript-typescript"], query_suite: "extended" },
+      body: {
+        state: "configured",
+        languages: ["actions", "javascript-typescript"],
+        query_suite: "extended",
+      },
     },
-    "actions/permissions": { status: 200, body: { enabled: true, allowed_actions: "selected", sha_pinning_required: true } },
-    "actions/permissions/selected-actions": { status: 200, body: selectedActions },
+    "actions/permissions": {
+      status: 200,
+      body: {
+        enabled: true,
+        allowed_actions: "selected",
+        sha_pinning_required: true,
+      },
+    },
+    "actions/permissions/selected-actions": {
+      status: 200,
+      body: selectedActions,
+    },
     "actions/permissions/fork-pr-contributor-approval": {
       status: 200,
       body: { approval_policy: "all_external_contributors" },
@@ -140,13 +204,25 @@ function inSync(): State {
     [RELEASE_POLICIES]: releasePolicies({ id: 20, name: "v*", type: "tag" }),
     "rulesets?per_page=100": {
       status: 200,
-      body: rulesets.map(({ id, name, target, enforcement }) => ({ id, name, target, enforcement })),
+      body: rulesets.map(({ id, name, target, enforcement }) => ({
+        id,
+        name,
+        target,
+        enforcement,
+      })),
     },
     // GET rulesets/ID adds fields the script must ignore.
     ...Object.fromEntries(
       rulesets.map((ruleset) => [
         `rulesets/${ruleset.id}`,
-        { status: 200, body: { ...ruleset, source_type: "Repository", current_user_can_bypass: "always" } },
+        {
+          status: 200,
+          body: {
+            ...ruleset,
+            source_type: "Repository",
+            current_user_can_bypass: "always",
+          },
+        },
       ]),
     ),
   };
@@ -179,14 +255,36 @@ function measured(): State {
       },
     },
   };
-  state["private-vulnerability-reporting"] = { status: 200, body: { enabled: false } };
-  state["immutable-releases"] = { status: 200, body: { enabled: false, enforced_by_owner: false } };
-  state["automated-security-fixes"] = { status: 200, body: { enabled: false, paused: false } };
-  state["code-scanning/default-setup"] = { status: 200, body: { state: "not-configured", query_suite: "default" } };
-  state["actions/permissions"] = { status: 200, body: { enabled: true, allowed_actions: "all", sha_pinning_required: false } };
+  state["private-vulnerability-reporting"] = {
+    status: 200,
+    body: { enabled: false },
+  };
+  state["immutable-releases"] = {
+    status: 200,
+    body: { enabled: false, enforced_by_owner: false },
+  };
+  state["automated-security-fixes"] = {
+    status: 200,
+    body: { enabled: false, paused: false },
+  };
+  state["code-scanning/default-setup"] = {
+    status: 200,
+    body: { state: "not-configured", query_suite: "default" },
+  };
+  state["actions/permissions"] = {
+    status: 200,
+    body: {
+      enabled: true,
+      allowed_actions: "all",
+      sha_pinning_required: false,
+    },
+  };
   state["actions/permissions/selected-actions"] = {
     status: 409,
-    body: { message: "Conflict", errors: "All actions and workflows are allowed on this repository" },
+    body: {
+      message: "Conflict",
+      errors: "All actions and workflows are allowed on this repository",
+    },
   };
   state["actions/permissions/fork-pr-contributor-approval"] = {
     status: 200,
@@ -194,7 +292,14 @@ function measured(): State {
   };
   state["rulesets?per_page=100"] = {
     status: 200,
-    body: [{ id: BRANCH_RULESET.id, name: BRANCH_RULESET.name, target: "branch", enforcement: "active" }],
+    body: [
+      {
+        id: BRANCH_RULESET.id,
+        name: BRANCH_RULESET.name,
+        target: "branch",
+        enforcement: "active",
+      },
+    ],
   };
   state[`rulesets/${BRANCH_RULESET.id}`] = {
     status: 200,
@@ -217,7 +322,8 @@ function measured(): State {
 const fixtures: string[] = [];
 
 afterEach(() => {
-  for (const fixture of fixtures.splice(0)) rmSync(fixture, { recursive: true, force: true });
+  for (const fixture of fixtures.splice(0))
+    rmSync(fixture, { recursive: true, force: true });
 });
 
 const key = (endpoint: string) => endpoint.replace(/[^A-Za-z0-9]/g, "_");
@@ -227,7 +333,11 @@ const key = (endpoint: string) => endpoint.replace(/[^A-Za-z0-9]/g, "_");
  * endpoint is a 404, as `vulnerability-alerts` answers when off), answers
  * every write with `writeStatus`, and records every call.
  */
-function run(state: State, args: string[], options: { writeStatus?: number; repo?: string | null } = {}) {
+function run(
+  state: State,
+  args: string[],
+  options: { writeStatus?: number; repo?: string | null } = {},
+) {
   const fixture = mkdtempSync(join(tmpdir(), "stoky-github-settings-"));
   fixtures.push(fixture);
   const bin = join(fixture, "bin");
@@ -236,10 +346,14 @@ function run(state: State, args: string[], options: { writeStatus?: number; repo
   mkdirSync(bin);
   mkdirSync(replies);
   writeFileSync(calls, "");
-  const repo = options.repo === undefined ? REPO : options.repo ?? "NGarate/stoky";
+  const repo =
+    options.repo === undefined ? REPO : (options.repo ?? "NGarate/stoky");
   for (const [path, reply] of Object.entries(state)) {
     const endpoint = path === "" ? `repos/${repo}` : `repos/${repo}/${path}`;
-    writeFileSync(join(replies, key(endpoint)), `${reply.status}\n${reply.body === undefined ? "" : JSON.stringify(reply.body)}`);
+    writeFileSync(
+      join(replies, key(endpoint)),
+      `${reply.status}\n${reply.body === undefined ? "" : JSON.stringify(reply.body)}`,
+    );
   }
   writeFileSync(
     join(bin, "gh"),
@@ -273,10 +387,13 @@ tail -n +2 "$file"
     { mode: 0o755 },
   );
   const repoArgs = options.repo === null ? [] : ["--repo", repo];
-  const result = Bun.spawnSync([process.execPath, script, ...args, ...repoArgs], {
-    cwd: fixture,
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
-  });
+  const result = Bun.spawnSync(
+    [process.execPath, script, ...args, ...repoArgs],
+    {
+      cwd: fixture,
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+    },
+  );
   return {
     exitCode: result.exitCode,
     stdout: result.stdout.toString(),
@@ -287,19 +404,31 @@ tail -n +2 "$file"
       .map((line) => {
         const [method, endpoint, ...body] = line.split(" ");
         const text = body.join(" ");
-        return { method, endpoint: endpoint.replace(`repos/${repo}`, "").replace(/^\//, ""), body: text ? JSON.parse(text) : undefined };
+        return {
+          method,
+          endpoint: endpoint.replace(`repos/${repo}`, "").replace(/^\//, ""),
+          body: text ? JSON.parse(text) : undefined,
+        };
       }),
   };
 }
 
-const driftLines = (stdout: string) => stdout.split("\n").filter((line) => line.startsWith("DRIFT"));
+const driftLines = (stdout: string) =>
+  stdout.split("\n").filter((line) => line.startsWith("DRIFT"));
 
 describe("the release-tag rulesets", () => {
   it("make a published v* tag impossible to move or delete, for everyone", () => {
     expect(immutable.target).toBe("tag");
     expect(immutable.enforcement).toBe("active");
-    expect(immutable.conditions.ref_name).toEqual({ include: ["refs/tags/v*"], exclude: [] });
-    expect(immutable.rules.map((rule) => rule.type).sort()).toEqual(["deletion", "non_fast_forward", "update"]);
+    expect(immutable.conditions.ref_name).toEqual({
+      include: ["refs/tags/v*"],
+      exclude: [],
+    });
+    expect(immutable.rules.map((rule) => rule.type).sort()).toEqual([
+      "deletion",
+      "non_fast_forward",
+      "update",
+    ]);
     // A bypass here would make the rule as decorative as the branch
     // ruleset's signatures: the owner's token is the one that leaks.
     expect(immutable.bypass_actors).toEqual([]);
@@ -310,7 +439,9 @@ describe("the release-tag rulesets", () => {
     expect(creation.enforcement).toBe("active");
     expect(creation.conditions.ref_name).toEqual(immutable.conditions.ref_name);
     expect(creation.rules).toEqual([{ type: "creation" }]);
-    expect(creation.bypass_actors).toEqual([{ actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always" }]);
+    expect(creation.bypass_actors).toEqual([
+      { actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always" },
+    ]);
   });
 });
 
@@ -322,17 +453,29 @@ describe("the Actions allow-list", () => {
   const uses = readdirSync(join(root, ".github/workflows"))
     .filter((file) => /\.ya?ml$/.test(file))
     .flatMap((file) => {
-      const workflow = Bun.YAML.parse(readFileSync(join(root, ".github/workflows", file), "utf8")) as {
+      const workflow = Bun.YAML.parse(
+        readFileSync(join(root, ".github/workflows", file), "utf8"),
+      ) as {
         jobs?: Record<string, { uses?: string; steps?: { uses?: string }[] }>;
       };
-      return Object.values(workflow.jobs ?? {}).flatMap((job) => [job.uses, ...(job.steps ?? []).map((step) => step.uses)]);
+      return Object.values(workflow.jobs ?? {}).flatMap((job) => [
+        job.uses,
+        ...(job.steps ?? []).map((step) => step.uses),
+      ]);
     })
-    .filter((ref): ref is string => typeof ref === "string" && !ref.startsWith("./") && !ref.startsWith("docker://"));
+    .filter(
+      (ref): ref is string =>
+        typeof ref === "string" &&
+        !ref.startsWith("./") &&
+        !ref.startsWith("docker://"),
+    );
 
   const allows = (pattern: string, ref: string) => {
     const [name] = ref.split("@");
     const [patternName] = pattern.split("@");
-    return patternName.endsWith("/*") ? name.startsWith(patternName.slice(0, -1)) : name === patternName;
+    return patternName.endsWith("/*")
+      ? name.startsWith(patternName.slice(0, -1))
+      : name === patternName;
   };
 
   it("finds the workflows' actions", () => {
@@ -344,14 +487,17 @@ describe("the Actions allow-list", () => {
     const refused = uses.filter(
       (ref) =>
         !(selectedActions.github_owned_allowed && ownedByGitHub(ref)) &&
-        !selectedActions.patterns_allowed.some((pattern) => allows(pattern, ref)),
+        !selectedActions.patterns_allowed.some((pattern) =>
+          allows(pattern, ref),
+        ),
     );
     expect(refused).toEqual([]);
   });
 
   it("allows nothing a workflow does not use", () => {
     const unused = selectedActions.patterns_allowed.filter(
-      (pattern) => !NESTED.includes(pattern) && !uses.some((ref) => allows(pattern, ref)),
+      (pattern) =>
+        !NESTED.includes(pattern) && !uses.some((ref) => allows(pattern, ref)),
     );
     expect(unused).toEqual([]);
     expect(selectedActions.verified_allowed).toBe(false);
@@ -375,7 +521,11 @@ describe("scripts/github-settings.ts check", () => {
     expect(result.calls.filter((call) => call.method !== "GET")).toEqual([]);
     // Dependabot alerts were already on.
     expect(result.stdout).toContain("ok     Dependabot alerts");
-    expect(driftLines(result.stdout).map((line) => line.replace(/^DRIFT {2}([^:]+):.*$/, "$1"))).toEqual([
+    expect(
+      driftLines(result.stdout).map((line) =>
+        line.replace(/^DRIFT {2}([^:]+):.*$/, "$1"),
+      ),
+    ).toEqual([
       "Private vulnerability reporting",
       "Immutable releases",
       "Secret scanning and push protection",
@@ -394,27 +544,52 @@ describe("scripts/github-settings.ts check", () => {
   });
 
   const cases: [string, string, (state: State) => void][] = [
-    ["Private vulnerability reporting", "enabled is false", (s) => (s["private-vulnerability-reporting"].body = { enabled: false })],
-    ["Immutable releases", "enabled is false", (s) => (s["immutable-releases"].body = { enabled: false })],
+    [
+      "Private vulnerability reporting",
+      "enabled is false",
+      (s) => (s["private-vulnerability-reporting"].body = { enabled: false }),
+    ],
+    [
+      "Immutable releases",
+      "enabled is false",
+      (s) => (s["immutable-releases"].body = { enabled: false }),
+    ],
     [
       "Secret scanning and push protection",
       'secret_scanning_push_protection is "disabled"',
       (s) => {
-        const repo = s[""].body as { security_and_analysis: Record<string, { status: string }> };
-        repo.security_and_analysis.secret_scanning_push_protection = { status: "disabled" };
+        const repo = s[""].body as {
+          security_and_analysis: Record<string, { status: string }>;
+        };
+        repo.security_and_analysis.secret_scanning_push_protection = {
+          status: "disabled",
+        };
       },
     ],
     ["Dependabot alerts", "disabled", (s) => delete s["vulnerability-alerts"]],
-    ["Dependabot security updates", "enabled is false", (s) => (s["automated-security-fixes"].body = { enabled: false })],
+    [
+      "Dependabot security updates",
+      "enabled is false",
+      (s) => (s["automated-security-fixes"].body = { enabled: false }),
+    ],
     [
       "CodeQL default setup",
       'query_suite is "default"',
-      (s) => (s["code-scanning/default-setup"].body = { state: "configured", query_suite: "default" }),
+      (s) =>
+        (s["code-scanning/default-setup"].body = {
+          state: "configured",
+          query_suite: "default",
+        }),
     ],
     [
       "Actions allow-list and SHA pinning",
       "sha_pinning_required is false",
-      (s) => (s["actions/permissions"].body = { enabled: true, allowed_actions: "selected", sha_pinning_required: false }),
+      (s) =>
+        (s["actions/permissions"].body = {
+          enabled: true,
+          allowed_actions: "selected",
+          sha_pinning_required: false,
+        }),
     ],
     [
       "Actions allow-list and SHA pinning",
@@ -422,7 +597,9 @@ describe("scripts/github-settings.ts check", () => {
       (s) =>
         (s["actions/permissions/selected-actions"].body = {
           ...selectedActions,
-          patterns_allowed: selectedActions.patterns_allowed.filter((pattern) => pattern !== "oven-sh/setup-bun@*"),
+          patterns_allowed: selectedActions.patterns_allowed.filter(
+            (pattern) => pattern !== "oven-sh/setup-bun@*",
+          ),
         }),
     ],
     [
@@ -431,18 +608,25 @@ describe("scripts/github-settings.ts check", () => {
       (s) =>
         (s["actions/permissions/selected-actions"].body = {
           ...selectedActions,
-          patterns_allowed: [...selectedActions.patterns_allowed, "evil/action@*"],
+          patterns_allowed: [
+            ...selectedActions.patterns_allowed,
+            "evil/action@*",
+          ],
         }),
     ],
     [
       "Fork pull request approval",
       'approval_policy is "first_time_contributors"',
-      (s) => (s["actions/permissions/fork-pr-contributor-approval"].body = { approval_policy: "first_time_contributors" }),
+      (s) =>
+        (s["actions/permissions/fork-pr-contributor-approval"].body = {
+          approval_policy: "first_time_contributors",
+        }),
     ],
     [
       "Squash or rebase merges",
       "allow_merge_commit is true",
-      (s) => ((s[""].body as Record<string, unknown>).allow_merge_commit = true),
+      (s) =>
+        ((s[""].body as Record<string, unknown>).allow_merge_commit = true),
     ],
     [
       'Ruleset "Release tags are immutable"',
@@ -451,18 +635,32 @@ describe("scripts/github-settings.ts check", () => {
         (s["rulesets/101"].body = {
           ...immutable,
           id: 101,
-          bypass_actors: [{ actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always" }],
+          bypass_actors: [
+            {
+              actor_id: 5,
+              actor_type: "RepositoryRole",
+              bypass_mode: "always",
+            },
+          ],
         }),
     ],
     [
       'Ruleset "Release tags are immutable"',
       "missing",
-      (s) => (s["rulesets?per_page=100"].body = (s["rulesets?per_page=100"].body as Ruleset[]).filter((r) => r.id !== 101)),
+      (s) =>
+        (s["rulesets?per_page=100"].body = (
+          s["rulesets?per_page=100"].body as Ruleset[]
+        ).filter((r) => r.id !== 101)),
     ],
     [
       'Ruleset "Release tags are created by an admin"',
       'enforcement is "disabled"',
-      (s) => (s["rulesets/102"].body = { ...creation, id: 102, enforcement: "disabled" }),
+      (s) =>
+        (s["rulesets/102"].body = {
+          ...creation,
+          id: 102,
+          enforcement: "disabled",
+        }),
     ],
     [
       "Dependabot can push its branches",
@@ -491,7 +689,11 @@ describe("scripts/github-settings.ts check", () => {
         (s[`rulesets/${BRANCH_RULESET.id}`].body = {
           ...BRANCH_RULESET,
           conditions: { ref_name: { include: ["~ALL"], exclude: [] } },
-          rules: [{ type: "non_fast_forward" }, { type: "deletion" }, { type: "required_signatures" }],
+          rules: [
+            { type: "non_fast_forward" },
+            { type: "deletion" },
+            { type: "required_signatures" },
+          ],
         }),
     ],
     [
@@ -502,20 +704,31 @@ describe("scripts/github-settings.ts check", () => {
       (s) =>
         (s[`rulesets/${BRANCH_RULESET.id}`].body = {
           ...BRANCH_RULESET,
-          conditions: { ref_name: { include: ["~ALL"], exclude: ["refs/heads/dependabot/bun/**"] } },
+          conditions: {
+            ref_name: {
+              include: ["~ALL"],
+              exclude: ["refs/heads/dependabot/bun/**"],
+            },
+          },
         }),
     ],
-    ["Interactions limited to collaborators", "no limit", (s) => (s["interaction-limits"].body = {})],
+    [
+      "Interactions limited to collaborators",
+      "no limit",
+      (s) => (s["interaction-limits"].body = {}),
+    ],
     [
       "Interactions limited to collaborators",
       'limit is "contributors_only"',
-      (s) => (s["interaction-limits"] = interactionLimit("contributors_only", 150)),
+      (s) =>
+        (s["interaction-limits"] = interactionLimit("contributors_only", 150)),
     ],
     [
       // It lapses on its own; a month's notice leaves time to set it again.
       "Interactions limited to collaborators",
       "within 30 days",
-      (s) => (s["interaction-limits"] = interactionLimit("collaborators_only", 29)),
+      (s) =>
+        (s["interaction-limits"] = interactionLimit("collaborators_only", 29)),
     ],
     ...(["has_projects", "has_wiki", "has_discussions"] as const).map(
       (feature): [string, string, (state: State) => void] => [
@@ -527,18 +740,32 @@ describe("scripts/github-settings.ts check", () => {
     ...(
       [
         ["missing", (s) => delete s["environments/release"]],
-        [`reviewers is ["User:1"], want ["User:${OWNER_ID}"]`, (s) => (s["environments/release"] = releaseEnvironment(ownerReviews(1)))],
-        ["reviewers is []", (s) => (s["environments/release"] = releaseEnvironment(null))],
+        [
+          `reviewers is ["User:1"], want ["User:${OWNER_ID}"]`,
+          (s) =>
+            (s["environments/release"] = releaseEnvironment(ownerReviews(1))),
+        ],
+        [
+          "reviewers is []",
+          (s) => (s["environments/release"] = releaseEnvironment(null)),
+        ],
         [
           // A sole maintainer could never approve their own release.
           "prevent_self_review is true",
-          (s) => (s["environments/release"] = releaseEnvironment({ ...ownerReviews(), prevent_self_review: true })),
+          (s) =>
+            (s["environments/release"] = releaseEnvironment({
+              ...ownerReviews(),
+              prevent_self_review: true,
+            })),
         ],
         [
           // Any branch may deploy; the policies are not even listed then.
           "deployment_branch_policy is null",
           (s) => {
-            s["environments/release"] = releaseEnvironment(ownerReviews(), null);
+            s["environments/release"] = releaseEnvironment(
+              ownerReviews(),
+              null,
+            );
             delete s[RELEASE_POLICIES];
           },
         ],
@@ -553,7 +780,15 @@ describe("scripts/github-settings.ts check", () => {
           },
         ],
         ["policies is []", (s) => (s[RELEASE_POLICIES] = releasePolicies())],
-        ['policies is ["branch:v*"]', (s) => (s[RELEASE_POLICIES] = releasePolicies({ id: 20, name: "v*", type: "branch" }))],
+        [
+          'policies is ["branch:v*"]',
+          (s) =>
+            (s[RELEASE_POLICIES] = releasePolicies({
+              id: 20,
+              name: "v*",
+              type: "branch",
+            })),
+        ],
         [
           'policies is ["branch:master","tag:v*"]',
           (s) =>
@@ -562,7 +797,15 @@ describe("scripts/github-settings.ts check", () => {
               { id: 21, name: "master", type: "branch" },
             )),
         ],
-        ['policies is ["tag:*"]', (s) => (s[RELEASE_POLICIES] = releasePolicies({ id: 20, name: "*", type: "tag" }))],
+        [
+          'policies is ["tag:*"]',
+          (s) =>
+            (s[RELEASE_POLICIES] = releasePolicies({
+              id: 20,
+              name: "*",
+              type: "tag",
+            })),
+        ],
       ] as [string, (state: State) => void][]
     ).map(([detail, drift]): [string, string, (state: State) => void] => [
       "Release environment, approved by the owner, from v* tags only",
@@ -597,7 +840,12 @@ describe("scripts/github-settings.ts check", () => {
     const state = inSync();
     state[`rulesets/${BRANCH_RULESET.id}`].body = {
       ...BRANCH_RULESET,
-      conditions: { ref_name: { include: ["refs/heads/*", "refs/heads/dependabot/*"], exclude: [] } },
+      conditions: {
+        ref_name: {
+          include: ["refs/heads/*", "refs/heads/dependabot/*"],
+          exclude: [],
+        },
+      },
     };
     expect(run(state, ["check"]).exitCode).toBe(0);
   });
@@ -614,8 +862,12 @@ describe("scripts/github-settings.ts check", () => {
 
   it("ignores a branch ruleset that is not enforced", () => {
     const state = inSync();
-    state["rulesets?per_page=100"].body = (state["rulesets?per_page=100"].body as Ruleset[]).map((ruleset) =>
-      ruleset.id === BRANCH_RULESET.id ? { ...ruleset, enforcement: "disabled" } : ruleset,
+    state["rulesets?per_page=100"].body = (
+      state["rulesets?per_page=100"].body as Ruleset[]
+    ).map((ruleset) =>
+      ruleset.id === BRANCH_RULESET.id
+        ? { ...ruleset, enforcement: "disabled" }
+        : ruleset,
     );
     state[`rulesets/${BRANCH_RULESET.id}`].body = {
       ...BRANCH_RULESET,
@@ -633,10 +885,15 @@ describe("scripts/github-settings.ts check", () => {
 
   it("exits 2, not 1, when GitHub refuses to answer", () => {
     const state = inSync();
-    state["private-vulnerability-reporting"] = { status: 403, body: { message: "Must have admin rights to Repository." } };
+    state["private-vulnerability-reporting"] = {
+      status: 403,
+      body: { message: "Must have admin rights to Repository." },
+    };
     const result = run(state, ["check"]);
     expect(result.exitCode).toBe(2);
-    expect(result.stderr).toContain("HTTP 403 (Must have admin rights to Repository.)");
+    expect(result.stderr).toContain(
+      "HTTP 403 (Must have admin rights to Repository.)",
+    );
     expect(result.stderr).toContain("administrator");
   });
 
@@ -683,23 +940,48 @@ describe("scripts/github-settings.ts apply", () => {
     ]);
     const body = (index: number) => writes[index].body;
     expect(body(2)).toEqual({
-      security_and_analysis: { secret_scanning: { status: "enabled" }, secret_scanning_push_protection: { status: "enabled" } },
+      security_and_analysis: {
+        secret_scanning: { status: "enabled" },
+        secret_scanning_push_protection: { status: "enabled" },
+      },
     });
-    expect(body(5)).toEqual({ enabled: true, allowed_actions: "selected", sha_pinning_required: true });
+    expect(body(5)).toEqual({
+      enabled: true,
+      allowed_actions: "selected",
+      sha_pinning_required: true,
+    });
     expect(body(6)).toEqual(selectedActions);
-    expect(body(8)).toMatchObject({ allow_merge_commit: false, allow_rebase_merge: true, delete_branch_on_merge: true });
+    expect(body(8)).toMatchObject({
+      allow_merge_commit: false,
+      allow_rebase_merge: true,
+      delete_branch_on_merge: true,
+    });
     expect(body(9)).toEqual(immutable);
     expect(body(10)).toEqual(creation);
     // Only the conditions, so the owner's rules and bypass stay as they are.
-    expect(body(11)).toEqual({ conditions: { ref_name: { include: ["~ALL"], exclude: ["refs/heads/dependabot/**"] } } });
-    expect(body(12)).toEqual({ limit: "collaborators_only", expiry: "six_months" });
+    expect(body(11)).toEqual({
+      conditions: {
+        ref_name: { include: ["~ALL"], exclude: ["refs/heads/dependabot/**"] },
+      },
+    });
+    expect(body(12)).toEqual({
+      limit: "collaborators_only",
+      expiry: "six_months",
+    });
     // Issues stay on: the owner files them, and the limit keeps others out.
-    expect(body(13)).toEqual({ has_projects: false, has_wiki: false, has_discussions: false });
+    expect(body(13)).toEqual({
+      has_projects: false,
+      has_wiki: false,
+      has_discussions: false,
+    });
     // The reviewer is the owner GET /repos names.
     expect(body(14)).toEqual({
       reviewers: [{ type: "User", id: 24436231 }],
       prevent_self_review: false,
-      deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
+      deployment_branch_policy: {
+        protected_branches: false,
+        custom_branch_policies: true,
+      },
     });
     expect(body(15)).toEqual({ name: "v*", type: "tag" });
   });
@@ -707,7 +989,9 @@ describe("scripts/github-settings.ts apply", () => {
   it("names the repository's owner as the release reviewer, whoever that is", () => {
     const state = inSync();
     state["environments/release"] = releaseEnvironment(ownerReviews(1));
-    const writes = run(state, ["apply"]).calls.filter((call) => call.method !== "GET");
+    const writes = run(state, ["apply"]).calls.filter(
+      (call) => call.method !== "GET",
+    );
     // The tag policy is already there, so only the environment is written.
     expect(writes).toEqual([
       {
@@ -716,7 +1000,10 @@ describe("scripts/github-settings.ts apply", () => {
         body: {
           reviewers: [{ type: "User", id: OWNER_ID }],
           prevent_self_review: false,
-          deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
+          deployment_branch_policy: {
+            protected_branches: false,
+            custom_branch_policies: true,
+          },
         },
       },
     ]);
@@ -728,7 +1015,9 @@ describe("scripts/github-settings.ts apply", () => {
       { id: 20, name: "v*", type: "branch" },
       { id: 21, name: "master", type: "branch" },
     );
-    const writes = run(state, ["apply"]).calls.filter((call) => call.method !== "GET");
+    const writes = run(state, ["apply"]).calls.filter(
+      (call) => call.method !== "GET",
+    );
     expect(writes.map((call) => `${call.method} ${call.endpoint}`)).toEqual([
       "PUT environments/release",
       // Removed before the tag is added: a branch v* has the same name.
@@ -741,8 +1030,13 @@ describe("scripts/github-settings.ts apply", () => {
 
   it("keeps a tag v* policy that is already there", () => {
     const state = inSync();
-    state[RELEASE_POLICIES] = releasePolicies({ id: 20, name: "v*", type: "tag" }, { id: 21, name: "*", type: "tag" });
-    const writes = run(state, ["apply"]).calls.filter((call) => call.method !== "GET");
+    state[RELEASE_POLICIES] = releasePolicies(
+      { id: 20, name: "v*", type: "tag" },
+      { id: 21, name: "*", type: "tag" },
+    );
+    const writes = run(state, ["apply"]).calls.filter(
+      (call) => call.method !== "GET",
+    );
     expect(writes.map((call) => `${call.method} ${call.endpoint}`)).toEqual([
       "PUT environments/release",
       "DELETE environments/release/deployment-branch-policies/21",
@@ -752,17 +1046,31 @@ describe("scripts/github-settings.ts apply", () => {
   it("sets an expiring interaction limit again, restarting its six months", () => {
     const state = inSync();
     state["interaction-limits"] = interactionLimit("collaborators_only", 5);
-    const writes = run(state, ["apply"]).calls.filter((call) => call.method !== "GET");
+    const writes = run(state, ["apply"]).calls.filter(
+      (call) => call.method !== "GET",
+    );
     expect(writes).toEqual([
-      { method: "PUT", endpoint: "interaction-limits", body: { limit: "collaborators_only", expiry: "six_months" } },
+      {
+        method: "PUT",
+        endpoint: "interaction-limits",
+        body: { limit: "collaborators_only", expiry: "six_months" },
+      },
     ]);
   });
 
   it("replaces a ruleset that exists under its name rather than adding a second", () => {
     const state = inSync();
-    state["rulesets/101"].body = { ...immutable, id: 101, rules: [{ type: "deletion" }] };
-    const writes = run(state, ["apply"]).calls.filter((call) => call.method !== "GET");
-    expect(writes).toEqual([{ method: "PUT", endpoint: "rulesets/101", body: immutable }]);
+    state["rulesets/101"].body = {
+      ...immutable,
+      id: 101,
+      rules: [{ type: "deletion" }],
+    };
+    const writes = run(state, ["apply"]).calls.filter(
+      (call) => call.method !== "GET",
+    );
+    expect(writes).toEqual([
+      { method: "PUT", endpoint: "rulesets/101", body: immutable },
+    ]);
   });
 
   it("exits 2 when GitHub refuses a write", () => {
@@ -770,6 +1078,8 @@ describe("scripts/github-settings.ts apply", () => {
     state["immutable-releases"].body = { enabled: false };
     const result = run(state, ["apply"], { writeStatus: 403 });
     expect(result.exitCode).toBe(2);
-    expect(result.stderr).toContain("PUT repos/example/stoky/immutable-releases answered HTTP 403");
+    expect(result.stderr).toContain(
+      "PUT repos/example/stoky/immutable-releases answered HTTP 403",
+    );
   });
 });

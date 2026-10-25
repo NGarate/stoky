@@ -51,7 +51,9 @@ describe("when a screen fails to render", () => {
     const retry = mock(() => {});
     renderWithIntl(<DashboardError error={FAILURE} retry={retry} />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Volver a intentarlo" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Volver a intentarlo" }),
+    );
 
     expect(retry).toHaveBeenCalledTimes(1);
   });
@@ -63,10 +65,16 @@ describe("when a screen fails to render", () => {
     const retry = mock(() => {});
     const reset = mock(() => {});
     renderWithIntl(
-      <DashboardError error={FAILURE} {...({ reset } as object)} retry={retry} />,
+      <DashboardError
+        error={FAILURE}
+        {...({ reset } as object)}
+        retry={retry}
+      />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Volver a intentarlo" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Volver a intentarlo" }),
+    );
 
     expect(retry).toHaveBeenCalledTimes(1);
     expect(reset).not.toHaveBeenCalled();
@@ -77,9 +85,10 @@ describe("when a screen fails to render", () => {
     // transient — a link to a different route is the only escape.
     renderWithIntl(<DashboardError error={FAILURE} retry={() => {}} />);
 
-    expect(
-      screen.getByRole("link", { name: "Ir al inicio" }),
-    ).toHaveAttribute("href", "/dashboard");
+    expect(screen.getByRole("link", { name: "Ir al inicio" })).toHaveAttribute(
+      "href",
+      "/dashboard",
+    );
   });
 
   it("says nothing was lost, because nothing was", () => {
@@ -90,7 +99,9 @@ describe("when a screen fails to render", () => {
       <DashboardError error={FAILURE} retry={() => {}} />,
     );
 
-    expect(container.textContent).toContain("nada de lo que hayas apuntado se ha perdido");
+    expect(container.textContent).toContain(
+      "nada de lo que hayas apuntado se ha perdido",
+    );
   });
 
   it("shows the digest, which is the only thread back to the server log", () => {

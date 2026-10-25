@@ -61,7 +61,6 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
     [entries, product],
   );
 
-
   const back = { href: `/products/${id}`, label: t("backToProduct") };
 
   // Two questions, one screen: whichever has not answered is the one the
@@ -113,12 +112,10 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
         <>
           <div className="mt-6 rounded border border-border bg-card p-4">
             <StockHistoryChart
-              points={[...points]
-                .reverse()
-                .map((point) => ({
-                  date: new Date(point.createdAt).toISOString(),
-                  total: point.total,
-                }))}
+              points={[...points].reverse().map((point) => ({
+                date: new Date(point.createdAt).toISOString(),
+                total: point.total,
+              }))}
               unit={product.defaultUnit}
             />
           </div>
@@ -136,7 +133,10 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
                 <ItemRow
                   key={entry.id}
                   meta={[
-                    { label: t("typeHeader"), value: t(`op${entry.operationType}`) },
+                    {
+                      label: t("typeHeader"),
+                      value: t(`op${entry.operationType}`),
+                    },
                     {
                       label: t("changeHeader"),
                       value: `${entry.quantity > 0 ? "+" : ""}${units.quantity(entry.quantity, entry.unit)}`,

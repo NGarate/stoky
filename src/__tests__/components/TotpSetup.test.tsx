@@ -27,7 +27,10 @@ const CODES = [
   "GGGG-HHHH-JJJJ-KKKK-MMMM-NNNN",
   "PPPP-QQQQ-RRRR-SSSS-TTTT-VVVV",
 ];
-const NEW_CODES = ["WWWW-XXXX-YYYY-ZZZZ-0000-1111", "2222-3333-4444-5555-6666-7777"];
+const NEW_CODES = [
+  "WWWW-XXXX-YYYY-ZZZZ-0000-1111",
+  "2222-3333-4444-5555-6666-7777",
+];
 
 interface Me {
   id: string;
@@ -79,13 +82,19 @@ mock.module("@/lib/trpc/client", () => ({
     }),
     auth: {
       me: {
-        useQuery: () => ({ data: me, error: null, fetchStatus: "idle", refetch: async () => {} }),
+        useQuery: () => ({
+          data: me,
+          error: null,
+          fetchStatus: "idle",
+          refetch: async () => {},
+        }),
       },
     },
   },
 }));
 
-const { TwoFactorSettings } = await import("@/components/security/TwoFactorSettings");
+const { TwoFactorSettings } =
+  await import("@/components/security/TwoFactorSettings");
 
 beforeEach(() => {
   me = { id: "u-cocina", role: "MEMBER", twoFactorEnabled: false };
@@ -99,7 +108,11 @@ beforeEach(() => {
 afterEach(cleanup);
 
 /** Opens the password dialog with `button` and confirms it. */
-async function confirm(user: ReturnType<typeof userEvent.setup>, button: string, password = PASSWORD) {
+async function confirm(
+  user: ReturnType<typeof userEvent.setup>,
+  button: string,
+  password = PASSWORD,
+) {
   await user.click(screen.getByRole("button", { name: button }));
   const dialog = await screen.findByRole("dialog");
   await user.type(within(dialog).getByLabelText(es.reauth.password), password);
@@ -115,7 +128,8 @@ async function enrol(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByRole("heading", { name: t.codesTitle });
 }
 
-const codesOnScreen = () => CODES.filter((code) => screen.queryByText(code) !== null);
+const codesOnScreen = () =>
+  CODES.filter((code) => screen.queryByText(code) !== null);
 
 describe("who may set it up", () => {
   it.each(["KITCHEN", "MEMBER", "ADMIN", "OWNER"] as const)(
@@ -124,7 +138,9 @@ describe("who may set it up", () => {
       me = { ...me, role };
       renderWithIntl(<TwoFactorSettings />);
 
-      expect(screen.getByRole("button", { name: t.turnOn })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: t.turnOn }),
+      ).toBeInTheDocument();
       expect(screen.getByText(t.statusOff)).toBeInTheDocument();
     },
   );
@@ -134,7 +150,9 @@ describe("who may set it up", () => {
     renderWithIntl(<TwoFactorSettings />);
 
     expect(screen.getByText(t.statusOn)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: t.regenerate })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: t.regenerate }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: t.turnOff })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: t.turnOn })).toBeNull();
   });
@@ -148,15 +166,24 @@ describe("turning it on", () => {
     await confirm(user, t.turnOn);
 
     expect(calls).toEqual([["enable", PASSWORD]]);
-    expect(await screen.findByRole("heading", { name: t.scanTitle })).toHaveFocus();
+    expect(
+      await screen.findByRole("heading", { name: t.scanTitle }),
+    ).toHaveFocus();
     // The QR code has a name: a grid of squares says nothing to a screen reader.
     const qr = screen.getByRole("img", { name: t.qrLabel });
     expect(qr.tagName.toLowerCase()).toBe("svg");
-    expect(qr.querySelector("path")?.getAttribute("d")).toMatch(/^M\d+ \d+h1v1h-1z/);
+    expect(qr.querySelector("path")?.getAttribute("d")).toMatch(
+      /^M\d+ \d+h1v1h-1z/,
+    );
     // The key, in fours, for somebody who cannot scan.
-    expect(screen.getByText(KEY.replace(/(.{4})(?=.)/g, "$1 "))).toBeInTheDocument();
+    expect(
+      screen.getByText(KEY.replace(/(.{4})(?=.)/g, "$1 ")),
+    ).toBeInTheDocument();
     // And the address itself, for an app on this device.
-    expect(screen.getByRole("link", { name: t.openInApp })).toHaveAttribute("href", URI);
+    expect(screen.getByRole("link", { name: t.openInApp })).toHaveAttribute(
+      "href",
+      URI,
+    );
   });
 
   it("shows no backup code until the first code has turned it on", async () => {
@@ -170,8 +197,13 @@ describe("turning it on", () => {
     await user.type(screen.getByLabelText(t.codeLabel), "123456");
     await user.click(screen.getByRole("button", { name: t.verify }));
 
-    expect(await screen.findByRole("heading", { name: t.codesTitle })).toHaveFocus();
-    expect(calls).toEqual([["enable", PASSWORD], ["verify", "123456"]]);
+    expect(
+      await screen.findByRole("heading", { name: t.codesTitle }),
+    ).toHaveFocus();
+    expect(calls).toEqual([
+      ["enable", PASSWORD],
+      ["verify", "123456"],
+    ]);
     expect(codesOnScreen()).toEqual(CODES);
     expect(screen.getByText(t.codesIntro)).toBeInTheDocument();
     expect(invalidated).toBeGreaterThan(0);
@@ -190,8 +222,13 @@ describe("turning it on", () => {
     await user.type(screen.getByLabelText(t.codeLabel), "000000");
     await user.click(screen.getByRole("button", { name: t.verify }));
 
-    expect(await screen.findByText(es.auth.twoFactorInvalidCode)).toBeInTheDocument();
-    expect(screen.getByLabelText(t.codeLabel)).toHaveAttribute("aria-invalid", "true");
+    expect(
+      await screen.findByText(es.auth.twoFactorInvalidCode),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(t.codeLabel)).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
     expect(screen.queryByRole("heading", { name: t.codesTitle })).toBeNull();
     expect(codesOnScreen()).toEqual([]);
   });
@@ -231,7 +268,9 @@ describe("turning it on", () => {
     await screen.findByRole("heading", { name: t.scanTitle });
     await user.click(screen.getByRole("button", { name: es.common.cancel }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: t.turnOn })).toHaveFocus());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: t.turnOn })).toHaveFocus(),
+    );
   });
 
   it("words a wrong password beside the field, and goes nowhere", async () => {
@@ -242,8 +281,13 @@ describe("turning it on", () => {
     await confirm(user, t.turnOn, "no es esta");
 
     const dialog = screen.getByRole("dialog");
-    expect(await within(dialog).findByText(es.reauth.wrong)).toBeInTheDocument();
-    expect(within(dialog).getByLabelText(es.reauth.password)).toHaveAttribute("aria-invalid", "true");
+    expect(
+      await within(dialog).findByText(es.reauth.wrong),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(es.reauth.password)).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
     expect(screen.queryByRole("heading", { name: t.scanTitle })).toBeNull();
   });
 
@@ -254,11 +298,17 @@ describe("turning it on", () => {
     refusal = new AccountChangeRefusedError("too_many_attempts", 60);
     await confirm(user, t.turnOn);
     const dialog = screen.getByRole("dialog");
-    expect(await within(dialog).findByText(es.reauth.tooMany)).toBeInTheDocument();
+    expect(
+      await within(dialog).findByText(es.reauth.tooMany),
+    ).toBeInTheDocument();
 
     refusal = new AccountChangeRefusedError("already_enabled");
-    await user.click(within(dialog).getAllByRole("button").at(-1) as HTMLElement);
-    expect(await within(dialog).findByText(t.alreadyEnabled)).toBeInTheDocument();
+    await user.click(
+      within(dialog).getAllByRole("button").at(-1) as HTMLElement,
+    );
+    expect(
+      await within(dialog).findByText(t.alreadyEnabled),
+    ).toBeInTheDocument();
     // And the state is read again, so the screen stops offering it.
     await waitFor(() => expect(invalidated).toBeGreaterThan(0));
   });
@@ -289,7 +339,9 @@ describe("the backup codes", () => {
 
     expect(codesOnScreen()).toEqual([]);
     expect(screen.queryByRole("heading", { name: t.codesTitle })).toBeNull();
-    expect(screen.getByRole("button", { name: t.regenerate })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: t.regenerate }),
+    ).toBeInTheDocument();
   });
 
   it("say they cannot be seen again, and copy as text", async () => {
@@ -308,7 +360,9 @@ describe("the backup codes", () => {
     expect(await screen.findByText(t.copied)).toBeInTheDocument();
     expect(written).toHaveLength(1);
     for (const code of CODES) expect(written[0]).toContain(code);
-    expect(screen.getByRole("list", { name: t.codesListLabel })).toBeInTheDocument();
+    expect(
+      screen.getByRole("list", { name: t.codesListLabel }),
+    ).toBeInTheDocument();
   });
 
   it("are replaced with the password, and the new set shown once", async () => {
@@ -318,9 +372,12 @@ describe("the backup codes", () => {
 
     await confirm(user, t.regenerate);
 
-    expect(await screen.findByRole("heading", { name: t.codesTitle })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: t.codesTitle }),
+    ).toBeInTheDocument();
     expect(calls).toEqual([["regenerate", PASSWORD]]);
-    for (const code of NEW_CODES) expect(screen.getByText(code)).toBeInTheDocument();
+    for (const code of NEW_CODES)
+      expect(screen.getByText(code)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: t.codesDone }));
     for (const code of NEW_CODES) expect(screen.queryByText(code)).toBeNull();
@@ -342,7 +399,9 @@ describe("turning it off", () => {
     // Turning it off replaces this browser's session too.
     expect(devicesReread).toBeGreaterThan(0);
     // ASVS 5.0.0 7.4.3: after a change to a factor, the way to end the other sessions.
-    expect(screen.getByRole("link", { name: t.reviewDevicesLink })).toHaveAttribute("href", "#devices");
+    expect(
+      screen.getByRole("link", { name: t.reviewDevicesLink }),
+    ).toHaveAttribute("href", "#devices");
   });
 
   it("asks before it does anything", async () => {
@@ -352,14 +411,17 @@ describe("turning it off", () => {
 
     await user.click(screen.getByRole("button", { name: t.turnOff }));
 
-    expect(await screen.findByRole("dialog", { name: t.turnOffTitle })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("dialog", { name: t.turnOffTitle }),
+    ).toBeInTheDocument();
     expect(calls).toEqual([]);
   });
 });
 
 describe("in English", () => {
   it("says the same things in its own words", async () => {
-    const en = (await import("../../../messages/en.json")).default.twoFactorSettings;
+    const en = (await import("../../../messages/en.json")).default
+      .twoFactorSettings;
     renderWithIntl(<TwoFactorSettings />, { locale: "en" });
 
     expect(screen.getByRole("button", { name: en.turnOn })).toBeInTheDocument();

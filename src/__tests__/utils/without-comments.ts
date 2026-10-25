@@ -31,13 +31,8 @@
 export function withoutComments(source: string): string {
   let out = "";
   let i = 0;
-  let mode:
-    | "code"
-    | "line"
-    | "block"
-    | "single"
-    | "double"
-    | "template" = "code";
+  let mode: "code" | "line" | "block" | "single" | "double" | "template" =
+    "code";
 
   while (i < source.length) {
     const ch = source[i] as string;
@@ -83,8 +78,7 @@ export function withoutComments(source: string): string {
           i += 2;
           break;
         }
-        const closer =
-          mode === "single" ? "'" : mode === "double" ? '"' : "`";
+        const closer = mode === "single" ? "'" : mode === "double" ? '"' : "`";
         if (ch === closer) mode = "code";
         out += ch;
         i += 1;

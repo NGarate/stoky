@@ -30,7 +30,11 @@ function columnsOf(definition: string): string {
     .join(",");
 }
 
-function hasIndex(table: string, columns: string[], options: { unique?: boolean } = {}): boolean {
+function hasIndex(
+  table: string,
+  columns: string[],
+  options: { unique?: boolean } = {},
+): boolean {
   const wanted = columns.join(",");
   return indexes.some(
     (row) =>
@@ -140,7 +144,9 @@ describe("every foreign key", () => {
   // makes deleting the parent scan the child table once per row.
 
   it("has an index on the referencing column", async () => {
-    const unindexed = await prisma.$queryRaw<{ table: string; column: string }[]>`
+    const unindexed = await prisma.$queryRaw<
+      { table: string; column: string }[]
+    >`
       SELECT
         source.relname::text AS "table",
         attribute.attname::text AS "column"

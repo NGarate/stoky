@@ -36,7 +36,9 @@ async function caller() {
 }
 
 beforeAll(async () => {
-  const household = await prisma.household.create({ data: { name: "Unit price household" } });
+  const household = await prisma.household.create({
+    data: { name: "Unit price household" },
+  });
   const user = await prisma.user.create({
     data: {
       email: `unit-price-${Date.now()}@example.com`,
@@ -48,45 +50,125 @@ beforeAll(async () => {
   OWNER.userId = user.id;
   OWNER.householdId = household.id;
 
-  productId = (await prisma.product.create({
-    data: { name: "Leche", defaultUnit: "unidad", householdId: household.id },
-  })).id;
-  mercadona = (await prisma.store.create({ data: { name: "Mercadona", householdId: household.id } })).id;
-  carrefour = (await prisma.store.create({ data: { name: "Carrefour", householdId: household.id } })).id;
-  dia = (await prisma.store.create({ data: { name: "Dia", householdId: household.id } })).id;
+  productId = (
+    await prisma.product.create({
+      data: { name: "Leche", defaultUnit: "unidad", householdId: household.id },
+    })
+  ).id;
+  mercadona = (
+    await prisma.store.create({
+      data: { name: "Mercadona", householdId: household.id },
+    })
+  ).id;
+  carrefour = (
+    await prisma.store.create({
+      data: { name: "Carrefour", householdId: household.id },
+    })
+  ).id;
+  dia = (
+    await prisma.store.create({
+      data: { name: "Dia", householdId: household.id },
+    })
+  ).id;
 
   const at = (minutes: number) => new Date(Date.now() - minutes * 60_000);
   await prisma.priceRecord.createMany({
     data: [
       // Six for 5,34 € is 0,89 € each.
-      { productId, storeId: mercadona, price: 5.34, quantity: 6, unit: "unidad", recordedAt: at(10) },
-      { productId, storeId: carrefour, price: 0.99, quantity: 1, unit: "unidad", recordedAt: at(10) },
+      {
+        productId,
+        storeId: mercadona,
+        price: 5.34,
+        quantity: 6,
+        unit: "unidad",
+        recordedAt: at(10),
+      },
+      {
+        productId,
+        storeId: carrefour,
+        price: 0.99,
+        quantity: 1,
+        unit: "unidad",
+        recordedAt: at(10),
+      },
       // A row no comparison can use, written before validation refused it.
       // Dia's older, valid sighting is the one to report.
-      { productId, storeId: dia, price: 0.95, quantity: 1, unit: "unidad", recordedAt: at(20) },
-      { productId, storeId: dia, price: 1, quantity: 0, unit: "unidad", recordedAt: at(5) },
+      {
+        productId,
+        storeId: dia,
+        price: 0.95,
+        quantity: 1,
+        unit: "unidad",
+        recordedAt: at(20),
+      },
+      {
+        productId,
+        storeId: dia,
+        price: 1,
+        quantity: 0,
+        unit: "unidad",
+        recordedAt: at(5),
+      },
     ],
   });
 
   // Sightings of one product in three units. A dozen converts exactly; a
   // kilo of eggs does not, and dividing by its own quantity would compare
   // euros per kilo with euros per egg.
-  eggsId = (await prisma.product.create({
-    data: { name: "Huevos", defaultUnit: "unidad", householdId: household.id },
-  })).id;
+  eggsId = (
+    await prisma.product.create({
+      data: {
+        name: "Huevos",
+        defaultUnit: "unidad",
+        householdId: household.id,
+      },
+    })
+  ).id;
   await prisma.priceRecord.createMany({
     data: [
-      { productId: eggsId, storeId: mercadona, price: 2.4, quantity: 1, unit: "docena", recordedAt: at(10) },
-      { productId: eggsId, storeId: carrefour, price: 1.5, quantity: 6, unit: "unidad", recordedAt: at(10) },
-      { productId: eggsId, storeId: dia, price: 3, quantity: 12, unit: "unidad", recordedAt: at(20) },
-      { productId: eggsId, storeId: dia, price: 0.5, quantity: 1, unit: "kg", recordedAt: at(5) },
+      {
+        productId: eggsId,
+        storeId: mercadona,
+        price: 2.4,
+        quantity: 1,
+        unit: "docena",
+        recordedAt: at(10),
+      },
+      {
+        productId: eggsId,
+        storeId: carrefour,
+        price: 1.5,
+        quantity: 6,
+        unit: "unidad",
+        recordedAt: at(10),
+      },
+      {
+        productId: eggsId,
+        storeId: dia,
+        price: 3,
+        quantity: 12,
+        unit: "unidad",
+        recordedAt: at(20),
+      },
+      {
+        productId: eggsId,
+        storeId: dia,
+        price: 0.5,
+        quantity: 1,
+        unit: "kg",
+        recordedAt: at(5),
+      },
     ],
   });
 });
 
 afterAll(async () => {
-  await prisma.priceRecord.deleteMany({ where: { productId: { in: [productId, eggsId] } } });
-  await prisma.product.deleteMany({ where: { householdId: OWNER.householdId } });
+  await prisma.priceRecord.deleteMany({
+    where: { productId: { in: [productId, eggsId] } },
+  });
+  await prisma.product.deleteMany({
+    where: { householdId: OWNER.householdId },
+  });
   await prisma.store.deleteMany({ where: { householdId: OWNER.householdId } });
   await prisma.user.deleteMany({ where: { id: OWNER.userId } });
   await prisma.household.deleteMany({ where: { id: OWNER.householdId } });
@@ -130,7 +212,11 @@ describe("sightings in different units", () => {
     const api = await caller();
     const history = await api.price.getHistory({ productId: eggsId, days: 30 });
 
-    expect(history.map((row) => row.unit)).toEqual(["unidad", "unidad", "unidad"]);
+    expect(history.map((row) => row.unit)).toEqual([
+      "unidad",
+      "unidad",
+      "unidad",
+    ]);
   });
 });
 
@@ -149,8 +235,9 @@ describe("price.getHistory", () => {
 describe("price.getProductPrices", () => {
   it("reports the last usable sighting with its unit price", async () => {
     const api = await caller();
-    const [product] = (await api.price.getProductPrices({ search: "Leche" }))
-      .filter((row) => row.id === productId);
+    const [product] = (
+      await api.price.getProductPrices({ search: "Leche" })
+    ).filter((row) => row.id === productId);
 
     const last = product?.priceRecords[0];
     expect(last?.quantity).toBeGreaterThan(0);

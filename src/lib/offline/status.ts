@@ -39,8 +39,7 @@ export function syncStatus(queue: QueueState): SyncSummary {
       (op) => op.reason === "needs-reconciliation",
     );
     const toReview = failed.filter((op) => op.reason === "needs-review");
-    const otherFailures =
-      failed.length - toReconcile.length - toReview.length;
+    const otherFailures = failed.length - toReconcile.length - toReview.length;
 
     // Ordered by what someone has to do about it, hardest first. A session that
     // ended blocks everything else, so it is said first even when other things

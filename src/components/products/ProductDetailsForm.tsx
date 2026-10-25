@@ -52,7 +52,8 @@ interface FieldErrors {
 function serverErrorKey(message: string | undefined): string {
   const normalized = message?.toLowerCase() ?? "";
 
-  if (normalized.includes("unique constraint")) return "errorBarcodeTakenServer";
+  if (normalized.includes("unique constraint"))
+    return "errorBarcodeTakenServer";
   if (normalized.includes("product not found")) return "errorNotFound";
   if (normalized.includes("household")) return "errorNoHousehold";
 
@@ -103,7 +104,10 @@ export function ProductDetailsForm({
         />
       ) : (
         <dl className="mt-2 space-y-3">
-          <Row label={tDetail("brandLabel")} value={product.brand || tDetail("notSet")} />
+          <Row
+            label={tDetail("brandLabel")}
+            value={product.brand || tDetail("notSet")}
+          />
           <Row
             label={tDetail("categoryLabel")}
             value={product.category || tDetail("notSet")}
@@ -334,10 +338,18 @@ function Fields({
       />
 
       <Field id={nameId} label={t("nameLabel")}>
-        <Input id={nameId} onChange={(e) => setName(e.target.value)} value={name} />
+        <Input
+          id={nameId}
+          onChange={(e) => setName(e.target.value)}
+          value={name}
+        />
       </Field>
       <Field id={brandId} label={t("brandLabel")}>
-        <Input id={brandId} onChange={(e) => setBrand(e.target.value)} value={brand} />
+        <Input
+          id={brandId}
+          onChange={(e) => setBrand(e.target.value)}
+          value={brand}
+        />
       </Field>
       <Field id={categoryId} label={t("categoryLabel")}>
         <Input
@@ -363,7 +375,11 @@ function Fields({
         </p>
       </Field>
       <Field id={unitId} label={t("unitLabel")}>
-        <Input id={unitId} onChange={(e) => setUnit(e.target.value)} value={unit} />
+        <Input
+          id={unitId}
+          onChange={(e) => setUnit(e.target.value)}
+          value={unit}
+        />
       </Field>
       <Field id={minStockId} label={t("minStockLabel")}>
         <Input
@@ -403,7 +419,10 @@ function Field({
 }): JSX.Element {
   return (
     <div>
-      <label className="mb-1 block font-medium text-foreground text-sm" htmlFor={id}>
+      <label
+        className="mb-1 block font-medium text-foreground text-sm"
+        htmlFor={id}
+      >
         {label}
       </label>
       {children}

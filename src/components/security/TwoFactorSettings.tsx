@@ -102,7 +102,10 @@ export function TwoFactorSettings(): JSX.Element {
    * as this device — at the moment the screen points to it (7.4.3).
    */
   async function refresh(): Promise<void> {
-    await Promise.all([utils.auth.me.invalidate(), utils.auth.listSessions.invalidate()]);
+    await Promise.all([
+      utils.auth.me.invalidate(),
+      utils.auth.listSessions.invalidate(),
+    ]);
   }
 
   async function submit(password: string): Promise<void> {
@@ -165,10 +168,25 @@ export function TwoFactorSettings(): JSX.Element {
 
   const dialog =
     asking === "enable"
-      ? { title: t("turnOnTitle"), description: t("turnOnBody"), label: t("turnOnAction"), destructive: false }
+      ? {
+          title: t("turnOnTitle"),
+          description: t("turnOnBody"),
+          label: t("turnOnAction"),
+          destructive: false,
+        }
       : asking === "regenerate"
-        ? { title: t("regenerateTitle"), description: t("regenerateBody"), label: t("regenerateAction"), destructive: true }
-        : { title: t("turnOffTitle"), description: t("turnOffBody"), label: t("turnOffAction"), destructive: true };
+        ? {
+            title: t("regenerateTitle"),
+            description: t("regenerateBody"),
+            label: t("regenerateAction"),
+            destructive: true,
+          }
+        : {
+            title: t("turnOffTitle"),
+            description: t("turnOffBody"),
+            label: t("turnOffAction"),
+            destructive: true,
+          };
 
   return (
     <div className="space-y-4">
@@ -194,7 +212,9 @@ export function TwoFactorSettings(): JSX.Element {
         <BackupCodes codes={step.codes} onDone={codesSaved} />
       ) : (
         <>
-          <p className="text-muted-foreground">{enabled ? t("explainOn") : t("explainOff")}</p>
+          <p className="text-muted-foreground">
+            {enabled ? t("explainOn") : t("explainOff")}
+          </p>
           <div className="flex flex-wrap gap-3">
             {enabled ? (
               <>
@@ -234,7 +254,11 @@ export function TwoFactorSettings(): JSX.Element {
 
       <ReauthDialog
         actions={[
-          { id: "go", label: dialog.label, variant: dialog.destructive ? "destructive" : "default" },
+          {
+            id: "go",
+            label: dialog.label,
+            variant: dialog.destructive ? "destructive" : "default",
+          },
         ]}
         description={dialog.description}
         describe={describe}
@@ -253,7 +277,11 @@ export function TwoFactorSettings(): JSX.Element {
  * What changed, and the way to the devices list (ASVS 5.0.0 7.4.3). A link,
  * because it goes somewhere: the list is on this page, above.
  */
-function ChangedNotice({ changed }: { changed: Exclude<Changed, null> }): JSX.Element {
+function ChangedNotice({
+  changed,
+}: {
+  changed: Exclude<Changed, null>;
+}): JSX.Element {
   const t = useTranslations("twoFactorSettings");
   const heading = useRef<HTMLParagraphElement>(null);
 
@@ -272,7 +300,10 @@ function ChangedNotice({ changed }: { changed: Exclude<Changed, null> }): JSX.El
       </p>
       <p className="text-muted-foreground">
         {t("reviewDevices")}{" "}
-        <a className="text-primary underline underline-offset-4 hover:decoration-2" href="#devices">
+        <a
+          className="text-primary underline underline-offset-4 hover:decoration-2"
+          href="#devices"
+        >
           {t("reviewDevicesLink")}
         </a>
       </p>

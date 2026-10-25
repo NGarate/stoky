@@ -102,7 +102,10 @@ const CODE_KEYS: Record<string, AuthErrorKey> = {
   step_up_required: "stepUpRequired",
 };
 
-const INVALID_CREDENTIALS_MARKERS = ["invalid credentials", "invalid email or password"];
+const INVALID_CREDENTIALS_MARKERS = [
+  "invalid credentials",
+  "invalid email or password",
+];
 
 const EMAIL_EXISTS_MARKERS = [
   "already registered",
@@ -152,9 +155,7 @@ export function getAuthErrorKey(
   }
 
   if (
-    EMAIL_EXISTS_MARKERS.some((marker) =>
-      normalizedMessage.includes(marker),
-    )
+    EMAIL_EXISTS_MARKERS.some((marker) => normalizedMessage.includes(marker))
   ) {
     return "emailExists";
   }

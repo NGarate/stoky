@@ -50,7 +50,12 @@ const fixedLength = (buffer: Buffer): Buffer => Buffer.from(buffer);
 
 const canvas = () =>
   sharp({
-    create: { width: 60, height: 40, channels: 3, background: { r: 10, g: 20, b: 30 } },
+    create: {
+      width: 60,
+      height: 40,
+      channels: 3,
+      background: { r: 10, g: 20, b: 30 },
+    },
   }).jpeg();
 
 async function withGps(): Promise<Buffer> {
@@ -144,7 +149,12 @@ describe("agreeing with sharp about colour profiles", () => {
   async function displayP3(): Promise<Buffer> {
     return fixedLength(
       await sharp({
-        create: { width: 60, height: 40, channels: 3, background: { r: 200, g: 20, b: 30 } },
+        create: {
+          width: 60,
+          height: 40,
+          channels: 3,
+          background: { r: 200, g: 20, b: 30 },
+        },
       })
         .withIccProfile("p3")
         .jpeg()
@@ -155,8 +165,12 @@ describe("agreeing with sharp about colour profiles", () => {
   it("sees the profile where sharp does, so the absence below means something", async () => {
     const source = await displayP3();
 
-    expect((await sharp(source).metadata()).icc?.length ?? 0).toBeGreaterThan(0);
-    expect(jpegSegments(source).some((segment) => segment.marker === 0xe2)).toBe(true);
+    expect((await sharp(source).metadata()).icc?.length ?? 0).toBeGreaterThan(
+      0,
+    );
+    expect(
+      jpegSegments(source).some((segment) => segment.marker === 0xe2),
+    ).toBe(true);
   });
 
   it("finds no profile and no application segment but JFIF after a re-encode", async () => {
@@ -194,7 +208,12 @@ describe("what it is for", () => {
     // sees no difference. SOF describes the pixels that are encoded.
     const landscape = fixedLength(
       await sharp({
-        create: { width: 120, height: 60, channels: 3, background: { r: 5, g: 5, b: 5 } },
+        create: {
+          width: 120,
+          height: 60,
+          channels: 3,
+          background: { r: 5, g: 5, b: 5 },
+        },
       })
         .withMetadata({ orientation: 6 })
         .jpeg()
@@ -214,7 +233,12 @@ describe("what it is for", () => {
   it("reads the orientation tag, and agrees with sharp about it", async () => {
     const landscape = fixedLength(
       await sharp({
-        create: { width: 120, height: 60, channels: 3, background: { r: 5, g: 5, b: 5 } },
+        create: {
+          width: 120,
+          height: 60,
+          channels: 3,
+          background: { r: 5, g: 5, b: 5 },
+        },
       })
         .withMetadata({ orientation: 6 })
         .jpeg()
@@ -240,9 +264,10 @@ describe("what it is for", () => {
     // makes the naive check true and the structural one false.
     const decoy = await exifStringInAComment();
 
-    expect(decoy.includes(Buffer.from("Exif")), "the fixture is not a decoy").toBe(
-      true,
-    );
+    expect(
+      decoy.includes(Buffer.from("Exif")),
+      "the fixture is not a decoy",
+    ).toBe(true);
     expect(hasExif(decoy)).toBe(false);
 
     // And sharp agrees with the structural answer, which is what makes it the

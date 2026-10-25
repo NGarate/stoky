@@ -34,12 +34,16 @@ const PASSWORD = "cocina despensa nevera";
 
 function isolatedDatabaseUrl(): { url: string; name: string } {
   const base = process.env.DATABASE_URL;
-  if (!base) throw new Error("DATABASE_URL is not set; run through `bun run test:integration`.");
+  if (!base)
+    throw new Error(
+      "DATABASE_URL is not set; run through `bun run test:integration`.",
+    );
   const url = new URL(base);
   const name = `${url.pathname.slice(1)}_migration`;
   // An identifier cannot be a bind parameter, so it is checked instead: this
   // name is interpolated into CREATE and DROP DATABASE below.
-  if (!/^[a-z0-9_]+$/.test(name)) throw new Error(`Refusing database name ${JSON.stringify(name)}`);
+  if (!/^[a-z0-9_]+$/.test(name))
+    throw new Error(`Refusing database name ${JSON.stringify(name)}`);
   url.pathname = `/${name}`;
   return { url: url.toString(), name };
 }
@@ -55,7 +59,9 @@ function migrate(schema: string, databaseUrl: string): void {
     },
   );
   if (run.exitCode !== 0) {
-    throw new Error(`prisma migrate deploy (${schema}) failed:\n${run.stdout}\n${run.stderr}`);
+    throw new Error(
+      `prisma migrate deploy (${schema}) failed:\n${run.stdout}\n${run.stderr}`,
+    );
   }
 }
 
@@ -71,7 +77,9 @@ const people = [
 let oldHash = "";
 
 beforeAll(async () => {
-  await prisma.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${isolated.name}" WITH (FORCE)`);
+  await prisma.$executeRawUnsafe(
+    `DROP DATABASE IF EXISTS "${isolated.name}" WITH (FORCE)`,
+  );
   await prisma.$executeRawUnsafe(`CREATE DATABASE "${isolated.name}"`);
 
   // `prisma/` as it stood the release before: every migration up to this one,
@@ -106,14 +114,18 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await db?.$disconnect();
-  await prisma.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${isolated.name}" WITH (FORCE)`);
+  await prisma.$executeRawUnsafe(
+    `DROP DATABASE IF EXISTS "${isolated.name}" WITH (FORCE)`,
+  );
   rmSync(before, { recursive: true, force: true });
 });
 
 describe("moving the password hashes into credential Account rows", () => {
   it("gives every existing account exactly one credential row holding its old hash", async () => {
     for (const person of people) {
-      const accounts = await db.account.findMany({ where: { userId: person.id } });
+      const accounts = await db.account.findMany({
+        where: { userId: person.id },
+      });
 
       expect(accounts).toHaveLength(1);
       const [account] = accounts;
@@ -140,8 +152,12 @@ describe("moving the password hashes into credential Account rows", () => {
       const credential = await findCredentialByEmail(db, person.email);
 
       expect(credential?.user.id).toBe(person.id);
-      expect(await verifyPassword(credential?.passwordHash, PASSWORD)).toBe(true);
-      expect(await verifyPassword(credential?.passwordHash, `${PASSWORD}!`)).toBe(false);
+      expect(await verifyPassword(credential?.passwordHash, PASSWORD)).toBe(
+        true,
+      );
+      expect(
+        await verifyPassword(credential?.passwordHash, `${PASSWORD}!`),
+      ).toBe(false);
     }
   });
 

@@ -38,7 +38,19 @@ function normalizeForSimilarity(value: string): string {
  * molde" and "pan" share "pan"; they do not share "de".
  */
 const STOP_WORDS = new Set([
-  "a", "al", "con", "de", "del", "el", "en", "la", "las", "los", "para", "por", "y",
+  "a",
+  "al",
+  "con",
+  "de",
+  "del",
+  "el",
+  "en",
+  "la",
+  "las",
+  "los",
+  "para",
+  "por",
+  "y",
 ]);
 
 function contentTokens(value: string): Set<string> {
@@ -87,7 +99,10 @@ export function tokenSimilarity(left: string, right: string): number {
  * and wrong about identity, so they are capped just under the threshold: they
  * can put a product in front of the person, never confirm it for them.
  */
-export function matchScore(trigramSimilarity: number, containment: number): number {
+export function matchScore(
+  trigramSimilarity: number,
+  containment: number,
+): number {
   return Math.max(
     trigramSimilarity,
     Math.min(containment, AUTO_MATCH_THRESHOLD - 0.01),
@@ -226,7 +241,10 @@ async function findProductMatches(
       name: product.name,
       similarity: matchScore(
         product.trigramSimilarity,
-        Math.max(product.containment, tokenSimilarity(product.name, parsedName)),
+        Math.max(
+          product.containment,
+          tokenSimilarity(product.name, parsedName),
+        ),
       ),
     }))
     .filter((product) => product.similarity > 0.1)

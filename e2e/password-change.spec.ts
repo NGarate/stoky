@@ -1,4 +1,10 @@
-import { test, expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import {
+  test,
+  expect,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from "@playwright/test";
 import es from "../messages/es.json";
 
 /**
@@ -49,7 +55,11 @@ function freshEmail(): string {
     .substring(7)}@example.com`;
 }
 
-async function signIn(page: Page, email: string, password: string): Promise<void> {
+async function signIn(
+  page: Page,
+  email: string,
+  password: string,
+): Promise<void> {
   await page.goto("/login");
   await page.waitForSelector('input[name="email"]');
   // Hydration: a pre-hydration submit falls back to a native POST, the same
@@ -68,8 +78,12 @@ async function signedIn(page: Page): Promise<boolean> {
 }
 
 /** This browser's session cookie: its value, and its expiry (-1: none). */
-async function sessionCookie(context: BrowserContext): Promise<{ value: string; expires: number }> {
-  const cookie = (await context.cookies()).find((c) => c.name.endsWith("session_token"));
+async function sessionCookie(
+  context: BrowserContext,
+): Promise<{ value: string; expires: number }> {
+  const cookie = (await context.cookies()).find((c) =>
+    c.name.endsWith("session_token"),
+  );
   expect(cookie, "no session cookie in this browser").toBeDefined();
   return { value: cookie!.value, expires: cookie!.expires };
 }
@@ -115,9 +129,10 @@ test.describe("changing your own password", () => {
     // expiry and goes when the browser closes — a kitchen tablet left with
     // the box unticked (`remember-me.spec.ts`).
     const beforeChange = await sessionCookie(page.context());
-    expect(beforeChange.expires, "the registered device did not start as a browser session").toBe(
-      -1,
-    );
+    expect(
+      beforeChange.expires,
+      "the registered device did not start as a browser session",
+    ).toBe(-1);
 
     // A copy of this device's cookies as they are before the change: what a
     // thief who lifted the cookie would hold.
@@ -127,17 +142,21 @@ test.describe("changing your own password", () => {
 
     // The controls. Without them the refusals below are equally well
     // explained by those browsers never having been signed in.
-    expect(await signedIn(other.page), "the other device was not signed in to begin with").toBe(
-      true,
-    );
-    expect(await signedIn(copyPage), "the copied cookie was not a session to begin with").toBe(
-      true,
-    );
+    expect(
+      await signedIn(other.page),
+      "the other device was not signed in to begin with",
+    ).toBe(true);
+    expect(
+      await signedIn(copyPage),
+      "the copied cookie was not a session to begin with",
+    ).toBe(true);
 
     // ----------------------------------------------------------------- when --
     await page.goto("/settings/security");
     // Both sessions are listed, so "Cerrar las demás" is offered.
-    await expect(page.getByRole("button", { name: es.security.endOthers })).toBeVisible({
+    await expect(
+      page.getByRole("button", { name: es.security.endOthers }),
+    ).toBeVisible({
       timeout: 30_000,
     });
     await page.getByLabel(t.current).fill(OLD_PASSWORD);
@@ -147,7 +166,9 @@ test.describe("changing your own password", () => {
 
     // ----------------------------------------------------------------- then --
     // Done, said in place, and this device is where it was.
-    await expect(page.getByRole("status").filter({ hasText: t.changedTitle })).toBeVisible({
+    await expect(
+      page.getByRole("status").filter({ hasText: t.changedTitle }),
+    ).toBeVisible({
       timeout: 30_000,
     });
     await expect(page).toHaveURL(/\/settings\/security/);
@@ -159,21 +180,31 @@ test.describe("changing your own password", () => {
     // the `dont_remember` cookie this browser sent, and a browser session
     // that came back with ninety days would outlive the browser closing.
     const afterChange = await sessionCookie(page.context());
-    expect(afterChange.value, "the session cookie was not replaced").not.toBe(beforeChange.value);
+    expect(afterChange.value, "the session cookie was not replaced").not.toBe(
+      beforeChange.value,
+    );
     expect(
       afterChange.expires,
       "the change turned a browser session's cookie into an expiring one",
     ).toBe(-1);
     // The list, read again with the new cookie, holds this device alone.
-    await expect(page.getByRole("button", { name: es.security.endOthers })).toBeHidden({
+    await expect(
+      page.getByRole("button", { name: es.security.endOthers }),
+    ).toBeHidden({
       timeout: 30_000,
     });
     // And it survives a reload, which a cookie kept only in memory would not.
     await page.reload();
-    expect(await signedIn(page), "this device was signed out after a reload").toBe(true);
+    expect(
+      await signedIn(page),
+      "this device was signed out after a reload",
+    ).toBe(true);
 
     // The other device is signed out.
-    expect(await signedIn(other.page), "the other device was still signed in").toBe(false);
+    expect(
+      await signedIn(other.page),
+      "the other device was still signed in",
+    ).toBe(false);
     await other.page.goto("/dashboard");
     await expect(other.page).toHaveURL(/\/login/, { timeout: 30_000 });
 

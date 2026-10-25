@@ -63,7 +63,10 @@ interface Stub<T> {
   refetch: () => void;
 }
 
-let overviewStub: Stub<{ products: ReturnType<typeof row>[]; nextCursor?: string }>;
+let overviewStub: Stub<{
+  products: ReturnType<typeof row>[];
+  nextCursor?: string;
+}>;
 let expiringStub: Stub<unknown[]>;
 let expiredStub: Stub<unknown[]>;
 
@@ -75,7 +78,13 @@ function trpcError(code: string, httpStatus: number): TRPCClientError<never> {
 }
 
 function answered<T>(data: T): Stub<T> {
-  return { data, isPending: false, error: null, fetchStatus: "idle", refetch: () => {} };
+  return {
+    data,
+    isPending: false,
+    error: null,
+    fetchStatus: "idle",
+    refetch: () => {},
+  };
 }
 
 mock.module("@/lib/trpc/client", () => ({
@@ -102,9 +111,8 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
-const { default: DashboardPage } = await import(
-  "@/app/(dashboard)/dashboard/page"
-);
+const { default: DashboardPage } =
+  await import("@/app/(dashboard)/dashboard/page");
 
 beforeEach(() => {
   overviewStub = answered({ products: [row()] });
@@ -139,9 +147,15 @@ describe("the Panel's opening order", () => {
       screen.queryByRole("link", { name: "Escanear un código" }),
     ).toBeAbsent();
     // The other three actions have no other home on this tier and stay.
-    expect(screen.getByRole("link", { name: "Añadir stock" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Apuntar consumo" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Subir un ticket" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Añadir stock" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Apuntar consumo" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Subir un ticket" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -170,7 +184,9 @@ describe("what the Panel does not say twice", () => {
     expect(
       screen.getByRole("heading", { name: "Se está acabando" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Café molido" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Café molido" }),
+    ).toBeInTheDocument();
   });
 
   it("still says all is well in words when nothing needs attention", () => {
@@ -213,14 +229,21 @@ describe("when not every question has an answer", () => {
     };
     renderWithIntl(<DashboardPage />, { locale: "es" });
 
-    expect(screen.getByRole("link", { name: "Café molido" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Café molido" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps a loaded panel when a background refetch fails", () => {
-    overviewStub = { ...answered({ products: [row()] }), error: trpcError("INTERNAL_SERVER_ERROR", 500) };
+    overviewStub = {
+      ...answered({ products: [row()] }),
+      error: trpcError("INTERNAL_SERVER_ERROR", 500),
+    };
     renderWithIntl(<DashboardPage />, { locale: "es" });
 
-    expect(screen.getByRole("link", { name: "Café molido" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Café molido" }),
+    ).toBeInTheDocument();
   });
 
   it("does not call a failed expiry question good news", () => {
@@ -233,8 +256,12 @@ describe("when not every question has an answer", () => {
     };
     renderWithIntl(<DashboardPage />, { locale: "es" });
 
-    expect(screen.queryByText("No hay nada caducado ni a punto de caducar.")).toBeAbsent();
-    expect(screen.getByText("No se han podido cargar los datos")).toBeInTheDocument();
+    expect(
+      screen.queryByText("No hay nada caducado ni a punto de caducar."),
+    ).toBeAbsent();
+    expect(
+      screen.getByText("No se han podido cargar los datos"),
+    ).toBeInTheDocument();
   });
 
   it("offers a household by the server's code, not by the message's words", () => {
@@ -256,13 +283,17 @@ describe("the restock list's state", () => {
     // It derived its own: a warn badge reading "Quedan 1 paquete (mínimo 2)"
     // here and "Stock bajo" on /inventory for the same product (UI-11).
     overviewStub.data = {
-      products: [row({ id: "p-low", name: "Arroz", totalStock: 1, isLowStock: true })],
+      products: [
+        row({ id: "p-low", name: "Arroz", totalStock: 1, isLowStock: true }),
+      ],
     };
     renderWithIntl(<DashboardPage />, { locale: "es" });
 
     expect(screen.getByText("Queda poco")).toBeInTheDocument();
     // How much is left is still said, as a detail rather than as the state.
-    expect(screen.getByText(/Quedan 1 paquete \(mínimo 2\)/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Quedan 1 paquete \(mínimo 2\)/),
+    ).toBeInTheDocument();
   });
 });
 
@@ -289,7 +320,9 @@ describe("the Panel's lists", () => {
     // not structure. Rows separate with dividers (`divide-border` is the
     // dividers' colour, not a box); the border box itself is gone.
     for (const list of screen.getAllByRole("list")) {
-      expect(list.className).not.toMatch(/bg-card|rounded|(?:^| )border(?: |$)/);
+      expect(list.className).not.toMatch(
+        /bg-card|rounded|(?:^| )border(?: |$)/,
+      );
     }
   });
 });

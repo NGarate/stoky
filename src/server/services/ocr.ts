@@ -47,7 +47,11 @@ export function tessdataDirectory(): string | null {
  * worker, which spawns a thread and loads the whole model — not something a
  * test should do to check a string.
  */
-export function workerOptions(): { langPath?: string; cachePath?: string; gzip?: boolean } {
+export function workerOptions(): {
+  langPath?: string;
+  cachePath?: string;
+  gzip?: boolean;
+} {
   const directory = tessdataDirectory();
   if (!directory) return {};
 

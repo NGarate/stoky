@@ -1,5 +1,13 @@
 import "../setup/matchers";
-import { describe, it, expect, afterEach, beforeEach, mock, setSystemTime } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  afterEach,
+  beforeEach,
+  mock,
+  setSystemTime,
+} from "bun:test";
 import { createContext } from "react";
 import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -18,9 +26,10 @@ import type { QueuedOp, EnqueueResult } from "@/lib/offline/queue";
  * refuse reads a number instead of a control (D90's shape).
  */
 
-const enqueue = mock(
-  (_op: unknown): EnqueueResult => ({ ok: true, id: "op-1" }),
-);
+const enqueue = mock((_op: unknown): EnqueueResult => ({
+  ok: true,
+  id: "op-1",
+}));
 const cancel = mock((_id: string) => true);
 
 let pending: QueuedOp[] = [];
@@ -98,9 +107,8 @@ mock.module("@/lib/trpc/client", () => ({
 }));
 
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
-const { ProductDetailView } = await import(
-  "@/app/(dashboard)/products/[id]/page"
-);
+const { ProductDetailView } =
+  await import("@/app/(dashboard)/products/[id]/page");
 
 const renderDetail = () =>
   renderWithIntl(
@@ -172,7 +180,9 @@ describe("each press is a delta, not a new total", () => {
       screen.getByRole("button", { name: "Usar 1 L de «Aceite de oliva»" }),
     );
 
-    const op = enqueue.mock.calls[0]?.[0] as { input?: Record<string, unknown> };
+    const op = enqueue.mock.calls[0]?.[0] as {
+      input?: Record<string, unknown>;
+    };
     expect(op).toMatchObject({
       path: "inventory.consumeStock",
       input: { productId: "p1", quantity: 1, unit: "L" },
@@ -283,9 +293,7 @@ describe("who gets the control", () => {
 
     // Plus is `addStock`, which `writeProcedure` refuses a KITCHEN account.
     // Hiding is courtesy; the middleware is the control (D90).
-    expect(
-      screen.queryByRole("button", { name: /Añadir 1 L/ }),
-    ).toBeAbsent();
+    expect(screen.queryByRole("button", { name: /Añadir 1 L/ })).toBeAbsent();
     expect(screen.queryByRole("button", { name: /Usar 1 L/ })).toBeAbsent();
     // The plain total is a paragraph; the "2 L" in the locations list is a span.
     expect(screen.getByText("2 L", { selector: "p" })).toBeInTheDocument();
@@ -313,7 +321,9 @@ describe("a batch's expiry is read as a date", () => {
 
     // `ExpiryStatus`'s words: the batch dated today goes off today, the one
     // dated yesterday went off yesterday — not "expired" from 02:00 today.
-    expect(screen.getByText("Caduca hoy").closest("li")?.textContent).toContain("6");
+    expect(screen.getByText("Caduca hoy").closest("li")?.textContent).toContain(
+      "6",
+    );
     const expired = screen.getByText("Caducó ayer").closest("li");
     expect(expired?.textContent).toContain("5");
   });

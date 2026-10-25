@@ -36,9 +36,7 @@ describe("withoutComments", () => {
   });
 
   it("a quote inside a comment does not open a string", () => {
-    expect(withoutComments('// it\'s fine\nguard("x");')).toBe(
-      '\nguard("x");',
-    );
+    expect(withoutComments('// it\'s fine\nguard("x");')).toBe('\nguard("x");');
   });
 
   it("a // inside a block comment does not outlive the block", () => {

@@ -188,9 +188,7 @@ self.addEventListener("activate", (event) => {
         names
           .filter(
             (name) =>
-              isOwnCache(name) &&
-              name !== SHELL_CACHE &&
-              name !== STATIC_CACHE,
+              isOwnCache(name) && name !== SHELL_CACHE && name !== STATIC_CACHE,
           )
           .map((name) => self.caches.delete(name)),
       );

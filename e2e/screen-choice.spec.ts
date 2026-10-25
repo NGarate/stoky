@@ -101,7 +101,10 @@ test.describe("Journey 8 — the screen choice", () => {
     // queue has not sent. With a clean queue the confirmation is the second
     // button with the same label, so it is addressed inside the group that
     // asks rather than by position.
-    await page.getByRole("button", { name: es.session.signOut }).first().click();
+    await page
+      .getByRole("button", { name: es.session.signOut })
+      .first()
+      .click();
     const confirm = page.getByRole("group", { name: es.session.signOutTitle });
     await expect(confirm).toBeVisible({ timeout: 15_000 });
     await confirm.getByRole("button", { name: es.session.signOut }).click();
@@ -173,7 +176,9 @@ test.describe("Journey 8 — the screen choice", () => {
       page.getByRole("button", { name: new RegExp(es.start.currentSuffix) }),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: new RegExp(es.start.shopping) }).click();
+    await page
+      .getByRole("button", { name: new RegExp(es.start.shopping) })
+      .click();
 
     // Changing a setting must not also walk you out of settings.
     await expect(page).toHaveURL(/\/settings\/screen/);
@@ -229,7 +234,9 @@ test.describe("Journey 8 — the screen choice", () => {
       page.getByRole("heading", { level: 1, name: es.start.title }),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: new RegExp(es.start.shopping) }).click();
+    await page
+      .getByRole("button", { name: new RegExp(es.start.shopping) })
+      .click();
     await page.waitForURL(/\/shopping/, { timeout: 30_000 });
 
     await context.close();

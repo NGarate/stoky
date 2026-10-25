@@ -6,7 +6,10 @@ import { useTranslations } from "next-intl";
 import { Upload, Camera, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { MAX_RECEIPT_BYTES, RECEIPT_IMAGE_TYPES } from "@/lib/validations/receipt";
+import {
+  MAX_RECEIPT_BYTES,
+  RECEIPT_IMAGE_TYPES,
+} from "@/lib/validations/receipt";
 
 interface UploadZoneProps {
   onUpload: (file: File) => void;
@@ -168,7 +171,10 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
           <input {...getInputProps({ "aria-label": t("dropzoneLabel") })} />
           <div className="space-y-4">
             <div className="flex justify-center">
-              <Upload aria-hidden="true" className="size-12 text-muted-foreground" />
+              <Upload
+                aria-hidden="true"
+                className="size-12 text-muted-foreground"
+              />
             </div>
             <p className="text-foreground">
               {isDragActive ? t("dropActive") : t("dropPrompt")}

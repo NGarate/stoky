@@ -64,7 +64,9 @@ describe("which queries are kept", () => {
 });
 
 describe("what the options say", () => {
-  const options = persistOptions("clttttttttttttttttttttttt", { storage: null });
+  const options = persistOptions("clttttttttttttttttttttttt", {
+    storage: null,
+  });
 
   it("never persists a mutation", () => {
     // query-core's default is `isPaused`, and `networkMode` is "online" — so a
@@ -81,7 +83,9 @@ describe("what the options say", () => {
       ),
     ).toBe(true);
     expect(
-      options.dehydrateOptions.shouldDehydrateQuery(query([["receipt", "list"]])),
+      options.dehydrateOptions.shouldDehydrateQuery(
+        query([["receipt", "list"]]),
+      ),
     ).toBe(false);
   });
 
@@ -89,7 +93,9 @@ describe("what the options say", () => {
     // The buster carries the account, so a device that changes hands does not
     // restore the previous household under the next person's session.
     const mine = persistOptions("clttttttttttttttttttttttt", { storage: null });
-    const theirs = persistOptions("clsomeoneelsesomeoneelses", { storage: null });
+    const theirs = persistOptions("clsomeoneelsesomeoneelses", {
+      storage: null,
+    });
 
     expect(mine.buster).not.toBe(theirs.buster);
   });

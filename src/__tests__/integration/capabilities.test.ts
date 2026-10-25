@@ -44,7 +44,10 @@ let orphan: Caller;
 /** The kitchen account's own id, for the replay envelope the writes carry. */
 let kitchenUserId: string;
 
-async function callerFor(role: HouseholdRole, withHousehold = true): Promise<Caller> {
+async function callerFor(
+  role: HouseholdRole,
+  withHousehold = true,
+): Promise<Caller> {
   const user = await createTestUser({
     email: generateTestEmail(`cap-${role.toLowerCase()}`),
     name: `Capability ${role}`,
@@ -73,7 +76,10 @@ async function expectRefused(
   // The code matters as much as the refusal: DEBT-4's symptom is an
   // authorisation failure arriving at the client as INTERNAL_SERVER_ERROR,
   // which a client cannot tell apart from the server falling over.
-  expect((thrown as TRPCError).code, `${label} was refused with the wrong code`).toBe(code);
+  expect(
+    (thrown as TRPCError).code,
+    `${label} was refused with the wrong code`,
+  ).toBe(code);
 }
 
 beforeAll(async () => {
@@ -125,7 +131,9 @@ afterAll(async () => {
   await prisma.product.deleteMany({ where: { householdId } });
   await prisma.storageLocation.deleteMany({ where: { householdId } });
   await prisma.store.deleteMany({ where: { householdId } });
-  await prisma.user.deleteMany({ where: { name: { startsWith: "Capability " } } });
+  await prisma.user.deleteMany({
+    where: { name: { startsWith: "Capability " } },
+  });
   await prisma.household.deleteMany({ where: { name: HOUSEHOLD_NAME } });
 });
 
@@ -143,7 +151,6 @@ describe("Journey 2 — a kitchen account is refused a write by the server", () 
       productId,
       quantity: 1,
       unit: "L",
-
     });
 
     expect(entry.quantity).toBe(-1);
@@ -166,7 +173,9 @@ describe("Journey 2 — a kitchen account is refused a write by the server", () 
     });
     expect(added.productId).toBe(productId);
 
-    const row = await prisma.shoppingItem.findUnique({ where: { id: added.id } });
+    const row = await prisma.shoppingItem.findUnique({
+      where: { id: added.id },
+    });
     expect(row).not.toBeNull();
   });
 
@@ -175,7 +184,9 @@ describe("Journey 2 — a kitchen account is refused a write by the server", () 
     const itemsBefore = await prisma.shoppingItem.count({
       where: { shoppingList: { householdId } },
     });
-    const productsBefore = await prisma.product.count({ where: { householdId } });
+    const productsBefore = await prisma.product.count({
+      where: { householdId },
+    });
 
     await expectRefused("inventory.addStock", () =>
       kitchen.inventory.addStock({
@@ -183,7 +194,6 @@ describe("Journey 2 — a kitchen account is refused a write by the server", () 
         productId,
         quantity: 5,
         unit: "L",
-
       }),
     );
     await expectRefused("shopping.updateItem", () =>
@@ -197,19 +207,30 @@ describe("Journey 2 — a kitchen account is refused a write by the server", () 
       kitchen.shopping.generateFromLowStock(),
     );
     await expectRefused("product.create", () =>
-      kitchen.product.create({ name: "Kitchen Should Not Create", defaultUnit: "unit" }),
+      kitchen.product.create({
+        name: "Kitchen Should Not Create",
+        defaultUnit: "unit",
+      }),
     );
     await expectRefused("product.scanBarcode", () =>
       kitchen.product.scanBarcode({ barcode: "8410000000000" }),
     );
 
-    expect(await prisma.stockEntry.count({ where: { productId } })).toBe(stockBefore);
+    expect(await prisma.stockEntry.count({ where: { productId } })).toBe(
+      stockBefore,
+    );
     expect(
-      await prisma.shoppingItem.count({ where: { shoppingList: { householdId } } }),
+      await prisma.shoppingItem.count({
+        where: { shoppingList: { householdId } },
+      }),
     ).toBe(itemsBefore);
-    expect(await prisma.product.count({ where: { householdId } })).toBe(productsBefore);
+    expect(await prisma.product.count({ where: { householdId } })).toBe(
+      productsBefore,
+    );
 
-    const item = await prisma.shoppingItem.findUnique({ where: { id: shoppingItemId } });
+    const item = await prisma.shoppingItem.findUnique({
+      where: { id: shoppingItemId },
+    });
     expect(item?.isChecked).toBe(false);
   });
 
@@ -244,7 +265,9 @@ describe("the tiers above kitchen", () => {
   });
 
   it("lets an admin change the household's own settings", async () => {
-    const location = await admin.location.create({ name: "Admin Created Location" });
+    const location = await admin.location.create({
+      name: "Admin Created Location",
+    });
     const store = await admin.store.create({ name: "Admin Created Store" });
 
     expect(location.id).toBeDefined();

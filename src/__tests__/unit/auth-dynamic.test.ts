@@ -46,7 +46,9 @@ describe("auth() declares itself dynamic", () => {
     );
     const message = error instanceof Error ? error.message : String(error);
 
-    expect(message).toContain("`connection` was called outside a request scope");
+    expect(message).toContain(
+      "`connection` was called outside a request scope",
+    );
   });
 });
 
@@ -75,7 +77,10 @@ describe("only the auth seam reaches Better Auth", () => {
     rel === join("server", "http", "auth-handler.ts");
 
   it("matches the instance's own imports, so the pattern can match", () => {
-    const instance = readFileSync(join(SRC, "lib", "auth", "instance.ts"), "utf8");
+    const instance = readFileSync(
+      join(SRC, "lib", "auth", "instance.ts"),
+      "utf8",
+    );
     expect(BETTER_AUTH.test(instance)).toBe(true);
   });
 

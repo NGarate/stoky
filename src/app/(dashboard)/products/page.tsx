@@ -7,10 +7,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ItemRow } from "@/components/ui/item-row";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
-import {
-  StockAmount,
-  StockStatus,
-} from "@/components/inventory/StockStatus";
+import { StockAmount, StockStatus } from "@/components/inventory/StockStatus";
 import { isLowStock } from "@/lib/stock/low-stock";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
@@ -154,77 +151,85 @@ export default function ProductsPage(): JSX.Element {
           hidden one makes "the product is on the page" assert false on the tier
           where it is true. */}
       {products.length > 0 ? (
-      <div className="hidden overflow-hidden rounded-lg border border-border bg-card shadow lg:block">
-        <table className="w-full">
-          <thead className="bg-muted text-muted-foreground">
-            <tr>
-              <th className="px-4 py-3 text-left">{t("nameHeader")}</th>
-              <th className="px-4 py-3 text-left">{t("brandHeader")}</th>
-              <th className="px-4 py-3 text-left">{t("categoryHeader")}</th>
-              <th className="px-4 py-3 text-right">{t("stockHeader")}</th>
-              <th className="px-4 py-3 text-center">{t("actionsHeader")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((product) => (
-              <tr key={product.id} className="border-t border-border">
-                <td className="px-4 py-3">
-                  <Button asChild variant="link">
-                    <Link href={`/products/${product.id}`}>{product.name}</Link>
-                  </Button>
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">
-                  {product.brand || "-"}
-                </td>
-                <td className="px-4 py-3">
-                  <Badge tone="neutral">
-                    {product.category || t("noCategory")}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  {/* The number and what it means, in the same cell rather
+        <div className="hidden overflow-hidden rounded-lg border border-border bg-card shadow lg:block">
+          <table className="w-full">
+            <thead className="bg-muted text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 text-left">{t("nameHeader")}</th>
+                <th className="px-4 py-3 text-left">{t("brandHeader")}</th>
+                <th className="px-4 py-3 text-left">{t("categoryHeader")}</th>
+                <th className="px-4 py-3 text-right">{t("stockHeader")}</th>
+                <th className="px-4 py-3 text-center">{t("actionsHeader")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.map((product) => (
+                <tr key={product.id} className="border-t border-border">
+                  <td className="px-4 py-3">
+                    <Button asChild variant="link">
+                      <Link href={`/products/${product.id}`}>
+                        {product.name}
+                      </Link>
+                    </Button>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {product.brand || "-"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge tone="neutral">
+                      {product.category || t("noCategory")}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {/* The number and what it means, in the same cell rather
                       than a new column: the state was carried by the colour
                       of the number and by nothing else. */}
-                  <span className="flex items-center justify-end gap-2">
-                    <StockAmount
-                      defaultUnit={product.defaultUnit}
-                      isLowStock={isLowStock(product.totalStock, product.minStock)}
-                      totalStock={product.totalStock}
-                    />
-                    <StockStatus
-                      isLowStock={isLowStock(product.totalStock, product.minStock)}
-                      totalStock={product.totalStock}
-                    />
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  {/* Every link 48px in both directions (DESIGN_AUDIT A4.2)
+                    <span className="flex items-center justify-end gap-2">
+                      <StockAmount
+                        defaultUnit={product.defaultUnit}
+                        isLowStock={isLowStock(
+                          product.totalStock,
+                          product.minStock,
+                        )}
+                        totalStock={product.totalStock}
+                      />
+                      <StockStatus
+                        isLowStock={isLowStock(
+                          product.totalStock,
+                          product.minStock,
+                        )}
+                        totalStock={product.totalStock}
+                      />
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {/* Every link 48px in both directions (DESIGN_AUDIT A4.2)
                       and named for a screen reader with the row's product —
                       WCAG 2.4.9, the criterion the old bare "Ver" was A4.5's
                       example of failing. */}
-                  <span className="flex flex-wrap items-center justify-center gap-1">
-                    <RowAction
-                      href={`/products/${product.id}/adjust`}
-                      label={t("actionAdjust")}
-                      name={t("actionOf", { name: product.name })}
-                    />
-                    <RowAction
-                      href={`/products/${product.id}/history`}
-                      label={t("actionHistory")}
-                      name={t("actionOf", { name: product.name })}
-                    />
-                    <RowAction
-                      href={`/prices/${product.id}`}
-                      label={t("actionPrices")}
-                      name={t("actionOf", { name: product.name })}
-                    />
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                    <span className="flex flex-wrap items-center justify-center gap-1">
+                      <RowAction
+                        href={`/products/${product.id}/adjust`}
+                        label={t("actionAdjust")}
+                        name={t("actionOf", { name: product.name })}
+                      />
+                      <RowAction
+                        href={`/products/${product.id}/history`}
+                        label={t("actionHistory")}
+                        name={t("actionOf", { name: product.name })}
+                      />
+                      <RowAction
+                        href={`/prices/${product.id}`}
+                        label={t("actionPrices")}
+                        name={t("actionOf", { name: product.name })}
+                      />
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
 
       {/* Phone and tablet: one card per product. */}
@@ -258,7 +263,10 @@ export default function ProductsPage(): JSX.Element {
                 value: (
                   <StockAmount
                     defaultUnit={product.defaultUnit}
-                    isLowStock={isLowStock(product.totalStock, product.minStock)}
+                    isLowStock={isLowStock(
+                      product.totalStock,
+                      product.minStock,
+                    )}
                     totalStock={product.totalStock}
                   />
                 ),

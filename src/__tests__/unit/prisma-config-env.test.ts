@@ -25,7 +25,10 @@ let dirWithoutEnv: string;
 
 beforeAll(() => {
   dirWithEnv = mkdtempSync(join(tmpdir(), "stoky-prisma-config-"));
-  writeFileSync(join(dirWithEnv, ".env"), "DATABASE_URL=postgres://from-dotenv-file\n");
+  writeFileSync(
+    join(dirWithEnv, ".env"),
+    "DATABASE_URL=postgres://from-dotenv-file\n",
+  );
   dirWithoutEnv = mkdtempSync(join(tmpdir(), "stoky-prisma-config-"));
 });
 
@@ -65,7 +68,9 @@ describe("prisma.config.ts", () => {
   it("lets a real environment variable win over the file", () => {
     // CI provides DATABASE_URL directly, pointing at its own service
     // container. The .env fallback must never shadow it.
-    const run = importConfig(dirWithEnv, { DATABASE_URL: "postgres://from-real-env" });
+    const run = importConfig(dirWithEnv, {
+      DATABASE_URL: "postgres://from-real-env",
+    });
     expect(run.exitCode).toBe(0);
     expect(run.stdout).toContain("DATABASE_URL=postgres://from-real-env");
   });

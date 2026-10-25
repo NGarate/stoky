@@ -53,7 +53,10 @@ export const URLS_VARIABLE: RenamedVariable = {
 };
 
 /** Every rename, for the start-up warnings. */
-export const RENAMED: readonly RenamedVariable[] = [SECRET_VARIABLE, URLS_VARIABLE];
+export const RENAMED: readonly RenamedVariable[] = [
+  SECRET_VARIABLE,
+  URLS_VARIABLE,
+];
 
 /** A value read through a rename, and which name it came from. */
 export interface RenamedValue {
@@ -75,9 +78,11 @@ function isSet(value: string | undefined): value is string {
 /** The value of a renamed variable: the current name if set, else the legacy one. */
 export function readRenamed(env: Env, pair: RenamedVariable): RenamedValue {
   const current = env[pair.current];
-  if (isSet(current)) return { value: current, name: pair.current, from: "current" };
+  if (isSet(current))
+    return { value: current, name: pair.current, from: "current" };
   const legacy = env[pair.legacy];
-  if (isSet(legacy)) return { value: legacy, name: pair.legacy, from: "legacy" };
+  if (isSet(legacy))
+    return { value: legacy, name: pair.legacy, from: "legacy" };
   return { value: undefined, name: pair.current, from: null };
 }
 

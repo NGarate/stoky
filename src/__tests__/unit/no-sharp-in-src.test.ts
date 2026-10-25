@@ -77,9 +77,9 @@ describe("sharp stays out of what ships", () => {
     expect(IMPORTS_SHARP.test("const sharp = require('sharp')")).toBe(true);
     expect(IMPORTS_SHARP.test('const s = await import("sharp");')).toBe(true);
 
-    expect(IMPORTS_SHARP.test("// sharp's bundled libvips cannot decode HEIC")).toBe(
-      false,
-    );
+    expect(
+      IMPORTS_SHARP.test("// sharp's bundled libvips cannot decode HEIC"),
+    ).toBe(false);
     expect(IMPORTS_SHARP.test('import { x } from "sharpen";')).toBe(false);
   });
 });

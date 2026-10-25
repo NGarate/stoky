@@ -17,10 +17,20 @@ describe("hotp", () => {
   it("gives RFC 4226's test values", () => {
     // Appendix D: the secret "12345678901234567890", counters 0 to 9.
     const expected = [
-      "755224", "287082", "359152", "969429", "338314",
-      "254676", "287922", "162583", "399871", "520489",
+      "755224",
+      "287082",
+      "359152",
+      "969429",
+      "338314",
+      "254676",
+      "287922",
+      "162583",
+      "399871",
+      "520489",
     ];
-    expect(expected.map((_, counter) => hotp("12345678901234567890", counter))).toEqual(expected);
+    expect(
+      expected.map((_, counter) => hotp("12345678901234567890", counter)),
+    ).toEqual(expected);
   });
 
   it("agrees with the code Better Auth's own library makes for a secret it stores", () => {
@@ -32,9 +42,9 @@ describe("hotp", () => {
     // two still agree on a live instance is `integration/two-factor.test.ts`,
     // where every code accepted is one this function made.
     const secret = "u2Jw0dYbQ7vKp1sXl9TzR4mNc8EaHf6G";
-    expect([0, 1, 59_000_000, 59_000_001].map((counter) => hotp(secret, counter))).toEqual([
-      "141416", "366670", "932299", "533475",
-    ]);
+    expect(
+      [0, 1, 59_000_000, 59_000_001].map((counter) => hotp(secret, counter)),
+    ).toEqual(["141416", "366670", "932299", "533475"]);
   });
 });
 
@@ -57,7 +67,14 @@ describe("matchingStep", () => {
 
   it("finds none for another secret's code, or for something that is not a code", () => {
     expect(matchingStep(secret, hotp(`${secret}x`, now), at)).toBeNull();
-    for (const code of ["", "12345", `${hotp(secret, now)}0`, `${hotp(secret, now)}\0`, NO_MATCH_CODE, "ñññññ"]) {
+    for (const code of [
+      "",
+      "12345",
+      `${hotp(secret, now)}0`,
+      `${hotp(secret, now)}\0`,
+      NO_MATCH_CODE,
+      "ñññññ",
+    ]) {
       expect(matchingStep(secret, code, at), JSON.stringify(code)).toBeNull();
     }
   });

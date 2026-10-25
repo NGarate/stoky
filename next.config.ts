@@ -236,7 +236,6 @@ const nextConfig: NextConfig = {
     "*": ["node_modules/sharp/**", "node_modules/@img/**"],
   },
 
-
   // The React Compiler memoises what we would otherwise have to remember to
   // memoise. On in full mode rather than `annotation`, because opt-in
   // memoisation fails the same way manual memoisation does: the components

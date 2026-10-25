@@ -34,7 +34,11 @@ function freshEmail(label: string): string {
     .substring(7)}@example.com`;
 }
 
-async function signIn(page: Page, email: string, password: string): Promise<void> {
+async function signIn(
+  page: Page,
+  email: string,
+  password: string,
+): Promise<void> {
   await page.goto("/login");
   await page.waitForSelector('input[name="email"]');
   // Hydration: a pre-hydration submit falls back to a native POST, the same
@@ -46,7 +50,9 @@ async function signIn(page: Page, email: string, password: string): Promise<void
 }
 
 test.describe("setting a member's password", () => {
-  test("the old password is refused and the new one signs in", async ({ page }) => {
+  test("the old password is refused and the new one signs in", async ({
+    page,
+  }) => {
     const ownerEmail = freshEmail("reset-owner");
     const memberEmail = freshEmail("reset-member");
     const stamp = Date.now();
@@ -68,7 +74,9 @@ test.describe("setting a member's password", () => {
 
     await page.goto("/settings/people");
     await page.getByLabel("Nombre", { exact: true }).fill(memberName);
-    await page.getByLabel("Correo electrónico", { exact: true }).fill(memberEmail);
+    await page
+      .getByLabel("Correo electrónico", { exact: true })
+      .fill(memberEmail);
     await page.getByLabel("Contraseña", { exact: true }).fill(OLD_PASSWORD);
     await page.getByRole("button", { name: "Crear la cuenta" }).click();
     // The member's row, not the snackbar that also names them: a snackbar is a
@@ -76,19 +84,25 @@ test.describe("setting a member's password", () => {
     const row = page
       .getByRole("listitem")
       .filter({ hasText: memberName })
-      .filter({ has: page.getByRole("button", { name: "Cambiar su contraseña" }) });
+      .filter({
+        has: page.getByRole("button", { name: "Cambiar su contraseña" }),
+      });
     await expect(row).toBeVisible({ timeout: 30_000 });
 
     // ----------------------------------------------------------------- when --
     await row.getByRole("button", { name: "Cambiar su contraseña" }).click();
-    const dialog = page.getByRole("dialog", { name: `Nueva contraseña para ${memberName}` });
+    const dialog = page.getByRole("dialog", {
+      name: `Nueva contraseña para ${memberName}`,
+    });
     await dialog.getByLabel("Contraseña nueva").fill(NEW_PASSWORD);
     await dialog.getByRole("button", { name: "Cambiar la contraseña" }).click();
 
     // ----------------------------------------------------------------- then --
     // The admin is told what to do next, and the dialog has gone.
     await expect(
-      page.getByTestId("snackbar").filter({ hasText: `Contraseña de ${memberName} cambiada` }),
+      page
+        .getByTestId("snackbar")
+        .filter({ hasText: `Contraseña de ${memberName} cambiada` }),
     ).toBeVisible({ timeout: 30_000 });
     await expect(dialog).toHaveCount(0);
 
@@ -96,7 +110,9 @@ test.describe("setting a member's password", () => {
     await page.context().clearCookies();
     await signIn(page, memberEmail, OLD_PASSWORD);
     await expect(
-      page.getByRole("status").filter({ hasText: "El correo o la contraseña no son correctos" }),
+      page
+        .getByRole("status")
+        .filter({ hasText: "El correo o la contraseña no son correctos" }),
       "the member's old password was not refused after the reset",
     ).toBeVisible({ timeout: 30_000 });
     await expect(page).toHaveURL(/\/login/);

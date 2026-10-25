@@ -120,7 +120,8 @@ const SCOPED: Record<string, RegExp> = {
   storeId: /store\.(findFirst|findUnique)|assertOwnStore|assertStoreIsOurs/,
   locationId: /storageLocation\.(findFirst|findUnique)|assertOwnLocation/,
   parentId: /storageLocation\.(findFirst|findUnique)|assertOwnLocation/,
-  consumeFromLocationId: /storageLocation\.(findFirst|findUnique)|assertOwnLocation/,
+  consumeFromLocationId:
+    /storageLocation\.(findFirst|findUnique)|assertOwnLocation/,
   fromLocationId: /storageLocation\.(findFirst|findUnique)|assertOwnLocation/,
   toLocationId: /storageLocation\.(findFirst|findUnique)|assertOwnLocation/,
   productId: /product\.(findFirst|findUnique)|assertOwnProduct/,
@@ -130,7 +131,8 @@ const SCOPED: Record<string, RegExp> = {
   // `auth.listSessions` (D143). Scoped by the caller's own `userId` in the
   // very filter that uses it, so another account's id matches nothing — the
   // object that names `input.sessionId` must also name `userId`.
-  sessionId: /\{[^{}]*\buserId\b[^{}]*\binput\.sessionId\b[^{}]*\}|\{[^{}]*\binput\.sessionId\b[^{}]*\buserId\b[^{}]*\}/,
+  sessionId:
+    /\{[^{}]*\buserId\b[^{}]*\binput\.sessionId\b[^{}]*\}|\{[^{}]*\binput\.sessionId\b[^{}]*\buserId\b[^{}]*\}/,
 };
 
 // Bodies are stripped of comments before they are tested against `SCOPED`,

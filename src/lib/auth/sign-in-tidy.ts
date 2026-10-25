@@ -66,7 +66,9 @@ export function signInTidyFilter(
   now: Date,
 ): Prisma.SessionWhereInput {
   if (!userId || !newToken) {
-    throw new Error("tidyAfterSignIn needs the account and the new session's token");
+    throw new Error(
+      "tidyAfterSignIn needs the account and the new session's token",
+    );
   }
   return {
     OR: [
@@ -108,7 +110,10 @@ export interface SessionCap {
  * Postgres resolves that by aborting one: a tidy that fails for no reason of
  * its own.
  */
-export async function capSessions(db: SessionDb, { userId, keepToken }: SessionCap): Promise<number> {
+export async function capSessions(
+  db: SessionDb,
+  { userId, keepToken }: SessionCap,
+): Promise<number> {
   if (!userId || !keepToken) {
     throw new Error("capSessions needs the account and the token it keeps");
   }
@@ -168,7 +173,10 @@ export async function tidyAfterSignIn(
     // A tagged template, so the id is a bound parameter.
     await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${input.userId} FOR UPDATE`;
     const replaced = await endSessions(tx, filter, { challenges: false });
-    const evicted = await capSessions(tx, { userId: input.userId, keepToken: input.newToken });
+    const evicted = await capSessions(tx, {
+      userId: input.userId,
+      keepToken: input.newToken,
+    });
     return { replaced, evicted };
   });
   if (input.previous) {
@@ -209,7 +217,11 @@ export async function endPresentedSession(
 ): Promise<number> {
   // The challenge this sign-in has just been given may be the same
   // account's: it is the sign-in in progress, not something this ends.
-  const count = await endSessions(db, { id: previous.id }, { challenges: false });
+  const count = await endSessions(
+    db,
+    { id: previous.id },
+    { challenges: false },
+  );
   logSecurityEvent("auth.session.ended", {
     reason: "replaced",
     targetUserId: previous.userId,

@@ -43,7 +43,8 @@ import { readFileSync } from "node:fs";
 
 export const REPOSITORY = "https://github.com/NGarate/stoky";
 const TAG = /^v\d+\.\d+\.\d+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$/;
-export const START = (previous: string) => `<!-- cambios:inicio ${previous} -->`;
+export const START = (previous: string) =>
+  `<!-- cambios:inicio ${previous} -->`;
 export const END = "<!-- cambios:fin -->";
 const MARKED = /<!-- cambios:inicio (\S+) -->\n([\s\S]*?)<!-- cambios:fin -->/;
 
@@ -90,9 +91,13 @@ export function sectionOf(commit: Commit): Section | null {
     case "fix":
       return "fix";
     case "build":
-      return scope === "deps" || scope === "deps-dev" || scope === "docker" ? "dependency" : null;
+      return scope === "deps" || scope === "deps-dev" || scope === "docker"
+        ? "dependency"
+        : null;
     case "docs":
-      return commit.files().some((file) => OPERATOR_DOCS.has(file)) ? "documentation" : null;
+      return commit.files().some((file) => OPERATOR_DOCS.has(file))
+        ? "documentation"
+        : null;
     default:
       return null;
   }
@@ -109,11 +114,16 @@ function line(commit: Commit): string {
 }
 
 /** The marked list for `commits` (oldest first), between two tags. */
-export function render(commits: Commit[], previous: string, next: string): string {
+export function render(
+  commits: Commit[],
+  previous: string,
+  next: string,
+): string {
   const grouped = new Map<Section, Commit[]>();
   for (const commit of commits) {
     const section = sectionOf(commit);
-    if (section) grouped.set(section, [...(grouped.get(section) ?? []), commit]);
+    if (section)
+      grouped.set(section, [...(grouped.get(section) ?? []), commit]);
   }
   const parts = [START(previous)];
   for (const [key, title] of SECTIONS) {
@@ -121,7 +131,8 @@ export function render(commits: Commit[], previous: string, next: string): strin
     if (!listed) continue;
     parts.push("", `### ${title}`, "", ...listed.map(line));
   }
-  if (grouped.size === 0) parts.push("", "Ningún cambio visible; solo cambios internos.");
+  if (grouped.size === 0)
+    parts.push("", "Ningún cambio visible; solo cambios internos.");
   parts.push(
     "",
     "Los cambios internos (CI, pruebas, refactorizaciones, documentación del proyecto) no se listan; están en la comparación completa.",
@@ -133,7 +144,10 @@ export function render(commits: Commit[], previous: string, next: string): strin
 }
 
 function git(args: string[]): string {
-  return execFileSync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return execFileSync("git", args, {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
 }
 
 /** The commits after `previous` up to HEAD, oldest first, merges left out. */
@@ -161,13 +175,17 @@ export function commitsSince(previous: string): Commit[] {
           .split(",")
           .map((value) => value.trim().toLowerCase())
           .filter(Boolean),
-        files: () => git(["diff-tree", "--no-commit-id", "--name-only", "-r", sha]).split("\n").filter(Boolean),
+        files: () =>
+          git(["diff-tree", "--no-commit-id", "--name-only", "-r", sha])
+            .split("\n")
+            .filter(Boolean),
       };
     });
 }
 
 function main(argv: string[]): number {
-  const usage = "usage: bun scripts/release-notes.ts vPREVIOUS vNEXT | --check NOTES_FILE vNEXT";
+  const usage =
+    "usage: bun scripts/release-notes.ts vPREVIOUS vNEXT | --check NOTES_FILE vNEXT";
   const tagExists = (tag: string) => {
     try {
       git(["rev-parse", "--verify", "--quiet", `refs/tags/${tag}^{commit}`]);
@@ -185,12 +203,16 @@ function main(argv: string[]): number {
     }
     const marked = readFileSync(file, "utf8").match(MARKED);
     if (!marked) {
-      console.error(`Error: ${file} has no change list between ${START("vPREVIOUS")} and ${END}.`);
+      console.error(
+        `Error: ${file} has no change list between ${START("vPREVIOUS")} and ${END}.`,
+      );
       return 2;
     }
     const previous = marked[1];
     if (!TAG.test(previous) || !tagExists(previous)) {
-      console.error(`Error: ${file} lists changes since ${previous}, which is not a tag here.`);
+      console.error(
+        `Error: ${file} lists changes since ${previous}, which is not a tag here.`,
+      );
       return 2;
     }
     const expected = render(commitsSince(previous), previous, next);

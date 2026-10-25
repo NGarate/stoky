@@ -56,9 +56,9 @@ describe("a device with no id yet", () => {
     // project is reachable over plain http on a LAN, and a Secure cookie there
     // is one the browser silently refuses to store — which would mint a new
     // device on every single request.
-    expect(setCookie(proxy(new NextRequest("https://example.test/")))).toContain(
-      "Secure",
-    );
+    expect(
+      setCookie(proxy(new NextRequest("https://example.test/"))),
+    ).toContain("Secure");
     expect(
       setCookie(proxy(new NextRequest("http://192.168.8.20/"))),
     ).not.toContain("Secure");
@@ -84,7 +84,7 @@ describe("a device that already has one", () => {
 
   it("replaces a value it did not mint", () => {
     // The value is attacker-controlled and becomes half of a database key.
-    const response = proxy(withCookie("'; drop table \"User\"; --"));
+    const response = proxy(withCookie('\'; drop table "User"; --'));
 
     const value = /stoky_device=([^;]+)/.exec(forwardedCookie(response))?.[1];
     expect(isDeviceId(value)).toBe(true);

@@ -67,11 +67,10 @@ describe("pre-paint script", () => {
       },
     };
 
-    new Function(
-      "localStorage",
-      "document",
-      THEME_NO_FLASH_SCRIPT,
-    )(sandbox.localStorage, sandbox.document);
+    new Function("localStorage", "document", THEME_NO_FLASH_SCRIPT)(
+      sandbox.localStorage,
+      sandbox.document,
+    );
 
     expect(attributes["data-theme"]).toBe("dark");
   });

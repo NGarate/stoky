@@ -67,7 +67,10 @@ export function passkeyRpOrigin(env: Env = process.env): string | null {
  * alone. Anywhere else the browser would find no passkey to offer, or the
  * server would refuse the one it found.
  */
-export function passkeyOfferedAt(host: string | null | undefined, env: Env = process.env): boolean {
+export function passkeyOfferedAt(
+  host: string | null | undefined,
+  env: Env = process.env,
+): boolean {
   const origin = passkeyOrigin(env);
   if (!origin || !host) return false;
   let requested: URL;

@@ -49,7 +49,9 @@ async function register(page: Page, email: string): Promise<void> {
 
 async function sessionCookie(context: BrowserContext) {
   const cookies = await context.cookies();
-  const session = cookies.find((cookie) => cookie.name.endsWith("session_token"));
+  const session = cookies.find((cookie) =>
+    cookie.name.endsWith("session_token"),
+  );
   expect(session, "no session cookie after signing in").toBeDefined();
   return { session: session!, all: cookies };
 }
@@ -65,7 +67,10 @@ test.describe("keep me signed in", () => {
     // so it goes when the browser closes.
     await register(page, email);
     const unticked = await sessionCookie(page.context());
-    expect(unticked.session.expires, "an unticked sign-in set an expiring cookie").toBe(-1);
+    expect(
+      unticked.session.expires,
+      "an unticked sign-in set an expiring cookie",
+    ).toBe(-1);
 
     // Another browser, signing in with the box ticked.
     const other = await browser.newContext();
@@ -90,11 +95,15 @@ test.describe("keep me signed in", () => {
       expect(lifetime).toBeLessThan(90 * DAY_S + 120);
       // Nothing left behind that would have Better Auth treat it as a
       // browser session.
-      expect(ticked.all.some((cookie) => cookie.name.endsWith("dont_remember"))).toBe(false);
+      expect(
+        ticked.all.some((cookie) => cookie.name.endsWith("dont_remember")),
+      ).toBe(false);
 
       // The kitchen screen's settings say how it should be signed in.
       await kitchen.goto("/settings/screen");
-      await expect(kitchen.getByText(es.start.kitchenSignIn)).toBeVisible({ timeout: 30_000 });
+      await expect(kitchen.getByText(es.start.kitchenSignIn)).toBeVisible({
+        timeout: 30_000,
+      });
     } finally {
       await other.close();
     }

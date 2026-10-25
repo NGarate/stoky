@@ -79,7 +79,9 @@ export function useQuantityFormat(): {
   unit: (unit: string | null | undefined, count: number) => string;
   measure: (unit: string | null | undefined) => string;
   quantity: (quantity: number, unit: string | null | undefined) => string;
-  labelValues: <T extends Record<string, unknown>>(values: T | undefined) => T | undefined;
+  labelValues: <T extends Record<string, unknown>>(
+    values: T | undefined,
+  ) => T | undefined;
 } {
   const t = useTranslations("common") as unknown as CountTranslator;
   return {

@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -16,7 +23,8 @@ const root = join(import.meta.dir, "../../..");
 const fixtures: string[] = [];
 
 afterEach(() => {
-  for (const fixture of fixtures.splice(0)) rmSync(fixture, { recursive: true, force: true });
+  for (const fixture of fixtures.splice(0))
+    rmSync(fixture, { recursive: true, force: true });
 });
 
 const POSTGRES = "postgres:16.15-alpine@sha256:" + "1".repeat(64);
@@ -33,15 +41,37 @@ const bundle = {
   },
 };
 
-function setup(options: { services?: Record<string, { image?: string }>; red?: string[]; broken?: string[] } = {}) {
+function setup(
+  options: {
+    services?: Record<string, { image?: string }>;
+    red?: string[];
+    broken?: string[];
+  } = {},
+) {
   const fixture = mkdtempSync(join(tmpdir(), "stoky-scan-"));
   fixtures.push(fixture);
-  for (const directory of ["scripts", "deploy", "bin", "trivy-bin"]) mkdirSync(join(fixture, directory));
-  copyFileSync(join(root, "scripts/scan-bundle-images.sh"), join(fixture, "scripts/scan-bundle-images.sh"));
-  writeFileSync(join(fixture, "deploy/docker-compose.yml"), "# read through the stub\n");
-  writeFileSync(join(fixture, "compose.json"), JSON.stringify({ services: options.services ?? bundle.services }));
-  writeFileSync(join(fixture, "red"), (options.red ?? []).map((image) => `${image}\n`).join(""));
-  writeFileSync(join(fixture, "broken"), (options.broken ?? []).map((image) => `${image}\n`).join(""));
+  for (const directory of ["scripts", "deploy", "bin", "trivy-bin"])
+    mkdirSync(join(fixture, directory));
+  copyFileSync(
+    join(root, "scripts/scan-bundle-images.sh"),
+    join(fixture, "scripts/scan-bundle-images.sh"),
+  );
+  writeFileSync(
+    join(fixture, "deploy/docker-compose.yml"),
+    "# read through the stub\n",
+  );
+  writeFileSync(
+    join(fixture, "compose.json"),
+    JSON.stringify({ services: options.services ?? bundle.services }),
+  );
+  writeFileSync(
+    join(fixture, "red"),
+    (options.red ?? []).map((image) => `${image}\n`).join(""),
+  );
+  writeFileSync(
+    join(fixture, "broken"),
+    (options.broken ?? []).map((image) => `${image}\n`).join(""),
+  );
   const log = join(fixture, "calls");
   writeFileSync(log, "");
 
@@ -79,7 +109,10 @@ exit 0
   const run = (...images: string[]) =>
     Bun.spawnSync(["bash", "scripts/scan-bundle-images.sh", ...images], {
       cwd: fixture,
-      env: { ...process.env, PATH: `${join(fixture, "bin")}:${process.env.PATH}` },
+      env: {
+        ...process.env,
+        PATH: `${join(fixture, "bin")}:${process.env.PATH}`,
+      },
     });
   const calls = (tool: string) =>
     readFileSync(log, "utf8")
@@ -96,7 +129,9 @@ describe("scanning the release bundle's service images", () => {
     const { run, scanned } = setup();
     const result = run();
     expect(result.exitCode).toBe(0);
-    expect(scanned().toSorted()).toEqual([POSTGRES, TRAEFIK, VALKEY].toSorted());
+    expect(scanned().toSorted()).toEqual(
+      [POSTGRES, TRAEFIK, VALKEY].toSorted(),
+    );
   });
 
   it("applies the release gate's rule to every image", () => {
@@ -162,7 +197,9 @@ describe("scanning the release bundle's service images", () => {
   });
 
   it("refuses a service with no image rather than scanning less", () => {
-    const { run, calls } = setup({ services: { ...bundle.services, cache: {} } });
+    const { run, calls } = setup({
+      services: { ...bundle.services, cache: {} },
+    });
     expect(run().exitCode).toBe(2);
     expect(calls("trivy")).toHaveLength(0);
   });
@@ -178,19 +215,31 @@ describe("scanning the release bundle's service images", () => {
     const [args] = runs;
     const image = args.find((arg) => arg.startsWith("aquasec/trivy:"));
     expect(image).toMatch(/^aquasec\/trivy:\d+\.\d+\.\d+@sha256:[0-9a-f]{64}$/);
-    for (const flag of ["-v", "--volume", "--mount", "--privileged"]) expect(args).not.toContain(flag);
+    for (const flag of ["-v", "--volume", "--mount", "--privileged"])
+      expect(args).not.toContain(flag);
     expect(args.join(" ")).not.toContain("docker.sock");
   });
 
   it("uses the Trivy version ci.yml's release gate and rescan.yml use", () => {
-    const script = readFileSync(join(root, "scripts/scan-bundle-images.sh"), "utf8");
+    const script = readFileSync(
+      join(root, "scripts/scan-bundle-images.sh"),
+      "utf8",
+    );
     const version = script.match(/^TRIVY_VERSION="([\d.]+)"$/m)?.[1];
-    const pinned = script.match(/^TRIVY_IMAGE="aquasec\/trivy:\$\{TRIVY_VERSION\}@sha256:[0-9a-f]{64}"$/m);
+    const pinned = script.match(
+      /^TRIVY_IMAGE="aquasec\/trivy:\$\{TRIVY_VERSION\}@sha256:[0-9a-f]{64}"$/m,
+    );
     expect(pinned).not.toBeNull();
-    if (version === undefined) throw new Error("scan-bundle-images.sh sets no TRIVY_VERSION");
+    if (version === undefined)
+      throw new Error("scan-bundle-images.sh sets no TRIVY_VERSION");
     for (const workflow of ["ci.yml", "rescan.yml"]) {
-      const source = readFileSync(join(root, ".github/workflows", workflow), "utf8");
-      const versions = [...source.matchAll(/^\s+version: v([\d.]+)$/gm)].map(([, v]) => v);
+      const source = readFileSync(
+        join(root, ".github/workflows", workflow),
+        "utf8",
+      );
+      const versions = [...source.matchAll(/^\s+version: v([\d.]+)$/gm)].map(
+        ([, v]) => v,
+      );
       expect(versions.length).toBeGreaterThan(0);
       for (const v of versions) expect(v).toBe(version);
     }

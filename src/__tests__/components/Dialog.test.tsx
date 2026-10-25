@@ -156,7 +156,9 @@ describe("ConfirmDialog", () => {
     await open();
 
     const cancel = screen.getByRole("button", { name: "Cancelar" });
-    const confirm = screen.getByRole("button", { name: "Sí, eliminar la lista" });
+    const confirm = screen.getByRole("button", {
+      name: "Sí, eliminar la lista",
+    });
 
     // The safe answer is reached first by anyone walking the dialog.
     expect(
@@ -183,7 +185,9 @@ describe("Dialog footer", () => {
       { locale: "es" },
     );
 
-    expect(screen.getByRole("button", { name: "Añadir otro" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Añadir otro" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Ver el inventario" }),
     ).toBeInTheDocument();
@@ -234,7 +238,9 @@ describe("when the action removed whatever opened it", () => {
     // A detached button takes no focus: without the fallback a keyboard or
     // screen-reader user was left on <body> after removing something.
     renderWithIntl(<Rows />, { locale: "es" });
-    await userEvent.click(screen.getByRole("button", { name: "Eliminar Semanal" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Eliminar Semanal" }),
+    );
     await screen.findByRole("dialog");
 
     await userEvent.click(screen.getByRole("button", { name: "Sí, eliminar" }));
@@ -242,18 +248,24 @@ describe("when the action removed whatever opened it", () => {
     await waitFor(() => {
       expect(screen.getByRole("list", { name: "Listas" })).toHaveFocus();
     });
-    expect(screen.queryByRole("button", { name: "Eliminar Semanal" })).toBeAbsent();
+    expect(
+      screen.queryByRole("button", { name: "Eliminar Semanal" }),
+    ).toBeAbsent();
   });
 
   it("still gives it back to the opener when the opener is still there", async () => {
     renderWithIntl(<Rows />, { locale: "es" });
-    await userEvent.click(screen.getByRole("button", { name: "Eliminar Fiesta" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Eliminar Fiesta" }),
+    );
     await screen.findByRole("dialog");
 
     await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Eliminar Fiesta" })).toHaveFocus();
+      expect(
+        screen.getByRole("button", { name: "Eliminar Fiesta" }),
+      ).toHaveFocus();
     });
   });
 });

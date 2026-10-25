@@ -61,7 +61,9 @@ export function proxy(request: NextRequest): NextResponse {
   // and replacing it would hand Better Auth a cookie the client never sent.
   const existing = request.cookies.get(DEVICE_ID_COOKIE)?.value;
   const minted =
-    isDeviceId(existing) || isAuthOrBearer(request) ? undefined : mintDeviceId();
+    isDeviceId(existing) || isAuthOrBearer(request)
+      ? undefined
+      : mintDeviceId();
   if (minted) request.cookies.set(DEVICE_ID_COOKIE, minted);
 
   // `upgrade-insecure-requests` is keyed on how this request actually

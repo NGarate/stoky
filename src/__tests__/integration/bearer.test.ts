@@ -34,7 +34,11 @@ afterAll(async () => {
 
 async function account(): Promise<{ email: string; userId: string }> {
   const email = generateTestEmail(MARKER);
-  const user = await createTestUser({ email, name: `Bearer ${MARKER}`, password: PASSWORD });
+  const user = await createTestUser({
+    email,
+    name: `Bearer ${MARKER}`,
+    password: PASSWORD,
+  });
   return { email, userId: user.id };
 }
 
@@ -88,7 +92,9 @@ describe("a native sign-in", () => {
     expect(signature).toBeTruthy();
     expect(await rowByToken(token)).not.toBeNull();
 
-    expect(answer.headers.get("access-control-expose-headers")).toContain("set-auth-token");
+    expect(answer.headers.get("access-control-expose-headers")).toContain(
+      "set-auth-token",
+    );
     expect(answer.body?.token).toBeUndefined();
     expect(JSON.stringify(answer.body)).not.toContain(raw);
   });
@@ -104,15 +110,25 @@ describe("a native sign-in", () => {
     // Any cookie at all: a browser always carries one here, and the token in
     // a header would be the HttpOnly cookie's value within a script's reach.
     const { email } = await account();
-    for (const cookie of ["stoky_device=7d3e1c58-9a1f-4f5e-8a0e-3b2d1c4e5f60", "unrelated=1"]) {
-      const answer = await signInWith({ email, password: PASSWORD, rememberMe: true }, { cookie });
+    for (const cookie of [
+      "stoky_device=7d3e1c58-9a1f-4f5e-8a0e-3b2d1c4e5f60",
+      "unrelated=1",
+    ]) {
+      const answer = await signInWith(
+        { email, password: PASSWORD, rememberMe: true },
+        { cookie },
+      );
 
       expect(answer.status).toBe(200);
-      expect(answer.setCookie.some((line) => line.startsWith("stoky.session_token="))).toBe(true);
+      expect(
+        answer.setCookie.some((line) =>
+          line.startsWith("stoky.session_token="),
+        ),
+      ).toBe(true);
       expect(answer.headers.get("set-auth-token")).toBeNull();
-      expect(answer.headers.get("access-control-expose-headers") ?? "").not.toContain(
-        "set-auth-token",
-      );
+      expect(
+        answer.headers.get("access-control-expose-headers") ?? "",
+      ).not.toContain("set-auth-token");
     }
   });
 
@@ -129,7 +145,9 @@ describe("a native sign-in", () => {
     );
 
     expect(again.status).toBe(200);
-    expect(await prisma.session.findUnique({ where: { id: firstRow!.id } })).toBeNull();
+    expect(
+      await prisma.session.findUnique({ where: { id: firstRow!.id } }),
+    ).toBeNull();
   });
 });
 
@@ -170,9 +188,13 @@ describe("what a bearer token opens", () => {
 
     // The control: the same construction with the instance's own key opens
     // the session, so the refusal below is the key and not the construction.
-    expect(await sessionUserId({ authorization: signedWith(resolveSecret()) })).toBe(userId);
+    expect(
+      await sessionUserId({ authorization: signedWith(resolveSecret()) }),
+    ).toBe(userId);
 
-    const forged = { authorization: signedWith("another instance's secret, 32 chars+") };
+    const forged = {
+      authorization: signedWith("another instance's secret, 32 chars+"),
+    };
     expect(await sessionUserId(forged)).toBeNull();
     expect((await protectedQuery(forged)).status).toBe(401);
   });
@@ -218,7 +240,9 @@ describe("how long a bearer session lives", () => {
 
     const slid = (await rowByToken(token))!;
     expect(slid.updatedAt.getTime()).toBeGreaterThan(now - MINUTE);
-    expect(slid.expiresAt.getTime()).toBe(slid.authenticatedAt.getTime() + REMEMBERED_CAP_S * 1000);
+    expect(slid.expiresAt.getTime()).toBe(
+      slid.authenticatedAt.getTime() + REMEMBERED_CAP_S * 1000,
+    );
   });
 
   it("never moves a browser-kind one, read through tRPC or the auth API", async () => {
@@ -236,6 +260,8 @@ describe("how long a bearer session lives", () => {
 
     const after = (await rowByToken(token))!;
     expect(after.expiresAt.getTime()).toBe(before.expiresAt.getTime());
-    expect(after.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + BROWSER_IDLE_S * 1000);
+    expect(after.expiresAt.getTime()).toBeLessThanOrEqual(
+      Date.now() + BROWSER_IDLE_S * 1000,
+    );
   });
 });

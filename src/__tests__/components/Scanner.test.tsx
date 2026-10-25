@@ -1,5 +1,13 @@
 import "../setup/matchers";
-import { describe, it, expect, afterEach, beforeEach, mock, spyOn } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  afterEach,
+  beforeEach,
+  mock,
+  spyOn,
+} from "bun:test";
 import { screen, cleanup, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
@@ -155,7 +163,9 @@ describe("BarcodeScanner", () => {
       lastScannerProps?.onError(failure);
     });
 
-    expect(screen.getByText("No se ha podido usar la cámara")).toBeInTheDocument();
+    expect(
+      screen.getByText("No se ha podido usar la cámara"),
+    ).toBeInTheDocument();
     expect(onError).toHaveBeenCalledWith(failure);
 
     consoleError.mockRestore();
@@ -171,10 +181,14 @@ describe("BarcodeScanner", () => {
     renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
     act(() => {
-      lastScannerProps?.onError(new DOMException("Permission denied", "NotAllowedError"));
+      lastScannerProps?.onError(
+        new DOMException("Permission denied", "NotAllowedError"),
+      );
     });
 
-    expect(screen.getByText(/Permite el acceso a la cámara para este sitio/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Permite el acceso a la cámara para este sitio/),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Permission denied")).toBeAbsent();
 
     consoleError.mockRestore();
@@ -185,10 +199,14 @@ describe("BarcodeScanner", () => {
     renderWithIntl(<BarcodeScanner onScan={() => {}} />, { locale: "en" });
 
     act(() => {
-      lastScannerProps?.onError(new DOMException("Requested device not found", "NotFoundError"));
+      lastScannerProps?.onError(
+        new DOMException("Requested device not found", "NotFoundError"),
+      );
     });
 
-    expect(screen.getByText(/No camera was found on this device/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/No camera was found on this device/),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Requested device not found")).toBeAbsent();
 
     consoleError.mockRestore();
@@ -202,12 +220,18 @@ describe("BarcodeScanner", () => {
     const { rerender } = renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
     act(() => {
-      lastScannerProps?.onError(new DOMException("Permission denied", "NotAllowedError"));
+      lastScannerProps?.onError(
+        new DOMException("Permission denied", "NotAllowedError"),
+      );
     });
     rerender(<BarcodeScanner isScanning={false} onScan={() => {}} />);
 
-    expect(screen.getByText("No se ha podido usar la cámara")).toBeInTheDocument();
-    expect(screen.getByText(/Permite el acceso a la cámara para este sitio/)).toBeInTheDocument();
+    expect(
+      screen.getByText("No se ha podido usar la cámara"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Permite el acceso a la cámara para este sitio/),
+    ).toBeInTheDocument();
 
     consoleError.mockRestore();
   });
@@ -221,7 +245,9 @@ describe("BarcodeScanner", () => {
       lastScannerProps?.onError(undefined);
     });
 
-    expect(screen.getByText("El navegador no ha dicho por qué.")).toBeInTheDocument();
+    expect(
+      screen.getByText("El navegador no ha dicho por qué."),
+    ).toBeInTheDocument();
     // What to do, not only that it failed (§7 rule 4): the hint names the
     // setting and the way round it.
     expect(screen.getByText(/escribe el código abajo/)).toBeInTheDocument();
@@ -286,7 +312,9 @@ describe("BarcodeScanner", () => {
     feedReady();
 
     const torch = screen.getByRole("button", { name: "Encender linterna" });
-    expect((await minimumHeight(torch.className)) ?? 0).toBeGreaterThanOrEqual(48);
+    expect((await minimumHeight(torch.className)) ?? 0).toBeGreaterThanOrEqual(
+      48,
+    );
     expect(torch.className).not.toMatch(/bg-black|text-white/);
   });
 
@@ -348,7 +376,9 @@ describe("BarcodeScanner", () => {
     // The icon is a button's icon: it says what pressing will do, not what
     // the lamp is doing now. A dark torch offers to light it.
     const turnOn = screen.getByRole("button", { name: "Encender linterna" });
-    expect(turnOn.querySelector('[data-testid="torch-icon-lit"]')).not.toBeNull();
+    expect(
+      turnOn.querySelector('[data-testid="torch-icon-lit"]'),
+    ).not.toBeNull();
 
     await userEvent.click(turnOn);
 

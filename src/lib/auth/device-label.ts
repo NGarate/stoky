@@ -49,7 +49,10 @@ const SYSTEMS: readonly [RegExp, string][] = [
   [/\bLinux\b/, "Linux"],
 ];
 
-function firstMatch(text: string, table: readonly [RegExp, string][]): string | null {
+function firstMatch(
+  text: string,
+  table: readonly [RegExp, string][],
+): string | null {
   for (const [pattern, name] of table) {
     if (pattern.test(text)) return name;
   }

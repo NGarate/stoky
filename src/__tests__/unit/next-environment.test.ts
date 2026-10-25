@@ -29,9 +29,9 @@ import { workUnitAsyncStorage } from "next/dist/server/app-render/work-unit-asyn
  */
 describe("Next's request storage in the test process", () => {
   it("is the platform's AsyncLocalStorage, installed before any Next module", () => {
-    expect(typeof (globalThis as { AsyncLocalStorage?: unknown }).AsyncLocalStorage).toBe(
-      "function",
-    );
+    expect(
+      typeof (globalThis as { AsyncLocalStorage?: unknown }).AsyncLocalStorage,
+    ).toBe("function");
   });
 
   it("lets a function run outside the unit store, as the patched console does", () => {
@@ -41,8 +41,12 @@ describe("Next's request storage in the test process", () => {
   });
 
   it("holds a store for the duration of a run", () => {
-    const store = { route: "/kitchen" } as unknown as Parameters<typeof workAsyncStorage.run>[0];
+    const store = { route: "/kitchen" } as unknown as Parameters<
+      typeof workAsyncStorage.run
+    >[0];
 
-    expect(workAsyncStorage.run(store, () => workAsyncStorage.getStore())).toBe(store);
+    expect(workAsyncStorage.run(store, () => workAsyncStorage.getStore())).toBe(
+      store,
+    );
   });
 });

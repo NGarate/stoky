@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { MAX_ID_LENGTH, MAX_NAME_LENGTH, MAX_QUANTITY, MAX_UNIT_LENGTH } from "./bounds";
+import {
+  MAX_ID_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_QUANTITY,
+  MAX_UNIT_LENGTH,
+} from "./bounds";
 import { replayable } from "./idempotency";
 
 export const shoppingListSchema = z.object({
@@ -52,17 +57,22 @@ export const shoppingItemSchema = shoppingItemFields;
 /** What `shopping.addItem` takes: the same fields, with the replay envelope. */
 export const addShoppingItemSchema = shoppingItemFields.merge(replayable);
 
-export const updateShoppingItemSchema = z.object({
-  id: z.string().max(MAX_ID_LENGTH),
-  isChecked: z.boolean().optional(),
-  quantity: z.number().positive().finite().max(MAX_QUANTITY).optional(),
-  quantityUnit: z.string().max(MAX_UNIT_LENGTH).nullable().optional(),
-  /** `null` clears it: "anywhere" is a real answer. */
-  storeId: z.string().max(MAX_ID_LENGTH).nullish(),
-}).refine((input) => input.quantity === undefined || input.quantityUnit !== undefined, {
-  message: "Confirm the quantity unit before changing the amount",
-  path: ["quantityUnit"],
-});
+export const updateShoppingItemSchema = z
+  .object({
+    id: z.string().max(MAX_ID_LENGTH),
+    isChecked: z.boolean().optional(),
+    quantity: z.number().positive().finite().max(MAX_QUANTITY).optional(),
+    quantityUnit: z.string().max(MAX_UNIT_LENGTH).nullable().optional(),
+    /** `null` clears it: "anywhere" is a real answer. */
+    storeId: z.string().max(MAX_ID_LENGTH).nullish(),
+  })
+  .refine(
+    (input) => input.quantity === undefined || input.quantityUnit !== undefined,
+    {
+      message: "Confirm the quantity unit before changing the amount",
+      path: ["quantityUnit"],
+    },
+  );
 
 export const shoppingListQuerySchema = z.object({
   includeCompleted: z.boolean().default(false),

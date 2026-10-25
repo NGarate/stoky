@@ -50,7 +50,10 @@ describe("leaving a line out", () => {
 describe("ReviewCard status", () => {
   it("says an automatic match in a neutral pill, without a glyph or a tint", () => {
     const { container } = renderWithIntl(
-      <ReviewCard item={line({ matchStatus: "AUTO_MATCHED", matchConfidence: 0.9 })} onConfirm={() => {}} />,
+      <ReviewCard
+        item={line({ matchStatus: "AUTO_MATCHED", matchConfidence: 0.9 })}
+        onConfirm={() => {}}
+      />,
       { locale: "es" },
     );
 
@@ -59,12 +62,17 @@ describe("ReviewCard status", () => {
     expect(pill.querySelector("svg")).toBeNull();
     expect(pill.parentElement?.querySelector("svg")).toBeNull();
     // The card is not tinted for it.
-    expect((container.firstElementChild as HTMLElement).className).not.toContain("bg-muted");
+    expect(
+      (container.firstElementChild as HTMLElement).className,
+    ).not.toContain("bg-muted");
   });
 
   it("says a confirmed line in an ok pill, outlined on its ok card", () => {
     renderWithIntl(
-      <ReviewCard item={line({ matchStatus: "USER_CONFIRMED" })} onConfirm={() => {}} />,
+      <ReviewCard
+        item={line({ matchStatus: "USER_CONFIRMED" })}
+        onConfirm={() => {}}
+      />,
       { locale: "es" },
     );
 
@@ -75,12 +83,17 @@ describe("ReviewCard status", () => {
 
   it("does not call a line left out 'confirmed', or colour it healthy", () => {
     const { container } = renderWithIntl(
-      <ReviewCard item={line({ matchStatus: "SKIPPED" })} onConfirm={() => {}} />,
+      <ReviewCard
+        item={line({ matchStatus: "SKIPPED" })}
+        onConfirm={() => {}}
+      />,
       { locale: "es" },
     );
 
     expect(screen.queryByText("Confirmado")).toBeAbsent();
     expect(screen.getByText("No se añadirá").className).toContain("bg-muted");
-    expect((container.firstElementChild as HTMLElement).className).not.toContain("bg-ok");
+    expect(
+      (container.firstElementChild as HTMLElement).className,
+    ).not.toContain("bg-ok");
   });
 });

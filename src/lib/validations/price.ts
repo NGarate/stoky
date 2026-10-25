@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { MAX_DAYS, MAX_ID_LENGTH, MAX_PRICE, MAX_QUANTITY, MAX_UNIT_LENGTH } from "./bounds";
+import {
+  MAX_DAYS,
+  MAX_ID_LENGTH,
+  MAX_PRICE,
+  MAX_QUANTITY,
+  MAX_UNIT_LENGTH,
+} from "./bounds";
 
 /**
  * An ISO 4217 code: three letters. Normalised before it is checked, so a

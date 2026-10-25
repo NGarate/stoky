@@ -49,7 +49,8 @@ import {
  */
 
 /** Why a sign-in was refused before its password was looked at. */
-export type SignInRefusal = "rate_limited" | "account_rate_limited" | "auth_unavailable";
+export type SignInRefusal =
+  "rate_limited" | "account_rate_limited" | "auth_unavailable";
 
 /**
  * A sign-in the policy refused.
@@ -143,7 +144,10 @@ const VALKEY_HINT =
  * operator reading the container output is told what to check rather than
  * left with a code.
  */
-function unavailable(address: string, error: RateLimitUnavailableError): SignInRefusedError {
+function unavailable(
+  address: string,
+  error: RateLimitUnavailableError,
+): SignInRefusedError {
   logSecurityEvent("auth.unavailable", { address });
   console.error(VALKEY_HINT, error.cause);
   return new SignInRefusedError("auth_unavailable", null);
@@ -200,9 +204,15 @@ export async function chargeSignInAddress(
       });
       throw new SignInRefusedError("rate_limited", seconds);
     }
-    return { address, addressLimit, addressIdentifier, addressWindow: result.window };
+    return {
+      address,
+      addressLimit,
+      addressIdentifier,
+      addressWindow: result.window,
+    };
   } catch (error) {
-    if (error instanceof RateLimitUnavailableError) throw unavailable(address, error);
+    if (error instanceof RateLimitUnavailableError)
+      throw unavailable(address, error);
     throw error;
   }
 }
@@ -221,10 +231,8 @@ export async function chargeSignInAttempt(
   rawEmail: unknown,
   limiter: SignInLimiter = valkeySignInLimiter,
 ): Promise<SignInAttempt> {
-  const { address, addressLimit, addressIdentifier, addressWindow } = await chargeSignInAddress(
-    headers,
-    limiter,
-  );
+  const { address, addressLimit, addressIdentifier, addressWindow } =
+    await chargeSignInAddress(headers, limiter);
 
   const parsed = loginSchema.shape.email.safeParse(rawEmail);
   if (!parsed.success) {
@@ -266,7 +274,11 @@ export async function chargeSignInAttempt(
             limit: loginDeviceRateLimit(),
             identifier: `${account}:${deviceFingerprint(deviceId)}`,
           }
-        : { kind: "account", limit: loginAccountRateLimit(), identifier: account };
+        : {
+            kind: "account",
+            limit: loginAccountRateLimit(),
+            identifier: account,
+          };
 
     const result = await limiter.consume(charged.limit, charged.identifier);
     if (!result.allowed) {
@@ -279,7 +291,8 @@ export async function chargeSignInAttempt(
       throw new SignInRefusedError("account_rate_limited", seconds);
     }
   } catch (error) {
-    if (error instanceof RateLimitUnavailableError) throw unavailable(address, error);
+    if (error instanceof RateLimitUnavailableError)
+      throw unavailable(address, error);
     throw error;
   }
 
@@ -335,7 +348,11 @@ export async function settleSignIn(
   charge: SignInCharge,
   limiter: SignInLimiter = valkeySignInLimiter,
 ): Promise<void> {
-  await limiter.refund(charge.addressLimit, charge.addressIdentifier, charge.addressWindow);
+  await limiter.refund(
+    charge.addressLimit,
+    charge.addressIdentifier,
+    charge.addressWindow,
+  );
   await limiter.reset(charge.charged.limit, charge.charged.identifier);
 }
 
@@ -358,7 +375,8 @@ export async function signInSucceeded(
   limiter: SignInLimiter = valkeySignInLimiter,
 ): Promise<void> {
   await settleSignIn(charge, limiter);
-  if (charge.deviceId) await limiter.rememberDevice(charge.account, charge.deviceId);
+  if (charge.deviceId)
+    await limiter.rememberDevice(charge.account, charge.deviceId);
   logSecurityEvent("auth.signin.succeeded", {
     userId,
     method,
@@ -411,8 +429,13 @@ export async function secondFactorSucceeded(
   method: Exclude<SignInMethod, "password">,
   limiter: SignInLimiter = valkeySignInLimiter,
 ): Promise<void> {
-  await limiter.refund(charge.addressLimit, charge.addressIdentifier, charge.addressWindow);
-  if (email && deviceId) await limiter.rememberDevice(accountIdentifier(email), deviceId);
+  await limiter.refund(
+    charge.addressLimit,
+    charge.addressIdentifier,
+    charge.addressWindow,
+  );
+  if (email && deviceId)
+    await limiter.rememberDevice(accountIdentifier(email), deviceId);
   logSecurityEvent("auth.signin.succeeded", {
     userId,
     method,

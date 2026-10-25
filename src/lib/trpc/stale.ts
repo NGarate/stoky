@@ -33,7 +33,10 @@ export function invalidateAfterStockChange(
 
 /** Applying a receipt: stock, prices and the receipt itself all move. */
 export function invalidateAfterReceiptApplied(
-  utils: Pick<Utils, "inventory" | "product" | "shopping" | "price" | "receipt">,
+  utils: Pick<
+    Utils,
+    "inventory" | "product" | "shopping" | "price" | "receipt"
+  >,
 ): Promise<unknown> {
   return Promise.all([
     invalidateAfterStockChange(utils),

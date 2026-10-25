@@ -1,10 +1,20 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CiJob, CiRun } from "../../../scripts/release-github";
-import { PUBLISH_JOB, type TagDeps, tagRelease } from "../../../scripts/release-tag";
+import {
+  PUBLISH_JOB,
+  type TagDeps,
+  tagRelease,
+} from "../../../scripts/release-tag";
 
 /**
  * `scripts/release-tag.ts` signs and pushes the tag of a merged preparation.
@@ -15,10 +25,24 @@ import { PUBLISH_JOB, type TagDeps, tagRelease } from "../../../scripts/release-
 
 const tag = "v0.1.0-alpha.5";
 const fixtures: string[] = [];
-const green: CiRun = { databaseId: 7, status: "completed", conclusion: "success", url: "https://ci.example/run/7" };
+const green: CiRun = {
+  databaseId: 7,
+  status: "completed",
+  conclusion: "success",
+  url: "https://ci.example/run/7",
+};
 const jobs = (publish: Partial<CiJob> | null): CiJob[] => [
   { name: "Lint, types, contrast", status: "completed", conclusion: "success" },
-  ...(publish ? [{ name: PUBLISH_JOB, status: "completed", conclusion: "success", ...publish }] : []),
+  ...(publish
+    ? [
+        {
+          name: PUBLISH_JOB,
+          status: "completed",
+          conclusion: "success",
+          ...publish,
+        },
+      ]
+    : []),
 ];
 
 const saved: Record<string, string | undefined> = {};
@@ -40,7 +64,8 @@ afterAll(() => {
   }
 });
 afterEach(() => {
-  for (const fixture of fixtures.splice(0)) rmSync(fixture, { recursive: true, force: true });
+  for (const fixture of fixtures.splice(0))
+    rmSync(fixture, { recursive: true, force: true });
 });
 
 function repository(options: { subject?: string; version?: string } = {}) {
@@ -49,13 +74,30 @@ function repository(options: { subject?: string; version?: string } = {}) {
   const origin = join(base, "origin.git");
   const dir = join(base, "work");
   const key = join(base, "signing-key");
-  execFileSync("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-C", "release-tag test", "-f", key]);
+  execFileSync("ssh-keygen", [
+    "-q",
+    "-t",
+    "ed25519",
+    "-N",
+    "",
+    "-C",
+    "release-tag test",
+    "-f",
+    key,
+  ]);
   const allowed = join(base, "allowed-signers");
-  writeFileSync(allowed, `test@example.invalid ${readFileSync(`${key}.pub`, "utf8")}`);
+  writeFileSync(
+    allowed,
+    `test@example.invalid ${readFileSync(`${key}.pub`, "utf8")}`,
+  );
   execFileSync("git", ["init", "-q", "--bare", "-b", "master", origin]);
   mkdirSync(dir);
   const git = (...args: string[]) =>
-    execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    execFileSync("git", args, {
+      cwd: dir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
   git("init", "-q", "-b", "master");
   git("config", "user.name", "Test");
   git("config", "user.email", "test@example.invalid");
@@ -63,12 +105,18 @@ function repository(options: { subject?: string; version?: string } = {}) {
   git("config", "gpg.format", "ssh");
   git("config", "user.signingkey", key);
   git("config", "gpg.ssh.allowedSignersFile", allowed);
-  writeFileSync(join(dir, "package.json"), JSON.stringify({ version: "0.1.0-alpha.4" }));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ version: "0.1.0-alpha.4" }),
+  );
   git("add", "package.json");
   git("commit", "-q", "-m", "chore: prepare v0.1.0-alpha.4");
   git("tag", "v0.1.0-alpha.4");
   git("commit", "-q", "--allow-empty", "-m", "feat(inventory): scan a barcode");
-  writeFileSync(join(dir, "package.json"), JSON.stringify({ version: options.version ?? "0.1.0-alpha.5" }));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ version: options.version ?? "0.1.0-alpha.5" }),
+  );
   git("add", "package.json");
   git("commit", "-q", "-m", options.subject ?? `chore: prepare ${tag}`);
   git("remote", "add", "origin", origin);
@@ -78,10 +126,19 @@ function repository(options: { subject?: string; version?: string } = {}) {
     ci: green as CiRun | null,
     jobs: jobs({}),
     remoteTags: [] as string[],
-    tagRun: { ...green, databaseId: 8, url: "https://ci.example/run/8" } as CiRun | null,
+    tagRun: {
+      ...green,
+      databaseId: 8,
+      url: "https://ci.example/run/8",
+    } as CiRun | null,
     pushFails: false,
   };
-  const calls = { pushed: [] as string[], ciRun: [] as string[], ciJobs: [] as number[], slept: 0 };
+  const calls = {
+    pushed: [] as string[],
+    ciRun: [] as string[],
+    ciJobs: [] as number[],
+    slept: 0,
+  };
   const out: string[] = [];
   const err: string[] = [];
   const deps = (): TagDeps => ({
@@ -107,7 +164,10 @@ function repository(options: { subject?: string; version?: string } = {}) {
     err: (line) => err.push(line),
   });
   const originTags = () =>
-    execFileSync("git", ["for-each-ref", "--format=%(refname)", "refs/tags"], { cwd: origin, encoding: "utf8" });
+    execFileSync("git", ["for-each-ref", "--format=%(refname)", "refs/tags"], {
+      cwd: origin,
+      encoding: "utf8",
+    });
   return {
     dir,
     origin,
@@ -152,15 +212,30 @@ describe("tagging a merged release", () => {
     repo.state.tagRun = null;
     expect(repo.run()).toBe(0);
     expect(repo.calls.slept).toBe(11);
-    expect(repo.out.join("\n")).toContain(`gh run list --workflow ci.yml --branch ${tag}`);
+    expect(repo.out.join("\n")).toContain(
+      `gh run list --workflow ci.yml --branch ${tag}`,
+    );
   });
 
   it("deletes a tag whose signature does not verify, and pushes nothing", () => {
     const repo = repository();
     // Another key in the allowed signers: the signature is made, but not by a listed key.
     const other = join(repo.dir, "..", "other-key");
-    execFileSync("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-C", "other", "-f", other]);
-    writeFileSync(repo.allowed, `test@example.invalid ${readFileSync(`${other}.pub`, "utf8")}`);
+    execFileSync("ssh-keygen", [
+      "-q",
+      "-t",
+      "ed25519",
+      "-N",
+      "",
+      "-C",
+      "other",
+      "-f",
+      other,
+    ]);
+    writeFileSync(
+      repo.allowed,
+      `test@example.invalid ${readFileSync(`${other}.pub`, "utf8")}`,
+    );
     expect(repo.run()).toBe(1);
     expect(repo.err.join("\n")).toContain("does not verify");
     expect(repo.git("tag", "-l", tag).trim()).toBe("");
@@ -172,17 +247,44 @@ describe("tagging a merged release", () => {
     const repo = repository();
     repo.state.pushFails = true;
     expect(repo.run()).toBe(1);
-    expect(repo.err.join("\n")).toContain(`push https://github.com/NGarate/stoky.git refs/tags/${tag}`);
+    expect(repo.err.join("\n")).toContain(
+      `push https://github.com/NGarate/stoky.git refs/tags/${tag}`,
+    );
     expect(repo.git("tag", "-l", tag).trim()).toBe(tag);
   });
 });
 
 describe("refusing to tag", () => {
-  const cases: [string, Parameters<typeof repository>[0], (repo: ReturnType<typeof repository>) => void, RegExp][] = [
-    ["a head that is not a preparation", { subject: "fix(auth): keep sessions" }, () => {}, /is "fix\(auth\): keep sessions", not "chore: prepare/],
-    ["a squash-merged preparation", { subject: `chore: prepare ${tag} (#14)` }, () => {}, /fast-forward/],
-    ["a preparation of something that is not a tag", { subject: "chore: prepare the kitchen" }, () => {}, /not "chore: prepare vX/],
-    ["a package.json that disagrees", { version: "0.1.0-alpha.6" }, () => {}, /package\.json holds 0\.1\.0-alpha\.6/],
+  const cases: [
+    string,
+    Parameters<typeof repository>[0],
+    (repo: ReturnType<typeof repository>) => void,
+    RegExp,
+  ][] = [
+    [
+      "a head that is not a preparation",
+      { subject: "fix(auth): keep sessions" },
+      () => {},
+      /is "fix\(auth\): keep sessions", not "chore: prepare/,
+    ],
+    [
+      "a squash-merged preparation",
+      { subject: `chore: prepare ${tag} (#14)` },
+      () => {},
+      /fast-forward/,
+    ],
+    [
+      "a preparation of something that is not a tag",
+      { subject: "chore: prepare the kitchen" },
+      () => {},
+      /not "chore: prepare vX/,
+    ],
+    [
+      "a package.json that disagrees",
+      { version: "0.1.0-alpha.6" },
+      () => {},
+      /package\.json holds 0\.1\.0-alpha\.6/,
+    ],
     [
       "a local master ahead of origin's",
       {},
@@ -194,13 +296,43 @@ describe("refusing to tag", () => {
       },
       /is "feat\(inventory\): scan a barcode"/,
     ],
-    ["a tag that exists here", {}, (r) => r.git("tag", tag, "HEAD~1"), /already exists here/],
-    ["a tag that exists on origin", {}, (r) => r.state.remoteTags.push(tag), /already exists on origin/],
+    [
+      "a tag that exists here",
+      {},
+      (r) => r.git("tag", tag, "HEAD~1"),
+      /already exists here/,
+    ],
+    [
+      "a tag that exists on origin",
+      {},
+      (r) => r.state.remoteTags.push(tag),
+      /already exists on origin/,
+    ],
     ["no CI run", {}, (r) => (r.state.ci = null), /no CI push run/],
-    ["a CI run still going", {}, (r) => (r.state.ci = { ...green, status: "in_progress", conclusion: "" }), /still in_progress/],
-    ["a failed CI run", {}, (r) => (r.state.ci = { ...green, conclusion: "failure" }), /ended failure/],
-    ["a run whose image was not published", {}, (r) => (r.state.jobs = jobs({ conclusion: "skipped" })), /"Publish image" is skipped/],
-    ["a run without the publish job", {}, (r) => (r.state.jobs = jobs(null)), /"Publish image" is missing/],
+    [
+      "a CI run still going",
+      {},
+      (r) => (r.state.ci = { ...green, status: "in_progress", conclusion: "" }),
+      /still in_progress/,
+    ],
+    [
+      "a failed CI run",
+      {},
+      (r) => (r.state.ci = { ...green, conclusion: "failure" }),
+      /ended failure/,
+    ],
+    [
+      "a run whose image was not published",
+      {},
+      (r) => (r.state.jobs = jobs({ conclusion: "skipped" })),
+      /"Publish image" is skipped/,
+    ],
+    [
+      "a run without the publish job",
+      {},
+      (r) => (r.state.jobs = jobs(null)),
+      /"Publish image" is missing/,
+    ],
     [
       "no signing key",
       {},

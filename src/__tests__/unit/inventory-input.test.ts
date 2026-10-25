@@ -27,9 +27,9 @@ describe("adding stock", () => {
     // The defect this closes: `Math.abs` in the handler meant `-5` booked `+5`,
     // so a client could add stock by asking to remove it and nothing anywhere
     // said no.
-    expect(addStockSchema.safeParse({ ...MOVEMENT, quantity: -5 }).success).toBe(
-      false,
-    );
+    expect(
+      addStockSchema.safeParse({ ...MOVEMENT, quantity: -5 }).success,
+    ).toBe(false);
   });
 
   it("refuses zero, which would write a row that adds nothing", () => {
@@ -39,9 +39,9 @@ describe("adding stock", () => {
   });
 
   it("accepts a fraction, because half a litre is a real purchase", () => {
-    expect(addStockSchema.safeParse({ ...MOVEMENT, quantity: 0.5 }).success).toBe(
-      true,
-    );
+    expect(
+      addStockSchema.safeParse({ ...MOVEMENT, quantity: 0.5 }).success,
+    ).toBe(true);
   });
 
   it("no longer demands the field the handler ignores", () => {

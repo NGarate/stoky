@@ -75,14 +75,16 @@ describe("the account's own name", () => {
   });
 
   it("refuses a password containing the person's name", () => {
-    expect(passwordProblems("carmen la cocinera", { name: "Carmen" })).toContain(
-      "containsIdentity",
-    );
+    expect(
+      passwordProblems("carmen la cocinera", { name: "Carmen" }),
+    ).toContain("containsIdentity");
   });
 
   it("does not trip on a two-letter name that appears everywhere", () => {
     // "Al" inside "personal" is a coincidence, not a weak password.
-    expect(passwordProblems("la despensa personal", { name: "Al" })).toEqual([]);
+    expect(passwordProblems("la despensa personal", { name: "Al" })).toEqual(
+      [],
+    );
   });
 
   it("says nothing about identity when none was given", () => {
@@ -233,7 +235,8 @@ describe("the identity rule, where a password is set", () => {
           name: "Noel",
           password: "noel1",
         });
-        const messages = attempt.error?.issues.map((issue) => issue.message) ?? [];
+        const messages =
+          attempt.error?.issues.map((issue) => issue.message) ?? [];
 
         expect(messages).toContain(PASSWORD_CONTAINS_IDENTITY_MESSAGE);
         expect(messages.length).toBeGreaterThan(1);
@@ -247,8 +250,11 @@ describe("the identity rule, where a password is set", () => {
     );
 
     expect(
-      schema.safeParse({ email: "ana@example.com", name: "Ana", password: "ana" })
-        .error?.issues,
+      schema.safeParse({
+        email: "ana@example.com",
+        name: "Ana",
+        password: "ana",
+      }).error?.issues,
     ).toEqual([
       expect.objectContaining({
         code: "custom",
@@ -271,8 +277,11 @@ describe("the identity rule, where a password is set", () => {
     expect(isPasswordIdentityRefusal(undefined)).toBe(false);
     expect(
       isPasswordIdentityRefusal(
-        registerSchema.safeParse({ email: "x@y.es", name: "X", password: "short" })
-          .error?.message,
+        registerSchema.safeParse({
+          email: "x@y.es",
+          name: "X",
+          password: "short",
+        }).error?.message,
       ),
     ).toBe(false);
   });

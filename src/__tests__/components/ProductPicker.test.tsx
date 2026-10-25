@@ -24,7 +24,9 @@ mock.module("@/lib/trpc/client", () => ({
     product: {
       list: {
         useQuery: () => ({
-          data: { products: [{ id: "p1", name: "Leche entera", defaultUnit: "L" }] },
+          data: {
+            products: [{ id: "p1", name: "Leche entera", defaultUnit: "L" }],
+          },
           isPending: false,
         }),
       },
@@ -40,7 +42,11 @@ afterEach(cleanup);
 describe("the sentence under the field", () => {
   it("is whatever the page supplied", () => {
     renderWithIntl(
-      <ProductPicker hint="Elige el producto que se ha gastado." value="" onChange={() => {}} />,
+      <ProductPicker
+        hint="Elige el producto que se ha gastado."
+        value=""
+        onChange={() => {}}
+      />,
     );
 
     expect(
@@ -51,7 +57,11 @@ describe("the sentence under the field", () => {
   it("is not the add page's, whatever page this is", () => {
     // The defect exactly: the consume page rendered the add page's verb.
     const { container } = renderWithIntl(
-      <ProductPicker hint="Elige el producto que se ha gastado." value="" onChange={() => {}} />,
+      <ProductPicker
+        hint="Elige el producto que se ha gastado."
+        value=""
+        onChange={() => {}}
+      />,
     );
 
     expect(container.textContent).not.toContain("añadir stock");
@@ -96,7 +106,10 @@ describe("the catalogue behind it", () => {
     // Otherwise the next person copies the old pattern and the picker starts
     // reading one page's keys again.
     for (const catalogue of [esMessages, enMessages]) {
-      const inventory = catalogue.inventory as unknown as Record<string, unknown>;
+      const inventory = catalogue.inventory as unknown as Record<
+        string,
+        unknown
+      >;
 
       expect(inventory.picker).toBeDefined();
       expect(inventory.add).not.toHaveProperty("productSearchLabel");

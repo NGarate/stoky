@@ -175,7 +175,10 @@ describe("what it says, and in which order", () => {
   it("puts a stock disagreement ahead of a scan to review", () => {
     const state: QueueState = {
       ...base,
-      failed: [failed("f1", "needs-review"), failed("f2", "needs-reconciliation")],
+      failed: [
+        failed("f1", "needs-review"),
+        failed("f2", "needs-reconciliation"),
+      ],
     };
 
     expect(syncStatus(state).state).toBe("needs-reconciliation");

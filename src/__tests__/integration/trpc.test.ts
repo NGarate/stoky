@@ -19,7 +19,7 @@ describe("tRPC Infrastructure", () => {
       };
 
       const ctx = await createTRPCContext({ session: mockSession });
-      
+
       expect(ctx.session).toBeDefined();
       expect(ctx.session?.user.id).toBe("user-123");
       expect(ctx.session?.user.householdId).toBe("household-123");
@@ -27,7 +27,7 @@ describe("tRPC Infrastructure", () => {
 
     it("should create context without session", async () => {
       const ctx = await createTRPCContext({ session: null });
-      
+
       expect(ctx.session).toBeNull();
     });
 
@@ -45,7 +45,7 @@ describe("tRPC Infrastructure", () => {
       };
 
       const ctx = await createTRPCContext({ session: minimalSession });
-      
+
       expect(ctx.session).toBeDefined();
       expect(ctx.session?.user.id).toBe("user-456");
     });

@@ -24,9 +24,7 @@ import type { JSX } from "react";
 export function ExportButton(): JSX.Element {
   const t = useTranslations("settings.hub");
   const snackbar = useSnackbar();
-  const [state, setState] = useState<"idle" | "working">(
-    "idle",
-  );
+  const [state, setState] = useState<"idle" | "working">("idle");
 
   // `useUtils().fetch` rather than `useQuery`: this must run when the button is
   // pressed, not when the page renders. A query would download the entire
@@ -92,8 +90,6 @@ export function ExportButton(): JSX.Element {
       >
         {state === "working" ? t("exportWorking") : t("exportAction")}
       </Button>
-
-
     </div>
   );
 }

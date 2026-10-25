@@ -38,7 +38,9 @@ export const STEP_UP_TTL_S = 5 * 60;
 /** The refusal's code, which the browser words (`src/lib/auth/error-messages.ts`). */
 export const STEP_UP_REQUIRED = "STEP_UP_REQUIRED";
 
-export type StepUpDb = Pick<PrismaClient, "verification"> | Pick<Prisma.TransactionClient, "verification">;
+export type StepUpDb =
+  | Pick<PrismaClient, "verification">
+  | Pick<Prisma.TransactionClient, "verification">;
 
 export function stepUpIdentifier(sessionId: string): string {
   return `${STEP_UP_PREFIX}${sessionId}`;
@@ -54,11 +56,14 @@ export async function grantStepUp(
   { sessionId, userId }: { sessionId: string; userId: string },
   now: Date = new Date(),
 ): Promise<Date> {
-  if (!sessionId || !userId) throw new Error("grantStepUp needs a session and its account");
+  if (!sessionId || !userId)
+    throw new Error("grantStepUp needs a session and its account");
   const identifier = stepUpIdentifier(sessionId);
   const expiresAt = new Date(now.getTime() + STEP_UP_TTL_S * 1000);
   await db.verification.deleteMany({ where: { identifier } });
-  await db.verification.create({ data: { identifier, value: userId, expiresAt } });
+  await db.verification.create({
+    data: { identifier, value: userId, expiresAt },
+  });
   return expiresAt;
 }
 
@@ -69,11 +74,19 @@ export async function grantStepUp(
  */
 export async function hasStepUp(
   db: StepUpDb,
-  { sessionId, userId, spend }: { sessionId: string; userId: string; spend: boolean },
+  {
+    sessionId,
+    userId,
+    spend,
+  }: { sessionId: string; userId: string; spend: boolean },
   now: Date = new Date(),
 ): Promise<boolean> {
   if (!sessionId || !userId) return false;
-  const where = { identifier: stepUpIdentifier(sessionId), value: userId, expiresAt: { gt: now } };
+  const where = {
+    identifier: stepUpIdentifier(sessionId),
+    value: userId,
+    expiresAt: { gt: now },
+  };
   if (spend) return (await db.verification.deleteMany({ where })).count > 0;
   return (await db.verification.count({ where })) > 0;
 }

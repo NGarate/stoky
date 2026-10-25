@@ -19,7 +19,8 @@ import {
  */
 
 /** What a raw Prisma failure actually carries: the SQL and where it ran. */
-const LEAKY = 'Invalid `prisma.$queryRaw()` invocation in /app/src/server/trpc/routers/product.ts:385 — SELECT * FROM "User" WHERE email = $1';
+const LEAKY =
+  'Invalid `prisma.$queryRaw()` invocation in /app/src/server/trpc/routers/product.ts:385 — SELECT * FROM "User" WHERE email = $1';
 
 /**
  * A Prisma validation error as Prisma 6.19.3 renders it — the whole call,
@@ -64,7 +65,9 @@ const router = createTRPCRouter({
   }),
 });
 
-async function errorFrom(path: string): Promise<{ message: string; code: string }> {
+async function errorFrom(
+  path: string,
+): Promise<{ message: string; code: string }> {
   const response = await fetchRequestHandler({
     endpoint: "/api/trpc",
     req: new Request(`http://localhost/api/trpc/${path}`),

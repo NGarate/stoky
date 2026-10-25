@@ -33,7 +33,9 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..", "..", "..");
 
-const manifest = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
+const manifest = JSON.parse(
+  readFileSync(join(ROOT, "package.json"), "utf8"),
+) as {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
 };
@@ -42,7 +44,8 @@ const dependencies = Object.keys(manifest.dependencies ?? {});
 /** Runtime packages that shipped code reaches without an import of its own. */
 const RUNTIME_WITHOUT_IMPORT: Record<string, string> = {
   prisma: "the image runs `prisma migrate deploy` from /opt/prisma on start",
-  "react-dom": "Next renders with it; it is a peer of next, not an import of ours",
+  "react-dom":
+    "Next renders with it; it is a peer of next, not an import of ours",
 };
 
 /** Source files that end up in what ships: `src/` outside the test suite, and the Next config. */
@@ -56,9 +59,10 @@ function shippedFiles(dir: string, found: string[] = []): string[] {
   return found;
 }
 
-const sources = [...shippedFiles(join(ROOT, "src")), join(ROOT, "next.config.ts")].map((path) =>
-  readFileSync(path, "utf8"),
-);
+const sources = [
+  ...shippedFiles(join(ROOT, "src")),
+  join(ROOT, "next.config.ts"),
+].map((path) => readFileSync(path, "utf8"));
 
 function escape(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -97,7 +101,11 @@ describe("dependencies holds only what the application runs", () => {
     ]) {
       expect(pkg.test(line)).toBe(true);
     }
-    for (const line of [`from "pkg-other"`, `from "@scope/pkg"`, `// pkg is not imported`]) {
+    for (const line of [
+      `from "pkg-other"`,
+      `from "@scope/pkg"`,
+      `// pkg is not imported`,
+    ]) {
       expect(pkg.test(line)).toBe(false);
     }
   });
@@ -119,7 +127,9 @@ describe("dependencies holds only what the application runs", () => {
   });
 
   it("files type packages as devDependencies, since types never run", () => {
-    expect(dependencies.filter((name) => name.startsWith("@types/"))).toEqual([]);
+    expect(dependencies.filter((name) => name.startsWith("@types/"))).toEqual(
+      [],
+    );
     expect(manifest.devDependencies?.["@types/node"]).toBeDefined();
   });
 });

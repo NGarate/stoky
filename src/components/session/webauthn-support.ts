@@ -27,5 +27,9 @@ function webAuthnSupport(): WebAuthnSupport {
 
 /** Read once on the client and never on the server. */
 export function useWebAuthnSupport(): WebAuthnSupport {
-  return useSyncExternalStore(noSubscription, webAuthnSupport, () => "pending" as const);
+  return useSyncExternalStore(
+    noSubscription,
+    webAuthnSupport,
+    () => "pending" as const,
+  );
 }

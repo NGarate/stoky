@@ -1,4 +1,10 @@
-import { test, expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import {
+  test,
+  expect,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from "@playwright/test";
 import es from "../messages/es.json";
 
 /**
@@ -108,23 +114,32 @@ async function secondDevice(
 /** Open the devices list and wait for both sessions to be on it. */
 async function devices(page: Page): Promise<void> {
   await page.goto("/settings/security");
-  await expect(page.getByRole("heading", { name: t.devicesTitle })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(page.getByRole("heading", { name: t.devicesTitle })).toBeVisible(
+    {
+      timeout: 30_000,
+    },
+  );
   await expect(page.getByRole("button", { name: t.endOthers })).toBeVisible({
     timeout: 30_000,
   });
 }
 
 /** Type the password into the open dialog and press its button. */
-async function confirm(page: Page, button: string, password = PASSWORD): Promise<void> {
+async function confirm(
+  page: Page,
+  button: string,
+  password = PASSWORD,
+): Promise<void> {
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel(es.reauth.password).fill(password);
   await dialog.getByRole("button", { name: button, exact: true }).click();
 }
 
 test.describe("ending sessions from the devices list", () => {
-  test("ends the other device's session, and this one stays", async ({ page, browser }) => {
+  test("ends the other device's session, and this one stays", async ({
+    page,
+    browser,
+  }) => {
     const email = await register(page);
     const other = await secondDevice(browser, email);
 
@@ -137,7 +152,9 @@ test.describe("ending sessions from the devices list", () => {
       .getByRole("listitem")
       .filter({ hasNot: page.getByText(t.thisDevice, { exact: true }) });
     await expect(otherRow).toHaveCount(1);
-    await otherRow.getByRole("button", { name: new RegExp(`^${t.endOne}`) }).click();
+    await otherRow
+      .getByRole("button", { name: new RegExp(`^${t.endOne}`) })
+      .click();
     await confirm(page, t.endOne);
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 30_000 });
 
@@ -151,7 +168,10 @@ test.describe("ending sessions from the devices list", () => {
     await expect(other.page).toHaveURL(/\/login/, { timeout: 30_000 });
 
     // This one is not: ending the other must not end the one asking.
-    expect(await signedIn(page), "ending the other session signed this one out").toBe(true);
+    expect(
+      await signedIn(page),
+      "ending the other session signed this one out",
+    ).toBe(true);
 
     await other.context.close();
   });
@@ -172,9 +192,10 @@ test.describe("ending sessions from the devices list", () => {
     // This tab, which "every one" includes and the dialog said so.
     await expect(page).toHaveURL(/\/login/, { timeout: 30_000 });
 
-    expect(await signedIn(page), "this browser was still signed in after every session ended").toBe(
-      false,
-    );
+    expect(
+      await signedIn(page),
+      "this browser was still signed in after every session ended",
+    ).toBe(false);
     expect(
       await signedIn(other.page),
       "the other browser was still signed in after every session was ended — " +
@@ -193,14 +214,22 @@ test.describe("ending sessions from the devices list", () => {
 
     // Scoped to the dialog: the sync indicator keeps an empty alert region on
     // every dashboard page.
-    await expect(page.getByRole("dialog").getByRole("alert")).toContainText(es.reauth.wrong, {
-      timeout: 30_000,
-    });
-    await page.getByRole("dialog").getByRole("button", { name: es.common.cancel }).click();
+    await expect(page.getByRole("dialog").getByRole("alert")).toContainText(
+      es.reauth.wrong,
+      {
+        timeout: 30_000,
+      },
+    );
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: es.common.cancel })
+      .click();
 
     // Still signed in, and still on the page they were reading.
     await expect(page).toHaveURL(/\/settings\/security/);
-    expect(await signedIn(page), "a wrong password ended the session").toBe(true);
+    expect(await signedIn(page), "a wrong password ended the session").toBe(
+      true,
+    );
   });
 });
 
@@ -231,11 +260,17 @@ test.describe("ending a member's sessions from the people page", () => {
     await page.click('button[type="submit"]');
     // A kitchen account is sent straight to its screen.
     await expect(page).toHaveURL(/\/kitchen/, { timeout: 30_000 });
-    expect(await signedIn(page), "the member's browser was not signed in to begin with").toBe(true);
+    expect(
+      await signedIn(page),
+      "the member's browser was not signed in to begin with",
+    ).toBe(true);
     return { context, page };
   }
 
-  test("ends the one chosen, then every one, and never the admin's", async ({ page, browser }) => {
+  test("ends the one chosen, then every one, and never the admin's", async ({
+    page,
+    browser,
+  }) => {
     // ---------------------------------------------------------------- given --
     await register(page);
     const memberEmail = freshEmail();
@@ -248,7 +283,9 @@ test.describe("ending a member's sessions from the people page", () => {
     const row = page
       .getByRole("listitem")
       .filter({ hasText: memberName })
-      .filter({ has: page.getByRole("button", { name: h.memberSessionsButton }) });
+      .filter({
+        has: page.getByRole("button", { name: h.memberSessionsButton }),
+      });
     await expect(row).toBeVisible({ timeout: 30_000 });
 
     const tablet = await memberDevice(browser, memberEmail);
@@ -281,7 +318,10 @@ test.describe("ending a member's sessions from the people page", () => {
       [await signedIn(tablet.page), await signedIn(phone.page)],
       "a member's browser was still signed in after every session was ended",
     ).toEqual([false, false]);
-    expect(await signedIn(page), "ending a member's sessions signed the admin out").toBe(true);
+    expect(
+      await signedIn(page),
+      "ending a member's sessions signed the admin out",
+    ).toBe(true);
 
     // ------------------------------------------- and opened again, read again --
     // Not the list from before "Cerrar todas", still inside the client's
@@ -313,7 +353,10 @@ test.describe("ending every session in the household from the people page", () =
   const h = es.household;
   const MEMBER_PASSWORD = "E2EHouseholdEnd123!";
 
-  test("signs out a member's browser and the owner's own", async ({ page, browser }) => {
+  test("signs out a member's browser and the owner's own", async ({
+    page,
+    browser,
+  }) => {
     // ---------------------------------------------------------------- given --
     await register(page);
     const memberEmail = freshEmail();
@@ -327,7 +370,9 @@ test.describe("ending every session in the household from the people page", () =
       page
         .getByRole("listitem")
         .filter({ hasText: memberName })
-        .filter({ has: page.getByRole("button", { name: h.memberSessionsButton }) }),
+        .filter({
+          has: page.getByRole("button", { name: h.memberSessionsButton }),
+        }),
     ).toBeVisible({ timeout: 30_000 });
 
     const context = await browser.newContext();
@@ -339,18 +384,30 @@ test.describe("ending every session in the household from the people page", () =
     await member.fill('input[name="password"]', MEMBER_PASSWORD);
     await member.click('button[type="submit"]');
     await expect(member).toHaveURL(/\/kitchen/, { timeout: 30_000 });
-    expect(await signedIn(member), "the member's browser was not signed in to begin with").toBe(true);
+    expect(
+      await signedIn(member),
+      "the member's browser was not signed in to begin with",
+    ).toBe(true);
 
     // ----------------------------------------------------------------- when --
     const section = page.getByRole("region", { name: h.endAllHouseholdTitle });
-    await section.getByRole("button", { name: h.endAllHouseholdButton }).click();
-    const dialog = page.getByRole("dialog", { name: h.endAllHouseholdDialogTitle });
+    await section
+      .getByRole("button", { name: h.endAllHouseholdButton })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: h.endAllHouseholdDialogTitle,
+    });
     await dialog.getByLabel(es.reauth.password).fill(PASSWORD);
-    await dialog.getByRole("button", { name: h.endAllHouseholdButton, exact: true }).click();
+    await dialog
+      .getByRole("button", { name: h.endAllHouseholdButton, exact: true })
+      .click();
 
     // ----------------------------------------------------------------- then --
     await expect(page).toHaveURL(/\/login/, { timeout: 30_000 });
-    expect(await signedIn(page), "the owner's own browser was still signed in").toBe(false);
+    expect(
+      await signedIn(page),
+      "the owner's own browser was still signed in",
+    ).toBe(false);
     expect(
       await signedIn(member),
       "the member's browser was still signed in after every session in the household ended",

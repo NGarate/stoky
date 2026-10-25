@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { emailSchema } from "./auth";
 import { MAX_ID_LENGTH, MAX_NAME_LENGTH } from "./bounds";
-import { existingPasswordSchema, newPasswordSchema, withIdentityRule } from "./password";
+import {
+  existingPasswordSchema,
+  newPasswordSchema,
+  withIdentityRule,
+} from "./password";
 
 export const householdSchema = z.object({
   name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
@@ -190,9 +194,15 @@ export type AddMemberInput = z.infer<typeof addMemberSchema>;
 export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
 export type RemoveMemberInput = z.infer<typeof removeMemberSchema>;
 export type EndMemberSessionsInput = z.infer<typeof endMemberSessionsSchema>;
-export type EndHouseholdSessionsInput = z.infer<typeof endHouseholdSessionsSchema>;
-export type RemoveMemberTwoFactorInput = z.infer<typeof removeMemberTwoFactorSchema>;
-export type ResetMemberPasswordInput = z.infer<typeof resetMemberPasswordSchema>;
+export type EndHouseholdSessionsInput = z.infer<
+  typeof endHouseholdSessionsSchema
+>;
+export type RemoveMemberTwoFactorInput = z.infer<
+  typeof removeMemberTwoFactorSchema
+>;
+export type ResetMemberPasswordInput = z.infer<
+  typeof resetMemberPasswordSchema
+>;
 export type HouseholdInput = z.infer<typeof householdSchema>;
 export type UpdateHouseholdInput = z.infer<typeof updateHouseholdSchema>;
 export type HouseholdMemberInput = z.infer<typeof householdMemberSchema>;

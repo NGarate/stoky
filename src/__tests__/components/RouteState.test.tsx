@@ -37,9 +37,8 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
-const { RouteState, isNoHouseholdError, isNotFoundError } = await import(
-  "@/components/household/RouteState"
-);
+const { RouteState, isNoHouseholdError, isNotFoundError } =
+  await import("@/components/household/RouteState");
 
 /** A refusal shaped the way tRPC delivers one to the browser. */
 function trpcError(code: string): TRPCClientError<never> {
@@ -147,7 +146,9 @@ describe("RouteState with no signal", () => {
     );
 
     expect(screen.getByText("Todavía no tienes un hogar")).toBeInTheDocument();
-    expect(screen.queryByText("Aquí todavía no hay nada guardado")).toBeAbsent();
+    expect(
+      screen.queryByText("Aquí todavía no hay nada guardado"),
+    ).toBeAbsent();
   });
 });
 
@@ -163,7 +164,9 @@ describe("RouteState", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Inventario" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Inventario" }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeAbsent();
     expect(screen.queryByRole("textbox")).toBeAbsent();
   });
@@ -181,7 +184,9 @@ describe("RouteState", () => {
 
     // A named field and a submit, not a dead end.
     expect(screen.getByLabelText(/hogar/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /crear hogar/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /crear hogar/i }),
+    ).toBeInTheDocument();
   });
 
   it("offers a retry, not a household form, for any other failure", () => {
@@ -199,7 +204,9 @@ describe("RouteState", () => {
     );
 
     expect(screen.queryByLabelText(/hogar/i)).toBeAbsent();
-    expect(screen.getByRole("button", { name: "Volver a intentarlo" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Volver a intentarlo" }),
+    ).toBeInTheDocument();
   });
 
   it("retries the query when asked", async () => {
@@ -214,7 +221,9 @@ describe("RouteState", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Volver a intentarlo" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Volver a intentarlo" }),
+    );
 
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
@@ -390,8 +399,12 @@ describe("the page around the state", () => {
       />,
     );
 
-    expect(screen.getByRole("link", { name: "Volver a tus listas" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Nuevo producto" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Volver a tus listas" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Nuevo producto" }),
+    ).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
   });
 
@@ -428,12 +441,17 @@ describe("the page around the state", () => {
     );
 
     expect(
-      screen.getByRole("heading", { level: 1, name: "Esta lista ya no existe" }),
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Esta lista ya no existe",
+      }),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Puede que alguien de tu hogar la haya eliminado."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Volver a tus listas" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Volver a tus listas" }),
+    ).toBeInTheDocument();
     // Retrying a thing that does not exist fails the same way every time,
     // and an action on it has nothing left to act on.
     expect(screen.queryByRole("button")).toBeAbsent();
@@ -450,7 +468,9 @@ describe("the page around the state", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Volver a intentarlo" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Volver a intentarlo" }),
+    ).toBeInTheDocument();
   });
 
   it("explains a failure in plain words, not the system's", () => {

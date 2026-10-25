@@ -42,18 +42,16 @@ export const storeRouter = createTRPCRouter({
     }),
 
   /** Adds a shop. */
-  create: adminProcedure
-    .input(storeSchema)
-    .mutation(async ({ ctx, input }) => {
-      const store = await ctx.db.store.create({
-        data: {
-          ...input,
-          householdId: ctx.householdId,
-        },
-      });
+  create: adminProcedure.input(storeSchema).mutation(async ({ ctx, input }) => {
+    const store = await ctx.db.store.create({
+      data: {
+        ...input,
+        householdId: ctx.householdId,
+      },
+    });
 
-      return store;
-    }),
+    return store;
+  }),
 
   /** Renames a shop or changes its address. */
   update: adminProcedure

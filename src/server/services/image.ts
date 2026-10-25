@@ -209,7 +209,9 @@ export function stripJpegMetadata(jpeg: Buffer): Buffer {
 
     const isApplication = marker >= APP0 && marker <= APP15;
     if (!isApplication && marker !== COM && !KEPT_BEFORE_SCAN.has(marker)) {
-      throw malformed(`unexpected marker 0x${marker.toString(16)} before the scan`);
+      throw malformed(
+        `unexpected marker 0x${marker.toString(16)} before the scan`,
+      );
     }
 
     if (cursor + 3 > length) throw malformed("truncated segment length");

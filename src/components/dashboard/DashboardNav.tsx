@@ -54,7 +54,7 @@ export function DashboardNav(): JSX.Element {
               width rather than borrowing a button's. Measured at 35×48
               without it, which the structural audit failed at desktop. */}
           <Button asChild className="min-w-[48px]" variant="link">
-            <Link href="/dashboard" > Stoky </Link>
+            <Link href="/dashboard"> Stoky </Link>
           </Button>
           <ul className="flex items-center gap-1">
             {DESKTOP_DESTINATIONS.map((destination) => {

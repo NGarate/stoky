@@ -420,7 +420,8 @@ async function collectViolations(
      * fill change on its own is invisible to someone who cannot separate the two
      * fills (WCAG 1.4.1).
      */
-    const STATEFUL = '[aria-current], [aria-selected="true"], [aria-pressed="true"]';
+    const STATEFUL =
+      '[aria-current], [aria-selected="true"], [aria-pressed="true"]';
     const NON_COLOUR: Array<keyof CSSStyleDeclaration & string> = [
       "fontWeight",
       "fontStyle",
@@ -515,7 +516,10 @@ async function collectViolations(
 async function auditStructure(page: Page, route: string): Promise<void> {
   const failures: string[] = [];
 
-  await page.setViewportSize({ width: TIERS[0].width, height: TIERS[0].height });
+  await page.setViewportSize({
+    width: TIERS[0].width,
+    height: TIERS[0].height,
+  });
   await page.goto(route);
   // Data-driven pages render their real content after the tRPC round trip,
   // and auditing the skeleton would pass while telling us nothing.
@@ -526,7 +530,9 @@ async function auditStructure(page: Page, route: string): Promise<void> {
     await page.evaluate(
       () =>
         new Promise((resolve) => {
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)));
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => resolve(null)),
+          );
         }),
     );
 

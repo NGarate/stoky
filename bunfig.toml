@@ -25,3 +25,11 @@ minimumReleaseAge = 259200 # seconds: 3 days
 # process (ISSUES TEST-11). Applies to every `bun test`, including a single
 # file run alone; a suite's own `--preload` adds to it.
 preload = ["./src/__tests__/setup/next-environment.ts"]
+
+[fmt]
+# `bun fmt` is Bun's port of Prettier, and these are Prettier's options under
+# Prettier's names. Only the width is stated: the rest of Prettier's defaults
+# (double quotes, semicolons, trailing commas, two spaces) are what the code
+# was already written in. `.prettierignore` says what is left alone, and
+# `bun run check:format` is the gate.
+printWidth = 80

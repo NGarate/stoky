@@ -40,19 +40,45 @@ const COUNT_UNIT = "unit";
  * first, mapped to the one spelling it stores.
  */
 const UNIT_WORDS: Record<string, string> = {
-  g: "g", gr: "g", grs: "g", gramo: "g", gramos: "g", gram: "g", grams: "g",
-  kg: "kg", kgs: "kg", kilo: "kg", kilos: "kg", kilogramo: "kg", kilogramos: "kg",
-  kilogram: "kg", kilograms: "kg",
+  g: "g",
+  gr: "g",
+  grs: "g",
+  gramo: "g",
+  gramos: "g",
+  gram: "g",
+  grams: "g",
+  kg: "kg",
+  kgs: "kg",
+  kilo: "kg",
+  kilos: "kg",
+  kilogramo: "kg",
+  kilogramos: "kg",
+  kilogram: "kg",
+  kilograms: "kg",
   mg: "mg",
-  ml: "ml", mililitro: "ml", mililitros: "ml", millilitre: "ml", millilitres: "ml",
-  milliliter: "ml", milliliters: "ml",
-  cl: "cl", centilitro: "cl", centilitros: "cl",
-  l: "l", litro: "l", litros: "l", litre: "l", litres: "l", liter: "l", liters: "l",
-  oz: "oz", lb: "lb", lbs: "lb",
+  ml: "ml",
+  mililitro: "ml",
+  mililitros: "ml",
+  millilitre: "ml",
+  millilitres: "ml",
+  milliliter: "ml",
+  milliliters: "ml",
+  cl: "cl",
+  centilitro: "cl",
+  centilitros: "cl",
+  l: "l",
+  litro: "l",
+  litros: "l",
+  litre: "l",
+  litres: "l",
+  liter: "l",
+  liters: "l",
+  oz: "oz",
+  lb: "lb",
+  lbs: "lb",
 };
 
 const VOLUME_UNITS = new Set(["ml", "cl", "l"]);
-
 
 const offProductSchema = z.object({
   code: z.string(),
@@ -86,7 +112,12 @@ const offProductSchema = z.object({
       fat: z.number().optional(),
     })
     .transform(
-      ({ "energy-kcal": kcal, "energy-kcal_100g": kcal100g, energy_kcal, ...rest }) => ({
+      ({
+        "energy-kcal": kcal,
+        "energy-kcal_100g": kcal100g,
+        energy_kcal,
+        ...rest
+      }) => ({
         ...rest,
         energy_kcal: energy_kcal ?? kcal ?? kcal100g,
       }),
@@ -172,7 +203,8 @@ export class OpenFoodFactsClient {
       // reach a caller as a valid product with fields missing.
       const revived = offProductSchema.safeParse(JSON.parse(cached));
       // A stub cached before stubs were refused is dropped like a stale shape.
-      if (revived.success && identifiesAProduct(revived.data)) return revived.data;
+      if (revived.success && identifiesAProduct(revived.data))
+        return revived.data;
       await this.cache.delete(barcode);
     }
 
@@ -194,14 +226,17 @@ export class OpenFoodFactsClient {
           // claims its replay key, which is what leaves a retry of the same key
           // free to succeed once Open Food Facts answers again.
           signal: AbortSignal.timeout(this.timeoutMs),
-        }
+        },
       );
 
       // A 404 is how the v2 API says "no such product" — HTTP 404 with a
       // `status: 0` body, measured against the live API on 2026-10-12 — so it
       // is read, not thrown. Any other non-2xx is OFF being unavailable.
       if (!response.ok && response.status !== 404) {
-        throw new UpstreamError(`Open Food Facts answered ${response.status}`, response.status);
+        throw new UpstreamError(
+          `Open Food Facts answered ${response.status}`,
+          response.status,
+        );
       }
 
       const rawData = await response.json();
@@ -228,7 +263,11 @@ export class OpenFoodFactsClient {
       // — but is not remembered, even as a miss: a stub is a record somebody
       // has started, the likeliest to be named soon, and the next lookup sees
       // it once someone fills it in.
-      if (parsed.status !== 1 || !parsed.product || !identifiesAProduct(parsed.product)) {
+      if (
+        parsed.status !== 1 ||
+        !parsed.product ||
+        !identifiesAProduct(parsed.product)
+      ) {
         return null;
       }
 

@@ -114,7 +114,9 @@ test.describe("LocationPicker on /inventory/add", () => {
     ).toEqual([]);
   });
 
-  test("every option is on screen, not behind the bottom bar", async ({ page }) => {
+  test("every option is on screen, not behind the bottom bar", async ({
+    page,
+  }) => {
     // A phone, because that is the only tier with a fixed bottom bar and the
     // only one where the picker is the last field of a long form.
     await page.setViewportSize({ width: 390, height: 844 });
@@ -157,7 +159,9 @@ test.describe("LocationPicker on /inventory/add", () => {
     // Before this, the last option ended at 892px on an 844px viewport with the
     // bar starting at 780px, and the screenshot showed no option at all.
     const where = JSON.stringify(verdict);
-    expect(verdict.panelBottom, where).toBeLessThanOrEqual((verdict.floor ?? 0) + 1);
+    expect(verdict.panelBottom, where).toBeLessThanOrEqual(
+      (verdict.floor ?? 0) + 1,
+    );
     expect(verdict.panelTop, where).toBeGreaterThanOrEqual(-1);
     expect(verdict.firstRowVisible, where).toBe(true);
   });

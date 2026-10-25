@@ -240,16 +240,22 @@ describe("a photograph that grows when it is re-encoded", () => {
     // The premise, both halves: the upload itself is under the cap, so the
     // input check cannot be what refuses it, and the JPEG it becomes is over.
     expect(noise.length).toBeLessThan(MAX_RECEIPT_BYTES);
-    expect((await reencodeAsJpeg(noise)).length).toBeGreaterThan(MAX_RECEIPT_BYTES);
+    expect((await reencodeAsJpeg(noise)).length).toBeGreaterThan(
+      MAX_RECEIPT_BYTES,
+    );
 
     const filesBefore = await filesOnDisk();
     const rowsBefore = await prisma.receipt.count({ where: { householdId } });
 
-    await expect(uploadPng(noise)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(uploadPng(noise)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
 
     // Refused before the write, not after it: no file, no row pointing at one.
     expect(await filesOnDisk()).toEqual(filesBefore);
-    expect(await prisma.receipt.count({ where: { householdId } })).toBe(rowsBefore);
+    expect(await prisma.receipt.count({ where: { householdId } })).toBe(
+      rowsBefore,
+    );
   });
 
   it("is accepted when what would be stored is under it, from the same builder", async () => {
@@ -258,7 +264,9 @@ describe("a photograph that grows when it is re-encoded", () => {
     // Small on purpose — an accepted upload goes on to the real Tesseract, and
     // a full-size page of noise is a slow, hungry thing to hand it in a test.
     const noise = pngNoise(800, 800);
-    expect((await reencodeAsJpeg(noise)).length).toBeLessThan(MAX_RECEIPT_BYTES);
+    expect((await reencodeAsJpeg(noise)).length).toBeLessThan(
+      MAX_RECEIPT_BYTES,
+    );
 
     const receipt = await uploadPng(noise);
     written.push(receipt.imagePath);

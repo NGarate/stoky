@@ -49,7 +49,9 @@ describe("the web app manifest", () => {
     expect(m.name).toBeTruthy();
     expect(m.short_name).toBeTruthy();
     expect(m.start_url).toBe("/");
-    expect(["standalone", "fullscreen", "minimal-ui"]).toContain(m.display ?? "browser");
+    expect(["standalone", "fullscreen", "minimal-ui"]).toContain(
+      m.display ?? "browser",
+    );
   });
 
   it("declares a 192 and a 512 icon for any purpose, and a maskable one", () => {
@@ -92,7 +94,9 @@ describe("the icons the root layout and the manifest reference", () => {
   });
 
   it("give iOS a 180px touch icon", () => {
-    expect(pngSize(join(PUBLIC, "icons/apple-touch-icon.png"))).toEqual([180, 180]);
+    expect(pngSize(join(PUBLIC, "icons/apple-touch-icon.png"))).toEqual([
+      180, 180,
+    ]);
   });
 
   it("are reachable without the proxy, which would stamp a nonce and a cookie on them", () => {

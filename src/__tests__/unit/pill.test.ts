@@ -88,19 +88,31 @@ describe("the only pill is Badge", () => {
   });
 
   it("would notice one, and leaves the things that are not pills alone", () => {
-    expect(looksLikeAPill('<span className="rounded-full bg-ok px-2 py-1" />')).toBe(true);
+    expect(
+      looksLikeAPill('<span className="rounded-full bg-ok px-2 py-1" />'),
+    ).toBe(true);
     // The chip shape, which the first version of this check let through.
     expect(
-      looksLikeAPill('<span className="rounded bg-warn px-2 py-0.5 text-xs" />'),
+      looksLikeAPill(
+        '<span className="rounded bg-warn px-2 py-0.5 text-xs" />',
+      ),
     ).toBe(true);
     // A progress bar and an icon button, which are not pills.
-    expect(looksLikeAPill('<div className="h-2 rounded-full bg-gauge" />')).toBe(false);
-    expect(looksLikeAPill('<button className="rounded-full p-2" />')).toBe(false);
+    expect(
+      looksLikeAPill('<div className="h-2 rounded-full bg-gauge" />'),
+    ).toBe(false);
+    expect(looksLikeAPill('<button className="rounded-full p-2" />')).toBe(
+      false,
+    );
     // A message panel: same fill, full width, body text.
     expect(
-      looksLikeAPill('<p className="rounded-xl border bg-danger px-4 py-3 text-sm" />'),
+      looksLikeAPill(
+        '<p className="rounded-xl border bg-danger px-4 py-3 text-sm" />',
+      ),
     ).toBe(false);
     // And prose describing one.
-    expect(looksLikeAPill('  // it was rounded-full px-3 py-1.5 before')).toBe(false);
+    expect(looksLikeAPill("  // it was rounded-full px-3 py-1.5 before")).toBe(
+      false,
+    );
   });
 });

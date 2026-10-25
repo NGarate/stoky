@@ -532,7 +532,12 @@ export async function refundRateLimit(
   window: number,
 ): Promise<void> {
   try {
-    await valkey().eval(REFUND_SCRIPT, 1, `${limit.prefix}:${identifier}`, window);
+    await valkey().eval(
+      REFUND_SCRIPT,
+      1,
+      `${limit.prefix}:${identifier}`,
+      window,
+    );
   } catch {
     // The same reasoning as `resetRateLimit`: the attempt stays counted until
     // the window ends, which is safe, and failing the sign-in that just
@@ -627,7 +632,12 @@ function addressBucket(address: string): string {
 
   // ::ffff:a.b.c.d — RFC 4291 §2.5.5.2. The first 80 bits zero, then 0xffff.
   if (hextets.slice(0, 5).every((h) => h === 0) && hextets[5] === 0xffff) {
-    return [hextets[6] >> 8, hextets[6] & 0xff, hextets[7] >> 8, hextets[7] & 0xff].join(".");
+    return [
+      hextets[6] >> 8,
+      hextets[6] & 0xff,
+      hextets[7] >> 8,
+      hextets[7] & 0xff,
+    ].join(".");
   }
 
   return `${hextets

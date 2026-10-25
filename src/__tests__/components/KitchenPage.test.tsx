@@ -15,9 +15,10 @@ import type { QueuedOp, EnqueueResult } from "@/lib/offline/queue";
  */
 
 // Typed as the real result so a test can make the queue refuse a change.
-const enqueue = mock(
-  (_op: unknown): EnqueueResult => ({ ok: true, id: "op-1" }),
-);
+const enqueue = mock((_op: unknown): EnqueueResult => ({
+  ok: true,
+  id: "op-1",
+}));
 const cancel = mock((_id: string) => true);
 const createList = mock(
   (
@@ -183,13 +184,19 @@ describe("what is urgent comes first", () => {
     // Nothing urgent means no buttons at all — §4: one button per card, and
     // there are no cards.
     expect(screen.queryByRole("button", { name: /He usado/ })).toBeAbsent();
-    expect(screen.getByText("No hay nada a punto de caducar")).toBeInTheDocument();
+    expect(
+      screen.getByText("No hay nada a punto de caducar"),
+    ).toBeInTheDocument();
   });
 
   it("says today and tomorrow in words rather than as numbers", () => {
     expiringStub.data = [
       batch({ id: "b1", daysUntilExpiry: 0 }),
-      batch({ id: "b2", daysUntilExpiry: 1, product: { id: "p2", name: "Huevos" } }),
+      batch({
+        id: "b2",
+        daysUntilExpiry: 1,
+        product: { id: "p2", name: "Huevos" },
+      }),
     ];
     renderKitchen();
 
@@ -218,16 +225,24 @@ describe("using something up", () => {
   });
 
   it("shows one left after two pending uses of a three-unit batch", () => {
-    pending = [consumeOp("p1"), { ...consumeOp("p1"), id: "second" }].map((op) => ({
-      ...op, input: { ...op.input, batchId: "batch-1" },
-    }));
+    pending = [consumeOp("p1"), { ...consumeOp("p1"), id: "second" }].map(
+      (op) => ({
+        ...op,
+        input: { ...op.input, batchId: "batch-1" },
+      }),
+    );
     renderKitchen();
     expect(screen.getByText("Quedan 1 L")).toBeInTheDocument();
   });
 
   it("does not offer another use after the last unit is queued", () => {
     expiringStub.data = [batch({ quantity: 1 })];
-    pending = [{ ...consumeOp("p1"), input: { productId: "p1", batchId: "batch-1", quantity: 1, unit: "L" } }];
+    pending = [
+      {
+        ...consumeOp("p1"),
+        input: { productId: "p1", batchId: "batch-1", quantity: 1, unit: "L" },
+      },
+    ];
     renderKitchen();
     expect(screen.getByRole("button", { name: /He usado 1 L/ })).toBeDisabled();
   });
@@ -271,7 +286,9 @@ describe("using something up", () => {
     // "He usado 1 unit" and "Quedan 3 unit", in a Spanish kitchen.
     expect(screen.getByText("Quedan 3 unidades")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "He usado 1 unidad de «Leche entera»" }),
+      screen.getByRole("button", {
+        name: "He usado 1 unidad de «Leche entera»",
+      }),
     ).toBeInTheDocument();
   });
 
@@ -279,7 +296,14 @@ describe("using something up", () => {
     stockStub = {
       data: {
         products: [
-          { id: "p9", name: "Café", totalStock: 0, minStock: 2, onListQuantity: 0, defaultUnit: "paquete" },
+          {
+            id: "p9",
+            name: "Café",
+            totalStock: 0,
+            minStock: 2,
+            onListQuantity: 0,
+            defaultUnit: "paquete",
+          },
         ],
       },
       isPending: false,
@@ -292,8 +316,12 @@ describe("using something up", () => {
     // "pulsa He usado 1 L" matched nothing. The same for the list button,
     // whose visible words were not in its name at all.
     for (const button of screen.getAllByRole("button")) {
-      const visible = button.querySelector("[aria-hidden='true']")?.textContent ?? "";
-      const name = button.querySelector(".sr-only")?.textContent ?? button.textContent ?? "";
+      const visible =
+        button.querySelector("[aria-hidden='true']")?.textContent ?? "";
+      const name =
+        button.querySelector(".sr-only")?.textContent ??
+        button.textContent ??
+        "";
       expect(visible.length).toBeGreaterThan(0);
       expect(name.startsWith(visible)).toBe(true);
     }
@@ -306,7 +334,14 @@ describe("using something up", () => {
     stockStub = {
       data: {
         products: [
-          { id: "p9", name: "Café", totalStock: 0, minStock: 2, onListQuantity: 0, defaultUnit: "ud" },
+          {
+            id: "p9",
+            name: "Café",
+            totalStock: 0,
+            minStock: 2,
+            onListQuantity: 0,
+            defaultUnit: "ud",
+          },
         ],
       },
       isPending: false,
@@ -325,7 +360,8 @@ describe("writing it on the list", () => {
     id: "p9",
     name: "Café molido",
     totalStock: 0,
-    minStock: 2, onListQuantity: 0,
+    minStock: 2,
+    onListQuantity: 0,
     defaultUnit: "paquete",
   };
 
@@ -382,7 +418,9 @@ describe("writing it on the list", () => {
     createListHeld = true;
     renderKitchen();
 
-    const tap = screen.getByRole("button", { name: /Añadir a la lista: «Café molido»/ });
+    const tap = screen.getByRole("button", {
+      name: /Añadir a la lista: «Café molido»/,
+    });
     await userEvent.click(tap);
     await userEvent.click(tap);
 
@@ -409,9 +447,7 @@ describe("writing it on the list", () => {
     );
 
     expect(enqueue).not.toHaveBeenCalled();
-    expect(
-      screen.getByText(/no se puede crear la lista/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/no se puede crear la lista/i)).toBeInTheDocument();
   });
 
   it("offers undo for the add, in the snackbar rather than in the row", async () => {
@@ -486,7 +522,11 @@ describe("undo", () => {
 });
 
 describe("what the lists already cover", () => {
-  const runningOut = (onListQuantity: number, totalStock = 1, minStock = 2) => ({
+  const runningOut = (
+    onListQuantity: number,
+    totalStock = 1,
+    minStock = 2,
+  ) => ({
     data: {
       products: [
         {
@@ -543,7 +583,6 @@ describe("what the lists already cover", () => {
     expect(screen.getByText("No falta nada")).toBeInTheDocument();
   });
 
-
   it("does not say the same word twice in one row", () => {
     stockStub = runningOut(1);
     renderKitchen();
@@ -585,7 +624,12 @@ describe("what the lists already cover", () => {
       {
         id: "op-add",
         path: "shopping.addItem",
-        input: { shoppingListId: "l1", productId: "p9", quantity: 1, unit: "paquete" },
+        input: {
+          shoppingListId: "l1",
+          productId: "p9",
+          quantity: 1,
+          unit: "paquete",
+        },
         householdId: "h1",
         label: { key: "offline.addedItem" },
         createdAt: new Date("2026-08-18T10:00:00.000Z"),
@@ -596,7 +640,9 @@ describe("what the lists already cover", () => {
 
     // The server has not heard yet. Without folding the queue in, the button
     // stays lit offline and the second tap writes a second item.
-    expect(screen.queryByRole("button", { name: /Añadir a la lista/ })).toBeAbsent();
+    expect(
+      screen.queryByRole("button", { name: /Añadir a la lista/ }),
+    ).toBeAbsent();
   });
 
   it("says nothing about a product with no minimum, rather than suppressing it", () => {
@@ -604,7 +650,9 @@ describe("what the lists already cover", () => {
     stockStub = runningOut(0, 0, null as unknown as number);
     renderKitchen();
 
-    expect(screen.queryByRole("button", { name: /Añadir a la lista/ })).toBeAbsent();
+    expect(
+      screen.queryByRole("button", { name: /Añadir a la lista/ }),
+    ).toBeAbsent();
   });
 });
 
@@ -617,7 +665,8 @@ describe("what is running out", () => {
             id: "p9",
             name: "Café molido",
             totalStock: 1,
-            minStock: 2, onListQuantity: 0,
+            minStock: 2,
+            onListQuantity: 0,
             defaultUnit: "paquete",
           },
         ],
@@ -638,7 +687,8 @@ describe("what is running out", () => {
             id: "p9",
             name: "Café molido",
             totalStock: 0,
-            minStock: 2, onListQuantity: 0,
+            minStock: 2,
+            onListQuantity: 0,
             defaultUnit: "paquete",
           },
         ],
@@ -659,7 +709,14 @@ describe("what is running out", () => {
     stockStub = {
       data: {
         products: [
-          { id: "p9", name: "Café molido", totalStock: 1, minStock: 2, onListQuantity: 0, defaultUnit: "paquete" },
+          {
+            id: "p9",
+            name: "Café molido",
+            totalStock: 1,
+            minStock: 2,
+            onListQuantity: 0,
+            defaultUnit: "paquete",
+          },
         ],
       },
       isPending: false,
@@ -674,7 +731,14 @@ describe("what is running out", () => {
     stockStub = {
       data: {
         products: [
-          { id: "p9", name: "Café molido", totalStock: 0, minStock: 2, onListQuantity: 0, defaultUnit: "paquete" },
+          {
+            id: "p9",
+            name: "Café molido",
+            totalStock: 0,
+            minStock: 2,
+            onListQuantity: 0,
+            defaultUnit: "paquete",
+          },
         ],
       },
       isPending: false,
@@ -685,15 +749,17 @@ describe("what is running out", () => {
     // It sat in the status slot beside the title, so it jumped left and right
     // with the length of the product's name, at `text-sm`, on a screen read
     // from a metre away. Actions come after the details, at touch size.
-    const button = screen.getByRole("button", { name: /Añadir a la lista: «Café molido»/ });
+    const button = screen.getByRole("button", {
+      name: /Añadir a la lista: «Café molido»/,
+    });
     const details = button.closest("li")?.querySelector("dl");
     expect(details).toBeTruthy();
     expect(
-      details!.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
+      details!.compareDocumentPosition(button) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(button.className).toContain("min-h-[56px]");
   });
-
 
   it("counts a queued use against what is left", () => {
     stockStub = {
@@ -703,7 +769,8 @@ describe("what is running out", () => {
             id: "p1",
             name: "Leche entera",
             totalStock: 2,
-            minStock: 6, onListQuantity: 0,
+            minStock: 6,
+            onListQuantity: 0,
             defaultUnit: "L",
           },
         ],
