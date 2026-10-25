@@ -188,7 +188,9 @@ describe("the storage locations screen", () => {
   it("creates a location, which nothing in the interface could do", async () => {
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: "Crear ubicación" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Crear ubicación" }),
+    );
     await userEvent.type(
       screen.getByLabelText("Nombre de la ubicación"),
       "Congelador",
@@ -202,7 +204,9 @@ describe("the storage locations screen", () => {
   it("creates it inside another when one is chosen", async () => {
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: "Crear ubicación" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Crear ubicación" }),
+    );
     await userEvent.type(
       screen.getByLabelText("Nombre de la ubicación"),
       "Congelador",
@@ -216,7 +220,9 @@ describe("the storage locations screen", () => {
   it("renames a location, opening the form already filled in", async () => {
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: /Editar Nevera/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /Editar Nevera/ }),
+    );
 
     const field = screen.getByLabelText("Nombre de la ubicación");
     expect(field).toHaveValue("Nevera");
@@ -240,7 +246,9 @@ describe("the storage locations screen", () => {
   it("does not offer to move a location inside its own subtree", async () => {
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: /Editar Nevera/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /Editar Nevera/ }),
+    );
 
     // "Nevera" itself and its child are gone; the unrelated root stays.
     expect(optionLabels()).toEqual(["No está dentro de ninguna", "Despensa"]);
@@ -249,7 +257,9 @@ describe("the storage locations screen", () => {
   it("offers every location when creating, because a new one has no subtree", async () => {
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: "Crear ubicación" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Crear ubicación" }),
+    );
 
     expect(optionLabels()).toEqual([
       "No está dentro de ninguna",
@@ -270,7 +280,9 @@ describe("the storage locations screen", () => {
   it("refetches the tree after every write", async () => {
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: /Eliminar Despensa/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /Eliminar Despensa/ }),
+    );
 
     // Without this the change does not appear until the route is left and
     // re-entered, and the form closing is the only sign anything happened.
@@ -281,7 +293,9 @@ describe("the storage locations screen", () => {
   it("says which location it created, and which it deleted", async () => {
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: /Eliminar Despensa/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /Eliminar Despensa/ }),
+    );
 
     expect(
       await screen.findAllByText(/Eliminaste la ubicación «Despensa»/),
@@ -292,13 +306,15 @@ describe("the storage locations screen", () => {
     failure = { data: { code: "INTERNAL_SERVER_ERROR" } };
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: /Eliminar Despensa/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /Eliminar Despensa/ }),
+    );
 
     // "Todavía tiene algo dentro" is true of a CONFLICT and a guess about
     // anything else.
-    expect(
-      await screen.findAllByText(/Vuelve a intentarlo/),
-    ).not.toHaveLength(0);
+    expect(await screen.findAllByText(/Vuelve a intentarlo/)).not.toHaveLength(
+      0,
+    );
     expect(screen.queryByText(/Todavía tiene algo dentro/)).toBeAbsent();
   });
 
@@ -306,9 +322,15 @@ describe("the storage locations screen", () => {
     role = "MEMBER";
     renderPage();
 
-    expect(screen.queryByRole("button", { name: "Crear ubicación" })).toBeAbsent();
-    expect(screen.queryByRole("button", { name: /Editar Nevera/ })).toBeAbsent();
-    expect(screen.queryByRole("button", { name: /Eliminar Nevera/ })).toBeAbsent();
+    expect(
+      screen.queryByRole("button", { name: "Crear ubicación" }),
+    ).toBeAbsent();
+    expect(
+      screen.queryByRole("button", { name: /Editar Nevera/ }),
+    ).toBeAbsent();
+    expect(
+      screen.queryByRole("button", { name: /Eliminar Nevera/ }),
+    ).toBeAbsent();
     expect(
       screen.getByText(/Solo quien administra el hogar/),
     ).toBeInTheDocument();

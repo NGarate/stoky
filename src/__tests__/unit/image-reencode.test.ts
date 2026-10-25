@@ -311,7 +311,8 @@ function iccProfileCarrying(text: string): Buffer {
   ]);
 }
 
-const markersOf = (jpeg: Buffer) => jpegSegments(jpeg).map((segment) => segment.marker);
+const markersOf = (jpeg: Buffer) =>
+  jpegSegments(jpeg).map((segment) => segment.marker);
 
 describe("what is stored besides the picture", () => {
   // The re-encode is what makes a stored receipt "an image this server
@@ -320,7 +321,11 @@ describe("what is stored besides the picture", () => {
   // uploads volume verbatim inside an ICC segment.
 
   async function carrier(): Promise<Buffer> {
-    return withSegment(await reencodeAsJpeg(pngOf(64, 48)), APP2, iccProfileCarrying(CARRIED));
+    return withSegment(
+      await reencodeAsJpeg(pngOf(64, 48)),
+      APP2,
+      iccProfileCarrying(CARRIED),
+    );
   }
 
   it("really is there to begin with, or the test below proves nothing", async () => {
@@ -337,7 +342,9 @@ describe("what is stored besides the picture", () => {
     const markers = markersOf(output);
 
     expect(markers).not.toContain(APP2);
-    expect(markers.filter((marker) => marker >= 0xe0 && marker <= 0xef)).toEqual([APP0]);
+    expect(
+      markers.filter((marker) => marker >= 0xe0 && marker <= 0xef),
+    ).toEqual([APP0]);
     expect(markers).not.toContain(COM);
     expect(output.toString("latin1")).not.toContain("STOKY-ICC-MARKER");
     expect(output.toString("latin1")).not.toContain("ICC_PROFILE");
@@ -369,7 +376,9 @@ describe("stripJpegMetadata on its own", () => {
     // Straight from `Bun.Image`, not through `reencodeAsJpeg`: what the walk
     // is handed in production. A strip that also dropped a table the decoder
     // needs would fail here before it failed anywhere else.
-    const jpeg = Buffer.from(await new Bun.Image(pngOf(16, 16)).jpeg({ quality: 90 }).toBuffer());
+    const jpeg = Buffer.from(
+      await new Bun.Image(pngOf(16, 16)).jpeg({ quality: 90 }).toBuffer(),
+    );
 
     expect(stripJpegMetadata(jpeg).equals(jpeg)).toBe(true);
   });
@@ -377,10 +386,20 @@ describe("stripJpegMetadata on its own", () => {
   it("drops EXIF, XMP and comments as well as colour profiles", async () => {
     let jpeg = await plain();
     jpeg = withSegment(jpeg, COM, Buffer.from("a comment", "latin1"));
-    jpeg = withSegment(jpeg, APP1, Buffer.from("http://ns.adobe.com/xap/1.0/\0<x/>", "latin1"));
-    jpeg = withSegment(jpeg, 0xee, Buffer.from("Adobe\0\0\0\0\0\0\0", "latin1"));
+    jpeg = withSegment(
+      jpeg,
+      APP1,
+      Buffer.from("http://ns.adobe.com/xap/1.0/\0<x/>", "latin1"),
+    );
+    jpeg = withSegment(
+      jpeg,
+      0xee,
+      Buffer.from("Adobe\0\0\0\0\0\0\0", "latin1"),
+    );
 
-    expect(markersOf(stripJpegMetadata(jpeg))).toEqual(markersOf(await plain()));
+    expect(markersOf(stripJpegMetadata(jpeg))).toEqual(
+      markersOf(await plain()),
+    );
   });
 
   it("drops a JFIF header carrying a thumbnail, and an APP0 that is not JFIF", async () => {
@@ -401,24 +420,31 @@ describe("stripJpegMetadata on its own", () => {
     ]);
     const notJfif = Buffer.from("JFXX\0\x10", "latin1");
 
-    expect(markersOf(stripJpegMetadata(withSegment(withoutJfif, APP0, thumbnail)))).not.toContain(
-      APP0,
-    );
-    expect(markersOf(stripJpegMetadata(withSegment(withoutJfif, APP0, notJfif)))).not.toContain(
-      APP0,
-    );
+    expect(
+      markersOf(stripJpegMetadata(withSegment(withoutJfif, APP0, thumbnail))),
+    ).not.toContain(APP0);
+    expect(
+      markersOf(stripJpegMetadata(withSegment(withoutJfif, APP0, notJfif))),
+    ).not.toContain(APP0);
   });
 
   it("refuses something that is not a JPEG", () => {
-    expect(() => stripJpegMetadata(pngOf(4, 4))).toThrow(/Malformed JPEG: no SOI/);
+    expect(() => stripJpegMetadata(pngOf(4, 4))).toThrow(
+      /Malformed JPEG: no SOI/,
+    );
   });
 
   it("refuses a truncated one", async () => {
     const jpeg = await plain();
 
-    expect(() => stripJpegMetadata(jpeg.subarray(0, jpeg.length - 1))).toThrow(/no EOI/);
+    expect(() => stripJpegMetadata(jpeg.subarray(0, jpeg.length - 1))).toThrow(
+      /no EOI/,
+    );
     // Cut inside the tables, then given an EOI back so only the structure is wrong.
-    const cut = Buffer.concat([jpeg.subarray(0, 30), Buffer.from([0xff, 0xd9])]);
+    const cut = Buffer.concat([
+      jpeg.subarray(0, 30),
+      Buffer.from([0xff, 0xd9]),
+    ]);
     expect(() => stripJpegMetadata(cut)).toThrow(/Malformed JPEG/);
   });
 
@@ -438,7 +464,9 @@ describe("stripJpegMetadata on its own", () => {
   });
 
   it("refuses a scan with no frame header before it", () => {
-    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xda, 0x00, 0x02, 0x00, 0xff, 0xd9]);
+    const jpeg = Buffer.from([
+      0xff, 0xd8, 0xff, 0xda, 0x00, 0x02, 0x00, 0xff, 0xd9,
+    ]);
 
     expect(() => stripJpegMetadata(jpeg)).toThrow(/scan before any frame/);
   });

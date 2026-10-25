@@ -6,7 +6,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { ItemRow } from "@/components/ui/item-row";
-import { useSessionName, type NamedSession } from "@/components/session/session-name";
+import {
+  useSessionName,
+  type NamedSession,
+} from "@/components/session/session-name";
 import { formatDateTime } from "@/lib/dates";
 import type { JSX, RefObject } from "react";
 
@@ -31,7 +34,9 @@ export type MemberSessionsRefusal = "notOwner" | "gone" | "failed";
  */
 export function memberSessionsRefusalOf(error: unknown): MemberSessionsRefusal {
   const code =
-    error instanceof TRPCClientError ? (error.data?.code as string | undefined) : undefined;
+    error instanceof TRPCClientError
+      ? (error.data?.code as string | undefined)
+      : undefined;
 
   if (code === "FORBIDDEN") return "notOwner";
   if (code === "NOT_FOUND") return "gone";
@@ -138,7 +143,9 @@ export function MemberSessionsDialog({
             onClick={() => run("all", onEndAll)}
             type="button"
           >
-            {working === "all" ? t("memberSessionsWorking") : t("memberSessionsEndAll")}
+            {working === "all"
+              ? t("memberSessionsWorking")
+              : t("memberSessionsEndAll")}
           </Button>
         </>
       }
@@ -164,7 +171,9 @@ export function MemberSessionsDialog({
       {loadError ? null : !sessions ? (
         <p className="text-muted-foreground">{tCommon("loading")}</p>
       ) : sessions.length === 0 ? (
-        <p className="text-muted-foreground">{t("memberSessionsNone", { name })}</p>
+        <p className="text-muted-foreground">
+          {t("memberSessionsNone", { name })}
+        </p>
       ) : (
         <ul className="max-h-[50vh] space-y-2 overflow-y-auto">
           {sessions.map((session) => {
@@ -177,7 +186,12 @@ export function MemberSessionsDialog({
                   // The browser too, when the title is the screen: a second
                   // tablet that chose the same screen is told apart by it.
                   ...(session.screen
-                    ? [{ label: tSecurity("metaDevice"), value: deviceName(session) }]
+                    ? [
+                        {
+                          label: tSecurity("metaDevice"),
+                          value: deviceName(session),
+                        },
+                      ]
                     : []),
                   {
                     label: tSecurity("metaLastUsed"),
@@ -202,7 +216,11 @@ export function MemberSessionsDialog({
                     // still finds it (WCAG 2.5.3).
                     aria-label={t("memberSessionsEndOneNamed", { device })}
                     disabled={working !== null}
-                    onClick={() => run(session.id, () => onEndOne({ id: session.id, name: device }))}
+                    onClick={() =>
+                      run(session.id, () =>
+                        onEndOne({ id: session.id, name: device }),
+                      )
+                    }
                     type="button"
                     variant="ghost"
                   >

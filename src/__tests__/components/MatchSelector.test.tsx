@@ -31,12 +31,19 @@ describe("MatchSelector's targets", () => {
     // Hand-styled at p-2 around 14px text, each candidate was about 36px
     // tall — the row a person taps to say which product a receipt line is.
     renderWithIntl(
-      <MatchSelector autoMatch={null} candidates={CANDIDATES} onSelect={() => {}} selectedId="p2" />,
+      <MatchSelector
+        autoMatch={null}
+        candidates={CANDIDATES}
+        onSelect={() => {}}
+        selectedId="p2"
+      />,
       { locale: "es" },
     );
 
     for (const name of [/Leche entera/, /Leche desnatada/, /Leche de avena/]) {
-      const height = await minimumHeight(screen.getByRole("button", { name }).className);
+      const height = await minimumHeight(
+        screen.getByRole("button", { name }).className,
+      );
       expect(height ?? 0).toBeGreaterThanOrEqual(48);
     }
   });
@@ -50,7 +57,12 @@ describe("what a candidate says", () => {
     // vocabulary), and the order of the list already says which it thinks
     // likeliest.
     renderWithIntl(
-      <MatchSelector autoMatch={null} candidates={CANDIDATES} onSelect={() => {}} selectedId={null} />,
+      <MatchSelector
+        autoMatch={null}
+        candidates={CANDIDATES}
+        onSelect={() => {}}
+        selectedId={null}
+      />,
       { locale: "es" },
     );
 

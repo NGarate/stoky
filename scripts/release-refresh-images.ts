@@ -111,14 +111,25 @@ export function floatingTag(tag: Tag): string {
 }
 
 /** `NAME:TAG@sha256:…` → its parts; null when it is not pinned that way. */
-export function parsePin(image: string): { name: string; tag: string; digest: string } | null {
+export function parsePin(
+  image: string,
+): { name: string; tag: string; digest: string } | null {
   const at = image.indexOf("@");
   if (at === -1) return null;
   const reference = image.slice(0, at);
   const digest = image.slice(at + 1);
   const colon = reference.lastIndexOf(":");
-  if (colon === -1 || colon < reference.lastIndexOf("/") || !DIGEST.test(digest)) return null;
-  return { name: reference.slice(0, colon), tag: reference.slice(colon + 1), digest };
+  if (
+    colon === -1 ||
+    colon < reference.lastIndexOf("/") ||
+    !DIGEST.test(digest)
+  )
+    return null;
+  return {
+    name: reference.slice(0, colon),
+    tag: reference.slice(colon + 1),
+    digest,
+  };
 }
 
 function compareVersions(a: string, b: string): number {
@@ -132,15 +143,28 @@ function compareVersions(a: string, b: string): number {
 }
 
 function imagetools(reference: string, format: string): unknown {
-  const result = Bun.spawnSync(["docker", "buildx", "imagetools", "inspect", reference, "--format", format]);
+  const result = Bun.spawnSync([
+    "docker",
+    "buildx",
+    "imagetools",
+    "inspect",
+    reference,
+    "--format",
+    format,
+  ]);
   if (result.exitCode !== 0) {
-    const message = result.stderr.toString().trim() || `exit ${result.exitCode}`;
-    throw new Refused(`docker buildx imagetools inspect ${reference}: ${message}`);
+    const message =
+      result.stderr.toString().trim() || `exit ${result.exitCode}`;
+    throw new Refused(
+      `docker buildx imagetools inspect ${reference}: ${message}`,
+    );
   }
   try {
     return JSON.parse(result.stdout.toString());
   } catch {
-    throw new Refused(`docker buildx imagetools inspect ${reference} printed no JSON for ${format}`);
+    throw new Refused(
+      `docker buildx imagetools inspect ${reference} printed no JSON for ${format}`,
+    );
   }
 }
 
@@ -155,14 +179,23 @@ function indexOf(reference: string): Index {
   const manifest = imagetools(reference, "{{json .Manifest}}") as {
     mediaType?: string;
     digest?: string;
-    manifests?: { digest?: string; platform?: { os?: string; architecture?: string; variant?: string } }[];
+    manifests?: {
+      digest?: string;
+      platform?: { os?: string; architecture?: string; variant?: string };
+    }[];
   };
   if (!INDEX_TYPES.has(manifest.mediaType ?? "")) {
-    throw new Refused(`${reference} is not a multi-platform index (${manifest.mediaType ?? "no media type"})`);
+    throw new Refused(
+      `${reference} is not a multi-platform index (${manifest.mediaType ?? "no media type"})`,
+    );
   }
-  if (!DIGEST.test(manifest.digest ?? "")) throw new Refused(`${reference} has no sha256 digest`);
+  if (!DIGEST.test(manifest.digest ?? ""))
+    throw new Refused(`${reference} has no sha256 digest`);
   const amd64 = manifest.manifests?.find(
-    ({ platform }) => platform?.os === "linux" && platform.architecture === "amd64" && !platform.variant,
+    ({ platform }) =>
+      platform?.os === "linux" &&
+      platform.architecture === "amd64" &&
+      !platform.variant,
   )?.digest;
   return { digest: manifest.digest!, amd64 };
 }
@@ -177,23 +210,35 @@ type Config = { config?: { Env?: string[]; Labels?: Record<string, string> } };
  * measurements behind this script spent them.
  */
 function versionOf(name: string, index: Index): string {
-  const source = VERSION_SOURCES[name.replace(/^(docker\.io\/)?(library\/)?/, "")];
-  if (!source) throw new Refused(`${name}: no measured source for its version (VERSION_SOURCES)`);
-  if (!index.amd64 || !DIGEST.test(index.amd64)) throw new Refused(`${name}@${index.digest} has no linux/amd64 image`);
+  const source =
+    VERSION_SOURCES[name.replace(/^(docker\.io\/)?(library\/)?/, "")];
+  if (!source)
+    throw new Refused(
+      `${name}: no measured source for its version (VERSION_SOURCES)`,
+    );
+  if (!index.amd64 || !DIGEST.test(index.amd64))
+    throw new Refused(`${name}@${index.digest} has no linux/amd64 image`);
   const reference = `${name}@${index.amd64}`;
-  const image = imagetools(reference, "{{json .Image}}") as Config & Record<string, Config | undefined>;
+  const image = imagetools(reference, "{{json .Image}}") as Config &
+    Record<string, Config | undefined>;
   // One manifest prints its image; an index (were the digest one) prints them keyed by platform.
   const config = image.config ?? image["linux/amd64"]?.config;
   if (!config) throw new Refused(`${reference} has no image config`);
   const digest = index.digest;
   const value =
     "env" in source
-      ? config.Env?.find((entry) => entry.startsWith(`${source.env}=`))?.slice(source.env.length + 1)
+      ? config.Env?.find((entry) => entry.startsWith(`${source.env}=`))?.slice(
+          source.env.length + 1,
+        )
       : config.Labels?.[source.label];
   const where = "env" in source ? `env ${source.env}` : `label ${source.label}`;
-  if (value === undefined) throw new Refused(`${name}@${digest} has no ${where}`);
+  if (value === undefined)
+    throw new Refused(`${name}@${digest} has no ${where}`);
   const version = value.replace(/^v/, "");
-  if (!VERSION.test(version)) throw new Refused(`${name}@${digest}: ${where} is "${value}", not a version`);
+  if (!VERSION.test(version))
+    throw new Refused(
+      `${name}@${digest}: ${where} is "${value}", not a version`,
+    );
   return version;
 }
 
@@ -207,9 +252,13 @@ interface Row {
 /** What the newest build of `image`'s major is, or null when it is `image`. */
 function candidateFor(image: string): string | null {
   const pin = parsePin(image);
-  if (!pin) throw new Refused(`"${image}" is not pinned as NAME:TAG@sha256:DIGEST`);
+  if (!pin)
+    throw new Refused(`"${image}" is not pinned as NAME:TAG@sha256:DIGEST`);
   const tag = parseTag(pin.tag);
-  if (!tag) throw new Refused(`cannot derive the floating tag of "${pin.tag}"; refusing to guess`);
+  if (!tag)
+    throw new Refused(
+      `cannot derive the floating tag of "${pin.tag}"; refusing to guess`,
+    );
 
   const floating = `${pin.name}:${floatingTag(tag)}`;
   const index = indexOf(floating);
@@ -221,44 +270,77 @@ function candidateFor(image: string): string | null {
   const version = versionOf(pin.name, index);
   const major = version.split(".")[0];
   if (major !== tag.major) {
-    throw new Refused(`${floating} is ${version}: a new major is a migration, not a refresh`);
+    throw new Refused(
+      `${floating} is ${version}: a new major is a migration, not a refresh`,
+    );
   }
   if (compareVersions(version, tag.version) < 0) {
-    throw new Refused(`${floating} is ${version}, older than the pinned ${tag.version}`);
+    throw new Refused(
+      `${floating} is ${version}, older than the pinned ${tag.version}`,
+    );
   }
   const exact = tag.prefix + version + tag.suffix;
   const exactDigest = indexOf(`${pin.name}:${exact}`).digest;
   if (exactDigest !== digest) {
-    throw new Refused(`${pin.name}:${exact} is ${exactDigest}, but ${floating} is ${digest}`);
+    throw new Refused(
+      `${pin.name}:${exact} is ${exactDigest}, but ${floating} is ${digest}`,
+    );
   }
   return `${pin.name}:${exact}@${digest}`;
 }
 
 /** The scan's verdict on one image: the release gate's exit status. */
 function scan(image: string): "clean" | "red" {
-  const result = Bun.spawnSync(["bash", SCANNER, image], { stdout: "inherit", stderr: "inherit" });
+  const result = Bun.spawnSync(["bash", SCANNER, image], {
+    stdout: "inherit",
+    stderr: "inherit",
+  });
   if (result.exitCode === 0) return "clean";
   if (result.exitCode === 1) return "red";
-  throw new Refused(`scan-bundle-images.sh ${image} failed (exit ${result.exitCode})`);
+  throw new Refused(
+    `scan-bundle-images.sh ${image} failed (exit ${result.exitCode})`,
+  );
 }
 
 /** `text` with exactly the one `image:` line naming `from` now naming `to`. */
 function rewrite(text: string, from: string, to: string): string {
   const lines = text.split("\n");
   const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const line = new RegExp(`^(\\s*image:\\s*["']?)${escaped}(["']?\\s*(?:#.*)?)$`);
-  const found = lines.flatMap((text, index) => (line.test(text) ? [index] : []));
-  if (found.length !== 1) throw new Refused(`${from} is on ${found.length} image lines, not one`);
-  lines[found[0]] = lines[found[0]].replace(line, (_, head: string, tail: string) => head + to + tail);
+  const line = new RegExp(
+    `^(\\s*image:\\s*["']?)${escaped}(["']?\\s*(?:#.*)?)$`,
+  );
+  const found = lines.flatMap((text, index) =>
+    line.test(text) ? [index] : [],
+  );
+  if (found.length !== 1)
+    throw new Refused(`${from} is on ${found.length} image lines, not one`);
+  lines[found[0]] = lines[found[0]].replace(
+    line,
+    (_, head: string, tail: string) => head + to + tail,
+  );
   return lines.join("\n");
 }
 
 function table(rows: Row[]): string {
-  const header: Row = { service: "SERVICE", from: "FROM", to: "TO", scan: "SCAN" };
+  const header: Row = {
+    service: "SERVICE",
+    from: "FROM",
+    to: "TO",
+    scan: "SCAN",
+  };
   const all = [header, ...rows];
   const keys = ["service", "from", "to", "scan"] as const;
-  const width = keys.map((key) => Math.max(...all.map((row) => row[key].length)));
-  return all.map((row) => keys.map((key, i) => row[key].padEnd(width[i])).join("  ").trimEnd()).join("\n");
+  const width = keys.map((key) =>
+    Math.max(...all.map((row) => row[key].length)),
+  );
+  return all
+    .map((row) =>
+      keys
+        .map((key, i) => row[key].padEnd(width[i]))
+        .join("  ")
+        .trimEnd(),
+    )
+    .join("\n");
 }
 
 export function main(argv: string[]): number {
@@ -266,9 +348,12 @@ export function main(argv: string[]): number {
   let compose = join(ROOT, "deploy/docker-compose.yml");
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--check") check = true;
-    else if (argv[i] === "--compose" && argv[i + 1] !== undefined) compose = resolve(argv[++i]);
+    else if (argv[i] === "--compose" && argv[i + 1] !== undefined)
+      compose = resolve(argv[++i]);
     else {
-      console.error("Usage: bun scripts/release-refresh-images.ts [--check] [--compose FILE]");
+      console.error(
+        "Usage: bun scripts/release-refresh-images.ts [--check] [--compose FILE]",
+      );
       return ERROR;
     }
   }
@@ -279,7 +364,12 @@ export function main(argv: string[]): number {
   let services: Record<string, { image?: unknown }>;
   try {
     text = readFileSync(compose, "utf8");
-    services = (Bun.YAML.parse(text) as { services?: Record<string, { image?: unknown }> }).services ?? {};
+    services =
+      (
+        Bun.YAML.parse(text) as {
+          services?: Record<string, { image?: unknown }>;
+        }
+      ).services ?? {};
   } catch (error) {
     console.error(`Error: cannot read ${shown}: ${(error as Error).message}`);
     return ERROR;
@@ -292,9 +382,15 @@ export function main(argv: string[]): number {
     if (service === "app") continue;
     const from = typeof image === "string" ? image : "(no image)";
     try {
-      if (typeof image !== "string") throw new Refused(`service ${service} names no image`);
+      if (typeof image !== "string")
+        throw new Refused(`service ${service} names no image`);
       const to = candidateFor(image);
-      const row = { service, from, to: to ?? "unchanged", scan: to ? "not scanned" : "-" };
+      const row = {
+        service,
+        from,
+        to: to ?? "unchanged",
+        scan: to ? "not scanned" : "-",
+      };
       rows.push(row);
       if (to) updates.push({ row, from: image, to });
     } catch (error) {
@@ -315,7 +411,9 @@ export function main(argv: string[]): number {
   }
   if (updates.length === 0) {
     console.log(table(rows));
-    console.log(`Nothing to update: each service image of ${shown} is the newest build of its major.`);
+    console.log(
+      `Nothing to update: each service image of ${shown} is the newest build of its major.`,
+    );
     return OK;
   }
 
@@ -341,7 +439,9 @@ export function main(argv: string[]): number {
     return RED;
   }
   if (check) {
-    console.log(`${updates.length} update(s) available and clean. Nothing written (--check).`);
+    console.log(
+      `${updates.length} update(s) available and clean. Nothing written (--check).`,
+    );
     return OK;
   }
 

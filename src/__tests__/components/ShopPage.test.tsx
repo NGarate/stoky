@@ -42,7 +42,9 @@ mock.module("@/lib/offline/queue-context", () => ({
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({ invalidate: () => Promise.resolve() }),
-    household: { create: { useMutation: () => ({ mutate: () => {}, isPending: false }) } },
+    household: {
+      create: { useMutation: () => ({ mutate: () => {}, isPending: false }) },
+    },
     shopping: { getBuyList: { useQuery: () => queryStub } },
     // Who is looking decides whether a row is a control at all.
     auth: { me: { useQuery: () => ({ data: { role } }) } },
@@ -161,7 +163,9 @@ describe("ticking something off", () => {
     renderWithIntl(<ShopPage />);
 
     expect(
-      screen.getByRole("button", { name: /Marcar «Leche entera» como comprado/ }),
+      screen.getByRole("button", {
+        name: /Marcar «Leche entera» como comprado/,
+      }),
     ).toBeInTheDocument();
   });
 
@@ -205,7 +209,10 @@ describe("undo instead of confirm", () => {
   });
 
   it("counts what is in it without being opened", () => {
-    queryStub.data = [row({ isChecked: true }), row({ id: "i2", isChecked: true })];
+    queryStub.data = [
+      row({ isChecked: true }),
+      row({ id: "i2", isChecked: true }),
+    ];
     renderWithIntl(<ShopPage />);
 
     expect(screen.getByText("2 cosas marcadas")).toBeInTheDocument();

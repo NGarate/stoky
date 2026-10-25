@@ -40,7 +40,10 @@ export interface ListedSession {
 
 type ListDb = Pick<PrismaClient, "session" | "screenChoice">;
 
-export async function liveSessionsOf(db: ListDb, userId: string): Promise<ListedSession[]> {
+export async function liveSessionsOf(
+  db: ListDb,
+  userId: string,
+): Promise<ListedSession[]> {
   const rows = await db.session.findMany({
     where: { userId, expiresAt: { gt: new Date() } },
     select: {
@@ -55,7 +58,9 @@ export async function liveSessionsOf(db: ListDb, userId: string): Promise<Listed
     orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
   });
 
-  const deviceIds = [...new Set(rows.flatMap((row) => (row.deviceId ? [row.deviceId] : [])))];
+  const deviceIds = [
+    ...new Set(rows.flatMap((row) => (row.deviceId ? [row.deviceId] : []))),
+  ];
   const choices =
     deviceIds.length === 0
       ? []
@@ -63,7 +68,9 @@ export async function liveSessionsOf(db: ListDb, userId: string): Promise<Listed
           where: { userId, deviceId: { in: deviceIds } },
           select: { deviceId: true, screen: true },
         });
-  const screenOf = new Map(choices.map((choice) => [choice.deviceId, choice.screen]));
+  const screenOf = new Map(
+    choices.map((choice) => [choice.deviceId, choice.screen]),
+  );
 
   return rows.map((row) => ({
     id: row.id,

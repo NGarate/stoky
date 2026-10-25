@@ -199,7 +199,9 @@ export default function ScanPage() {
           /* Its own Suspense boundary: reading the query string opts a
              subtree out of prerendering, and this link is all that reads it. */
           <Suspense
-            fallback={<BackLink href="/products">{t("backToProducts")}</BackLink>}
+            fallback={
+              <BackLink href="/products">{t("backToProducts")}</BackLink>
+            }
           >
             <ScanBackLink />
           </Suspense>
@@ -256,14 +258,17 @@ export default function ScanPage() {
             </p>
             {/* A label, not only a placeholder: the placeholder is gone the
                 moment somebody types, and with it the field's only name. */}
-            <label className="mb-1 block text-sm font-medium text-foreground" htmlFor="manual-barcode">
+            <label
+              className="mb-1 block text-sm font-medium text-foreground"
+              htmlFor="manual-barcode"
+            >
               {t("manualLabel")}
             </label>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 const input = e.currentTarget.elements.namedItem(
-                  "barcode"
+                  "barcode",
                 ) as HTMLInputElement;
                 if (input.value) {
                   handleScan(input.value);

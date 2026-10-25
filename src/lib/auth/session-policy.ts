@@ -114,7 +114,10 @@ export function clampRemembered({
   authenticatedAt: Date;
 }): Date {
   return new Date(
-    Math.min(proposed.getTime(), authenticatedAt.getTime() + REMEMBERED_CAP_S * 1000),
+    Math.min(
+      proposed.getTime(),
+      authenticatedAt.getTime() + REMEMBERED_CAP_S * 1000,
+    ),
   );
 }
 
@@ -152,7 +155,8 @@ export function persistentAtCreate({
   if (remember) return remember === "1";
   return (
     !dontRememberCookie &&
-    proposedExpiresAt.getTime() - now.getTime() > (LIBRARY_DONT_REMEMBER_S + 60) * 1000
+    proposedExpiresAt.getTime() - now.getTime() >
+      (LIBRARY_DONT_REMEMBER_S + 60) * 1000
   );
 }
 
@@ -198,7 +202,10 @@ export function nextExpiry({
 
 /** Whether activity at `now` should move an expiry of `expiresAt` forward. */
 export function shouldSlide(expiresAt: Date, now: Date): boolean {
-  return expiresAt.getTime() - now.getTime() < (BROWSER_IDLE_S - SLIDE_MARGIN_S) * 1000;
+  return (
+    expiresAt.getTime() - now.getTime() <
+    (BROWSER_IDLE_S - SLIDE_MARGIN_S) * 1000
+  );
 }
 
 /**

@@ -36,9 +36,8 @@ mock.module("next/navigation", () => ({
   redirect: () => {},
 }));
 
-const { PreferencesCluster } = await import(
-  "@/components/ui/PreferencesCluster"
-);
+const { PreferencesCluster } =
+  await import("@/components/ui/PreferencesCluster");
 
 afterEach(cleanup);
 

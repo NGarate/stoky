@@ -1,6 +1,5 @@
 "use client";
 
-
 import { useParams, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { Package } from "lucide-react";
@@ -100,7 +99,6 @@ export default function ReviewPage() {
       }),
   });
 
-
   // "Not found" only when the server said so. Gated on `isLoading`, a query
   // paused offline or refused with a 500 fell through to this branch and
   // told somebody their receipt did not exist.
@@ -129,8 +127,6 @@ export default function ReviewPage() {
   const pendingItems = receipt.items.filter(
     (item) => !isItemReviewed(item.matchStatus),
   ).length;
-
-
 
   // `mutate` rather than `mutateAsync`. Both of these awaited the async form
   // and neither caught it, so a refusal became an unhandled promise
@@ -199,8 +195,13 @@ export default function ReviewPage() {
 
       {receipt.status === "APPLIED" ? (
         <div className="text-center py-8 rounded-lg border border-ok-foreground bg-ok mb-6">
-          <Package aria-hidden="true" className="w-12 h-12 text-ok-foreground mx-auto mb-4" />
-          <p className="text-ok-foreground font-medium">{t("alreadyApplied")}</p>
+          <Package
+            aria-hidden="true"
+            className="w-12 h-12 text-ok-foreground mx-auto mb-4"
+          />
+          <p className="text-ok-foreground font-medium">
+            {t("alreadyApplied")}
+          </p>
           {/* The summary is what the apply redirects to; coming back to the
               review afterwards should be able to reach it too, rather than
               dead-ending on the fact that it happened. */}
@@ -224,7 +225,11 @@ export default function ReviewPage() {
                 confirmation produces. It is one region on the element that
                 already states the outcome, rather than an announcement bolted
                 onto every route: the number changing is the confirmation. */}
-            <p aria-live="polite" className="text-muted-foreground" role="status">
+            <p
+              aria-live="polite"
+              className="text-muted-foreground"
+              role="status"
+            >
               {pendingItems === 0
                 ? t("allReviewed")
                 : t("pendingItems", { count: pendingItems })}
@@ -235,11 +240,7 @@ export default function ReviewPage() {
                 disabled button would only be one a keyboard cannot reach to
                 ask why. */}
             {canFinish ? (
-              <Button
-                type="button"
-                onClick={handleFinish}
-                disabled={finishing}
-              >
+              <Button type="button" onClick={handleFinish} disabled={finishing}>
                 <Package aria-hidden="true" className="mr-2 size-5" />
                 {finishing ? t("applying") : t("applyToInventory")}
               </Button>
@@ -273,7 +274,10 @@ export default function ReviewPage() {
                       customName,
                     });
                   } else if (action === "SKIP") {
-                    confirmItemMutation.mutate({ receiptItemId: item.id, action });
+                    confirmItemMutation.mutate({
+                      receiptItemId: item.id,
+                      action,
+                    });
                   } else if (process.env.NODE_ENV !== "production") {
                     // Unreachable while ReviewCard's guards hold. If they ever
                     // move, a decision silently dropped here would read as a

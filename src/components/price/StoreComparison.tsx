@@ -154,7 +154,9 @@ export function StoreComparison({
                 {isBest ? (
                   <Badge tone="neutral">{t("prices.bestPrice")}</Badge>
                 ) : (
-                  <span>{t("prices.premiumOver", { percent: `${over}%` })}</span>
+                  <span>
+                    {t("prices.premiumOver", { percent: `${over}%` })}
+                  </span>
                 )}
                 {price.quantity === 1 ? null : (
                   <>

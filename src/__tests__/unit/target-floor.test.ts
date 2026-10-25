@@ -84,7 +84,9 @@ describe("the 48px floor lives in the design system", () => {
   it("keeps no reason for a floor that is no longer there", () => {
     // The list shrinks by deletion, and an entry nobody removed is an
     // exception nobody re-examined.
-    const stale = Object.keys(ALLOWED).filter((path) => !offenders.includes(path));
+    const stale = Object.keys(ALLOWED).filter(
+      (path) => !offenders.includes(path),
+    );
 
     expect(stale).toEqual([]);
   });

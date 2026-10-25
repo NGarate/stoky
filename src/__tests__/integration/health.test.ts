@@ -83,7 +83,9 @@ describe("when a dependency is gone", () => {
     const logged = spyOn(console, "error").mockImplementation(() => {});
     /** The variable the logged refusal named, so a case cannot pass on another check. */
     const refusal = () =>
-      logged.mock.calls.map((call) => String(call[1])).find((line) => line.includes("[auth]"));
+      logged.mock.calls
+        .map((call) => String(call[1]))
+        .find((line) => line.includes("[auth]"));
 
     try {
       env.NODE_ENV = "production";

@@ -202,10 +202,19 @@ export const ALLOWED_AUTH_ENDPOINTS: ReadonlySet<string> = new Set([
  */
 const PASSKEY_CHANGES: Record<
   string,
-  { keys: readonly string[]; event: "auth.passkey.added" | "auth.passkey.removed" | null }
+  {
+    keys: readonly string[];
+    event: "auth.passkey.added" | "auth.passkey.removed" | null;
+  }
 > = {
-  "POST /passkey/verify-registration": { keys: ["response", "name"], event: "auth.passkey.added" },
-  "POST /passkey/delete-passkey": { keys: ["id"], event: "auth.passkey.removed" },
+  "POST /passkey/verify-registration": {
+    keys: ["response", "name"],
+    event: "auth.passkey.added",
+  },
+  "POST /passkey/delete-passkey": {
+    keys: ["id"],
+    event: "auth.passkey.removed",
+  },
   "POST /passkey/update-passkey": { keys: ["id", "name"], event: null },
 };
 
@@ -223,11 +232,12 @@ const KEPT_QUERY: Record<string, readonly string[]> = {
  * The changes to two-step verification, each confirmed with the password, as
  * `accountChange` records them.
  */
-const ACCOUNT_CHANGES: Record<string, "enable" | "disable" | "replace-codes"> = {
-  "POST /two-factor/enable": "enable",
-  "POST /two-factor/disable": "disable",
-  "POST /two-factor/generate-backup-codes": "replace-codes",
-};
+const ACCOUNT_CHANGES: Record<string, "enable" | "disable" | "replace-codes"> =
+  {
+    "POST /two-factor/enable": "enable",
+    "POST /two-factor/disable": "disable",
+    "POST /two-factor/generate-backup-codes": "replace-codes",
+  };
 
 /** The factor each second-step endpoint proves, as the log names it. */
 const SECOND_STEPS: Record<string, "totp" | "backup-code"> = {
@@ -244,7 +254,10 @@ export async function handleAuthRequest(
   return response;
 }
 
-async function answer(incoming: Request, options: AuthHandlerOptions): Promise<Response> {
+async function answer(
+  incoming: Request,
+  options: AuthHandlerOptions,
+): Promise<Response> {
   const url = new URL(incoming.url);
   const endpoint = `${incoming.method} ${
     url.pathname.startsWith(`${AUTH_BASE_PATH}/`)
@@ -259,7 +272,8 @@ async function answer(incoming: Request, options: AuthHandlerOptions): Promise<R
     if (!read.ok) return read.response;
     body = read.body;
 
-    const refused = refuseCrossSite(incoming, AUTH_BASE_PATH) ?? refuseNonJson(incoming);
+    const refused =
+      refuseCrossSite(incoming, AUTH_BASE_PATH) ?? refuseNonJson(incoming);
     if (refused) return refused;
   } else {
     // A GET too: the passkey options spend a per-address budget, and an
@@ -276,9 +290,15 @@ async function answer(incoming: Request, options: AuthHandlerOptions): Promise<R
     // The instance refused this environment (`assertAuthEnvironment`). Said
     // in prose for the operator and as an event for the log's readers; the
     // caller learns only that sign-in is unavailable.
-    logSecurityEvent("auth.unavailable", { address: clientAddress(incoming.headers) });
+    logSecurityEvent("auth.unavailable", {
+      address: clientAddress(incoming.headers),
+    });
     console.error(error instanceof Error ? error.message : error);
-    return codeResponse(503, "AUTH_UNAVAILABLE", "Sign-in is temporarily unavailable");
+    return codeResponse(
+      503,
+      "AUTH_UNAVAILABLE",
+      "Sign-in is temporarily unavailable",
+    );
   }
 
   if (endpoint === "POST /sign-in/email") {
@@ -286,11 +306,25 @@ async function answer(incoming: Request, options: AuthHandlerOptions): Promise<R
   }
   const secondStepMethod = SECOND_STEPS[endpoint];
   if (secondStepMethod) {
-    return secondStep(incoming, body, handle, options, secondStepMethod, `${AUTH_BASE_PATH}${endpoint.slice(5)}`);
+    return secondStep(
+      incoming,
+      body,
+      handle,
+      options,
+      secondStepMethod,
+      `${AUTH_BASE_PATH}${endpoint.slice(5)}`,
+    );
   }
   const change = ACCOUNT_CHANGES[endpoint];
   if (change) {
-    return accountChange(incoming, body, handle, options, change, `${AUTH_BASE_PATH}${endpoint.slice(5)}`);
+    return accountChange(
+      incoming,
+      body,
+      handle,
+      options,
+      change,
+      `${AUTH_BASE_PATH}${endpoint.slice(5)}`,
+    );
   }
   if (endpoint === "POST /passkey/verify-authentication") {
     return passkeySignIn(incoming, body, handle, options);
@@ -308,7 +342,9 @@ async function answer(incoming: Request, options: AuthHandlerOptions): Promise<R
   }
   return guardResponse(
     incoming,
-    await handle(withoutInternalHeaders(incoming, KEPT_QUERY[endpoint] ?? null)),
+    await handle(
+      withoutInternalHeaders(incoming, KEPT_QUERY[endpoint] ?? null),
+    ),
   );
 }
 
@@ -343,7 +379,11 @@ async function signIn(
 
   let attempt;
   try {
-    attempt = await chargeSignInAttempt(incoming.headers, parsed?.email, limiter);
+    attempt = await chargeSignInAttempt(
+      incoming.headers,
+      parsed?.email,
+      limiter,
+    );
   } catch (error) {
     if (error instanceof SignInRefusedError) return refusedSignIn(error);
     throw error;
@@ -362,7 +402,11 @@ async function signIn(
   const response = await handle(
     rebuild(
       incoming,
-      JSON.stringify({ email: attempt.email, password, rememberMe: remember.rememberMe }),
+      JSON.stringify({
+        email: attempt.email,
+        password,
+        rememberMe: remember.rememberMe,
+      }),
       remember.adjust,
     ),
   );
@@ -372,7 +416,11 @@ async function signIn(
     if (issued) {
       await signInSucceeded(attempt, issued.userId, "password", limiter);
       if (issued.token && sessions) {
-        await tidyQuietly(sessions, { previous, userId: issued.userId, newToken: issued.token });
+        await tidyQuietly(sessions, {
+          previous,
+          userId: issued.userId,
+          newToken: issued.token,
+        });
       }
     } else if (await asksForSecondStep(response)) {
       await signInChallenged(attempt, limiter);
@@ -413,9 +461,10 @@ async function rememberChoice(
   finish: (answer: Response, ok: boolean) => Response;
 }> {
   const rememberMe = parsed?.rememberMe === true;
-  const dontRemember = rememberMe && options.dontRememberCookie
-    ? await options.dontRememberCookie()
-    : null;
+  const dontRemember =
+    rememberMe && options.dontRememberCookie
+      ? await options.dontRememberCookie()
+      : null;
   return {
     rememberMe,
     adjust: (headers) => {
@@ -464,21 +513,33 @@ function withoutCookie(header: string | null, name: string): string | null {
  * keeps the original headers when the replacement is empty, so a request
  * whose only header was this one would keep it.
  */
-function withoutInternalHeaders(incoming: Request, keptQuery: readonly string[] | null = null): Request {
+function withoutInternalHeaders(
+  incoming: Request,
+  keptQuery: readonly string[] | null = null,
+): Request {
   const url = new URL(incoming.url);
   if (keptQuery) {
     // Collected first: deleting while iterating the params skips the next one.
-    const dropped = Array.from(url.searchParams.keys()).filter((key) => !keptQuery.includes(key));
+    const dropped = Array.from(url.searchParams.keys()).filter(
+      (key) => !keptQuery.includes(key),
+    );
     for (const key of dropped) url.searchParams.delete(key);
   }
-  if (!incoming.headers.has(REMEMBER_HEADER) && url.href === incoming.url) return incoming;
+  if (!incoming.headers.has(REMEMBER_HEADER) && url.href === incoming.url)
+    return incoming;
   const headers = new Headers(incoming.headers);
   headers.delete(REMEMBER_HEADER);
-  return new Request(url, { method: incoming.method, headers, signal: incoming.signal });
+  return new Request(url, {
+    method: incoming.method,
+    headers,
+    signal: incoming.signal,
+  });
 }
 
 /** The JSON object a body holds, or null for anything else. */
-function parseJsonObject(body: Uint8Array<ArrayBuffer> | null): Record<string, unknown> | null {
+function parseJsonObject(
+  body: Uint8Array<ArrayBuffer> | null,
+): Record<string, unknown> | null {
   if (!body) return null;
   try {
     const value: unknown = JSON.parse(new TextDecoder().decode(body));
@@ -496,9 +557,11 @@ function parseJsonObject(body: Uint8Array<ArrayBuffer> | null): Record<string, u
  * The token is `token` in a sign-in's answer and `session.token` in one that
  * carries the session; a 200 without one issued no session.
  */
-async function issuedSession(
-  response: Response,
-): Promise<{ userId: string; email: string | undefined; token: string | null } | null> {
+async function issuedSession(response: Response): Promise<{
+  userId: string;
+  email: string | undefined;
+  token: string | null;
+} | null> {
   try {
     const body = (await response.clone().json()) as {
       user?: { id?: unknown; email?: unknown };
@@ -506,7 +569,8 @@ async function issuedSession(
       session?: { token?: unknown };
     } | null;
     if (typeof body?.user?.id !== "string") return null;
-    const token = typeof body.token === "string" ? body.token : body.session?.token;
+    const token =
+      typeof body.token === "string" ? body.token : body.session?.token;
     return {
       userId: body.user.id,
       email: typeof body.user.email === "string" ? body.user.email : undefined,
@@ -524,7 +588,10 @@ async function issuedSession(
  * still ends on its own clock — fifteen idle minutes, a day at most — and the
  * failure is on the log.
  */
-async function tidyQuietly(sessions: SignInSessions, input: SignInTidy): Promise<void> {
+async function tidyQuietly(
+  sessions: SignInSessions,
+  input: SignInTidy,
+): Promise<void> {
   await quietly("the sign-in tidy", () => sessions.tidy(input));
 }
 
@@ -537,18 +604,25 @@ async function tidyQuietly(sessions: SignInSessions, input: SignInTidy): Promise
  * arguments, and the tidy's include the new session's token
  * (`NOT: { token: newToken }` in `src/lib/auth/sign-in-tidy.ts`).
  */
-async function quietly(what: string, work: () => Promise<unknown>): Promise<void> {
+async function quietly(
+  what: string,
+  work: () => Promise<unknown>,
+): Promise<void> {
   try {
     await work();
   } catch (error) {
-    console.error(`[auth] error ${what} failed: ${describeErrorLine(error).slice(0, 300)}`);
+    console.error(
+      `[auth] error ${what} failed: ${describeErrorLine(error).slice(0, 300)}`,
+    );
   }
 }
 
 /** Whether Better Auth answered a right password with "now the code" (D148). */
 async function asksForSecondStep(response: Response): Promise<boolean> {
   try {
-    const body = (await response.clone().json()) as { twoFactorRedirect?: unknown } | null;
+    const body = (await response.clone().json()) as {
+      twoFactorRedirect?: unknown;
+    } | null;
     return body?.twoFactorRedirect === true;
   } catch {
     return false;
@@ -626,8 +700,12 @@ async function secondStep(
     return invalidRequest();
   }
 
-  const names = options.twoFactorCookies ? await options.twoFactorCookies() : null;
-  const carriedChallenge = names ? hasCookie(incoming.headers.get("cookie"), names.challenge) : false;
+  const names = options.twoFactorCookies
+    ? await options.twoFactorCookies()
+    : null;
+  const carriedChallenge = names
+    ? hasCookie(incoming.headers.get("cookie"), names.challenge)
+    : false;
 
   const response = await handle(rebuild(incoming, JSON.stringify({ code })));
 
@@ -641,22 +719,43 @@ async function secondStep(
     if (issued && carriedChallenge && !previous && charge) {
       await secondFactorSucceeded(
         charge,
-        { userId: issued.userId, email: issued.email, deviceId: deviceIdFromHeaders(incoming.headers) },
+        {
+          userId: issued.userId,
+          email: issued.email,
+          deviceId: deviceIdFromHeaders(incoming.headers),
+        },
         method,
         limiter,
       );
       if (issued.token && sessions) {
-        await tidyQuietly(sessions, { previous: null, userId: issued.userId, newToken: issued.token });
+        await tidyQuietly(sessions, {
+          previous: null,
+          userId: issued.userId,
+          newToken: issued.token,
+        });
       }
     } else if (issued && previous && method === "totp") {
-      logSecurityEvent("auth.twofactor.enabled", { userId: previous.userId, address });
+      logSecurityEvent("auth.twofactor.enabled", {
+        userId: previous.userId,
+        address,
+      });
     }
   } else {
     const refusal = await refusalCode(response);
-    if (refusal === "ACCOUNT_TEMPORARILY_LOCKED" || refusal === "TOO_MANY_WRONG_CODES") {
+    if (
+      refusal === "ACCOUNT_TEMPORARILY_LOCKED" ||
+      refusal === "TOO_MANY_WRONG_CODES"
+    ) {
       logSecurityEvent("auth.twofactor.locked", { address, code: refusal });
-    } else if (refusal !== "TWO_FACTOR_UNREADABLE" && response.status >= 400 && response.status < 500) {
-      logSecurityEvent("auth.twofactor.failed", { address, code: refusal ?? undefined });
+    } else if (
+      refusal !== "TWO_FACTOR_UNREADABLE" &&
+      response.status >= 400 &&
+      response.status < 500
+    ) {
+      logSecurityEvent("auth.twofactor.failed", {
+        address,
+        code: refusal ?? undefined,
+      });
     }
   }
 
@@ -700,7 +799,9 @@ async function accountChange(
   path: string,
 ): Promise<Response> {
   const limiter = options.limiter ?? valkeySignInLimiter;
-  const presented = options.sessions ? await options.sessions.presented(incoming.headers) : null;
+  const presented = options.sessions
+    ? await options.sessions.presented(incoming.headers)
+    : null;
   if (!presented) return codeResponse(401, "UNAUTHORIZED", "Sign in first");
   const address = clientAddress(incoming.headers);
 
@@ -709,21 +810,34 @@ async function accountChange(
   const { sessionWindow } = reentry;
 
   const password = parseJsonObject(body)?.password;
-  if (typeof password !== "string") return invalidRequest("The request carries no password");
+  if (typeof password !== "string")
+    return invalidRequest("The request carries no password");
 
-  const response = await handle(rebuild(incoming, JSON.stringify({ password })));
+  const response = await handle(
+    rebuild(incoming, JSON.stringify({ password })),
+  );
 
   if (response.ok) {
     await limiter.refund(reauthRateLimit(), presented.id, sessionWindow);
     if (change === "disable") {
-      logSecurityEvent("auth.twofactor.disabled", { userId: presented.userId, address });
+      logSecurityEvent("auth.twofactor.disabled", {
+        userId: presented.userId,
+        address,
+      });
     } else if (change === "replace-codes") {
-      logSecurityEvent("auth.twofactor.codes-regenerated", { userId: presented.userId, address });
+      logSecurityEvent("auth.twofactor.codes-regenerated", {
+        userId: presented.userId,
+        address,
+      });
     }
   } else {
     const refusal = await refusalCode(response);
     if (refusal === "INVALID_PASSWORD" || refusal === "PASSWORD_TOO_LONG") {
-      logSecurityEvent("auth.reauth.refused", { userId: presented.userId, via: "two-factor", address });
+      logSecurityEvent("auth.reauth.refused", {
+        userId: presented.userId,
+        via: "two-factor",
+        address,
+      });
     }
   }
 
@@ -758,7 +872,11 @@ async function chargeReentry(
         path,
         code: `retry-after=${seconds}`,
       });
-      const refused = codeResponse(429, "REAUTH_RATE_LIMITED", "Too many attempts at the password");
+      const refused = codeResponse(
+        429,
+        "REAUTH_RATE_LIMITED",
+        "Too many attempts at the password",
+      );
       refused.headers.set("retry-after", String(seconds));
       return refused;
     }
@@ -768,7 +886,11 @@ async function chargeReentry(
     console.error(
       "[auth] refused: the rate limiter could not reach Valkey. Check VALKEY_URL and the cache service.",
     );
-    return codeResponse(503, "AUTH_UNAVAILABLE", "Sign-in is temporarily unavailable");
+    return codeResponse(
+      503,
+      "AUTH_UNAVAILABLE",
+      "Sign-in is temporarily unavailable",
+    );
   }
 }
 
@@ -788,12 +910,19 @@ async function passkeyOptions(
 ): Promise<Response> {
   const limiter = options.limiter ?? valkeySignInLimiter;
   try {
-    await chargeSignInAddress(incoming.headers, limiter, passkeyOptionsRateLimit());
+    await chargeSignInAddress(
+      incoming.headers,
+      limiter,
+      passkeyOptionsRateLimit(),
+    );
   } catch (error) {
     if (error instanceof SignInRefusedError) return refusedSignIn(error);
     throw error;
   }
-  return guardResponse(incoming, await handle(withoutInternalHeaders(incoming, [])));
+  return guardResponse(
+    incoming,
+    await handle(withoutInternalHeaders(incoming, [])),
+  );
 }
 
 /**
@@ -834,8 +963,15 @@ async function passkeySignIn(
 
   const parsed = parseJsonObject(body);
   const answerToChallenge = parsed?.response;
-  if (!answerToChallenge || typeof answerToChallenge !== "object" || Array.isArray(answerToChallenge)) {
-    logSecurityEvent("auth.passkey.signin-failed", { address: charge.address, code: "malformed" });
+  if (
+    !answerToChallenge ||
+    typeof answerToChallenge !== "object" ||
+    Array.isArray(answerToChallenge)
+  ) {
+    logSecurityEvent("auth.passkey.signin-failed", {
+      address: charge.address,
+      code: "malformed",
+    });
     return invalidRequest();
   }
 
@@ -843,7 +979,11 @@ async function passkeySignIn(
   const remember = await rememberChoice(parsed, options);
 
   const response = await handle(
-    rebuild(incoming, JSON.stringify({ response: answerToChallenge }), remember.adjust),
+    rebuild(
+      incoming,
+      JSON.stringify({ response: answerToChallenge }),
+      remember.adjust,
+    ),
   );
 
   if (response.ok) {
@@ -851,12 +991,20 @@ async function passkeySignIn(
     if (issued) {
       await secondFactorSucceeded(
         charge,
-        { userId: issued.userId, email: issued.email, deviceId: deviceIdFromHeaders(incoming.headers) },
+        {
+          userId: issued.userId,
+          email: issued.email,
+          deviceId: deviceIdFromHeaders(incoming.headers),
+        },
         "passkey",
         limiter,
       );
       if (issued.token && sessions) {
-        await tidyQuietly(sessions, { previous, userId: issued.userId, newToken: issued.token });
+        await tidyQuietly(sessions, {
+          previous,
+          userId: issued.userId,
+          newToken: issued.token,
+        });
       }
     }
   } else if (response.status >= 400 && response.status < 500) {
@@ -900,7 +1048,9 @@ async function changePasskey(
   }
 
   const presented =
-    change.event && options.sessions ? await options.sessions.presented(incoming.headers) : null;
+    change.event && options.sessions
+      ? await options.sessions.presented(incoming.headers)
+      : null;
   const response = await handle(rebuild(incoming, JSON.stringify(kept)));
 
   if (response.ok && change.event) {
@@ -926,7 +1076,9 @@ function setsCookie(response: Response, name: string): boolean {
   return response.headers.getSetCookie().some((line) => {
     const [pair, ...attributes] = line.split(";");
     const [key, ...value] = pair.trim().split("=");
-    const expired = attributes.some((attribute) => /^\s*max-age=0\s*$/i.test(attribute));
+    const expired = attributes.some((attribute) =>
+      /^\s*max-age=0\s*$/i.test(attribute),
+    );
     return key.trim() === name && value.join("=").length > 0 && !expired;
   });
 }
@@ -959,7 +1111,12 @@ function rebuild(
   headers.delete("transfer-encoding");
   headers.delete(REMEMBER_HEADER);
   adjust?.(headers);
-  return new Request(url, { method: "POST", headers, body, signal: incoming.signal });
+  return new Request(url, {
+    method: "POST",
+    headers,
+    body,
+    signal: incoming.signal,
+  });
 }
 
 /**
@@ -984,7 +1141,10 @@ function rebuild(
  *   request is answered no session to copy: it would have to sign in with the
  *   password, which it would then already have.
  */
-async function guardResponse(incoming: Request, response: Response): Promise<Response> {
+async function guardResponse(
+  incoming: Request,
+  response: Response,
+): Promise<Response> {
   const headers = new Headers(response.headers);
 
   if (incoming.headers.has("cookie")) {
@@ -993,7 +1153,8 @@ async function guardResponse(incoming: Request, response: Response): Promise<Res
       .split(",")
       .map((name) => name.trim())
       .filter((name) => name && name.toLowerCase() !== "set-auth-token");
-    if (exposed.length) headers.set("access-control-expose-headers", exposed.join(", "));
+    if (exposed.length)
+      headers.set("access-control-expose-headers", exposed.join(", "));
     else headers.delete("access-control-expose-headers");
   }
 
@@ -1018,7 +1179,11 @@ async function guardResponse(incoming: Request, response: Response): Promise<Res
     headers.delete("content-length");
   }
 
-  return new Response(body, { status: response.status, statusText: response.statusText, headers });
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 /**

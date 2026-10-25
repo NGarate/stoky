@@ -1,9 +1,20 @@
 import { randomUUID } from "node:crypto";
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+} from "bun:test";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import type { AppSession } from "@/lib/auth/session";
-import { createTRPCRouter, createTRPCContext, writeProcedure } from "@/server/trpc/trpc";
+import {
+  createTRPCRouter,
+  createTRPCContext,
+  writeProcedure,
+} from "@/server/trpc/trpc";
 import { withReplay } from "@/server/trpc/replay";
 import { replayable } from "@/lib/validations/idempotency";
 import { prisma } from "@/lib/prisma";
@@ -229,51 +240,59 @@ describe("a queued mutation arriving more than once", () => {
    * breaking the mismatch check and watching all three attempts go red. The
    * spurious failure is ~15% per run under load; three attempts leave ~0.3%.
    */
-  it("refuses a key reused for a different change, and applies nothing", async () => {
-    const api = await caller(A);
-    const key = freshKey();
+  it(
+    "refuses a key reused for a different change, and applies nothing",
+    async () => {
+      const api = await caller(A);
+      const key = freshKey();
 
-    await api.makeLocation({
-      idempotencyKey: key,
-      composedByUserId: A.userId,
-      name: WRITTEN_NAME,
-    });
-
-    await expectCode(
-      api.makeLocation({
+      await api.makeLocation({
         idempotencyKey: key,
         composedByUserId: A.userId,
-        name: "Otro sitio",
-      }),
-      "BAD_REQUEST",
-    );
+        name: WRITTEN_NAME,
+      });
 
-    // Nothing runs and nothing is read out: answering with the first call's
-    // result would make a guessed key a way to read someone's row.
-    expect(await locationCount(A.householdId)).toBe(1);
-    expect(
-      await prisma.storageLocation.count({
-        where: { householdId: A.householdId, name: "Otro sitio" },
-      }),
-    ).toBe(0);
-   }, { retry: 2 });
+      await expectCode(
+        api.makeLocation({
+          idempotencyKey: key,
+          composedByUserId: A.userId,
+          name: "Otro sitio",
+        }),
+        "BAD_REQUEST",
+      );
+
+      // Nothing runs and nothing is read out: answering with the first call's
+      // result would make a guessed key a way to read someone's row.
+      expect(await locationCount(A.householdId)).toBe(1);
+      expect(
+        await prisma.storageLocation.count({
+          where: { householdId: A.householdId, name: "Otro sitio" },
+        }),
+      ).toBe(0);
+    },
+    { retry: 2 },
+  );
 
   // See the retry note above — same defect, same scope, TEST-5.
-  it("refuses a key reused for a different procedure", async () => {
-    const api = await caller(A);
-    const key = freshKey();
+  it(
+    "refuses a key reused for a different procedure",
+    async () => {
+      const api = await caller(A);
+      const key = freshKey();
 
-    await api.makeLocation({
-      idempotencyKey: key,
-      composedByUserId: A.userId,
-      name: WRITTEN_NAME,
-    });
+      await api.makeLocation({
+        idempotencyKey: key,
+        composedByUserId: A.userId,
+        name: WRITTEN_NAME,
+      });
 
-    await expectCode(
-      api.alwaysRefuses({ idempotencyKey: key, composedByUserId: A.userId }),
-      "BAD_REQUEST",
-    );
-  }, { retry: 2 });
+      await expectCode(
+        api.alwaysRefuses({ idempotencyKey: key, composedByUserId: A.userId }),
+        "BAD_REQUEST",
+      );
+    },
+    { retry: 2 },
+  );
 });
 
 describe("a queued mutation the server refuses", () => {

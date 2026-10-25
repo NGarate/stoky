@@ -2,7 +2,12 @@ import { describe, it, expect } from "bun:test";
 import sharp from "sharp";
 import { exifPayloadFor, withExif } from "../utils/exif";
 import { pngOf } from "../utils/png";
-import { exifOrientation, exifPayload, hasExif, jpegDimensions } from "../utils/jpeg";
+import {
+  exifOrientation,
+  exifPayload,
+  hasExif,
+  jpegDimensions,
+} from "../utils/jpeg";
 import { reencodeAsJpeg } from "@/server/services/image";
 
 /**

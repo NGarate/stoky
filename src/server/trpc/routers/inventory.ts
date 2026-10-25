@@ -35,11 +35,7 @@ import type {
   StockSort,
 } from "@/lib/validations/inventory";
 // The value namespace, not only the type: `Prisma.sql` is a function.
-import {
-  Prisma,
-  type PrismaClient,
-  type StockOperation,
-} from "@prisma/client";
+import { Prisma, type PrismaClient, type StockOperation } from "@prisma/client";
 
 /** Half-open bounds on an expiry date, in the shape Prisma words them. */
 interface ExpiryWindow {
@@ -416,7 +412,7 @@ export const inventoryRouter = createTRPCRouter({
           price: z.number().positive().finite().max(MAX_PRICE).optional(),
           storeId: z.string().max(MAX_ID_LENGTH).optional(),
         })
-        .merge(replayable)
+        .merge(replayable),
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
@@ -569,7 +565,7 @@ export const inventoryRouter = createTRPCRouter({
         .extend({
           consumeFromLocationId: z.string().max(MAX_ID_LENGTH).optional(),
         })
-        .merge(replayable)
+        .merge(replayable),
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
@@ -652,15 +648,29 @@ export const inventoryRouter = createTRPCRouter({
           const movement = inProductUnit(input, product.defaultUnit);
           const locationId = input.consumeFromLocationId || input.locationId;
           const batch = input.batchId
-            ? product.stockEntries.find((entry) => entry.id === input.batchId && entry.quantity > 0)
+            ? product.stockEntries.find(
+                (entry) => entry.id === input.batchId && entry.quantity > 0,
+              )
             : undefined;
           if (input.batchId && !batch) {
-            throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Batch not found",
+            });
           }
-          if (batch && (unitConversion(batch.unit, movement.unit) !== 1 || (locationId && locationId !== batch.locationId))) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Batch unit or location does not match" });
+          if (
+            batch &&
+            (unitConversion(batch.unit, movement.unit) !== 1 ||
+              (locationId && locationId !== batch.locationId))
+          ) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Batch unit or location does not match",
+            });
           }
-          const scopedEntries = product.stockEntries.filter((entry) => !locationId || entry.locationId === locationId);
+          const scopedEntries = product.stockEntries.filter(
+            (entry) => !locationId || entry.locationId === locationId,
+          );
           // Rounded as the screens round it (`netStock`): 1 − 0.9 is
           // 0.09999999999999998, which every screen shows as 0.1, and an
           // unrounded guard then refuses the 0.1 the person can see.
@@ -668,7 +678,10 @@ export const inventoryRouter = createTRPCRouter({
           if (batch) {
             const left = remainingByBatch(product.stockEntries).get(batch.id);
             if (left == null || movement.quantity > left) {
-              throw new TRPCError({ code: "CONFLICT", message: "Batch quantity needs confirmation" });
+              throw new TRPCError({
+                code: "CONFLICT",
+                message: "Batch quantity needs confirmation",
+              });
             }
           }
 
@@ -750,11 +763,17 @@ export const inventoryRouter = createTRPCRouter({
         }
 
         const movement = inProductUnit(input, product.defaultUnit);
-        const total = await tx.stockEntry.aggregate({ where: { productId: input.productId }, _sum: { quantity: true } });
+        const total = await tx.stockEntry.aggregate({
+          where: { productId: input.productId },
+          _sum: { quantity: true },
+        });
         const current = Math.round((total._sum.quantity ?? 0) * 100) / 100;
         if (input.expectedStock !== undefined) {
           if (current !== Math.round(input.expectedStock * 100) / 100) {
-            throw new TRPCError({ code: "CONFLICT", message: "Stock changed; refresh before adjusting" });
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Stock changed; refresh before adjusting",
+            });
           }
         }
         // The floor `consumeStock` has. `expectedStock` is optional, so without
@@ -762,7 +781,10 @@ export const inventoryRouter = createTRPCRouter({
         // Rounded like every other guard, so a recount to exactly zero is not
         // refused over 1e-17 of float residue.
         if (Math.round((current + movement.quantity) * 100) / 100 < 0) {
-          throw new TRPCError({ code: "CONFLICT", message: "Adjustment would take stock below zero" });
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Adjustment would take stock below zero",
+          });
         }
         const stockEntry = await tx.stockEntry.create({
           data: {
@@ -803,7 +825,7 @@ export const inventoryRouter = createTRPCRouter({
         fromLocationId: z.string().max(MAX_ID_LENGTH),
         toLocationId: z.string().max(MAX_ID_LENGTH),
         note: z.string().max(MAX_NOTE_LENGTH).optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
@@ -864,7 +886,9 @@ export const inventoryRouter = createTRPCRouter({
           // four out offered six to move (INV-1). Rounded like
           // `consumeStock`'s guard, for the same reason.
           const availableInSource = netStock(
-            product.stockEntries.filter((entry) => entry.locationId === input.fromLocationId),
+            product.stockEntries.filter(
+              (entry) => entry.locationId === input.fromLocationId,
+            ),
           );
 
           if (movement.quantity > availableInSource) {
@@ -905,45 +929,56 @@ export const inventoryRouter = createTRPCRouter({
             input.fromLocationId,
             movement.quantity,
           );
-          const moves: Array<{ quantity: number; batchId?: string; expirationDate?: Date | null }> =
-            parts.map(({ batch, quantity }) => ({
-              quantity,
-              batchId: batch.id,
-              expirationDate: batch.expirationDate,
-            }));
+          const moves: Array<{
+            quantity: number;
+            batchId?: string;
+            expirationDate?: Date | null;
+          }> = parts.map(({ batch, quantity }) => ({
+            quantity,
+            batchId: batch.id,
+            expirationDate: batch.expirationDate,
+          }));
           if (unassigned > 0) moves.push({ quantity: unassigned });
 
-          const toName = locations.find((l) => l.id === input.toLocationId)?.name;
-          const fromName = locations.find((l) => l.id === input.fromLocationId)?.name;
+          const toName = locations.find(
+            (l) => l.id === input.toLocationId,
+          )?.name;
+          const fromName = locations.find(
+            (l) => l.id === input.fromLocationId,
+          )?.name;
           const fromEntries = [];
           const toEntries = [];
           for (const move of moves) {
-            fromEntries.push(await tx.stockEntry.create({
-              data: {
-                productId: input.productId,
-                quantity: -move.quantity,
-                unit: movement.unit,
-                batchId: move.batchId,
-                locationId: input.fromLocationId,
-                operationType: "TRANSFER" as StockOperation,
-                note: input.note || `Transfer to ${toName}`,
-                createdBy: userId,
-              },
-              include: { product: true, location: true },
-            }));
-            toEntries.push(await tx.stockEntry.create({
-              data: {
-                productId: input.productId,
-                quantity: move.quantity,
-                unit: movement.unit,
-                expirationDate: move.expirationDate,
-                locationId: input.toLocationId,
-                operationType: "TRANSFER" as StockOperation,
-                note: input.note || `Transfer from ${fromName}`,
-                createdBy: userId,
-              },
-              include: { product: true, location: true },
-            }));
+            fromEntries.push(
+              await tx.stockEntry.create({
+                data: {
+                  productId: input.productId,
+                  quantity: -move.quantity,
+                  unit: movement.unit,
+                  batchId: move.batchId,
+                  locationId: input.fromLocationId,
+                  operationType: "TRANSFER" as StockOperation,
+                  note: input.note || `Transfer to ${toName}`,
+                  createdBy: userId,
+                },
+                include: { product: true, location: true },
+              }),
+            );
+            toEntries.push(
+              await tx.stockEntry.create({
+                data: {
+                  productId: input.productId,
+                  quantity: move.quantity,
+                  unit: movement.unit,
+                  expirationDate: move.expirationDate,
+                  locationId: input.toLocationId,
+                  operationType: "TRANSFER" as StockOperation,
+                  note: input.note || `Transfer from ${fromName}`,
+                  createdBy: userId,
+                },
+                include: { product: true, location: true },
+              }),
+            );
           }
 
           return { fromEntries, toEntries };
@@ -966,7 +1001,7 @@ export const inventoryRouter = createTRPCRouter({
         // `.int()`: Prisma truncates a fractional `take`, so 2.5 was a page of
         // two rows with a cursor, not an error. A page size is a count.
         limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
-      })
+      }),
     )
     .query(async ({ ctx, input }) => {
       // Verify product exists and belongs to household
@@ -1028,7 +1063,7 @@ export const inventoryRouter = createTRPCRouter({
       z.object({
         days: z.number().int().min(1).max(MAX_DAYS).default(7),
         locationId: z.string().max(MAX_ID_LENGTH).optional(),
-      })
+      }),
     )
     .query(async ({ ctx, input }) => {
       // Calendar days, not instants (`startOfToday`): a batch dated today
@@ -1065,7 +1100,7 @@ export const inventoryRouter = createTRPCRouter({
     .input(
       z.object({
         locationId: z.string().max(MAX_ID_LENGTH).optional(),
-      })
+      }),
     )
     .query(async ({ ctx, input }) => {
       // Expired means dated before today — not before this instant, which
@@ -1079,16 +1114,18 @@ export const inventoryRouter = createTRPCRouter({
         { lt: today },
       );
 
-      return batches
-        .map((batch) => ({
-          ...batch,
-          // One measurement, negated — not a second one in the other
-          // direction. Rounding elapsed time *up*, which is what this did
-          // before, reported a carton four days and one second gone as five
-          // days gone. Days remaining and days elapsed are the same distance.
-          daysExpired: -daysUntilExpiry(batch.expirationDate, today),
-        }))
-        // Newest first, matching the previous `expirationDate: "desc"`.
-        .reverse();
+      return (
+        batches
+          .map((batch) => ({
+            ...batch,
+            // One measurement, negated — not a second one in the other
+            // direction. Rounding elapsed time *up*, which is what this did
+            // before, reported a carton four days and one second gone as five
+            // days gone. Days remaining and days elapsed are the same distance.
+            daysExpired: -daysUntilExpiry(batch.expirationDate, today),
+          }))
+          // Newest first, matching the previous `expirationDate: "desc"`.
+          .reverse()
+      );
     }),
 });

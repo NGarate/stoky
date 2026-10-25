@@ -26,19 +26,33 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
-const { LocationPicker } = await import(
-  "@/components/inventory/LocationPicker"
-);
+const { LocationPicker } =
+  await import("@/components/inventory/LocationPicker");
 
 /**
  * Two levels deep on purpose: a grandchild is what tells a recursive render
  * apart from one that was patched to handle a single level (UI-2).
  */
 const locations: Location[] = [
-  { id: "kitchen", name: "Cocina", parentId: null, _count: { stockEntries: 4 } },
+  {
+    id: "kitchen",
+    name: "Cocina",
+    parentId: null,
+    _count: { stockEntries: 4 },
+  },
   { id: "fridge", name: "Nevera", parentId: "kitchen" },
-  { id: "freezer", name: "Congelador", parentId: "fridge", _count: { stockEntries: 2 } },
-  { id: "pantry", name: "Despensa", parentId: null, _count: { stockEntries: 0 } },
+  {
+    id: "freezer",
+    name: "Congelador",
+    parentId: "fridge",
+    _count: { stockEntries: 2 },
+  },
+  {
+    id: "pantry",
+    name: "Despensa",
+    parentId: null,
+    _count: { stockEntries: 0 },
+  },
 ];
 
 beforeEach(() => {
@@ -72,7 +86,9 @@ describe("LocationPicker", () => {
   });
 
   it("accepts a custom placeholder", () => {
-    renderWithIntl(<LocationPicker onChange={() => {}} placeholder="¿Dónde?" />);
+    renderWithIntl(
+      <LocationPicker onChange={() => {}} placeholder="¿Dónde?" />,
+    );
 
     expect(screen.getByText("¿Dónde?")).toBeInTheDocument();
   });
@@ -156,9 +172,13 @@ describe("LocationPicker", () => {
 
     await userEvent.click(trigger());
 
-    expect(screen.getByRole("option", { name: "Cocina (4)" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Cocina (4)" }),
+    ).toBeInTheDocument();
     // A zero count must not render as "(0)".
-    expect(screen.getByRole("option", { name: "Despensa" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Despensa" }),
+    ).toBeInTheDocument();
   });
 
   it("offers a clear option that emits undefined", async () => {
@@ -381,7 +401,9 @@ describe("in English", () => {
   it("names the control in the reader's language", () => {
     renderWithIntl(<LocationPicker onChange={() => {}} />, { locale: "en" });
 
-    expect(screen.getByRole("combobox", { name: "Location" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "Location" }),
+    ).toBeInTheDocument();
   });
 
   it("prompts in the reader's language", () => {
@@ -403,9 +425,12 @@ describe("in English", () => {
   it("still lets a caller supply its own prompt", () => {
     // The prop was a default argument and is now a fallback; a caller that
     // passes wording must still win, or two forms lose their labels.
-    renderWithIntl(<LocationPicker onChange={() => {}} placeholder="Where?" />, {
-      locale: "en",
-    });
+    renderWithIntl(
+      <LocationPicker onChange={() => {}} placeholder="Where?" />,
+      {
+        locale: "en",
+      },
+    );
 
     expect(screen.getByText("Where?")).toBeInTheDocument();
   });

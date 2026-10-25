@@ -42,7 +42,9 @@ export function ComposerProvider({
   );
 
   return (
-    <ComposerContext.Provider value={value}>{children}</ComposerContext.Provider>
+    <ComposerContext.Provider value={value}>
+      {children}
+    </ComposerContext.Provider>
   );
 }
 

@@ -37,7 +37,8 @@ export function drawnParents(
   locations: ReadonlyArray<LocationLink>,
 ): Map<string, string | null> {
   const parentOf = new Map<string, string | null>();
-  for (const location of locations) parentOf.set(location.id, location.parentId);
+  for (const location of locations)
+    parentOf.set(location.id, location.parentId);
 
   const drawn = new Map<string, string | null>();
 

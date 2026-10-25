@@ -35,7 +35,9 @@ export default function UploadPage() {
   const snackbar = useSnackbar();
   const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadedReceiptId, setUploadedReceiptId] = useState<string | null>(null);
+  const [uploadedReceiptId, setUploadedReceiptId] = useState<string | null>(
+    null,
+  );
   // "No store means no prices": applyReceipt writes a PriceRecord per line
   // only when the receipt has a store, and until Phase 8 no screen ever sent
   // one — the second half of ISSUES.md PRICE-1.
@@ -138,7 +140,9 @@ export default function UploadPage() {
           <UploadZone onUpload={handleUpload} isUploading={isUploading} />
 
           {isUploading && (
-            <p className="text-center text-muted-foreground">{t("uploadingHint")}</p>
+            <p className="text-center text-muted-foreground">
+              {t("uploadingHint")}
+            </p>
           )}
         </div>
       ) : (

@@ -1,4 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+} from "bun:test";
 import { TRPCError } from "@trpc/server";
 import { rm } from "node:fs/promises";
 import { pngClaiming, pngOf } from "../utils/png";
@@ -167,7 +174,10 @@ async function seedReceipt(options: {
 }
 
 /** Asserts a call was refused with a particular code. */
-async function expectCode(call: () => Promise<unknown>, code: TRPC_ERROR_CODE_KEY) {
+async function expectCode(
+  call: () => Promise<unknown>,
+  code: TRPC_ERROR_CODE_KEY,
+) {
   let thrown: unknown;
   try {
     await call();
@@ -214,9 +224,15 @@ beforeEach(async () => {
   // Each test seeds the receipts it needs, so the previous test's rows must be
   // gone or `list`'s counts would depend on execution order.
   const ids = [householdId, otherHouseholdId];
-  await prisma.stockEntry.deleteMany({ where: { product: { householdId: { in: ids } } } });
-  await prisma.priceRecord.deleteMany({ where: { product: { householdId: { in: ids } } } });
-  await prisma.receiptItem.deleteMany({ where: { receipt: { householdId: { in: ids } } } });
+  await prisma.stockEntry.deleteMany({
+    where: { product: { householdId: { in: ids } } },
+  });
+  await prisma.priceRecord.deleteMany({
+    where: { product: { householdId: { in: ids } } },
+  });
+  await prisma.receiptItem.deleteMany({
+    where: { receipt: { householdId: { in: ids } } },
+  });
   await prisma.receipt.deleteMany({ where: { householdId: { in: ids } } });
   await prisma.product.deleteMany({
     where: { householdId: { in: ids }, id: { not: productId } },
@@ -225,14 +241,24 @@ beforeEach(async () => {
 
 afterAll(async () => {
   const ids = [householdId, otherHouseholdId];
-  await prisma.stockEntry.deleteMany({ where: { product: { householdId: { in: ids } } } });
-  await prisma.priceRecord.deleteMany({ where: { product: { householdId: { in: ids } } } });
-  await prisma.receiptItem.deleteMany({ where: { receipt: { householdId: { in: ids } } } });
+  await prisma.stockEntry.deleteMany({
+    where: { product: { householdId: { in: ids } } },
+  });
+  await prisma.priceRecord.deleteMany({
+    where: { product: { householdId: { in: ids } } },
+  });
+  await prisma.receiptItem.deleteMany({
+    where: { receipt: { householdId: { in: ids } } },
+  });
   await prisma.receipt.deleteMany({ where: { householdId: { in: ids } } });
   await prisma.product.deleteMany({ where: { householdId: { in: ids } } });
   await prisma.store.deleteMany({ where: { householdId: { in: ids } } });
-  await prisma.user.deleteMany({ where: { name: { startsWith: "Receipt Router " } } });
-  await prisma.household.deleteMany({ where: { name: { in: [HOUSEHOLD, OTHER_HOUSEHOLD] } } });
+  await prisma.user.deleteMany({
+    where: { name: { startsWith: "Receipt Router " } },
+  });
+  await prisma.household.deleteMany({
+    where: { name: { in: [HOUSEHOLD, OTHER_HOUSEHOLD] } },
+  });
 });
 
 describe("receipt.upload — what it refuses", () => {
@@ -335,7 +361,9 @@ describe("receipt.upload — what it refuses", () => {
     await expectCode(
       () =>
         caller.receipt.upload({
-          fileBase64: Buffer.from("#!/bin/sh\necho not an image\n").toString("base64"),
+          fileBase64: Buffer.from("#!/bin/sh\necho not an image\n").toString(
+            "base64",
+          ),
           mimeType: "image/png",
         }),
       "BAD_REQUEST",
@@ -542,7 +570,9 @@ describe("receipt.getStatus", () => {
   });
 
   it("counts a line whose product was created in review as processed", async () => {
-    const { receipt } = await seedReceipt({ matchStatus: MatchStatus.USER_CREATED });
+    const { receipt } = await seedReceipt({
+      matchStatus: MatchStatus.USER_CREATED,
+    });
 
     const status = await caller.receipt.getStatus({ receiptId: receipt.id });
 
@@ -570,7 +600,9 @@ describe("receipt.getReceiptWithItems", () => {
   it("returns the receipt with its parsed lines", async () => {
     const { receipt } = await seedReceipt({});
 
-    const result = await caller.receipt.getReceiptWithItems({ receiptId: receipt.id });
+    const result = await caller.receipt.getReceiptWithItems({
+      receiptId: receipt.id,
+    });
 
     expect(result.id).toBe(receipt.id);
     expect(result.items).toHaveLength(2);
@@ -600,7 +632,9 @@ describe("receipt.confirmItem", () => {
       productId,
     });
 
-    const item = await prisma.receiptItem.findUnique({ where: { id: second.id } });
+    const item = await prisma.receiptItem.findUnique({
+      where: { id: second.id },
+    });
     expect(item?.matchStatus).toBe(MatchStatus.USER_CONFIRMED);
     expect(item?.matchedProductId).toBe(productId);
     // A person said so, so there is nothing probabilistic left to record.
@@ -621,7 +655,9 @@ describe("receipt.confirmItem", () => {
     });
     expect(created?.householdId).toBe(householdId);
 
-    const item = await prisma.receiptItem.findUnique({ where: { id: second.id } });
+    const item = await prisma.receiptItem.findUnique({
+      where: { id: second.id },
+    });
     expect(item?.matchStatus).toBe(MatchStatus.USER_CREATED);
     expect(item?.matchedProductId).toBe(created?.id);
   });
@@ -633,9 +669,14 @@ describe("receipt.confirmItem", () => {
     // condition away from creating stock nobody asked for.
     const { first } = await seedReceipt({});
 
-    await caller.receipt.confirmItem({ receiptItemId: first.id, action: "SKIP" });
+    await caller.receipt.confirmItem({
+      receiptItemId: first.id,
+      action: "SKIP",
+    });
 
-    const item = await prisma.receiptItem.findUnique({ where: { id: first.id } });
+    const item = await prisma.receiptItem.findUnique({
+      where: { id: first.id },
+    });
     expect(item?.matchStatus).toBe(MatchStatus.SKIPPED);
     expect(item?.matchedProductId).toBeNull();
   });
@@ -670,7 +711,9 @@ describe("receipt.confirmItem", () => {
       "BAD_REQUEST",
     );
 
-    const line = await prisma.receiptItem.findUnique({ where: { id: second.id } });
+    const line = await prisma.receiptItem.findUnique({
+      where: { id: second.id },
+    });
     expect(line?.matchedProductId).toBeNull();
   });
 
@@ -689,13 +732,19 @@ describe("receipt.confirmItem", () => {
       "BAD_REQUEST",
     );
 
-    const line = await prisma.receiptItem.findUnique({ where: { id: second.id } });
+    const line = await prisma.receiptItem.findUnique({
+      where: { id: second.id },
+    });
     expect(line?.matchStatus).toBe(MatchStatus.PENDING);
   });
 
   it("is NOT_FOUND for an item that does not exist", async () => {
     await expectCode(
-      () => caller.receipt.confirmItem({ receiptItemId: "does-not-exist", action: "SKIP" }),
+      () =>
+        caller.receipt.confirmItem({
+          receiptItemId: "does-not-exist",
+          action: "SKIP",
+        }),
       "NOT_FOUND",
     );
   });
@@ -704,11 +753,17 @@ describe("receipt.confirmItem", () => {
     const { first } = await seedReceipt({});
 
     await expectCode(
-      () => outsider.receipt.confirmItem({ receiptItemId: first.id, action: "SKIP" }),
+      () =>
+        outsider.receipt.confirmItem({
+          receiptItemId: first.id,
+          action: "SKIP",
+        }),
       "NOT_FOUND",
     );
 
-    const item = await prisma.receiptItem.findUnique({ where: { id: first.id } });
+    const item = await prisma.receiptItem.findUnique({
+      where: { id: first.id },
+    });
     expect(item?.matchStatus).toBe(MatchStatus.AUTO_MATCHED);
   });
 });
@@ -752,7 +807,9 @@ describe("receipt.confirmAll", () => {
     });
     expect(untouched).not.toBeNull();
 
-    const updated = await prisma.receipt.findUnique({ where: { id: receipt.id } });
+    const updated = await prisma.receipt.findUnique({
+      where: { id: receipt.id },
+    });
     expect(updated?.status).toBe(ReceiptStatus.CONFIRMED);
   });
 
@@ -768,7 +825,9 @@ describe("receipt.confirmAll", () => {
       "NOT_FOUND",
     );
 
-    const updated = await prisma.receipt.findUnique({ where: { id: receipt.id } });
+    const updated = await prisma.receipt.findUnique({
+      where: { id: receipt.id },
+    });
     expect(updated?.status).toBe(ReceiptStatus.NEEDS_REVIEW);
   });
 
@@ -822,7 +881,9 @@ describe("receipt.confirmAll", () => {
     for (const line of lines) {
       expect(line.matchStatus).toBe(MatchStatus.PENDING);
     }
-    const after = await prisma.receipt.findUnique({ where: { id: receipt.id } });
+    const after = await prisma.receipt.findUnique({
+      where: { id: receipt.id },
+    });
     expect(after?.status).toBe(ReceiptStatus.NEEDS_REVIEW);
   });
 });
@@ -834,9 +895,14 @@ describe("the review has edges", () => {
     // NEEDS_REVIEW alone — which reads like a tightening — goes red here.
     const { first } = await seedReceipt({ status: ReceiptStatus.CONFIRMED });
 
-    await caller.receipt.confirmItem({ receiptItemId: first.id, action: "SKIP" });
+    await caller.receipt.confirmItem({
+      receiptItemId: first.id,
+      action: "SKIP",
+    });
 
-    const item = await prisma.receiptItem.findUnique({ where: { id: first.id } });
+    const item = await prisma.receiptItem.findUnique({
+      where: { id: first.id },
+    });
     expect(item?.matchStatus).toBe(MatchStatus.SKIPPED);
     expect(item?.matchedProductId).toBeNull();
   });
@@ -846,11 +912,14 @@ describe("the review has edges", () => {
     // `confirmAll` ends by writing CONFIRMED unconditionally. So an APPLIED
     // receipt could be dragged back to CONFIRMED and applied a second time,
     // booking every line's stock and price twice.
-    const { receipt, first } = await seedReceipt({ status: ReceiptStatus.CONFIRMED });
+    const { receipt, first } = await seedReceipt({
+      status: ReceiptStatus.CONFIRMED,
+    });
     await caller.receipt.applyReceipt({ receiptId: receipt.id });
 
     await expectCode(
-      () => caller.receipt.confirmItem({ receiptItemId: first.id, action: "SKIP" }),
+      () =>
+        caller.receipt.confirmItem({ receiptItemId: first.id, action: "SKIP" }),
       "BAD_REQUEST",
     );
     await expectCode(
@@ -862,7 +931,9 @@ describe("the review has edges", () => {
       "BAD_REQUEST",
     );
 
-    const updated = await prisma.receipt.findUnique({ where: { id: receipt.id } });
+    const updated = await prisma.receipt.findUnique({
+      where: { id: receipt.id },
+    });
     // The status write at the end of `confirmAll` is what the guard makes safe.
     expect(updated?.status).toBe(ReceiptStatus.APPLIED);
   });
@@ -920,10 +991,12 @@ describe("the review has edges", () => {
     const outcome = await inFlight;
     expect("error" in outcome).toBe(true);
     expect((outcome as { error: unknown }).error).toBeInstanceOf(TRPCError);
-    expect(((outcome as { error: TRPCError }).error).code).toBe("BAD_REQUEST");
+    expect((outcome as { error: TRPCError }).error.code).toBe("BAD_REQUEST");
 
     // The line the apply booked stock from is exactly as it booked it.
-    const line = await prisma.receiptItem.findUnique({ where: { id: first.id } });
+    const line = await prisma.receiptItem.findUnique({
+      where: { id: first.id },
+    });
     expect(line?.matchStatus).toBe(MatchStatus.AUTO_MATCHED);
     expect(line?.matchedProductId).toBe(productId);
   });
@@ -933,7 +1006,9 @@ describe("receipt.applyReceipt", () => {
   it("refuses a receipt that has not been confirmed, and writes nothing", async () => {
     // The state machine's one real rule. Without it, a receipt could be
     // applied twice: once here and once after review.
-    const { receipt } = await seedReceipt({ status: ReceiptStatus.NEEDS_REVIEW });
+    const { receipt } = await seedReceipt({
+      status: ReceiptStatus.NEEDS_REVIEW,
+    });
 
     await expectCode(
       () => caller.receipt.applyReceipt({ receiptId: receipt.id }),
@@ -968,12 +1043,16 @@ describe("receipt.applyReceipt", () => {
 
     await caller.receipt.applyReceipt({ receiptId: receipt.id });
 
-    const updated = await prisma.receipt.findUnique({ where: { id: receipt.id } });
+    const updated = await prisma.receipt.findUnique({
+      where: { id: receipt.id },
+    });
     expect(updated?.status).toBe(ReceiptStatus.APPLIED);
   });
 
   it("skips a SKIPPED line and a line that matched nothing", async () => {
-    const { receipt, first } = await seedReceipt({ status: ReceiptStatus.CONFIRMED });
+    const { receipt, first } = await seedReceipt({
+      status: ReceiptStatus.CONFIRMED,
+    });
     await prisma.receiptItem.update({
       where: { id: first.id },
       data: { matchStatus: MatchStatus.SKIPPED, matchedProductId: null },
@@ -996,7 +1075,9 @@ describe("receipt.applyReceipt", () => {
     // Written this way after breaking the status branch on its own and finding
     // that the previous version of this test stayed green: it cleared the
     // product too, so it was asserting the null check twice.
-    const { receipt, first } = await seedReceipt({ status: ReceiptStatus.CONFIRMED });
+    const { receipt, first } = await seedReceipt({
+      status: ReceiptStatus.CONFIRMED,
+    });
     await prisma.receiptItem.update({
       where: { id: first.id },
       data: { matchStatus: MatchStatus.SKIPPED },
@@ -1129,7 +1210,9 @@ describe("receipt.applyReceipt", () => {
     expect(
       await prisma.priceRecord.count({ where: { receiptId: receipt.id } }),
     ).toBe(0);
-    const after = await prisma.receipt.findUnique({ where: { id: receipt.id } });
+    const after = await prisma.receipt.findUnique({
+      where: { id: receipt.id },
+    });
     expect(after?.status).toBe(ReceiptStatus.CONFIRMED);
 
     // Which is what "safe to retry" means, and the only assertion that proves
@@ -1148,7 +1231,9 @@ describe("receipt.getAppliedSummary", () => {
     const { receipt } = await seedReceipt({ status: ReceiptStatus.CONFIRMED });
     await caller.receipt.applyReceipt({ receiptId: receipt.id });
 
-    const summary = await caller.receipt.getAppliedSummary({ receiptId: receipt.id });
+    const summary = await caller.receipt.getAppliedSummary({
+      receiptId: receipt.id,
+    });
 
     // One line applied, of two parsed. Both figures are needed: the page says
     // how many were left out rather than implying the receipt held one line.
@@ -1168,7 +1253,9 @@ describe("receipt.getAppliedSummary", () => {
       matchStatus: MatchStatus.AUTO_MATCHED,
     });
 
-    const summary = await caller.receipt.getAppliedSummary({ receiptId: receipt.id });
+    const summary = await caller.receipt.getAppliedSummary({
+      receiptId: receipt.id,
+    });
 
     expect(summary.items).toHaveLength(1);
   });
@@ -1207,9 +1294,7 @@ describe("a receipt line belongs to its receipt, and its receipt to a household"
           // A receipt this caller genuinely owns, so the household check passes.
           receiptId: mine.receipt.id,
           // A line from a receipt they do not.
-          items: [
-            { receiptItemId: theirs.first.id, action: "SKIP" },
-          ],
+          items: [{ receiptItemId: theirs.first.id, action: "SKIP" }],
         }),
       "NOT_FOUND",
     );
@@ -1281,9 +1366,7 @@ describe("a receipt line belongs to its receipt, and its receipt to a household"
 
     const confirmed = await caller.receipt.confirmAll({
       receiptId: mine.receipt.id,
-      items: [
-        { receiptItemId: mine.second.id, action: "MATCH", productId },
-      ],
+      items: [{ receiptItemId: mine.second.id, action: "MATCH", productId }],
     });
 
     expect(confirmed).toBeDefined();
@@ -1343,7 +1426,9 @@ describe("receipt.list", () => {
     expect(secondPage.nextCursor).toBeNull();
 
     // And the pages do not overlap, which a cursor off by one would break.
-    const ids = new Set([...firstPage.items, ...secondPage.items].map((r) => r.id));
+    const ids = new Set(
+      [...firstPage.items, ...secondPage.items].map((r) => r.id),
+    );
     expect(ids.size).toBe(3);
   });
 });
@@ -1372,7 +1457,13 @@ describe("what a receipt read sends", () => {
   function expectNothingPrivate(response: unknown): void {
     const sent = JSON.stringify(response);
 
-    for (const key of ["rawOcrText", "imagePath", "uploadedBy", "accounts", "password"]) {
+    for (const key of [
+      "rawOcrText",
+      "imagePath",
+      "uploadedBy",
+      "accounts",
+      "password",
+    ]) {
       expect(sent).not.toContain(`"${key}"`);
     }
     // The values too, so a rename cannot carry them out under another key.
@@ -1393,7 +1484,9 @@ describe("what a receipt read sends", () => {
   it("getReceiptWithItems sends the header and the lines", async () => {
     const { receipt } = await seedReceipt({});
 
-    const review = await kitchen.receipt.getReceiptWithItems({ receiptId: receipt.id });
+    const review = await kitchen.receipt.getReceiptWithItems({
+      receiptId: receipt.id,
+    });
 
     expect(Object.keys(review).sort()).toEqual([...HEADER, "items"].sort());
     expect(Object.keys(review.store ?? {}).sort()).toEqual(["id", "name"]);
@@ -1406,7 +1499,9 @@ describe("what a receipt read sends", () => {
     const { items } = await kitchen.receipt.list({ limit: 20 });
 
     expect(items).toHaveLength(1);
-    expect(Object.keys(items[0] ?? {}).sort()).toEqual([...HEADER, "_count"].sort());
+    expect(Object.keys(items[0] ?? {}).sort()).toEqual(
+      [...HEADER, "_count"].sort(),
+    );
     expect(Object.keys(items[0]?.store ?? {}).sort()).toEqual(["id", "name"]);
     expectNothingPrivate(items);
   });
@@ -1415,7 +1510,9 @@ describe("what a receipt read sends", () => {
     const { receipt } = await seedReceipt({ status: ReceiptStatus.CONFIRMED });
     await caller.receipt.applyReceipt({ receiptId: receipt.id });
 
-    const summary = await kitchen.receipt.getAppliedSummary({ receiptId: receipt.id });
+    const summary = await kitchen.receipt.getAppliedSummary({
+      receiptId: receipt.id,
+    });
 
     expect(Object.keys(summary.receipt).sort()).toEqual(
       [...HEADER, "_count", "items"].sort(),

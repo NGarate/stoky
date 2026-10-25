@@ -63,7 +63,13 @@ describe("the form error summary", () => {
   });
 
   it("is the only thing that draws one, anywhere under src/", () => {
-    const owner = join(ROOT, "src", "components", "ui", "form-error-summary.tsx");
+    const owner = join(
+      ROOT,
+      "src",
+      "components",
+      "ui",
+      "form-error-summary.tsx",
+    );
     const offenders = tsxFiles(join(ROOT, "src"))
       .filter((path) => path !== owner)
       .filter((path) => readFileSync(path, "utf8").includes(HAND_WRITTEN));
@@ -72,14 +78,21 @@ describe("the form error summary", () => {
   });
 
   it("owns the only focusable alert in the application", () => {
-    const owner = join(ROOT, "src", "components", "ui", "form-error-summary.tsx");
+    const owner = join(
+      ROOT,
+      "src",
+      "components",
+      "ui",
+      "form-error-summary.tsx",
+    );
 
     // Proximity rather than file membership: `products/[id]/page.tsx` holds a
     // `role="alert"` and a `tabIndex={-1}` in two unrelated elements, and a
     // per-file check calls that a second focusable alert. 200 characters is
     // wide enough to span the attributes of one JSX element and narrow enough
     // not to span two.
-    const focusableAlert = /role="alert"[\s\S]{0,200}?tabIndex=\{-1\}|tabIndex=\{-1\}[\s\S]{0,200}?role="alert"/;
+    const focusableAlert =
+      /role="alert"[\s\S]{0,200}?tabIndex=\{-1\}|tabIndex=\{-1\}[\s\S]{0,200}?role="alert"/;
 
     const offenders = tsxFiles(join(ROOT, "src")).filter((path) =>
       focusableAlert.test(readFileSync(path, "utf8")),

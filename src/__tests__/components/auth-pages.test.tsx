@@ -1,10 +1,21 @@
 import "../setup/matchers";
-import { describe, it, expect, afterAll, afterEach, beforeEach, mock } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  afterAll,
+  afterEach,
+  beforeEach,
+  mock,
+} from "bun:test";
 import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
-import { renderWithIntl as renderWithIntlOnly, type TestLocale } from "../utils/render";
+import {
+  renderWithIntl as renderWithIntlOnly,
+  type TestLocale,
+} from "../utils/render";
 import { resolve } from "../setup/tailwind";
 import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
 import { registerSchema } from "@/lib/validations/auth";
@@ -193,7 +204,8 @@ const { default: LoginPage } = await import("@/app/(auth)/login/page");
 const { LoginForm } = await import("@/components/session/LoginForm");
 const { default: RegisterPage } = await import("@/app/(auth)/register/page");
 const { RegisterForm } = await import("@/components/session/RegisterForm");
-const { RegistrationClosed } = await import("@/components/session/RegistrationClosed");
+const { RegistrationClosed } =
+  await import("@/components/session/RegistrationClosed");
 
 afterEach(cleanup);
 
@@ -214,7 +226,9 @@ const SPANISH_ONLY = [
  * which is half the bug still shipping to half the viewports.
  */
 function headings(): string[] {
-  return screen.getAllByRole("heading", { level: 1 }).map((node) => node.textContent ?? "");
+  return screen
+    .getAllByRole("heading", { level: 1 })
+    .map((node) => node.textContent ?? "");
 }
 
 describe("the login page", () => {
@@ -260,9 +274,7 @@ describe("the login page around the form", () => {
     const page = await LoginPage();
 
     renderWithIntlOnly(
-      <QueryClientProvider client={client}>
-        {page}
-      </QueryClientProvider>,
+      <QueryClientProvider client={client}>{page}</QueryClientProvider>,
       { locale: "es" },
     );
 
@@ -335,10 +347,11 @@ function heroPanel(container: HTMLElement, asideTitle: string): HTMLElement {
   // repeats the heading and the subtitle, but never the aside block. Finding it
   // positionally would keep passing against the wrong <section> after a
   // reorder, which is the shape of bug this whole file exists for.
-  const panel = Array.from(container.querySelectorAll("section")).find((section) =>
-    section.textContent?.includes(asideTitle),
+  const panel = Array.from(container.querySelectorAll("section")).find(
+    (section) => section.textContent?.includes(asideTitle),
   );
-  if (!panel) throw new Error(`no <section> carries the aside copy "${asideTitle}"`);
+  if (!panel)
+    throw new Error(`no <section> carries the aside copy "${asideTitle}"`);
   return panel;
 }
 
@@ -356,7 +369,9 @@ describe("the panel beside the form is a surface, not the action colour", () => 
     it(`on ${name}`, async () => {
       const { container } = renderWithIntl(<Page />, { locale: "es" });
 
-      const panelFill = await backgroundOf(heroPanel(container, asideTitle).className);
+      const panelFill = await backgroundOf(
+        heroPanel(container, asideTitle).className,
+      );
       const buttonFill = await backgroundOf("bg-primary");
 
       expect(buttonFill).toBeDefined();
@@ -425,7 +440,9 @@ describe("where signing in leads", () => {
 
     await userEvent.type(screen.getByLabelText("Correo electrónico"), "a@b.es");
     await userEvent.type(screen.getByLabelText("Contraseña"), "secreta123");
-    await userEvent.click(screen.getByRole("button", { name: "Iniciar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Iniciar sesión" }),
+    );
 
     await waitFor(() => expect(replaced).toEqual(["/"]));
   });
@@ -446,7 +463,10 @@ describe("where signing in leads", () => {
 describe("keep me signed in", () => {
   // D141. Unticked by default: a browser session is what anybody gets without
   // deciding, and the box is for a home device used every day.
-  const LABEL = { es: "Mantener la sesión iniciada", en: "Keep me signed in" } as const;
+  const LABEL = {
+    es: "Mantener la sesión iniciada",
+    en: "Keep me signed in",
+  } as const;
   const HINT = {
     es: "Márcala en los dispositivos de casa que usas a diario, como la pantalla de la cocina. Sin marcar, la sesión se cierra al cerrar el navegador o tras 15 minutos sin uso.",
     en: "Tick it on home devices you use every day, such as the kitchen screen. Unticked, the session ends when you close the browser or after 15 minutes without use.",
@@ -467,8 +487,11 @@ describe("keep me signed in", () => {
     renderWithIntl(<LoginForm />, { locale: "es" });
     await userEvent.type(screen.getByLabelText("Correo electrónico"), "a@b.es");
     await userEvent.type(screen.getByLabelText("Contraseña"), "secreta123");
-    if (tick) await userEvent.click(screen.getByRole("checkbox", { name: LABEL.es }));
-    await userEvent.click(screen.getByRole("button", { name: "Iniciar sesión" }));
+    if (tick)
+      await userEvent.click(screen.getByRole("checkbox", { name: LABEL.es }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Iniciar sesión" }),
+    );
     await waitFor(() => expect(signInCalls).toHaveLength(1));
     return signInCalls[0];
   }
@@ -510,9 +533,14 @@ describe("what a refused sign-in says", () => {
     try {
       renderWithIntl(<LoginForm />, { locale: "es" });
 
-      await userEvent.type(screen.getByLabelText("Correo electrónico"), "a@b.es");
+      await userEvent.type(
+        screen.getByLabelText("Correo electrónico"),
+        "a@b.es",
+      );
       await userEvent.type(screen.getByLabelText("Contraseña"), "secreta123");
-      await userEvent.click(screen.getByRole("button", { name: "Iniciar sesión" }));
+      await userEvent.click(
+        screen.getByRole("button", { name: "Iniciar sesión" }),
+      );
 
       expect(
         await screen.findByText(
@@ -534,7 +562,11 @@ describe("what a refused sign-in says when it has been tried too often", () => {
       "es",
       "account_rate_limited",
       "Demasiados intentos con esta cuenta. Espera unos minutos; si se repite, avisa a quien administra tu hogar.",
-      { email: "Correo electrónico", password: "Contraseña", submit: "Iniciar sesión" },
+      {
+        email: "Correo electrónico",
+        password: "Contraseña",
+        submit: "Iniciar sesión",
+      },
     ],
     [
       "en",
@@ -546,7 +578,11 @@ describe("what a refused sign-in says when it has been tried too often", () => {
       "es",
       "rate_limited",
       "Demasiados intentos desde esta conexión. Espera unos minutos y vuelve a probar.",
-      { email: "Correo electrónico", password: "Contraseña", submit: "Iniciar sesión" },
+      {
+        email: "Correo electrónico",
+        password: "Contraseña",
+        submit: "Iniciar sesión",
+      },
     ],
   ] as const) {
     it(`says what ran out for ${code}, in ${locale}`, async () => {
@@ -555,8 +591,13 @@ describe("what a refused sign-in says when it has been tried too often", () => {
         renderWithIntl(<LoginForm />, { locale });
 
         await userEvent.type(screen.getByLabelText(labels.email), "a@b.es");
-        await userEvent.type(screen.getByLabelText(labels.password), "secreta123");
-        await userEvent.click(screen.getByRole("button", { name: labels.submit }));
+        await userEvent.type(
+          screen.getByLabelText(labels.password),
+          "secreta123",
+        );
+        await userEvent.click(
+          screen.getByRole("button", { name: labels.submit }),
+        );
 
         expect(await screen.findByText(words)).toBeInTheDocument();
       } finally {
@@ -577,9 +618,17 @@ describe("what a sign-in refused straight after registering says", () => {
       renderWithIntl(<RegisterForm />, { locale: "es" });
 
       await userEvent.type(screen.getByLabelText("Nombre"), "Ana");
-      await userEvent.type(screen.getByLabelText("Correo electrónico"), "ana@example.com");
-      await userEvent.type(screen.getByLabelText("Contraseña"), "cocina despensa nevera");
-      await userEvent.click(screen.getByRole("button", { name: "Registrarse" }));
+      await userEvent.type(
+        screen.getByLabelText("Correo electrónico"),
+        "ana@example.com",
+      );
+      await userEvent.type(
+        screen.getByLabelText("Contraseña"),
+        "cocina despensa nevera",
+      );
+      await userEvent.click(
+        screen.getByRole("button", { name: "Registrarse" }),
+      );
 
       expect(
         await screen.findByText(
@@ -602,7 +651,12 @@ describe("what a refused registration says", () => {
     [
       "es",
       "El registro está cerrado en este servidor. Pide a quien administra tu hogar que te añada desde «Personas del hogar», en Configuración.",
-      { name: "Nombre", email: "Correo electrónico", password: "Contraseña", submit: "Registrarse" },
+      {
+        name: "Nombre",
+        email: "Correo electrónico",
+        password: "Contraseña",
+        submit: "Registrarse",
+      },
     ],
     [
       "en",
@@ -616,9 +670,17 @@ describe("what a refused registration says", () => {
         renderWithIntl(<RegisterForm />, { locale });
 
         await userEvent.type(screen.getByLabelText(labels.name), "Ana");
-        await userEvent.type(screen.getByLabelText(labels.email), "ana@example.com");
-        await userEvent.type(screen.getByLabelText(labels.password), "cocina despensa nevera");
-        await userEvent.click(screen.getByRole("button", { name: labels.submit }));
+        await userEvent.type(
+          screen.getByLabelText(labels.email),
+          "ana@example.com",
+        );
+        await userEvent.type(
+          screen.getByLabelText(labels.password),
+          "cocina despensa nevera",
+        );
+        await userEvent.click(
+          screen.getByRole("button", { name: labels.submit }),
+        );
 
         expect(await screen.findByText(words)).toBeInTheDocument();
       } finally {
@@ -638,7 +700,12 @@ describe("what a refused registration says", () => {
     [
       "es",
       "La contraseña contiene tu nombre o tu correo. Elige una que no los incluya.",
-      { name: "Nombre", email: "Correo electrónico", password: "Contraseña", submit: "Registrarse" },
+      {
+        name: "Nombre",
+        email: "Correo electrónico",
+        password: "Contraseña",
+        submit: "Registrarse",
+      },
     ],
     [
       "en",
@@ -654,9 +721,14 @@ describe("what a refused registration says", () => {
         renderWithIntl(<RegisterForm />, { locale });
 
         await userEvent.type(screen.getByLabelText(labels.name), identity.name);
-        await userEvent.type(screen.getByLabelText(labels.email), identity.email);
+        await userEvent.type(
+          screen.getByLabelText(labels.email),
+          identity.email,
+        );
         await userEvent.type(screen.getByLabelText(labels.password), password);
-        await userEvent.click(screen.getByRole("button", { name: labels.submit }));
+        await userEvent.click(
+          screen.getByRole("button", { name: labels.submit }),
+        );
 
         expect(await screen.findByText(words)).toBeInTheDocument();
       } finally {
@@ -713,16 +785,22 @@ describe("the screen that says registration is closed", () => {
   }
 
   it("offers nothing to fill in", () => {
-    const { container } = renderWithIntl(<RegistrationClosed />, { locale: "es" });
+    const { container } = renderWithIntl(<RegistrationClosed />, {
+      locale: "es",
+    });
 
     expect(container.querySelector("form")).toBeAbsent();
     // Not "no input": the theme and language controls are inputs, and stay.
-    expect(container.querySelector('input[type="email"], input[type="password"]')).toBeAbsent();
+    expect(
+      container.querySelector('input[type="email"], input[type="password"]'),
+    ).toBeAbsent();
     expect(screen.queryByRole("button", { name: "Registrarse" })).toBeAbsent();
   });
 
   it("says nothing in Spanish to an English reader, and renders no raw key", () => {
-    const { container } = renderWithIntl(<RegistrationClosed />, { locale: "en" });
+    const { container } = renderWithIntl(<RegistrationClosed />, {
+      locale: "en",
+    });
 
     expect(container.textContent).not.toContain("auth.");
     for (const spanish of ["registro", "Configuración", "Personas del hogar"]) {
@@ -837,7 +915,8 @@ describe("the second step of a sign-in", () => {
       submit: "Sign in",
       title: "Two-step verification",
       totp: "Verification code",
-      totpHint: "The 6 digits your authenticator app shows now. They change every 30 seconds.",
+      totpHint:
+        "The 6 digits your authenticator app shows now. They change every 30 seconds.",
       verify: "Check the code",
       useBackup: "Use a recovery code",
       backupTitle: "Sign in with a recovery code",
@@ -897,11 +976,13 @@ describe("the second step of a sign-in", () => {
       await waitFor(() => expect(focused()).toBe(`H2 ${words.title}`));
       // Still one way to submit; the others only change the step.
       expect(container.querySelectorAll('[type="submit"]')).toHaveLength(1);
-      expect(screen.getByRole("button", { name: words.verify }).getAttribute("type")).toBe(
-        "submit",
-      );
+      expect(
+        screen.getByRole("button", { name: words.verify }).getAttribute("type"),
+      ).toBe("submit");
       for (const name of [words.useBackup, words.back]) {
-        expect(screen.getByRole("button", { name }).getAttribute("type")).toBe("button");
+        expect(screen.getByRole("button", { name }).getAttribute("type")).toBe(
+          "button",
+        );
       }
       expect(container.textContent).not.toContain("auth.");
     });
@@ -911,7 +992,9 @@ describe("the second step of a sign-in", () => {
     await challenged();
 
     await userEvent.type(screen.getByLabelText(WORDS.es.totp), "123456");
-    await userEvent.click(screen.getByRole("button", { name: WORDS.es.verify }));
+    await userEvent.click(
+      screen.getByRole("button", { name: WORDS.es.verify }),
+    );
 
     await waitFor(() => expect(replaced).toEqual(["/"]));
     expect(secondStepCalls).toEqual([{ kind: "totp", code: "123456" }]);
@@ -921,7 +1004,9 @@ describe("the second step of a sign-in", () => {
     await challenged();
 
     await userEvent.type(screen.getByLabelText(WORDS.es.totp), "12");
-    await userEvent.click(screen.getByRole("button", { name: WORDS.es.useBackup }));
+    await userEvent.click(
+      screen.getByRole("button", { name: WORDS.es.useBackup }),
+    );
 
     await screen.findByRole("heading", { name: WORDS.es.backupTitle });
     await waitFor(() => expect(focused()).toBe(`H2 ${WORDS.es.backupTitle}`));
@@ -933,7 +1018,9 @@ describe("the second step of a sign-in", () => {
 
     secondStepResults.push({ ok: false, code: "invalid_backup_code" });
     await userEvent.type(field, "abcd-efgh");
-    await userEvent.click(screen.getByRole("button", { name: WORDS.es.verify }));
+    await userEvent.click(
+      screen.getByRole("button", { name: WORDS.es.verify }),
+    );
     expect(
       await screen.findByText(
         "El código de recuperación no es correcto o ya se ha usado. Prueba con otro de los que guardaste.",
@@ -941,7 +1028,9 @@ describe("the second step of a sign-in", () => {
     ).toBeInTheDocument();
     expect(secondStepCalls).toEqual([{ kind: "backup", code: "abcd-efgh" }]);
 
-    await userEvent.click(screen.getByRole("button", { name: WORDS.es.useTotp }));
+    await userEvent.click(
+      screen.getByRole("button", { name: WORDS.es.useTotp }),
+    );
     expect(await screen.findByLabelText(WORDS.es.totp)).toBeInTheDocument();
     // A new step starts without the last one's refusal.
     expect(screen.getByRole("status").textContent).toBe("");
@@ -952,7 +1041,9 @@ describe("the second step of a sign-in", () => {
 
     secondStepResults.push({ ok: false, code: "two_factor_expired" });
     await userEvent.type(screen.getByLabelText(WORDS.es.totp), "123456");
-    await userEvent.click(screen.getByRole("button", { name: WORDS.es.verify }));
+    await userEvent.click(
+      screen.getByRole("button", { name: WORDS.es.verify }),
+    );
 
     expect(
       await screen.findByText(
@@ -960,12 +1051,14 @@ describe("the second step of a sign-in", () => {
       ),
     ).toBeInTheDocument();
     // The address is kept; the password is what is asked for, and has focus.
-    expect((screen.getByLabelText(WORDS.es.email) as HTMLInputElement).value).toBe(
-      "ana@example.com",
-    );
+    expect(
+      (screen.getByLabelText(WORDS.es.email) as HTMLInputElement).value,
+    ).toBe("ana@example.com");
     await waitFor(() => expect(focused()).toBe("INPUT password"));
     expect(screen.queryByLabelText(WORDS.es.totp)).toBeNull();
-    expect(screen.getByRole("button", { name: WORDS.es.submit })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: WORDS.es.submit }),
+    ).toBeInTheDocument();
   });
 
   it("goes back to the password when asked to", async () => {
@@ -985,24 +1078,45 @@ describe("the second step of a sign-in", () => {
       signInResult = { ok: false, twoFactor: true };
       signInCalls.length = 0;
       renderWithIntl(<LoginForm />, { locale: "es" });
-      await userEvent.type(screen.getByLabelText(WORDS.es.email), "ana@example.com");
-      await userEvent.type(screen.getByLabelText(WORDS.es.password), "secreta123");
-      await userEvent.click(screen.getByRole("checkbox", { name: "Mantener la sesión iniciada" }));
-      await userEvent.click(screen.getByRole("button", { name: WORDS.es.submit }));
+      await userEvent.type(
+        screen.getByLabelText(WORDS.es.email),
+        "ana@example.com",
+      );
+      await userEvent.type(
+        screen.getByLabelText(WORDS.es.password),
+        "secreta123",
+      );
+      await userEvent.click(
+        screen.getByRole("checkbox", { name: "Mantener la sesión iniciada" }),
+      );
+      await userEvent.click(
+        screen.getByRole("button", { name: WORDS.es.submit }),
+      );
       await screen.findByRole("heading", { name: WORDS.es.title });
 
       if (way === "Volver") {
-        await userEvent.click(screen.getByRole("button", { name: WORDS.es.back }));
+        await userEvent.click(
+          screen.getByRole("button", { name: WORDS.es.back }),
+        );
       } else {
         secondStepResults.push({ ok: false, code: "two_factor_expired" });
         await userEvent.type(screen.getByLabelText(WORDS.es.totp), "123456");
-        await userEvent.click(screen.getByRole("button", { name: WORDS.es.verify }));
+        await userEvent.click(
+          screen.getByRole("button", { name: WORDS.es.verify }),
+        );
       }
 
-      const box = await screen.findByRole("checkbox", { name: "Mantener la sesión iniciada" });
+      const box = await screen.findByRole("checkbox", {
+        name: "Mantener la sesión iniciada",
+      });
       expect(box).toBeChecked();
-      await userEvent.type(screen.getByLabelText(WORDS.es.password), "secreta123");
-      await userEvent.click(screen.getByRole("button", { name: WORDS.es.submit }));
+      await userEvent.type(
+        screen.getByLabelText(WORDS.es.password),
+        "secreta123",
+      );
+      await userEvent.click(
+        screen.getByRole("button", { name: WORDS.es.submit }),
+      );
       await waitFor(() => expect(signInCalls).toHaveLength(2));
       expect(signInCalls[1].rememberMe).toBe(true);
     });
@@ -1013,7 +1127,9 @@ describe("the second step of a sign-in", () => {
 
     secondStepResults.push({ ok: false, code: "two_factor_unreadable" });
     await userEvent.type(screen.getByLabelText(WORDS.es.totp), "123456");
-    await userEvent.click(screen.getByRole("button", { name: WORDS.es.verify }));
+    await userEvent.click(
+      screen.getByRole("button", { name: WORDS.es.verify }),
+    );
 
     expect(
       await screen.findByText(
@@ -1021,7 +1137,9 @@ describe("the second step of a sign-in", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByLabelText(WORDS.es.totp)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: WORDS.es.useBackup })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: WORDS.es.useBackup }),
+    ).toBeInTheDocument();
     expect(replaced).toEqual([]);
   });
 
@@ -1074,7 +1192,9 @@ describe("the second step of a sign-in", () => {
 
       secondStepResults.push({ ok: false, code });
       await userEvent.type(screen.getByLabelText(WORDS[locale].totp), "123456");
-      await userEvent.click(screen.getByRole("button", { name: WORDS[locale].verify }));
+      await userEvent.click(
+        screen.getByRole("button", { name: WORDS[locale].verify }),
+      );
 
       expect(await screen.findByText(words)).toBeInTheDocument();
     });
@@ -1097,14 +1217,17 @@ describe("the passkey offer on the login page", () => {
 
   // What `browserAt` changes, as it was: every component file shares one
   // window, as `PasskeyManager.test.tsx` says for the same reason.
-  const STARTING_PROPERTIES = (["isSecureContext", "PublicKeyCredential"] as const).map(
-    (key) => [key, Object.getOwnPropertyDescriptor(window, key)] as const,
-  );
+  const STARTING_PROPERTIES = (
+    ["isSecureContext", "PublicKeyCredential"] as const
+  ).map((key) => [key, Object.getOwnPropertyDescriptor(window, key)] as const);
   const previousUrls = process.env.STOKY_URLS;
 
   /** The browser's secure-context flag, and whether WebAuthn exists. */
   function browser({ secure = true, webauthn = true } = {}): void {
-    Object.defineProperty(window, "isSecureContext", { value: secure, configurable: true });
+    Object.defineProperty(window, "isSecureContext", {
+      value: secure,
+      configurable: true,
+    });
     Object.defineProperty(window, "PublicKeyCredential", {
       value: webauthn ? function PublicKeyCredential() {} : undefined,
       configurable: true,
@@ -1147,7 +1270,10 @@ describe("the passkey offer on the login page", () => {
     // A button, so Enter in the password field still sends the password.
     expect(passkey.getAttribute("type")).toBe("button");
     // After it: the other way in, not the first.
-    expect(submit.compareDocumentPosition(passkey) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      submit.compareDocumentPosition(passkey) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.queryByText(WORDS.unavailable)).toBeNull();
   });
 
@@ -1165,7 +1291,10 @@ describe("the passkey offer on the login page", () => {
       requestHost = host;
       await renderPage();
 
-      expect(screen.queryByRole("button", { name: WORDS.signIn }), String(host)).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: WORDS.signIn }),
+        String(host),
+      ).toBeNull();
       expect(screen.queryByText(WORDS.unavailable), String(host)).toBeNull();
     }
   });
@@ -1191,13 +1320,18 @@ describe("the passkey offer on the login page", () => {
   it("is named in English for an English reader", () => {
     renderWithIntl(<LoginForm passkeyOffered />, { locale: "en" });
 
-    expect(screen.getByRole("button", { name: "Sign in with a passkey" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Sign in with a passkey" }),
+    ).toBeInTheDocument();
   });
 
   for (const tick of [false, true]) {
     it(`signs in with the box ${tick ? "ticked" : "left alone"}, then goes to the landing decision`, async () => {
       renderWithIntl(<LoginForm passkeyOffered />, { locale: "es" });
-      if (tick) await userEvent.click(screen.getByRole("checkbox", { name: WORDS.remember }));
+      if (tick)
+        await userEvent.click(
+          screen.getByRole("checkbox", { name: WORDS.remember }),
+        );
       await userEvent.click(screen.getByRole("button", { name: WORDS.signIn }));
 
       await waitFor(() => expect(replaced).toEqual(["/"]));

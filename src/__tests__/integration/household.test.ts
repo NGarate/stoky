@@ -47,7 +47,9 @@ afterEach(async () => {
     select: { id: true },
   });
   const ids = households.map((h) => h.id);
-  await prisma.user.deleteMany({ where: { name: { startsWith: HOUSEHOLD_PREFIX } } });
+  await prisma.user.deleteMany({
+    where: { name: { startsWith: HOUSEHOLD_PREFIX } },
+  });
   if (ids.length > 0) {
     await prisma.household.deleteMany({ where: { id: { in: ids } } });
   }
@@ -66,7 +68,9 @@ describe("household.current", () => {
   });
 
   it("returns the household and role for an account that has one", async () => {
-    const household = await createTestHousehold({ name: `${HOUSEHOLD_PREFIX} Existing` });
+    const household = await createTestHousehold({
+      name: `${HOUSEHOLD_PREFIX} Existing`,
+    });
     const { caller } = await callerForNewUser(household.id);
 
     const result = await caller.household.current();
@@ -81,7 +85,9 @@ describe("household.create", () => {
   it("creates the household and puts the caller in it as OWNER", async () => {
     const { caller, userId } = await callerForNewUser();
 
-    const created = await caller.household.create({ name: `${HOUSEHOLD_PREFIX} New` });
+    const created = await caller.household.create({
+      name: `${HOUSEHOLD_PREFIX} New`,
+    });
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     expect(user?.householdId).toBe(created.id);
@@ -103,7 +109,9 @@ describe("household.create", () => {
   });
 
   it("refuses an account that already has a household", async () => {
-    const household = await createTestHousehold({ name: `${HOUSEHOLD_PREFIX} Taken` });
+    const household = await createTestHousehold({
+      name: `${HOUSEHOLD_PREFIX} Taken`,
+    });
     const { caller } = await callerForNewUser(household.id);
 
     let thrown: unknown;
@@ -120,7 +128,9 @@ describe("household.create", () => {
     // household nobody is a member of, which nothing in the interface can
     // ever reach or clean up.
     expect(
-      await prisma.household.count({ where: { name: `${HOUSEHOLD_PREFIX} Second` } }),
+      await prisma.household.count({
+        where: { name: `${HOUSEHOLD_PREFIX} Second` },
+      }),
     ).toBe(0);
   });
 
@@ -132,14 +142,21 @@ describe("household.create", () => {
     // to run in sequence and prove nothing.
     for (let round = 0; round < ROUNDS; round++) {
       const { caller, userId } = await callerForNewUser();
-      const names = [`${HOUSEHOLD_PREFIX} Race ${round} A`, `${HOUSEHOLD_PREFIX} Race ${round} B`];
+      const names = [
+        `${HOUSEHOLD_PREFIX} Race ${round} A`,
+        `${HOUSEHOLD_PREFIX} Race ${round} B`,
+      ];
 
       const outcomes = await Promise.allSettled(
         names.map((name) => caller.household.create({ name })),
       );
 
-      const created = outcomes.flatMap((o) => (o.status === "fulfilled" ? [o.value.id] : []));
-      const refused = outcomes.flatMap((o) => (o.status === "rejected" ? [o.reason] : []));
+      const created = outcomes.flatMap((o) =>
+        o.status === "fulfilled" ? [o.value.id] : [],
+      );
+      const refused = outcomes.flatMap((o) =>
+        o.status === "rejected" ? [o.reason] : [],
+      );
       expect(created).toHaveLength(1);
       expect(refused).toHaveLength(1);
       expect(refused[0]).toBeInstanceOf(TRPCError);
@@ -165,7 +182,9 @@ describe("household.create", () => {
 
     await expect(caller.household.create({ name: "   " })).rejects.toThrow();
     expect(
-      await prisma.household.count({ where: { name: { startsWith: HOUSEHOLD_PREFIX } } }),
+      await prisma.household.count({
+        where: { name: { startsWith: HOUSEHOLD_PREFIX } },
+      }),
     ).toBe(0);
   });
 

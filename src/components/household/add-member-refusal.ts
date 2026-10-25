@@ -5,7 +5,8 @@ import {
 } from "@/lib/validations/password";
 
 /** Every reason creating an account can be refused, each with its own sentence. */
-export type AddMemberRefusal = "taken" | "identity" | "tooEasy" | "tooMany" | "other";
+export type AddMemberRefusal =
+  "taken" | "identity" | "tooEasy" | "tooMany" | "other";
 
 /**
  * `household.addMember`'s refusal, in words the admin can act on.
@@ -28,7 +29,9 @@ export type AddMemberRefusal = "taken" | "identity" | "tooEasy" | "tooMany" | "o
  */
 export function addRefusalOf(error: unknown): AddMemberRefusal {
   const code =
-    error instanceof TRPCClientError ? (error.data?.code as string | undefined) : undefined;
+    error instanceof TRPCClientError
+      ? (error.data?.code as string | undefined)
+      : undefined;
   const message = error instanceof Error ? error.message : undefined;
 
   if (code === "CONFLICT") return "taken";

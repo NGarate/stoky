@@ -141,94 +141,103 @@ export default function ShoppingListsPage() {
     <PageShell width="index">
       <PageHeader actions={actions} back={back} title={t("shopping.title")} />
       <div className="space-y-6">
-      <AutoListPreview />
+        <AutoListPreview />
 
-      {isCreating && (
-        <form
-          noValidate
-          onSubmit={handleCreate}
-          className="rounded-lg border border-border bg-card p-4"
-        >
-          {/* A label, not a placeholder: a placeholder is the field's name
+        {isCreating && (
+          <form
+            noValidate
+            onSubmit={handleCreate}
+            className="rounded-lg border border-border bg-card p-4"
+          >
+            {/* A label, not a placeholder: a placeholder is the field's name
               only until somebody types in it. */}
-          <label
-            className="mb-1 block text-sm font-medium text-foreground"
-            htmlFor={nameId}
-          >
-            {t("shopping.listName")}
-          </label>
-          <Input
-            aria-describedby={
-              nameMissing ? `${nameId}-hint ${nameId}-error` : `${nameId}-hint`
-            }
-            aria-invalid={nameMissing ? true : undefined}
-            autoComplete="off"
-            id={nameId}
-            onChange={(e) => {
-              setNewListName(e.target.value);
-              if (e.target.value.trim()) setNameMissing(false);
-            }}
-            ref={nameRef}
-            type="text"
-            value={newListName}
-          />
-          <p className="mt-1 text-sm text-muted-foreground" id={`${nameId}-hint`}>
-            {t("shopping.listNameHint")}
-          </p>
-          {nameMissing ? (
-            <p
-              className="mt-1 text-sm font-medium text-danger-foreground"
-              id={`${nameId}-error`}
+            <label
+              className="mb-1 block text-sm font-medium text-foreground"
+              htmlFor={nameId}
             >
-              {t("shopping.listNameRequired")}
+              {t("shopping.listName")}
+            </label>
+            <Input
+              aria-describedby={
+                nameMissing
+                  ? `${nameId}-hint ${nameId}-error`
+                  : `${nameId}-hint`
+              }
+              aria-invalid={nameMissing ? true : undefined}
+              autoComplete="off"
+              id={nameId}
+              onChange={(e) => {
+                setNewListName(e.target.value);
+                if (e.target.value.trim()) setNameMissing(false);
+              }}
+              ref={nameRef}
+              type="text"
+              value={newListName}
+            />
+            <p
+              className="mt-1 text-sm text-muted-foreground"
+              id={`${nameId}-hint`}
+            >
+              {t("shopping.listNameHint")}
             </p>
-          ) : null}
-          <div className="mt-4 flex flex-wrap gap-2">
-          <Button
-            type="submit"
-            disabled={createMutation.isPending}
-          >
-            {t("shopping.create")}
-          </Button>
-          {/* Steps aside; it does not compete. Drawn as the filled primary
-              it was indistinguishable from "Crear", which is the one action
-              on this form that does something. */}
-          <Button
-            onClick={() => {
-              setIsCreating(false);
-              setNewListName("");
-              setNameMissing(false);
-            }}
-            type="button"
-            variant="outline"
-          >
-            {t("common.cancel")}
-          </Button>
-          </div>
-        </form>
-      )}
-
-      {lists.length === 0 ? (
-        <EmptyState
-          action={
-            isCreating ? undefined : (
-              <Button onClick={() => setIsCreating(true)} type="button" variant="outline">
+            {nameMissing ? (
+              <p
+                className="mt-1 text-sm font-medium text-danger-foreground"
+                id={`${nameId}-error`}
+              >
+                {t("shopping.listNameRequired")}
+              </p>
+            ) : null}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button type="submit" disabled={createMutation.isPending}>
                 {t("shopping.create")}
               </Button>
-            )
-          }
-          body={t("shopping.createFirst")}
-          title={t("shopping.noLists")}
-        />
-      ) : (
-        <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {lists.map((list) => {
-            const totalItems = list.items.length;
-            const checkedItems = list.items.filter((item) => item.isChecked).length;
-            const progress = totalItems > 0 ? (checkedItems / totalItems) * 100 : 0;
+              {/* Steps aside; it does not compete. Drawn as the filled primary
+              it was indistinguishable from "Crear", which is the one action
+              on this form that does something. */}
+              <Button
+                onClick={() => {
+                  setIsCreating(false);
+                  setNewListName("");
+                  setNameMissing(false);
+                }}
+                type="button"
+                variant="outline"
+              >
+                {t("common.cancel")}
+              </Button>
+            </div>
+          </form>
+        )}
 
-            return (
-              /* `ItemRow`, and the title is what links.
+        {lists.length === 0 ? (
+          <EmptyState
+            action={
+              isCreating ? undefined : (
+                <Button
+                  onClick={() => setIsCreating(true)}
+                  type="button"
+                  variant="outline"
+                >
+                  {t("shopping.create")}
+                </Button>
+              )
+            }
+            body={t("shopping.createFirst")}
+            title={t("shopping.noLists")}
+          />
+        ) : (
+          <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {lists.map((list) => {
+              const totalItems = list.items.length;
+              const checkedItems = list.items.filter(
+                (item) => item.isChecked,
+              ).length;
+              const progress =
+                totalItems > 0 ? (checkedItems / totalItems) * 100 : 0;
+
+              return (
+                /* `ItemRow`, and the title is what links.
                  The whole card used to be one `<Link>`, so its accessible
                  name was everything inside it read as a single run —
                  "Compra del sábado auto-generada 7 artículos Progreso 3/7" —
@@ -236,49 +245,51 @@ export default function ShoppingListsPage() {
                  prevent. The pill was hand-written too, and `bg-warn`:
                  "auto-generada" is not a state of health, so it is neutral,
                  which is the rule `Badge`'s own docblock states. */
-              <ItemRow
-                href={`/shopping/${list.id}`}
-                key={list.id}
-                meta={[
-                  {
-                    label: t("shopping.itemsLabel"),
-                    value: t("shopping.itemsCount", { count: totalItems }),
-                  },
-                  ...(totalItems > 0
-                    ? [
-                        {
-                          label: t("shopping.progress"),
-                          value: (
-                            <>
-                              <span className="tabular-nums">
-                                {checkedItems}/{totalItems}
-                              </span>
-                              <span
-                                aria-hidden="true"
-                                className="mt-1 block h-2 rounded-full bg-gauge-track"
-                              >
+                <ItemRow
+                  href={`/shopping/${list.id}`}
+                  key={list.id}
+                  meta={[
+                    {
+                      label: t("shopping.itemsLabel"),
+                      value: t("shopping.itemsCount", { count: totalItems }),
+                    },
+                    ...(totalItems > 0
+                      ? [
+                          {
+                            label: t("shopping.progress"),
+                            value: (
+                              <>
+                                <span className="tabular-nums">
+                                  {checkedItems}/{totalItems}
+                                </span>
                                 <span
-                                  className="block h-2 rounded-full bg-gauge transition-all"
-                                  style={{ width: `${progress}%` }}
-                                />
-                              </span>
-                            </>
-                          ),
-                        },
-                      ]
-                    : []),
-                ]}
-                status={
-                  list.isAutoGenerated ? (
-                    <Badge tone="neutral">{t("shopping.autoGenerated")}</Badge>
-                  ) : undefined
-                }
-                title={list.name}
-              />
-            );
-          })}
-        </ul>
-      )}
+                                  aria-hidden="true"
+                                  className="mt-1 block h-2 rounded-full bg-gauge-track"
+                                >
+                                  <span
+                                    className="block h-2 rounded-full bg-gauge transition-all"
+                                    style={{ width: `${progress}%` }}
+                                  />
+                                </span>
+                              </>
+                            ),
+                          },
+                        ]
+                      : []),
+                  ]}
+                  status={
+                    list.isAutoGenerated ? (
+                      <Badge tone="neutral">
+                        {t("shopping.autoGenerated")}
+                      </Badge>
+                    ) : undefined
+                  }
+                  title={list.name}
+                />
+              );
+            })}
+          </ul>
+        )}
       </div>
     </PageShell>
   );

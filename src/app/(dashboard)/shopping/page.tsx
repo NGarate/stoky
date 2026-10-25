@@ -76,10 +76,7 @@ export default function ShopPage(): JSX.Element {
   const toBuy = items.filter((item) => !item.isChecked);
   const trolley = items.filter((item) => item.isChecked);
 
-  function setChecked(
-    item: (typeof items)[number],
-    isChecked: boolean,
-  ): void {
+  function setChecked(item: (typeof items)[number], isChecked: boolean): void {
     enqueue({
       path: "shopping.updateItem",
       input: { id: item.id, isChecked },
@@ -130,7 +127,7 @@ export default function ShopPage(): JSX.Element {
               {t("nothingToBuyHint")}
             </p>
             <Button asChild className="mt-4" variant="link">
-              <Link href="/shopping/lists" > {t("manageLists")} </Link>
+              <Link href="/shopping/lists"> {t("manageLists")} </Link>
             </Button>
           </div>
         ) : (
@@ -200,7 +197,7 @@ export default function ShopPage(): JSX.Element {
       </section>
 
       <Button asChild className="mt-8" variant="link">
-        <Link href="/shopping/lists" > {t("manageLists")} </Link>
+        <Link href="/shopping/lists"> {t("manageLists")} </Link>
       </Button>
     </PageShell>
   );
@@ -251,37 +248,42 @@ function ShopRow({
   const hasNotch = item.stock != null && item.minStock != null;
   const filled =
     hasNotch && (item.minStock as number) > 0
-      ? Math.min(100, ((item.stock as number) / (item.minStock as number)) * 100)
+      ? Math.min(
+          100,
+          ((item.stock as number) / (item.minStock as number)) * 100,
+        )
       : 0;
 
   const circle = (
-      <span
-        aria-hidden="true"
-        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
-          item.isChecked
-            ? "border-primary bg-primary text-primary-foreground"
-            : "border-input"
-        }`}
-      >
-        {item.isChecked ? "✓" : null}
-      </span>
+    <span
+      aria-hidden="true"
+      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
+        item.isChecked
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-input"
+      }`}
+    >
+      {item.isChecked ? "✓" : null}
+    </span>
   );
 
   const words = (
-      <span className="min-w-0 flex-1">
-        <span
-          className={`block font-medium ${
-            item.isChecked ? "text-muted-foreground line-through" : "text-foreground"
-          }`}
-        >
-          {item.name}
-        </span>
+    <span className="min-w-0 flex-1">
+      <span
+        className={`block font-medium ${
+          item.isChecked
+            ? "text-muted-foreground line-through"
+            : "text-foreground"
+        }`}
+      >
+        {item.name}
+      </span>
 
-        {/* In words. The bar below is decoration and says nothing on its own. */}
-        <span className="block text-sm text-muted-foreground">
-          {item.queued
-            ? t("notSentYet")
-            : item.stock == null || item.minStock == null
+      {/* In words. The bar below is decoration and says nothing on its own. */}
+      <span className="block text-sm text-muted-foreground">
+        {item.queued
+          ? t("notSentYet")
+          : item.stock == null || item.minStock == null
             ? item.stock === 0
               ? t("stockNone")
               : t("stockUnknown")
@@ -292,20 +294,20 @@ function ShopRow({
                   minimum: item.minStock,
                   unit: units.unit(item.unit, item.minStock),
                 })}
-        </span>
-
-        {hasNotch ? (
-          <span
-            aria-hidden="true"
-            className="mt-2 block h-2 w-full overflow-hidden rounded-full bg-gauge-track"
-          >
-            <span
-              className="block h-2 rounded-full bg-gauge"
-              style={{ width: `${filled}%` }}
-            />
-          </span>
-        ) : null}
       </span>
+
+      {hasNotch ? (
+        <span
+          aria-hidden="true"
+          className="mt-2 block h-2 w-full overflow-hidden rounded-full bg-gauge-track"
+        >
+          <span
+            className="block h-2 rounded-full bg-gauge"
+            style={{ width: `${filled}%` }}
+          />
+        </span>
+      ) : null}
+    </span>
   );
 
   // Read-only: the same words, no control and no tick circle — a circle

@@ -13,7 +13,9 @@ import { unitConversion } from "@/lib/inventory/units";
  * anything, so callers leave it out rather than invent a figure for it.
  */
 export function unitPrice(price: number, quantity: number): number | null {
-  return quantity > 0 && Number.isFinite(price / quantity) ? price / quantity : null;
+  return quantity > 0 && Number.isFinite(price / quantity)
+    ? price / quantity
+    : null;
 }
 
 /**
@@ -60,7 +62,11 @@ export function withUnitPrices<T extends { price: number; quantity: number }>(
 
 /** One point of the price chart: a unit price, when and where it was seen. */
 export function toChartPoints(
-  history: ReadonlyArray<{ recordedAt: Date; unitPrice: number; store: { name: string } }>,
+  history: ReadonlyArray<{
+    recordedAt: Date;
+    unitPrice: number;
+    store: { name: string };
+  }>,
 ): Array<{ date: string; price: number; storeName: string }> {
   return history.map((record) => ({
     date: record.recordedAt.toISOString(),

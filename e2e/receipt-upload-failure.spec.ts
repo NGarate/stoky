@@ -30,7 +30,10 @@ test("says so when the upload fails, instead of waiting for ever", async ({
   });
 
   await page.goto("/receipts/upload");
-  await page.getByRole("heading", { name: /ticket/i }).first().waitFor();
+  await page
+    .getByRole("heading", { name: /ticket/i })
+    .first()
+    .waitFor();
 
   await page.setInputFiles('input[type="file"]', {
     name: "ticket.png",

@@ -62,9 +62,7 @@ async function openOwnList(page: Page, items: number): Promise<void> {
 
   await page.getByRole("button", { name: es.shopping.create }).click();
   await page.getByLabel(es.shopping.listName).fill(name);
-  await page
-    .getByRole("button", { name: es.shopping.create })
-    .click();
+  await page.getByRole("button", { name: es.shopping.create }).click();
 
   const link = page.getByRole("link", { name: new RegExp(name) });
   await expect(link).toBeVisible({ timeout: 15_000 });
@@ -82,8 +80,14 @@ async function openOwnList(page: Page, items: number): Promise<void> {
     await expect(picker.locator("option")).not.toHaveCount(1, {
       timeout: 15_000,
     });
-    const value = await picker.locator("option").nth(i + 1).getAttribute("value");
-    const label = await picker.locator("option").nth(i + 1).textContent();
+    const value = await picker
+      .locator("option")
+      .nth(i + 1)
+      .getAttribute("value");
+    const label = await picker
+      .locator("option")
+      .nth(i + 1)
+      .textContent();
     await picker.selectOption(value ?? "");
     // The option reads "Nombre — Marca"; the row shows the name alone.
     chosen.push((label ?? "").split("—")[0]!.trim());
@@ -91,7 +95,9 @@ async function openOwnList(page: Page, items: number): Promise<void> {
     await page
       .getByRole("button", { name: es.shopping.addToList, exact: true })
       .click();
-    await expect(page.getByText(chosen[i]!, { exact: false }).first()).toBeVisible({
+    await expect(
+      page.getByText(chosen[i]!, { exact: false }).first(),
+    ).toBeVisible({
       timeout: 15_000,
     });
   }
@@ -144,9 +150,7 @@ test.describe("A shop with no signal", () => {
     await expect(second).toBeChecked();
 
     // Said in words, not as a colour or a spinner.
-    await expect(calm(page)).toContainText(
-      /cambios sin enviar/i,
-    );
+    await expect(calm(page)).toContainText(/cambios sin enviar/i);
 
     await context.setOffline(false);
 
@@ -163,7 +167,6 @@ test.describe("A shop with no signal", () => {
     await expect(
       page.getByRole("checkbox").and(page.locator(":not(:checked)")),
     ).toHaveCount(0);
-
   });
 
   test("sends the same key when the first attempt is lost", async ({
@@ -204,7 +207,6 @@ test.describe("A shop with no signal", () => {
     // A second key for the same change would be a double-apply the server
     // cannot catch, because the two would not look like the same request.
     expect(new Set(keys).size).toBe(1);
-
   });
 
   test("keeps unsent changes across a reload", async ({ page }) => {
@@ -243,7 +245,6 @@ test.describe("A shop with no signal", () => {
     blocked = false;
     await queueReady(page);
     await expect(calm(page)).toBeEmpty({ timeout: 30_000 });
-
   });
 });
 
@@ -304,8 +305,12 @@ test.describe("An offline scan, resolved later (T7)", () => {
     await queueReady(page);
 
     await context.setOffline(true);
-    await page.getByPlaceholder(es.products.scan.manualPlaceholder).fill(unknown);
-    await page.getByRole("button", { name: es.products.scan.manualSubmit }).click();
+    await page
+      .getByPlaceholder(es.products.scan.manualPlaceholder)
+      .fill(unknown);
+    await page
+      .getByRole("button", { name: es.products.scan.manualSubmit })
+      .click();
 
     // Queued, said in words, still on the scan page — not a dead end.
     await expect(calm(page)).toContainText(/sin (enviar|conexión)/i, {
@@ -330,10 +335,10 @@ test.describe("An offline scan, resolved later (T7)", () => {
       unknown,
     );
 
-    await page.getByLabel(es.products.new.nameLabel).fill("Producto del ticket");
     await page
-      .getByRole("button", { name: es.products.new.submit })
-      .click();
+      .getByLabel(es.products.new.nameLabel)
+      .fill("Producto del ticket");
+    await page.getByRole("button", { name: es.products.new.submit }).click();
 
     // Wait for the create to actually succeed before leaving — its onSuccess
     // is what discards the queued scan, and navigating away mid-flight would
@@ -378,7 +383,9 @@ test.describe("An offline scan, resolved later (T7)", () => {
 
     await context.setOffline(true);
     await page.getByPlaceholder(es.products.scan.manualPlaceholder).fill(known);
-    await page.getByRole("button", { name: es.products.scan.manualSubmit }).click();
+    await page
+      .getByRole("button", { name: es.products.scan.manualSubmit })
+      .click();
     await expect(calm(page)).toContainText(/sin (enviar|conexión)/i, {
       timeout: 15_000,
     });

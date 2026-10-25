@@ -24,7 +24,10 @@ export function usualLocationId(entries: LocatedEntry[]): string | undefined {
   for (const entry of entries) {
     if (entry.quantity <= 0 || !entry.locationId) continue;
     const at = new Date(entry.createdAt).getTime();
-    const habit = habits.get(entry.locationId) ?? { count: 0, latest: -Infinity };
+    const habit = habits.get(entry.locationId) ?? {
+      count: 0,
+      latest: -Infinity,
+    };
     habits.set(entry.locationId, {
       count: habit.count + 1,
       latest: Math.max(habit.latest, at),

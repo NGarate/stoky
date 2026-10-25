@@ -39,7 +39,8 @@ const GROUP = 4;
 export const BACKUP_CODE_HASH_PREFIX = "sha256:";
 
 /** Bits of entropy in one code. ASVS 6.5.2 asks for 112 before a plain hash will do. */
-export const BACKUP_CODE_BITS = BACKUP_CODE_LENGTH * Math.log2(CROCKFORD_ALPHABET.length);
+export const BACKUP_CODE_BITS =
+  BACKUP_CODE_LENGTH * Math.log2(CROCKFORD_ALPHABET.length);
 
 type RandomBytes = (bytes: Uint8Array) => Uint8Array;
 
@@ -54,9 +55,13 @@ export function generateBackupCodes(
 ): string[] {
   return Array.from({ length: BACKUP_CODE_COUNT }, () => {
     const bytes = random(new Uint8Array(BACKUP_CODE_LENGTH));
-    const characters = Array.from(bytes, (byte) => CROCKFORD_ALPHABET[byte & 31]).join("");
+    const characters = Array.from(
+      bytes,
+      (byte) => CROCKFORD_ALPHABET[byte & 31],
+    ).join("");
     const groups: string[] = [];
-    for (let at = 0; at < characters.length; at += GROUP) groups.push(characters.slice(at, at + GROUP));
+    for (let at = 0; at < characters.length; at += GROUP)
+      groups.push(characters.slice(at, at + GROUP));
     return groups.join("-");
   });
 }
@@ -67,18 +72,27 @@ export function generateBackupCodes(
  * `ABCD-EFGH-…` are the same code, as Crockford intends.
  */
 export function normaliseBackupCode(typed: string): string {
-  return typed.toUpperCase().replace(/[\s-]+/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
+  return typed
+    .toUpperCase()
+    .replace(/[\s-]+/g, "")
+    .replace(/O/g, "0")
+    .replace(/[IL]/g, "1");
 }
 
 /** What is stored for a code, and what a typed code is compared as. */
 export function hashBackupCode(typed: string): string {
-  const digest = createHash("sha256").update(normaliseBackupCode(typed), "utf8").digest("hex");
+  const digest = createHash("sha256")
+    .update(normaliseBackupCode(typed), "utf8")
+    .digest("hex");
   return `${BACKUP_CODE_HASH_PREFIX}${digest}`;
 }
 
 function codeList(json: string): string[] {
   const parsed: unknown = JSON.parse(json);
-  if (!Array.isArray(parsed) || !parsed.every((code) => typeof code === "string")) {
+  if (
+    !Array.isArray(parsed) ||
+    !parsed.every((code) => typeof code === "string")
+  ) {
     throw new Error("[auth] backup codes are not a list of strings");
   }
   return parsed;

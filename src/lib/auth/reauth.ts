@@ -76,10 +76,14 @@ export async function confirmCurrentPassword(
   const { sessionId } = ctx.session;
   const userId = ctx.session.user.id;
   if (!sessionId) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: MISSING_SESSION_ID_MESSAGE });
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: MISSING_SESSION_ID_MESSAGE,
+    });
   }
 
-  const message = "Too many attempts at the password. Try again in a little while.";
+  const message =
+    "Too many attempts at the password. Try again in a little while.";
   const window = await chargeRateLimit(reauthRateLimit(), sessionId, message);
   await chargeRateLimit(reauthAccountRateLimit(), userId, message);
 
@@ -90,7 +94,10 @@ export async function confirmCurrentPassword(
       via,
       address: ctx.headers ? clientAddress(ctx.headers) : undefined,
     });
-    throw new TRPCError({ code: "BAD_REQUEST", message: WRONG_CURRENT_PASSWORD_MESSAGE });
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: WRONG_CURRENT_PASSWORD_MESSAGE,
+    });
   }
 
   await refundRateLimit(reauthRateLimit(), sessionId, window);

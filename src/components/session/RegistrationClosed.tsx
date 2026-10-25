@@ -36,7 +36,9 @@ export function RegistrationClosed(): JSX.Element {
             <h1 className="text-3xl font-semibold text-heading">
               {t("registrationClosedTitle")}
             </h1>
-            <p className="leading-7 text-foreground">{t("registrationClosedBody")}</p>
+            <p className="leading-7 text-foreground">
+              {t("registrationClosedBody")}
+            </p>
           </div>
 
           <BackLink href="/login">{t("backToLogin")}</BackLink>

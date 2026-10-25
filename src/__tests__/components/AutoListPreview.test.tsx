@@ -34,7 +34,8 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
-const { AutoListPreview } = await import("@/components/shopping/AutoListPreview");
+const { AutoListPreview } =
+  await import("@/components/shopping/AutoListPreview");
 
 afterEach(cleanup);
 
@@ -42,7 +43,10 @@ describe("the automatic list's preview", () => {
   it("offers the drafted list without wearing a state's tone", () => {
     const { container } = renderWithIntl(<AutoListPreview />, { locale: "es" });
 
-    expect(screen.getByRole("link")).toHaveAttribute("href", "/shopping/auto-1");
+    expect(screen.getByRole("link")).toHaveAttribute(
+      "href",
+      "/shopping/auto-1",
+    );
     for (const node of container.querySelectorAll("*")) {
       expect(node.getAttribute("class") ?? "").not.toMatch(
         /\b(?:text|bg|border)-(?:ok|warn|danger)(?:-foreground)?\b/,

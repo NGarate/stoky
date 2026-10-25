@@ -95,7 +95,11 @@ export function Checkbox({
           aria-hidden="true"
           className="pointer-events-none flex size-5 shrink-0 items-center justify-center rounded border border-input bg-background text-primary-foreground peer-checked:border-primary peer-checked:bg-primary peer-checked:[&>svg]:visible"
         >
-          <Check aria-hidden="true" className="invisible size-4" strokeWidth={3} />
+          <Check
+            aria-hidden="true"
+            className="invisible size-4"
+            strokeWidth={3}
+          />
         </span>
         <span className="pointer-events-none">{label}</span>
       </label>

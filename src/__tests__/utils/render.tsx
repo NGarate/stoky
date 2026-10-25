@@ -17,7 +17,11 @@ export const TEST_COMPOSER = {
   userId: "clttttttttttttttttttttttt",
   householdId: "clhhhhhhhhhhhhhhhhhhhhhhh",
 };
-import { render, type RenderOptions, type RenderResult } from "@testing-library/react";
+import {
+  render,
+  type RenderOptions,
+  type RenderResult,
+} from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { ComposerProvider } from "@/components/offline/Composer";
 import type { ReactElement, ReactNode } from "react";
@@ -39,16 +43,20 @@ export type TestLocale = keyof typeof CATALOGUES;
 const TIME_ZONE = "Europe/Madrid";
 
 function wrapperFor(locale: TestLocale) {
-  return function IntlWrapper({ children }: { children: ReactNode }): ReactElement {
+  return function IntlWrapper({
+    children,
+  }: {
+    children: ReactNode;
+  }): ReactElement {
     return (
-    <NextIntlClientProvider
-      locale={locale}
-      messages={CATALOGUES[locale]}
-      timeZone={TIME_ZONE}
-      now={new Date("2026-01-01T00:00:00.000Z")}
-    >
-      <ComposerProvider composer={TEST_COMPOSER}>{children}</ComposerProvider>
-    </NextIntlClientProvider>
+      <NextIntlClientProvider
+        locale={locale}
+        messages={CATALOGUES[locale]}
+        timeZone={TIME_ZONE}
+        now={new Date("2026-01-01T00:00:00.000Z")}
+      >
+        <ComposerProvider composer={TEST_COMPOSER}>{children}</ComposerProvider>
+      </NextIntlClientProvider>
     );
   };
 }

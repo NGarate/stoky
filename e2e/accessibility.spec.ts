@@ -135,7 +135,9 @@ async function audit(page: Page, route: string): Promise<void> {
       await page.emulateMedia({ colorScheme: theme });
       await reflow(page);
 
-      const results = await new AxeBuilder({ page }).withTags(AAA_TAGS).analyze();
+      const results = await new AxeBuilder({ page })
+        .withTags(AAA_TAGS)
+        .analyze();
       if (results.violations.length === 0) continue;
 
       failures.push(

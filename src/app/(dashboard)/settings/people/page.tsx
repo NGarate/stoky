@@ -111,20 +111,31 @@ export default function PeoplePage(): JSX.Element {
    * callback and cannot hold state of its own. `null` means "nobody", which is
    * the resting state for both.
    */
-  const [pendingRole, setPendingRole] = useState<Record<string, HouseholdRole>>({});
-  const [confirmingRemoval, setConfirmingRemoval] = useState<string | null>(null);
-  const [rowFailure, setRowFailure] = useState<{ id: string; message: string } | null>(
+  const [pendingRole, setPendingRole] = useState<Record<string, HouseholdRole>>(
+    {},
+  );
+  const [confirmingRemoval, setConfirmingRemoval] = useState<string | null>(
     null,
   );
-  const [resetting, setResetting] = useState<{ id: string; name: string } | null>(null);
+  const [rowFailure, setRowFailure] = useState<{
+    id: string;
+    message: string;
+  } | null>(null);
+  const [resetting, setResetting] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   // The button that opened the dialog, where focus goes back to. One ref for
   // every row, set on the click: only one dialog is open at a time.
   const resetOpener = useRef<HTMLButtonElement | null>(null);
-  const [viewing, setViewing] = useState<{ id: string; name: string } | null>(null);
-  const sessionsOpener = useRef<HTMLButtonElement | null>(null);
-  const [removingTwoFactor, setRemovingTwoFactor] = useState<{ id: string; name: string } | null>(
+  const [viewing, setViewing] = useState<{ id: string; name: string } | null>(
     null,
   );
+  const sessionsOpener = useRef<HTMLButtonElement | null>(null);
+  const [removingTwoFactor, setRemovingTwoFactor] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const twoFactorOpener = useRef<HTMLButtonElement | null>(null);
   // Where focus goes when removing a member's two-step verification took
   // the button that opened it off their row: the list of people.
@@ -142,13 +153,19 @@ export default function PeoplePage(): JSX.Element {
    */
   function refusalMessage(error: unknown, kind: "role" | "remove"): string {
     const code =
-      error instanceof TRPCClientError ? (error.data?.code as string | undefined) : undefined;
+      error instanceof TRPCClientError
+        ? (error.data?.code as string | undefined)
+        : undefined;
 
     if (code === "CONFLICT") {
-      return kind === "role" ? t("roleFailedLastOwner") : t("removeFailedLastOwner");
+      return kind === "role"
+        ? t("roleFailedLastOwner")
+        : t("removeFailedLastOwner");
     }
     if (code === "FORBIDDEN") {
-      return kind === "role" ? t("roleFailedNotOwner") : t("removeFailedNotOwner");
+      return kind === "role"
+        ? t("roleFailedNotOwner")
+        : t("removeFailedNotOwner");
     }
     return kind === "role" ? t("roleFailed") : t("removeFailed");
   }
@@ -171,7 +188,10 @@ export default function PeoplePage(): JSX.Element {
       void utils.household.members.invalidate();
     },
     onError: (error, variables) => {
-      setRowFailure({ id: variables.userId, message: refusalMessage(error, "role") });
+      setRowFailure({
+        id: variables.userId,
+        message: refusalMessage(error, "role"),
+      });
     },
   });
 
@@ -232,7 +252,9 @@ export default function PeoplePage(): JSX.Element {
     // "Cambiando…" with nothing saying why.
     networkMode: "always",
     onSuccess: (_result, variables) => {
-      const target = members.data?.find((candidate) => candidate.id === variables.userId);
+      const target = members.data?.find(
+        (candidate) => candidate.id === variables.userId,
+      );
       // What to do next, not only what happened: the person cannot sign in
       // until they are given the password, and should not keep one somebody
       // else chose.
@@ -249,7 +271,9 @@ export default function PeoplePage(): JSX.Element {
 
   const removeMember = api.household.removeMember.useMutation({
     onSuccess: (_result, variables) => {
-      const removed = members.data?.find((candidate) => candidate.id === variables.userId);
+      const removed = members.data?.find(
+        (candidate) => candidate.id === variables.userId,
+      );
       snackbar.show({
         kind: "confirm",
         message: {
@@ -262,14 +286,23 @@ export default function PeoplePage(): JSX.Element {
       void utils.household.members.invalidate();
     },
     onError: (error, variables) => {
-      setRowFailure({ id: variables.userId, message: refusalMessage(error, "remove") });
+      setRowFailure({
+        id: variables.userId,
+        message: refusalMessage(error, "remove"),
+      });
     },
   });
 
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
-    if (!name.trim() || !email.trim() || password.length < MIN_PASSWORD_LENGTH) return;
-    addMember.mutate({ name: name.trim(), email: email.trim(), password, role });
+    if (!name.trim() || !email.trim() || password.length < MIN_PASSWORD_LENGTH)
+      return;
+    addMember.mutate({
+      name: name.trim(),
+      email: email.trim(),
+      password,
+      role,
+    });
   }
 
   if (!members.data) {
@@ -302,7 +335,9 @@ export default function PeoplePage(): JSX.Element {
               { label: t("addEmail"), value: member.email },
               {
                 label: t("twoFactorLabel"),
-                value: member.twoFactorEnabled ? t("twoFactorOn") : t("twoFactorOff"),
+                value: member.twoFactorEnabled
+                  ? t("twoFactorOn")
+                  : t("twoFactorOff"),
               },
             ]}
             /* The role in words. Never a colour or a letter. */
@@ -311,170 +346,176 @@ export default function PeoplePage(): JSX.Element {
             actions={
               <div className="w-full">
                 {confirmingRemoval === member.id ? (
-                /* The same shape `product.delete` uses: asked twice, in the
+                  /* The same shape `product.delete` uses: asked twice, in the
                    audited danger pair, as a group a screen reader can announce
                    whole. A removal is not undoable from this screen. */
-                <div
-                  role="group"
-                  aria-label={t("removeConfirmTitle", { name: member.name })}
-                  className="rounded border border-danger-foreground bg-danger p-3"
-                >
-                  <p className="font-semibold text-danger-foreground">
-                    {t("removeConfirmTitle", { name: member.name })}
-                  </p>
-                  <p className="mt-1 text-sm text-danger-foreground">
-                    {t("removeConfirmBody")}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-3">
-                    <Button
-                      disabled={removeMember.isPending}
-                      onClick={() => removeMember.mutate({ userId: member.id })}
-                      type="button"
-                      variant="destructive"
-                    >
-                      {t("removeConfirm")}
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        setConfirmingRemoval(null);
-                        setRowFailure(null);
-                      }}
-                      type="button"
-                      variant="outline"
-                    >
-                      {t("removeCancel")}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-wrap items-end gap-3">
-                  <form
-                    className="flex flex-wrap items-end gap-2"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      const chosen = pendingRole[member.id];
-                      if (!chosen || chosen === member.role) return;
-                      updateRole.mutate({ userId: member.id, role: chosen });
-                    }}
+                  <div
+                    role="group"
+                    aria-label={t("removeConfirmTitle", { name: member.name })}
+                    className="rounded border border-danger-foreground bg-danger p-3"
                   >
-                    <div>
-                      {/* Labelled with the member's name, because four rows of
+                    <p className="font-semibold text-danger-foreground">
+                      {t("removeConfirmTitle", { name: member.name })}
+                    </p>
+                    <p className="mt-1 text-sm text-danger-foreground">
+                      {t("removeConfirmBody")}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      <Button
+                        disabled={removeMember.isPending}
+                        onClick={() =>
+                          removeMember.mutate({ userId: member.id })
+                        }
+                        type="button"
+                        variant="destructive"
+                      >
+                        {t("removeConfirm")}
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setConfirmingRemoval(null);
+                          setRowFailure(null);
+                        }}
+                        type="button"
+                        variant="outline"
+                      >
+                        {t("removeCancel")}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-end gap-3">
+                    <form
+                      className="flex flex-wrap items-end gap-2"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        const chosen = pendingRole[member.id];
+                        if (!chosen || chosen === member.role) return;
+                        updateRole.mutate({ userId: member.id, role: chosen });
+                      }}
+                    >
+                      <div>
+                        {/* Labelled with the member's name, because four rows of
                           "Rol" tell a screen reader which control it is and not
                           whose. */}
-                      <label
-                        className="block text-sm font-medium text-foreground"
-                        htmlFor={`${fieldId}-role-${member.id}`}
-                      >
-                        {t("roleFor", { name: member.name })}
-                      </label>
-                      {/* The primitive, not a hand-styled `select`. It already
+                        <label
+                          className="block text-sm font-medium text-foreground"
+                          htmlFor={`${fieldId}-role-${member.id}`}
+                        >
+                          {t("roleFor", { name: member.name })}
+                        </label>
+                        {/* The primitive, not a hand-styled `select`. It already
                           clears the 48px floor, and restating that here is what
                           `unit/target-floor.test.ts` exists to refuse — it
                           caught this exact line. */}
-                      <Select
-                        className="mt-1"
-                        id={`${fieldId}-role-${member.id}`}
-                        onChange={(event) =>
-                          setPendingRole((current) => ({
-                            ...current,
-                            [member.id]: event.target.value as HouseholdRole,
-                          }))
-                        }
-                        value={pendingRole[member.id] ?? member.role}
-                      >
-                        {(["OWNER", "ADMIN", "MEMBER", "KITCHEN"] as const).map(
-                          (option) => (
+                        <Select
+                          className="mt-1"
+                          id={`${fieldId}-role-${member.id}`}
+                          onChange={(event) =>
+                            setPendingRole((current) => ({
+                              ...current,
+                              [member.id]: event.target.value as HouseholdRole,
+                            }))
+                          }
+                          value={pendingRole[member.id] ?? member.role}
+                        >
+                          {(
+                            ["OWNER", "ADMIN", "MEMBER", "KITCHEN"] as const
+                          ).map((option) => (
                             <option key={option} value={option}>
                               {t(`role${option}`)}
                             </option>
-                          ),
-                        )}
-                      </Select>
-                    </div>
-                    {/* Nothing is applied by touching the select. A role change
+                          ))}
+                        </Select>
+                      </div>
+                      {/* Nothing is applied by touching the select. A role change
                         can lock a household out of itself, so it takes a
                         deliberate second act. */}
-                    <Button
-                      disabled={
-                        updateRole.isPending ||
-                        (pendingRole[member.id] ?? member.role) === member.role
-                      }
-                      type="submit"
-                    >
-                      {updateRole.isPending ? t("roleSaving") : t("roleSave")}
-                    </Button>
-                  </form>
+                      <Button
+                        disabled={
+                          updateRole.isPending ||
+                          (pendingRole[member.id] ?? member.role) ===
+                            member.role
+                        }
+                        type="submit"
+                      >
+                        {updateRole.isPending ? t("roleSaving") : t("roleSave")}
+                      </Button>
+                    </form>
 
-                  {/* Not on the caller's own row: the server refuses it, and
+                    {/* Not on the caller's own row: the server refuses it, and
                       the way to change your own is Settings, which asks for
                       the current one. Hidden until `me` says whose row is
                       whose, rather than offered and then refused. */}
-                  {me.data && me.data.id !== member.id ? (
-                    <Button
-                      onClick={(event) => {
-                        resetOpener.current = event.currentTarget;
-                        setResetting({ id: member.id, name: member.name });
-                        setRowFailure(null);
-                      }}
-                      type="button"
-                      variant="ghost"
-                    >
-                      {t("resetButton")}
-                    </Button>
-                  ) : null}
+                    {me.data && me.data.id !== member.id ? (
+                      <Button
+                        onClick={(event) => {
+                          resetOpener.current = event.currentTarget;
+                          setResetting({ id: member.id, name: member.name });
+                          setRowFailure(null);
+                        }}
+                        type="button"
+                        variant="ghost"
+                      >
+                        {t("resetButton")}
+                      </Button>
+                    ) : null}
 
-                  {/* Two different problems, two different acts. "They left"
+                    {/* Two different problems, two different acts. "They left"
                       is a removal; "their phone was stolen" is this, and
                       offering only the first would make a household delete
                       somebody to answer the second. Not on the caller's own
                       row: your own sessions are in Seguridad y acceso, and
                       ending them there asks for your password. */}
-                  {me.data && me.data.id !== member.id ? (
-                    <Button
-                      onClick={(event) => {
-                        sessionsOpener.current = event.currentTarget;
-                        setViewing({ id: member.id, name: member.name });
-                        setRowFailure(null);
-                      }}
-                      type="button"
-                      variant="outline"
-                    >
-                      {t("memberSessionsButton")}
-                    </Button>
-                  ) : null}
+                    {me.data && me.data.id !== member.id ? (
+                      <Button
+                        onClick={(event) => {
+                          sessionsOpener.current = event.currentTarget;
+                          setViewing({ id: member.id, name: member.name });
+                          setRowFailure(null);
+                        }}
+                        type="button"
+                        variant="outline"
+                      >
+                        {t("memberSessionsButton")}
+                      </Button>
+                    ) : null}
 
-                  {/* Only where there is something to remove, and never on
+                    {/* Only where there is something to remove, and never on
                       the caller's own row (turned off from Seguridad y
                       acceso, with their password) or, for an admin, on an
                       owner's: the server refuses both, and a button that
                       can only be refused is not offered. */}
-                  {member.twoFactorEnabled &&
-                  me.data &&
-                  me.data.id !== member.id &&
-                  (member.role !== "OWNER" || me.data.role === "OWNER") ? (
+                    {member.twoFactorEnabled &&
+                    me.data &&
+                    me.data.id !== member.id &&
+                    (member.role !== "OWNER" || me.data.role === "OWNER") ? (
+                      <Button
+                        onClick={(event) => {
+                          twoFactorOpener.current = event.currentTarget;
+                          setRemovingTwoFactor({
+                            id: member.id,
+                            name: member.name,
+                          });
+                          setRowFailure(null);
+                        }}
+                        type="button"
+                        variant="ghost"
+                      >
+                        {t("removeTwoFactorButton")}
+                      </Button>
+                    ) : null}
+
                     <Button
-                      onClick={(event) => {
-                        twoFactorOpener.current = event.currentTarget;
-                        setRemovingTwoFactor({ id: member.id, name: member.name });
+                      onClick={() => {
+                        setConfirmingRemoval(member.id);
                         setRowFailure(null);
                       }}
                       type="button"
-                      variant="ghost"
+                      variant="destructive-ghost"
                     >
-                      {t("removeTwoFactorButton")}
+                      {t("removeButton")}
                     </Button>
-                  ) : null}
-
-                  <Button
-                    onClick={() => {
-                      setConfirmingRemoval(member.id);
-                      setRowFailure(null);
-                    }}
-                    type="button"
-                    variant="destructive-ghost"
-                  >
-                    {t("removeButton")}
-                  </Button>
                   </div>
                 )}
 

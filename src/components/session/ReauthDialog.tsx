@@ -35,22 +35,29 @@ export type ReauthRefusal = "missing" | "wrong" | "tooMany" | "failed";
  * (`AccountChangeRefusedError`, `src/lib/auth/client.ts`) are read the same
  * way: its wrong password and its spent budget are these two.
  */
-export function reauthRefusalOf(error: unknown): Exclude<ReauthRefusal, "missing"> {
+export function reauthRefusalOf(
+  error: unknown,
+): Exclude<ReauthRefusal, "missing"> {
   if (error instanceof AccountChangeRefusedError) {
     if (error.code === "wrong_password") return "wrong";
     if (error.code === "too_many_attempts") return "tooMany";
     return "failed";
   }
   const refusal =
-    !(error instanceof TRPCClientError) && error instanceof Error && error.cause !== undefined
+    !(error instanceof TRPCClientError) &&
+    error instanceof Error &&
+    error.cause !== undefined
       ? error.cause
       : error;
   const code =
-    refusal instanceof TRPCClientError ? (refusal.data?.code as string | undefined) : undefined;
+    refusal instanceof TRPCClientError
+      ? (refusal.data?.code as string | undefined)
+      : undefined;
   const message = refusal instanceof Error ? refusal.message : undefined;
 
   if (code === "TOO_MANY_REQUESTS") return "tooMany";
-  if (code === "BAD_REQUEST" && isWrongCurrentPasswordRefusal(message)) return "wrong";
+  if (code === "BAD_REQUEST" && isWrongCurrentPasswordRefusal(message))
+    return "wrong";
   return "failed";
 }
 
@@ -229,7 +236,10 @@ export function ReauthDialog({
         noValidate
         onSubmit={handleSubmit}
       >
-        <label className="text-sm font-medium text-foreground" htmlFor={`${fieldId}-password`}>
+        <label
+          className="text-sm font-medium text-foreground"
+          htmlFor={`${fieldId}-password`}
+        >
           {t("password")}
         </label>
         <Input

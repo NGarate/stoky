@@ -1,5 +1,8 @@
 import { describe, it, expect } from "bun:test";
-import { parseEsAmount, parseReceiptText } from "@/server/services/receiptParser";
+import {
+  parseEsAmount,
+  parseReceiptText,
+} from "@/server/services/receiptParser";
 
 describe("Receipt Parser Service", () => {
   describe("parseReceiptText", () => {
@@ -24,7 +27,7 @@ Total: 4,70
 
     it("should extract store name from receipt", () => {
       const receiptText = "SUPERMERCADO MERCADONA\nCalle Mayor 1\nLeche 1,20";
-      
+
       const result = parseReceiptText(receiptText);
 
       expect(result.storeName).toBeDefined();
@@ -192,10 +195,11 @@ GRACIAS POR SU VISITA
       const result = parseReceiptText(receiptText);
 
       // Should not include lines like "IVA", "TOTAL", "FACTURA", etc.
-      const invalidItems = result.items.filter(item => 
-        item.parsedName.toLowerCase().includes("iva") ||
-        item.parsedName.toLowerCase().includes("total") ||
-        item.parsedName.toLowerCase().includes("factura")
+      const invalidItems = result.items.filter(
+        (item) =>
+          item.parsedName.toLowerCase().includes("iva") ||
+          item.parsedName.toLowerCase().includes("total") ||
+          item.parsedName.toLowerCase().includes("factura"),
       );
       expect(invalidItems.length).toBe(0);
       expect(result.items.map((item) => item.parsedName)).toEqual(["producto"]);
@@ -238,7 +242,10 @@ GRACIAS POR SU VISITA
 
     it("should handle various date formats", () => {
       const formats = [
-        { text: "Fecha: 15/03/2024", expected: { day: 15, month: 2, year: 2024 } },
+        {
+          text: "Fecha: 15/03/2024",
+          expected: { day: 15, month: 2, year: 2024 },
+        },
         { text: "15-03-2024", expected: { day: 15, month: 2, year: 2024 } },
         { text: "2024/03/15", expected: { day: 15, month: 2, year: 2024 } },
       ];
@@ -275,7 +282,9 @@ GRACIAS POR SU VISITA
     it("allows a day of slack for a till clock ahead of the server", () => {
       const now = new Date(2026, 9, 6, 12, 0);
 
-      expect(parseReceiptText("07/10/2026", now).purchaseDate?.getDate()).toBe(7);
+      expect(parseReceiptText("07/10/2026", now).purchaseDate?.getDate()).toBe(
+        7,
+      );
       expect(parseReceiptText("08/10/2026", now).purchaseDate).toBeUndefined();
     });
   });
@@ -288,16 +297,22 @@ GRACIAS POR SU VISITA
         "ASOC. CONSUMIDORES",
         "ESPARRAGOS DEL NORTE",
       ]) {
-        expect(parseReceiptText(`${header}\nPAN 1,00`).storeName).toBeUndefined();
+        expect(
+          parseReceiptText(`${header}\nPAN 1,00`).storeName,
+        ).toBeUndefined();
       }
     });
 
     it("finds a known store named as a word", () => {
-      expect(parseReceiptText("SUPERMERCADOS DIA\nPAN 1,00").storeName).toBe("dia");
-      expect(parseReceiptText("EL CORTE INGLÉS, S.A.\nPAN 1,00").storeName).toBe(
-        "el corte ingles",
+      expect(parseReceiptText("SUPERMERCADOS DIA\nPAN 1,00").storeName).toBe(
+        "dia",
       );
-      expect(parseReceiptText("CONSUM S. COOP\nPAN 1,00").storeName).toBe("consum");
+      expect(
+        parseReceiptText("EL CORTE INGLÉS, S.A.\nPAN 1,00").storeName,
+      ).toBe("el corte ingles");
+      expect(parseReceiptText("CONSUM S. COOP\nPAN 1,00").storeName).toBe(
+        "consum",
+      );
     });
   });
 

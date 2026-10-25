@@ -20,7 +20,11 @@ import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { undoHoldMs } from "@/lib/snackbar-duration";
 import { projectStockTotals } from "@/lib/offline/project";
-import { daysUntilExpiry, remainingByBatch, startOfToday } from "@/lib/inventory/batches";
+import {
+  daysUntilExpiry,
+  remainingByBatch,
+  startOfToday,
+} from "@/lib/inventory/batches";
 import type { JSX } from "react";
 import { formatDate } from "@/lib/dates";
 
@@ -128,7 +132,6 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
     },
   });
 
-
   /** Sum the surviving batches; unknown withdrawals never become a fake shelf balance. */
   const stockByLocation = useMemo<LocationTotal[]>(() => {
     if (!product) return [];
@@ -143,7 +146,10 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
       const current = totals.get(key);
 
       if (current) {
-        current.quantity = current.quantity === null || quantity === null ? null : current.quantity + quantity;
+        current.quantity =
+          current.quantity === null || quantity === null
+            ? null
+            : current.quantity + quantity;
       } else {
         totals.set(key, {
           key,
@@ -174,7 +180,9 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
     const remaining = remainingByBatch(product.stockEntries);
     return product.stockEntries
       .flatMap((entry) =>
-        entry.expirationDate && entry.quantity > 0 && remaining.get(entry.id) !== 0
+        entry.expirationDate &&
+        entry.quantity > 0 &&
+        remaining.get(entry.id) !== 0
           ? [
               {
                 id: entry.id,
@@ -330,7 +338,9 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         </p>
       )}
       {shownStock <= 0 ? (
-        <p className="mt-1 font-medium text-danger-foreground">{t("stockEmpty")}</p>
+        <p className="mt-1 font-medium text-danger-foreground">
+          {t("stockEmpty")}
+        </p>
       ) : isLowStock(shownStock, product.minStock) ? (
         <p className="mt-1 font-medium text-danger-foreground">
           {t("stockLow", {
@@ -345,7 +355,10 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
           buy" is the standing-in-the-shop question; where it lives at home is
           the after-the-shop one. */}
       <div className="mt-8">
-        <ProductRating barcode={product.barcode} snapshot={product.openFoodFactsData} />
+        <ProductRating
+          barcode={product.barcode}
+          snapshot={product.openFoodFactsData}
+        />
       </div>
 
       <h2 className={`mt-8 ${sectionHeading()}`}>{t("locationsTitle")}</h2>
@@ -370,7 +383,9 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-sm text-muted-foreground">{t("locationsNote")}</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {t("locationsNote")}
+          </p>
         </>
       )}
 
@@ -383,7 +398,9 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
             {batches.map((batch) => (
               <li key={batch.id} className="px-4 py-3">
                 <p className="flex flex-wrap items-center gap-2 font-medium text-foreground">
-                  {formatDate(locale, batch.expiresAt, "long", { dateOnly: true })}
+                  {formatDate(locale, batch.expiresAt, "long", {
+                    dateOnly: true,
+                  })}
                   {/* A date, not an instant: dated today is not yet expired.
                       The words and tone are the ones every other screen
                       uses for a batch's date — this was a bare red
@@ -408,7 +425,9 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-sm text-muted-foreground">{t("expiryNote")}</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {t("expiryNote")}
+          </p>
         </>
       )}
 
@@ -455,47 +474,47 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
           </ul>
 
           <div className="mt-2 hidden overflow-x-auto lg:block">
-          <table className="w-full border-collapse bg-card text-left">
-            <caption className="sr-only">{t("pricesCaption")}</caption>
-            <thead>
-              <tr className="border-b border-border">
-                <th scope="col" className="px-4 py-2 font-medium">
-                  {t("priceDateHeader")}
-                </th>
-                <th scope="col" className="px-4 py-2 font-medium">
-                  {t("priceStoreHeader")}
-                </th>
-                <th scope="col" className="px-4 py-2 font-medium">
-                  {t("priceAmountHeader")}
-                </th>
-                <th scope="col" className="px-4 py-2 font-medium">
-                  {t("priceQuantityHeader")}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {product.priceRecords.map((record) => (
-                <tr key={record.id} className="border-b border-border">
-                  <td className="px-4 py-2">
-                    {formatDate(locale, record.recordedAt, "long")}
-                  </td>
-                  <td className="px-4 py-2">{record.store.name}</td>
-                  <td className="px-4 py-2">
-                    {formatMoney(locale, record.price, record.currency)}
-                  </td>
-                  <td className="px-4 py-2">
-                    {units.quantity(record.quantity, record.unit)}
-                  </td>
+            <table className="w-full border-collapse bg-card text-left">
+              <caption className="sr-only">{t("pricesCaption")}</caption>
+              <thead>
+                <tr className="border-b border-border">
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    {t("priceDateHeader")}
+                  </th>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    {t("priceStoreHeader")}
+                  </th>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    {t("priceAmountHeader")}
+                  </th>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    {t("priceQuantityHeader")}
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {product.priceRecords.map((record) => (
+                  <tr key={record.id} className="border-b border-border">
+                    <td className="px-4 py-2">
+                      {formatDate(locale, record.recordedAt, "long")}
+                    </td>
+                    <td className="px-4 py-2">{record.store.name}</td>
+                    <td className="px-4 py-2">
+                      {formatMoney(locale, record.price, record.currency)}
+                    </td>
+                    <td className="px-4 py-2">
+                      {units.quantity(record.quantity, record.unit)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </>
       )}
       <p className="mt-2">
         <Button asChild variant="link">
-          <Link href={`/prices/${product.id}`} > {t("pricesHistoryLink")} </Link>
+          <Link href={`/prices/${product.id}`}> {t("pricesHistoryLink")} </Link>
         </Button>
       </p>
 
@@ -512,22 +531,28 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
       <ul className="mt-2 space-y-2">
         <li>
           <Button asChild variant="link">
-            <Link href="/inventory/add" > {t("addStock")} </Link>
+            <Link href="/inventory/add"> {t("addStock")} </Link>
           </Button>
         </li>
         <li>
           <Button asChild variant="link">
-            <Link href="/inventory/consume" > {t("consumeStock")} </Link>
+            <Link href="/inventory/consume"> {t("consumeStock")} </Link>
           </Button>
         </li>
         <li>
           <Button asChild variant="link">
-            <Link href={`/products/${product.id}/adjust`} > {t("adjustStock")} </Link>
+            <Link href={`/products/${product.id}/adjust`}>
+              {" "}
+              {t("adjustStock")}{" "}
+            </Link>
           </Button>
         </li>
         <li>
           <Button asChild variant="link">
-            <Link href={`/products/${product.id}/history`} > {t("stockHistoryLink")} </Link>
+            <Link href={`/products/${product.id}/history`}>
+              {" "}
+              {t("stockHistoryLink")}{" "}
+            </Link>
           </Button>
         </li>
       </ul>
@@ -538,7 +563,10 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
           button is only offered when the ledger is empty, and the server's
           four-way count is still the control behind it. */}
       {isAdmin ? (
-        <section aria-labelledby="product-delete" className="mt-10 rounded border border-border bg-muted p-4">
+        <section
+          aria-labelledby="product-delete"
+          className="mt-10 rounded border border-border bg-muted p-4"
+        >
           <h2 id="product-delete" className={sectionHeading()}>
             {t("deleteTitle")}
           </h2>
@@ -583,7 +611,9 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
             </div>
           ) : (
             <>
-              <p className="mt-2 text-sm text-muted-foreground">{t("deleteHint")}</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {t("deleteHint")}
+              </p>
               <Button
                 type="button"
                 onClick={() => setConfirmingDelete(true)}
@@ -594,7 +624,11 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
             </>
           )}
           {/* Kept mounted so a refusal is announced when it arrives. */}
-          <p role="status" aria-live="polite" className="mt-2 text-sm font-medium text-danger-foreground">
+          <p
+            role="status"
+            aria-live="polite"
+            className="mt-2 text-sm font-medium text-danger-foreground"
+          >
             {deleteError ?? ""}
           </p>
         </section>

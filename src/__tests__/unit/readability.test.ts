@@ -59,10 +59,11 @@ const CATALOGUES: Array<{ locale: SupportedLocale; entries: Entry[] }> = [
  * at es 69.0 / en 66.3 for the corpus, and es 58.5 / en 45.0 for the worst
  * string of twelve words or more.
  */
-const FLOORS: Record<SupportedLocale, { corpus: number; longString: number }> = {
-  es: { corpus: 65, longString: 50 },
-  en: { corpus: 60, longString: 35 },
-};
+const FLOORS: Record<SupportedLocale, { corpus: number; longString: number }> =
+  {
+    es: { corpus: 65, longString: 50 },
+    en: { corpus: 60, longString: 35 },
+  };
 
 /**
  * Where the formula stops being noise.
@@ -105,7 +106,10 @@ describe("reading level of the message catalogues (WCAG 3.1.5)", () => {
         .filter((e) => e.result.score < FLOORS[locale].longString)
         .map((e) => `  ${e.result.score} — ${e.key}: "${e.text.slice(0, 80)}"`);
 
-      expect(tooDense, `strings below ${FLOORS[locale].longString}:\n${tooDense.join("\n")}`).toEqual([]);
+      expect(
+        tooDense,
+        `strings below ${FLOORS[locale].longString}:\n${tooDense.join("\n")}`,
+      ).toEqual([]);
     });
   }
 });
@@ -147,7 +151,9 @@ describe("the measurement itself", () => {
   it("does not read a placeholder or a tag as prose", () => {
     // "{count} productos" must not be measured as if {count} were a word, or
     // every interpolated string reports a difficulty it does not have.
-    expect(toProse("Hay {count} productos <b>aquí</b>")).toBe("Hay productos aquí");
+    expect(toProse("Hay {count} productos <b>aquí</b>")).toBe(
+      "Hay productos aquí",
+    );
   });
 
   it("does not read an ellipsis as three sentences", () => {
@@ -160,7 +166,10 @@ describe("the measurement itself", () => {
   it("scores simple prose above dense prose, in both languages", () => {
     // The direction is the whole claim. If this ever inverts, the formula has
     // been mistranscribed and every threshold above is meaningless.
-    const simpleEs = readability("La leche se ha acabado. Hay que comprar más.", "es");
+    const simpleEs = readability(
+      "La leche se ha acabado. Hay que comprar más.",
+      "es",
+    );
     const denseEs = readability(
       "La reconciliación automatizada de discrepancias inventariales requiere parametrización previa.",
       "es",

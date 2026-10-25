@@ -58,8 +58,6 @@ describe("the routers not yet converted", () => {
     // Listed rather than ignored: converting a router and not updating this
     // list fails here, which is the reminder to decide whether it now needs
     // the same guarantee.
-    expect(stillImporting).toEqual([
-      "receipt.ts",
-    ]);
+    expect(stillImporting).toEqual(["receipt.ts"]);
   });
 });

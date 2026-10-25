@@ -128,7 +128,9 @@ async function expectTierRefusal(
 
   expect(thrown, `${label}: was not refused at all`).toBeInstanceOf(TRPCError);
   const refusal = thrown as TRPCError;
-  expect(refusal.code, `${label}: refused with the wrong code`).toBe("FORBIDDEN");
+  expect(refusal.code, `${label}: refused with the wrong code`).toBe(
+    "FORBIDDEN",
+  );
   expect(
     refusal.message,
     `${label}: refused for the wrong reason — "${refusal.message}"`,
@@ -311,7 +313,9 @@ afterAll(async () => {
 describe("the household itself — admin tier", () => {
   it("refuses a kitchen account the member list and the export", async () => {
     // Neither takes input at all, so BAD_REQUEST is not even reachable here.
-    await expectTierRefusal("household.members", () => kitchen.household.members());
+    await expectTierRefusal("household.members", () =>
+      kitchen.household.members(),
+    );
     await expectTierRefusal("data.exportHousehold", () =>
       kitchen.data.exportHousehold(),
     );
@@ -320,7 +324,9 @@ describe("the household itself — admin tier", () => {
   it("refuses a member the same two", async () => {
     // The whole point of the admin tier: MEMBER may change household *data* and
     // still may not read the household's own address book.
-    await expectTierRefusal("household.members", () => member.household.members());
+    await expectTierRefusal("household.members", () =>
+      member.household.members(),
+    );
     await expectTierRefusal("data.exportHousehold", () =>
       member.data.exportHousehold(),
     );
@@ -399,7 +405,9 @@ describe("the household's settings — admin tier", () => {
     });
     expect(renameable?.name).toBe(`${PREFIX}Rename Me`);
     expect(
-      await prisma.storageLocation.findUnique({ where: { id: spareLocationId } }),
+      await prisma.storageLocation.findUnique({
+        where: { id: spareLocationId },
+      }),
     ).not.toBeNull();
   });
 
@@ -432,7 +440,9 @@ describe("the catalogue", () => {
       kitchen.product.update({ id: productId, name: "Should Not Rename" }),
     );
 
-    const product = await prisma.product.findUnique({ where: { id: productId } });
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+    });
     expect(product?.name).toBe(`${PREFIX}Milk`);
   });
 
@@ -467,7 +477,9 @@ describe("stock writes — write tier", () => {
       }),
     );
 
-    expect(await prisma.stockEntry.count({ where: { productId } })).toBe(before);
+    expect(await prisma.stockEntry.count({ where: { productId } })).toBe(
+      before,
+    );
   });
 
   it("refuses a kitchen account a transfer, and the destination stays empty", async () => {
@@ -513,7 +525,10 @@ describe("shopping — the far side of the D88 boundary", () => {
     // emptying and deleting stay refused, and that asymmetry is the thing this
     // test pins.
     await expectTierRefusal("shopping.update", () =>
-      kitchen.shopping.update({ id: listWithItemId, name: "Should Not Rename" }),
+      kitchen.shopping.update({
+        id: listWithItemId,
+        name: "Should Not Rename",
+      }),
     );
     await expectTierRefusal("shopping.delete", () =>
       kitchen.shopping.delete({ id: emptyListId }),
@@ -569,7 +584,10 @@ describe("receipts — write tier", () => {
 
   it("refuses a kitchen account the confirmations, and changes no line", async () => {
     await expectTierRefusal("receipt.confirmItem", () =>
-      kitchen.receipt.confirmItem({ receiptItemId: pendingItemId, action: "SKIP" }),
+      kitchen.receipt.confirmItem({
+        receiptItemId: pendingItemId,
+        action: "SKIP",
+      }),
     );
     await expectTierRefusal("receipt.confirmAll", () =>
       kitchen.receipt.confirmAll({
@@ -596,7 +614,9 @@ describe("receipts — write tier", () => {
       kitchen.receipt.applyReceipt({ receiptId: confirmedReceiptId }),
     );
 
-    expect(await prisma.stockEntry.count({ where: { productId } })).toBe(before);
+    expect(await prisma.stockEntry.count({ where: { productId } })).toBe(
+      before,
+    );
   });
 });
 
@@ -632,7 +652,9 @@ describe("the same calls, from a role that may make them", () => {
     await admin.store.delete({ id: spareStoreId });
 
     expect(
-      await prisma.storageLocation.findUnique({ where: { id: spareLocationId } }),
+      await prisma.storageLocation.findUnique({
+        where: { id: spareLocationId },
+      }),
     ).toBeNull();
     expect(
       await prisma.store.findUnique({ where: { id: spareStoreId } }),
@@ -641,7 +663,8 @@ describe("the same calls, from a role that may make them", () => {
 
   it("lets a member rename a product and record a price", async () => {
     expect(
-      (await member.product.update({ id: productId, name: "Member Renamed" })).name,
+      (await member.product.update({ id: productId, name: "Member Renamed" }))
+        .name,
     ).toBe("Member Renamed");
 
     await member.price.recordPrice({
@@ -664,7 +687,10 @@ describe("the same calls, from a role that may make them", () => {
       reason: "Recuento",
     });
 
-    await member.shopping.update({ id: listWithItemId, name: "Member Renamed" });
+    await member.shopping.update({
+      id: listWithItemId,
+      name: "Member Renamed",
+    });
     await member.shopping.delete({ id: emptyListId });
 
     expect(

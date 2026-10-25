@@ -96,7 +96,10 @@ function substitute(value: string, variables: Map<string, string>): string {
 }
 
 /** `calc(var(--spacing) * 10)` with `--spacing: 0.25rem` is 40px. */
-function resolveLength(value: string, variables: Map<string, string>): number | undefined {
+function resolveLength(
+  value: string,
+  variables: Map<string, string>,
+): number | undefined {
   const substituted = substitute(value, variables);
 
   const calc = substituted.match(/^calc\(([^)]+)\)$/);
@@ -178,7 +181,9 @@ export async function resolve(classNames: string): Promise<ResolvedBox> {
     /\.([^{,\s]+)\s*\{([^}]*)\}/g,
   )) {
     if (selector.includes(":") && !selector.includes("\\:")) continue;
-    for (const [, property, value] of body.matchAll(/([a-z-]+):\s*([^;]+);/gi)) {
+    for (const [, property, value] of body.matchAll(
+      /([a-z-]+):\s*([^;]+);/gi,
+    )) {
       declarations.set(property, value.trim());
       substituted.set(property, substitute(value.trim(), variables));
       const px = resolveLength(value.trim(), variables);
@@ -196,7 +201,9 @@ export async function resolve(classNames: string): Promise<ResolvedBox> {
  * rather than clip — which is why the primitives use `min-h` — and because the
  * floor is the question being asked.
  */
-export async function minimumHeight(classNames: string): Promise<number | undefined> {
+export async function minimumHeight(
+  classNames: string,
+): Promise<number | undefined> {
   const { pixels } = await resolve(classNames);
   return pixels.get("min-height") ?? pixels.get("height");
 }

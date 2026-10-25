@@ -72,7 +72,11 @@ import type { AuthErrorKey } from "@/lib/auth/error-messages";
  */
 type Step = "password" | "totp" | "backup";
 
-export function LoginForm({ passkeyOffered = false }: { passkeyOffered?: boolean }): JSX.Element {
+export function LoginForm({
+  passkeyOffered = false,
+}: {
+  passkeyOffered?: boolean;
+}): JSX.Element {
   const t = useTranslations("auth");
   const router = useRouter();
   const [errorKey, setErrorKey] = useState<AuthErrorKey | null>(null);
@@ -128,7 +132,11 @@ export function LoginForm({ passkeyOffered = false }: { passkeyOffered?: boolean
     setEmail(typedEmail);
     setRemember(rememberMe);
 
-    const result = await signInWithPassword({ email: typedEmail, password, rememberMe });
+    const result = await signInWithPassword({
+      email: typedEmail,
+      password,
+      rememberMe,
+    });
     if (result.ok) return true;
     if (result.twoFactor) {
       setStep("totp");
@@ -141,7 +149,8 @@ export function LoginForm({ passkeyOffered = false }: { passkeyOffered?: boolean
   /** A code step. True when it signed somebody in. */
   async function submitCode(formData: FormData): Promise<boolean> {
     const code = String(formData.get("code") ?? "").trim();
-    const result = step === "backup" ? await verifyBackupCode(code) : await verifyTotp(code);
+    const result =
+      step === "backup" ? await verifyBackupCode(code) : await verifyTotp(code);
     if (result.ok) return true;
     // Only the password step makes a new challenge.
     if (result.code === "two_factor_expired") setStep("password");
@@ -149,7 +158,9 @@ export function LoginForm({ passkeyOffered = false }: { passkeyOffered?: boolean
     return false;
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
     event.preventDefault();
     setErrorKey(null);
     setIsSubmitting(true);
@@ -164,7 +175,9 @@ export function LoginForm({ passkeyOffered = false }: { passkeyOffered?: boolean
     // react-doctor-disable-next-line react-hooks-js/todo
     try {
       const signedIn =
-        step === "password" ? await submitPassword(formData) : await submitCode(formData);
+        step === "password"
+          ? await submitPassword(formData)
+          : await submitCode(formData);
       if (!signedIn) return;
       goHome();
     } catch (error: unknown) {
@@ -185,7 +198,8 @@ export function LoginForm({ passkeyOffered = false }: { passkeyOffered?: boolean
     setIsAskingPasskey(true);
     // The same box the password reads, as a person ticked it.
     const rememberMe =
-      form.current !== null && new FormData(form.current).get("rememberMe") === "on";
+      form.current !== null &&
+      new FormData(form.current).get("rememberMe") === "on";
     signInWithPasskey({ rememberMe })
       .then((result) => {
         if (result.ok) goHome();
@@ -255,7 +269,12 @@ export function LoginForm({ passkeyOffered = false }: { passkeyOffered?: boolean
                   put the password in the URL and therefore in history and
                   server logs. The JS path calls preventDefault and never
                   reaches it. */}
-              <form className="space-y-5" method="post" onSubmit={handleSubmit} ref={form}>
+              <form
+                className="space-y-5"
+                method="post"
+                onSubmit={handleSubmit}
+                ref={form}
+              >
                 {step === "password" ? (
                   <>
                     <div className="space-y-2">
@@ -279,7 +298,10 @@ export function LoginForm({ passkeyOffered = false }: { passkeyOffered?: boolean
                         required
                         type="email"
                       />
-                      <p className="text-sm text-muted-foreground" id="email-hint">
+                      <p
+                        className="text-sm text-muted-foreground"
+                        id="email-hint"
+                      >
                         {t("emailHint")}
                       </p>
                     </div>
@@ -300,7 +322,10 @@ export function LoginForm({ passkeyOffered = false }: { passkeyOffered?: boolean
                         required
                         type="password"
                       />
-                      <p className="text-sm text-muted-foreground" id="password-hint">
+                      <p
+                        className="text-sm text-muted-foreground"
+                        id="password-hint"
+                      >
                         {t("passwordHintLogin")}
                       </p>
                     </div>
@@ -320,7 +345,9 @@ export function LoginForm({ passkeyOffered = false }: { passkeyOffered?: boolean
                       ref={stepHeading}
                       tabIndex={-1}
                     >
-                      {step === "totp" ? t("twoFactorTitle") : t("backupCodeTitle")}
+                      {step === "totp"
+                        ? t("twoFactorTitle")
+                        : t("backupCodeTitle")}
                     </h2>
                     <label
                       className="text-sm font-medium text-foreground"
@@ -414,7 +441,9 @@ export function LoginForm({ passkeyOffered = false }: { passkeyOffered?: boolean
                       type="button"
                       variant="outline"
                     >
-                      {isAskingPasskey ? t("passkeySigningIn") : t("passkeySignIn")}
+                      {isAskingPasskey
+                        ? t("passkeySigningIn")
+                        : t("passkeySignIn")}
                     </Button>
                   ) : webAuthn === "pending" ? null : (
                     <p className="text-sm text-muted-foreground">

@@ -21,7 +21,8 @@ import type { FormEvent, JSX } from "react";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { Disclosure } from "@/components/ui/disclosure";
 
-type FieldName = "product" | "quantity" | "unit" | "expiration" | "price" | "store";
+type FieldName =
+  "product" | "quantity" | "unit" | "expiration" | "price" | "store";
 
 type FieldErrors = Partial<Record<FieldName, string>>;
 
@@ -38,7 +39,8 @@ function serverErrorKey(message: string | undefined): string {
 
   if (normalized.includes("product not found")) return "errorProductNotFound";
   if (normalized.includes("location not found")) return "errorLocationNotFound";
-  if (normalized.includes("unit cannot be converted")) return "errorUnitMismatch";
+  if (normalized.includes("unit cannot be converted"))
+    return "errorUnitMismatch";
   if (normalized.includes("household")) return "errorNoHousehold";
 
   return "errorGeneric";
@@ -130,7 +132,8 @@ export default function AddStockPage(): JSX.Element {
       setServerError(t(key, { unit: units.measure(product?.defaultUnit) }));
       // The unit lives in the folded half; a refusal about it must not point
       // at a closed drawer.
-      if (key === "errorUnitMismatch") advancedRef.current?.setAttribute("open", "");
+      if (key === "errorUnitMismatch")
+        advancedRef.current?.setAttribute("open", "");
       setErrorSignal((signal) => signal + 1);
     },
   });
@@ -333,7 +336,10 @@ export default function AddStockPage(): JSX.Element {
                 : expirationHintId
             }
           />
-          <p id={expirationHintId} className="mt-1 text-sm text-muted-foreground">
+          <p
+            id={expirationHintId}
+            className="mt-1 text-sm text-muted-foreground"
+          >
             {t("expirationHint")}
           </p>
           {fieldErrors.expiration ? (
@@ -453,7 +459,10 @@ export default function AddStockPage(): JSX.Element {
                 {t("unitHint")}
               </p>
               {fieldErrors.unit ? (
-                <p id={unitErrorId} className="mt-1 text-sm font-medium text-danger-foreground">
+                <p
+                  id={unitErrorId}
+                  className="mt-1 text-sm font-medium text-danger-foreground"
+                >
                   {fieldErrors.unit}
                 </p>
               ) : null}
@@ -476,7 +485,9 @@ export default function AddStockPage(): JSX.Element {
                 placeholder={t("locationPlaceholder")}
                 labelledBy={locationLabelId}
               />
-              <p className="mt-1 text-sm text-muted-foreground">{t("locationHint")}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t("locationHint")}
+              </p>
             </div>
             <div>
               <label
@@ -505,10 +516,7 @@ export default function AddStockPage(): JSX.Element {
         </Disclosure>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="submit"
-            disabled={addStock.isPending}
-          >
+          <Button type="submit" disabled={addStock.isPending}>
             {t("submit")}
           </Button>
           <Button asChild variant="outline">
@@ -516,7 +524,11 @@ export default function AddStockPage(): JSX.Element {
           </Button>
           {/* Kept mounted so the message is announced when it appears, rather
               than the whole region arriving at once. */}
-          <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+          <p
+            role="status"
+            aria-live="polite"
+            className="text-sm text-muted-foreground"
+          >
             {addStock.isPending ? t("submitting") : ""}
           </p>
         </div>

@@ -71,19 +71,24 @@ describe("the switched-off image optimiser", () => {
 });
 
 describe("what the proxy has always covered", () => {
-  it.each(["/", "/login", "/inventory", "/api/trpc/auth.me", "/manifest.webmanifest"])(
-    "%s",
-    (pathname) => {
-      expect(proxyRuns(pathname)).toBe(true);
-    },
-  );
+  it.each([
+    "/",
+    "/login",
+    "/inventory",
+    "/api/trpc/auth.me",
+    "/manifest.webmanifest",
+  ])("%s", (pathname) => {
+    expect(proxyRuns(pathname)).toBe(true);
+  });
 });
 
 describe("the prefetch labels, which are a separate decision", () => {
   // SECURITY_REVIEW §8 owns why these two are skipped and `sec-purpose` is
   // not. Pinned here only so anchoring the path cannot quietly drop them.
   it("skips a page labelled either way", () => {
-    expect(proxyRuns("/inventory", { "next-router-prefetch": "1" })).toBe(false);
+    expect(proxyRuns("/inventory", { "next-router-prefetch": "1" })).toBe(
+      false,
+    );
     expect(proxyRuns("/inventory", { purpose: "prefetch" })).toBe(false);
   });
 

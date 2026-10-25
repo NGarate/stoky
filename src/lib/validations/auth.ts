@@ -20,7 +20,12 @@ import {
  * stored. Sign-in parses this without an account, and a failed one is logged:
  * unbounded, a 10 MB address was a 10 MB line in the security log.
  */
-export const emailSchema = z.string().trim().max(MAX_EMAIL_LENGTH).toLowerCase().email();
+export const emailSchema = z
+  .string()
+  .trim()
+  .max(MAX_EMAIL_LENGTH)
+  .toLowerCase()
+  .email();
 
 export const loginSchema = z.object({
   email: emailSchema,
@@ -85,7 +90,9 @@ export const passkeyNameSchema = z
   .trim()
   .min(1)
   .max(MAX_PASSKEY_NAME_LENGTH)
-  .refine((name) => !UNSHOWABLE.test(name), { message: "The name holds characters it cannot show" });
+  .refine((name) => !UNSHOWABLE.test(name), {
+    message: "The name holds characters it cannot show",
+  });
 
 /**
  * A signed-in person ending their own sessions (`auth.endSessions`, D143):

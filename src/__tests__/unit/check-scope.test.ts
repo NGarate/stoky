@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -14,7 +21,8 @@ afterEach(() => {
 
 // Each stub logs one line per call, every argument in brackets, so a path with
 // a space in it stays one argument in the assertion.
-const logger = (name: string) => `{ printf '${name}'; printf ' [%s]' "$@"; printf '\\n'; } >> "$CALLS"`;
+const logger = (name: string) =>
+  `{ printf '${name}'; printf ' [%s]' "$@"; printf '\\n'; } >> "$CALLS"`;
 
 const gitEnv = {
   GIT_CONFIG_GLOBAL: "/dev/null",
@@ -30,10 +38,16 @@ function repo() {
   fixtures.push(fixture);
   mkdirSync(join(fixture, "scripts"));
   mkdirSync(join(fixture, "bin"));
-  copyFileSync(join(root, "scripts/check-scope.sh"), join(fixture, "scripts/check-scope.sh"));
+  copyFileSync(
+    join(root, "scripts/check-scope.sh"),
+    join(fixture, "scripts/check-scope.sh"),
+  );
   // check-ci.sh stands in for actionlint, shellcheck and zizmor: what check-scope.sh
   // owes them is the right file list, and that is what it receives.
-  writeFileSync(join(fixture, "scripts/check-ci.sh"), `#!/bin/bash\n${logger("check-ci")}\n`);
+  writeFileSync(
+    join(fixture, "scripts/check-ci.sh"),
+    `#!/bin/bash\n${logger("check-ci")}\n`,
+  );
   writeFileSync(
     join(fixture, "bin/bun"),
     `#!/bin/bash\n${logger("bun")}\nif [ -n "$FAIL" ] && [[ "$*" == *"$FAIL"* ]]; then exit "$FAIL_CODE"; fi\n`,
@@ -42,8 +56,12 @@ function repo() {
   const callsPath = join(fixture, "calls");
 
   const git = (...args: string[]) => {
-    const result = Bun.spawnSync(["git", ...args], { cwd: fixture, env: { ...process.env, ...gitEnv } });
-    if (result.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${result.stderr}`);
+    const result = Bun.spawnSync(["git", ...args], {
+      cwd: fixture,
+      env: { ...process.env, ...gitEnv },
+    });
+    if (result.exitCode !== 0)
+      throw new Error(`git ${args.join(" ")}: ${result.stderr}`);
     return result.stdout.toString().trim();
   };
   // Distinct contents by default: identical files let git pair a deletion
@@ -54,7 +72,14 @@ function repo() {
   };
 
   git("init", "-q", "-b", "master");
-  for (const path of ["src/old.ts", "src/gone.tsx", "src/shared.ts", "scripts/stable.sh", "README.md"]) write(path);
+  for (const path of [
+    "src/old.ts",
+    "src/gone.tsx",
+    "src/shared.ts",
+    "scripts/stable.sh",
+    "README.md",
+  ])
+    write(path);
   git("add", ".");
   git("commit", "-q", "-m", "base");
 
@@ -183,14 +208,18 @@ describe("check-scope.sh", () => {
 
     const result = fixture.run(["changed"]);
     expect(result.calls[0]).toBe("bun [run] [lint] [src/topic.ts]");
-    expect(result.calls[1]).toBe(`bun [run] [check:react] [--scope] [changed] [--base] [${landed}]`);
+    expect(result.calls[1]).toBe(
+      `bun [run] [check:react] [--scope] [changed] [--base] [${landed}]`,
+    );
   });
 
   it("fetches origin/master when the clone has never seen it", () => {
     const fixture = repo();
     const remote = mkdtempSync(join(tmpdir(), "stoky-check-scope-origin-"));
     fixtures.push(remote);
-    Bun.spawnSync(["git", "init", "-q", "--bare", remote], { env: { ...process.env, ...gitEnv } });
+    Bun.spawnSync(["git", "init", "-q", "--bare", remote], {
+      env: { ...process.env, ...gitEnv },
+    });
     fixture.git("remote", "add", "origin", remote);
     fixture.git("push", "-q", "origin", "master");
     fixture.git("update-ref", "-d", "refs/remotes/origin/master");
@@ -208,11 +237,19 @@ describe("check-scope.sh", () => {
     const result = repo().run(["staged"]);
     expect(result.exitCode).toBe(0);
     expect(result.calls).toEqual(["bun [run] [typecheck]"]);
-    for (const check of ["oxlint", "React Doctor", "actionlint", "shellcheck", "zizmor"]) {
+    for (const check of [
+      "oxlint",
+      "React Doctor",
+      "actionlint",
+      "shellcheck",
+      "zizmor",
+    ]) {
       expect(result.stdout).toContain(`skipped  ${check}: no staged`);
       expect(result.stdout).not.toContain(`ok       ${check}`);
     }
-    expect(result.stdout).toContain("skipped  dependency audit: no dependency change");
+    expect(result.stdout).toContain(
+      "skipped  dependency audit: no dependency change",
+    );
     expect(result.stdout).toContain("ok       typecheck");
   });
 
@@ -232,7 +269,10 @@ describe("check-scope.sh", () => {
       fixture.write(manifest);
       fixture.git("add", ".");
       const result = fixture.run(["staged"]);
-      expect(result.calls).toEqual(["bun [run] [check:audit]", "bun [run] [typecheck]"]);
+      expect(result.calls).toEqual([
+        "bun [run] [check:audit]",
+        "bun [run] [typecheck]",
+      ]);
     });
   }
 
@@ -242,7 +282,9 @@ describe("check-scope.sh", () => {
     fixture.git("add", ".");
     const result = fixture.run(["staged"]);
     expect(result.calls).not.toContain("bun [run] [check:audit]");
-    expect(result.stdout).toContain("skipped  dependency audit: no dependency change");
+    expect(result.stdout).toContain(
+      "skipped  dependency audit: no dependency change",
+    );
   });
 
   it("reports an audit that could not reach the network as skipped, and passes", () => {
@@ -257,9 +299,15 @@ describe("check-scope.sh", () => {
     for (const scope of ["all", "staged"]) {
       const result = fixture.run([scope, "--no-pipeline-lint"]);
       expect(result.exitCode).toBe(0);
-      expect(result.calls.filter((call) => call.startsWith("check-ci"))).toEqual([]);
-      expect(result.stdout).toContain("skipped  actionlint: --no-pipeline-lint");
-      expect(result.stdout).toContain("skipped  shellcheck: --no-pipeline-lint");
+      expect(
+        result.calls.filter((call) => call.startsWith("check-ci")),
+      ).toEqual([]);
+      expect(result.stdout).toContain(
+        "skipped  actionlint: --no-pipeline-lint",
+      );
+      expect(result.stdout).toContain(
+        "skipped  shellcheck: --no-pipeline-lint",
+      );
       expect(result.stdout).toContain("skipped  zizmor: --no-pipeline-lint");
     }
   });
@@ -277,7 +325,11 @@ describe("check-scope.sh", () => {
     // Socket.dev, and without --blocking error a finding does not fail.
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
     const flags = pkg.scripts["check:react"].split(" ");
-    for (const flag of ["--no-telemetry", "--no-supply-chain", "--no-warnings"]) {
+    for (const flag of [
+      "--no-telemetry",
+      "--no-supply-chain",
+      "--no-warnings",
+    ]) {
       expect(flags).toContain(flag);
     }
     expect(flags[flags.indexOf("--blocking") + 1]).toBe("error");
@@ -290,30 +342,49 @@ describe("check-audit.sh", () => {
     fixtures.push(fixture);
     mkdirSync(join(fixture, "scripts"));
     mkdirSync(join(fixture, "bin"));
-    copyFileSync(join(root, "scripts/check-audit.sh"), join(fixture, "scripts/check-audit.sh"));
-    writeFileSync(join(fixture, "bin/bun"), `#!/bin/bash\necho "$*" > args\nprintf '%s\\n' "$OUTPUT" >&2\nexit ${exitCode}\n`, {
-      mode: 0o755,
-    });
+    copyFileSync(
+      join(root, "scripts/check-audit.sh"),
+      join(fixture, "scripts/check-audit.sh"),
+    );
+    writeFileSync(
+      join(fixture, "bin/bun"),
+      `#!/bin/bash\necho "$*" > args\nprintf '%s\\n' "$OUTPUT" >&2\nexit ${exitCode}\n`,
+      {
+        mode: 0o755,
+      },
+    );
     const result = Bun.spawnSync(["bash", "scripts/check-audit.sh"], {
       cwd: fixture,
-      env: { ...process.env, PATH: `${join(fixture, "bin")}:${process.env.PATH}`, OUTPUT: output },
+      env: {
+        ...process.env,
+        PATH: `${join(fixture, "bin")}:${process.env.PATH}`,
+        OUTPUT: output,
+      },
     });
-    return { exitCode: result.exitCode, args: readFileSync(join(fixture, "args"), "utf8").trim() };
+    return {
+      exitCode: result.exitCode,
+      args: readFileSync(join(fixture, "args"), "utf8").trim(),
+    };
   }
 
   it("audits at the moderate level and passes a clean tree", () => {
-    expect(audit("No vulnerabilities found (checked 564 packages)", 0)).toEqual({
-      exitCode: 0,
-      args: "audit --audit-level moderate",
-    });
+    expect(audit("No vulnerabilities found (checked 564 packages)", 0)).toEqual(
+      {
+        exitCode: 0,
+        args: "audit --audit-level moderate",
+      },
+    );
   });
 
   it("fails on a vulnerable tree", () => {
-    expect(audit("lodash  <4.17.21\n  high: Prototype Pollution", 1).exitCode).toBe(1);
+    expect(
+      audit("lodash  <4.17.21\n  high: Prototype Pollution", 1).exitCode,
+    ).toBe(1);
   });
 
   it("exits 75 when the advisory endpoint cannot be reached", () => {
-    const offline = "error: POST https://registry.npmjs.org/-/npm/v1/security/advisories/bulk - DNSResolveFailed";
+    const offline =
+      "error: POST https://registry.npmjs.org/-/npm/v1/security/advisories/bulk - DNSResolveFailed";
     expect(audit(offline, 1).exitCode).toBe(75);
   });
 });
@@ -321,7 +392,8 @@ describe("check-audit.sh", () => {
 describe("check-ci.sh file arguments", () => {
   // Offline, the regular persona, and an unparseable workflow is a failure
   // rather than a file quietly left out of the audit.
-  const zizmorFlags = "[--offline] [--persona] [regular] [--strict-collection] [--no-progress] [--color] [never]";
+  const zizmorFlags =
+    "[--offline] [--persona] [regular] [--strict-collection] [--no-progress] [--color] [never]";
 
   function runCheckCi(args: string[], options: { deploy?: boolean } = {}) {
     const fixture = mkdtempSync(join(tmpdir(), "stoky-check-ci-"));
@@ -332,23 +404,41 @@ describe("check-ci.sh file arguments", () => {
       mkdirSync(join(fixture, "deploy"));
       writeFileSync(join(fixture, "deploy/install.sh"), "");
     }
-    copyFileSync(join(root, "scripts/check-ci.sh"), join(fixture, "scripts/check-ci.sh"));
-    for (const name of ["a.sh", "b.sh"]) writeFileSync(join(fixture, "scripts", name), "");
-    writeFileSync(join(fixture, "bin/docker"), `#!/bin/bash\n[ "$1" = info ] && exit 0\n${logger("docker")}\n`, {
-      mode: 0o755,
-    });
+    copyFileSync(
+      join(root, "scripts/check-ci.sh"),
+      join(fixture, "scripts/check-ci.sh"),
+    );
+    for (const name of ["a.sh", "b.sh"])
+      writeFileSync(join(fixture, "scripts", name), "");
+    writeFileSync(
+      join(fixture, "bin/docker"),
+      `#!/bin/bash\n[ "$1" = info ] && exit 0\n${logger("docker")}\n`,
+      {
+        mode: 0o755,
+      },
+    );
     const callsPath = join(fixture, "calls");
     writeFileSync(callsPath, "");
     const result = Bun.spawnSync(["bash", "scripts/check-ci.sh", ...args], {
       cwd: fixture,
-      env: { ...process.env, PATH: `${join(fixture, "bin")}:${process.env.PATH}`, CALLS: callsPath, CHECK_CI_TOOLS: "" },
+      env: {
+        ...process.env,
+        PATH: `${join(fixture, "bin")}:${process.env.PATH}`,
+        CALLS: callsPath,
+        CHECK_CI_TOOLS: "",
+      },
     });
     // The tool and what follows the image; the mount and user flags vary.
-    const calls = readFileSync(callsPath, "utf8").trim().split("\n").filter(Boolean);
+    const calls = readFileSync(callsPath, "utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean);
     return {
       exitCode: result.exitCode,
       calls,
-      tools: calls.map((call) => call.replace(/^.*\[--entrypoint\] \[([^\]]+)\] \[[^\]]+\]/, "$1")),
+      tools: calls.map((call) =>
+        call.replace(/^.*\[--entrypoint\] \[([^\]]+)\] \[[^\]]+\]/, "$1"),
+      ),
     };
   }
 
@@ -365,7 +455,9 @@ describe("check-ci.sh file arguments", () => {
   it("runs zizmor from its own pinned image, offline", () => {
     const [call] = runCheckCi(["zizmor"]).calls;
     expect(call).toContain("[--network] [none]");
-    expect(call).toMatch(/\[ghcr\.io\/zizmorcore\/zizmor:[\d.]+@sha256:[0-9a-f]{64}\]/);
+    expect(call).toMatch(
+      /\[ghcr\.io\/zizmorcore\/zizmor:[\d.]+@sha256:[0-9a-f]{64}\]/,
+    );
   });
 
   it("lints the operator's install script beside the project's own", () => {
@@ -375,13 +467,17 @@ describe("check-ci.sh file arguments", () => {
   });
 
   it("runs only the named tool, over only the named files", () => {
-    expect(runCheckCi(["shellcheck", "scripts/b.sh"]).tools).toEqual(["shellcheck [-S] [warning] [scripts/b.sh]"]);
-    expect(runCheckCi(["actionlint", ".github/workflows/x.yml"]).tools).toEqual([
-      "/usr/local/bin/actionlint [-no-color] [.github/workflows/x.yml]",
+    expect(runCheckCi(["shellcheck", "scripts/b.sh"]).tools).toEqual([
+      "shellcheck [-S] [warning] [scripts/b.sh]",
     ]);
+    expect(runCheckCi(["actionlint", ".github/workflows/x.yml"]).tools).toEqual(
+      ["/usr/local/bin/actionlint [-no-color] [.github/workflows/x.yml]"],
+    );
     expect(runCheckCi(["zizmor", ".github/dependabot.yml"]).tools).toEqual([
       `/usr/bin/zizmor ${zizmorFlags} [.github/dependabot.yml]`,
     ]);
-    expect(runCheckCi(["zizmor"]).tools).toEqual([`/usr/bin/zizmor ${zizmorFlags} [.github]`]);
+    expect(runCheckCi(["zizmor"]).tools).toEqual([
+      `/usr/bin/zizmor ${zizmorFlags} [.github]`,
+    ]);
   });
 });

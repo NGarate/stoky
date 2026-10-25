@@ -102,7 +102,9 @@ if (verbose) {
   for (const r of [...routes].sort()) console.log(`  ${r}`);
   console.log("\nLinks:");
   for (const l of links.sort((a, b) => a.target.localeCompare(b.target))) {
-    console.log(`  ${routes.has(normalise(l.target)) ? "ok  " : "DEAD"} ${l.target}`);
+    console.log(
+      `  ${routes.has(normalise(l.target)) ? "ok  " : "DEAD"} ${l.target}`,
+    );
   }
   console.log();
 }
@@ -119,7 +121,9 @@ if (broken.length === 0) {
 console.error(`\n${broken.length} broken link(s):\n`);
 for (const l of broken) {
   console.error(`  ${l.target}`);
-  console.error(`    ${l.file}:${l.line} — no route matches ${normalise(l.target)}`);
+  console.error(
+    `    ${l.file}:${l.line} — no route matches ${normalise(l.target)}`,
+  );
 }
 console.error(
   "\nEither create the route, or point the link somewhere that exists.",

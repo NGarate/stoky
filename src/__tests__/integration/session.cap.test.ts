@@ -20,7 +20,11 @@ let ana: { id: string; email: string };
 
 beforeAll(async () => {
   const email = generateTestEmail(MARKER);
-  const user = await createTestUser({ email, name: `Cap ${MARKER}`, password: PASSWORD });
+  const user = await createTestUser({
+    email,
+    name: `Cap ${MARKER}`,
+    password: PASSWORD,
+  });
   ana = { id: user.id, email };
 });
 
@@ -34,7 +38,10 @@ async function clearSessions(): Promise<void> {
 
 /** Signs Ana in, sending `jar` as the browser's cookies, and returns the new jar. */
 async function signIn(jar?: string): Promise<string> {
-  const answer = await signInWith({ email: ana.email, password: PASSWORD }, { cookie: jar });
+  const answer = await signInWith(
+    { email: ana.email, password: PASSWORD },
+    { cookie: jar },
+  );
   expect(answer.status).toBe(200);
   return answer.cookieHeader;
 }
@@ -47,9 +54,13 @@ async function signInFrom(n: number): Promise<string[]> {
 }
 
 const works = async (jar: string) =>
-  (await readSession(new Headers({ cookie: jar }), { refresh: false })) !== null;
+  (await readSession(new Headers({ cookie: jar }), { refresh: false })) !==
+  null;
 const rows = () =>
-  prisma.session.findMany({ where: { userId: ana.id }, orderBy: { createdAt: "asc" } });
+  prisma.session.findMany({
+    where: { userId: ana.id },
+    orderBy: { createdAt: "asc" },
+  });
 
 /** The `auth.session.ended` lines written while `run` ran, parsed: every value a string. */
 async function endedDuring(run: () => Promise<unknown>) {
@@ -85,7 +96,10 @@ describe("the eleventh sign-in", () => {
     // The first browser is the one in use: the keep-alive slid its row, so it
     // is the most recently used although it is the oldest. The second is now
     // the least recently used.
-    await prisma.session.update({ where: { id: created[0].id }, data: { updatedAt: new Date() } });
+    await prisma.session.update({
+      where: { id: created[0].id },
+      data: { updatedAt: new Date() },
+    });
 
     const { raw, ended } = await endedDuring(() => signIn());
 
@@ -97,7 +111,12 @@ describe("the eleventh sign-in", () => {
     expect(await works(jars[0])).toBe(true);
 
     expect(ended).toEqual([
-      expect.objectContaining({ reason: "evicted", userId: ana.id, targetUserId: ana.id, count: "1" }),
+      expect.objectContaining({
+        reason: "evicted",
+        userId: ana.id,
+        targetUserId: ana.id,
+        count: "1",
+      }),
     ]);
     // No token reaches the log, whichever row it names.
     for (const row of [...created, ...left]) {
@@ -115,9 +134,9 @@ describe("the eleventh sign-in", () => {
     const left = await rows();
     expect(left).toHaveLength(10);
     // Only the presented row went; every other browser keeps its session.
-    expect(before.filter((row) => !left.some((kept) => kept.id === row.id))).toEqual([
-      expect.objectContaining({ id: before[4].id }),
-    ]);
+    expect(
+      before.filter((row) => !left.some((kept) => kept.id === row.id)),
+    ).toEqual([expect.objectContaining({ id: before[4].id })]);
     expect(await works(jars[0])).toBe(true);
     expect(ended.map((line) => line.reason)).toEqual(["replaced"]);
   });

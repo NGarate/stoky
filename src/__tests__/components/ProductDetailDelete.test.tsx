@@ -102,9 +102,8 @@ mock.module("@/lib/trpc/client", () => ({
 }));
 
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
-const { ProductDetailView } = await import(
-  "@/app/(dashboard)/products/[id]/page"
-);
+const { ProductDetailView } =
+  await import("@/app/(dashboard)/products/[id]/page");
 
 function render() {
   return renderWithIntl(
@@ -134,7 +133,16 @@ describe("deleting a product", () => {
   });
 
   it("explains itself instead of offering a button when the ledger is not empty", () => {
-    stockEntries = [{ id: "e1", quantity: 1, unit: "kg", location: null, expirationDate: null, createdAt: new Date() }];
+    stockEntries = [
+      {
+        id: "e1",
+        quantity: 1,
+        unit: "kg",
+        location: null,
+        expirationDate: null,
+        createdAt: new Date(),
+      },
+    ];
     render();
 
     expect(screen.getByText(/tiene historial/)).toBeInTheDocument();
@@ -148,13 +156,16 @@ describe("deleting a product", () => {
 
     // All three were the primary fill: "Eliminar el producto", "Sí, eliminar
     // definitivamente" and "Cancelar" looked the same as "Guardar".
-    const trigger = screen.getByRole("button", { name: "Eliminar el producto" });
+    const trigger = screen.getByRole("button", {
+      name: "Eliminar el producto",
+    });
     expect(trigger.className).toContain("text-destructive");
     expect(trigger.className).not.toContain("bg-primary");
 
     fireEvent.click(trigger);
     expect(
-      screen.getByRole("button", { name: "Sí, eliminar definitivamente" }).className,
+      screen.getByRole("button", { name: "Sí, eliminar definitivamente" })
+        .className,
     ).toContain("bg-destructive");
     expect(
       screen.getByRole("button", { name: "Cancelar" }).className,
@@ -164,7 +175,9 @@ describe("deleting a product", () => {
   it("never fires on the first press — the second one names the product", () => {
     render();
 
-    fireEvent.click(screen.getByRole("button", { name: "Eliminar el producto" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Eliminar el producto" }),
+    );
     expect(deleteCalls).toEqual([]);
 
     fireEvent.click(
@@ -183,10 +196,13 @@ describe("deleting a product", () => {
   });
 
   it("turns the server's four-way CONFLICT into a sentence about references", () => {
-    deleteFails = "This product still has 3 price records. Remove those first, or keep the product.";
+    deleteFails =
+      "This product still has 3 price records. Remove those first, or keep the product.";
     render();
 
-    fireEvent.click(screen.getByRole("button", { name: "Eliminar el producto" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Eliminar el producto" }),
+    );
     fireEvent.click(
       screen.getByRole("button", { name: "Sí, eliminar definitivamente" }),
     );

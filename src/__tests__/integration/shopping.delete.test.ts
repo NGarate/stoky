@@ -104,8 +104,12 @@ afterAll(async () => {
   await prisma.shoppingList.deleteMany({
     where: { householdId: { in: households } },
   });
-  await prisma.product.deleteMany({ where: { householdId: { in: households } } });
-  await prisma.user.deleteMany({ where: { name: { startsWith: NAME_PREFIX } } });
+  await prisma.product.deleteMany({
+    where: { householdId: { in: households } },
+  });
+  await prisma.user.deleteMany({
+    where: { name: { startsWith: NAME_PREFIX } },
+  });
   await prisma.household.deleteMany({ where: { id: { in: households } } });
 });
 
@@ -167,7 +171,10 @@ describe("whose list it is", () => {
     // and now happens before anything is removed — because the item delete is
     // keyed on the list alone and could not carry a household filter.
     const strangersList = await prisma.shoppingList.create({
-      data: { name: `${NAME_PREFIX}Stranger List`, householdId: strangerHouseholdId },
+      data: {
+        name: `${NAME_PREFIX}Stranger List`,
+        householdId: strangerHouseholdId,
+      },
     });
     const strangersProduct = await prisma.product.create({
       data: {

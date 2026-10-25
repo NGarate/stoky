@@ -41,9 +41,11 @@ type FieldErrors = Partial<Record<FieldName, string>>;
 function serverErrorKey(message: string | undefined): string {
   const normalized = message?.toLowerCase() ?? "";
 
-  if (normalized.includes("not enough stock")) return "errorNotEnoughStockServer";
+  if (normalized.includes("not enough stock"))
+    return "errorNotEnoughStockServer";
   if (normalized.includes("product not found")) return "errorProductNotFound";
-  if (normalized.includes("unit cannot be converted")) return "errorUnitMismatch";
+  if (normalized.includes("unit cannot be converted"))
+    return "errorUnitMismatch";
   if (normalized.includes("household")) return "errorNoHousehold";
 
   return "errorGeneric";
@@ -143,7 +145,8 @@ export default function ConsumeStockPage(): JSX.Element {
     onError: (error) => {
       const key = serverErrorKey(error.message);
       setServerError(t(key, { unit: units.measure(product?.defaultUnit) }));
-      if (key === "errorUnitMismatch") advancedRef.current?.setAttribute("open", "");
+      if (key === "errorUnitMismatch")
+        advancedRef.current?.setAttribute("open", "");
       setErrorSignal((signal) => signal + 1);
     },
   });
@@ -356,7 +359,10 @@ export default function ConsumeStockPage(): JSX.Element {
                 {t("unitHint")}
               </p>
               {fieldErrors.unit ? (
-                <p id={unitErrorId} className="mt-1 text-sm font-medium text-danger-foreground">
+                <p
+                  id={unitErrorId}
+                  className="mt-1 text-sm font-medium text-danger-foreground"
+                >
                   {fieldErrors.unit}
                 </p>
               ) : null}
@@ -377,7 +383,9 @@ export default function ConsumeStockPage(): JSX.Element {
                 placeholder={t("locationPlaceholder")}
                 labelledBy={locationLabelId}
               />
-              <p className="mt-1 text-sm text-muted-foreground">{t("locationHint")}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t("locationHint")}
+              </p>
             </div>
             <div>
               <label
@@ -403,18 +411,19 @@ export default function ConsumeStockPage(): JSX.Element {
         </Disclosure>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="submit"
-            disabled={consumeStock.isPending}
-          >
+          <Button type="submit" disabled={consumeStock.isPending}>
             {t("submit")}
           </Button>
           <Button asChild variant="outline">
-            <Link href="/inventory" > {t("cancel")} </Link>
+            <Link href="/inventory"> {t("cancel")} </Link>
           </Button>
           {/* Kept mounted so the message is announced when it appears, rather
               than the whole region arriving at once. */}
-          <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+          <p
+            role="status"
+            aria-live="polite"
+            className="text-sm text-muted-foreground"
+          >
             {consumeStock.isPending ? t("submitting") : ""}
           </p>
         </div>

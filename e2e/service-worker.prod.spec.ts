@@ -111,7 +111,10 @@ test.describe("a production build's service worker", () => {
   test.describe("signed in", () => {
     test.use({ storageState: SESSION_FILE });
 
-    test("serves a page with the network cut off", async ({ page, context }) => {
+    test("serves a page with the network cut off", async ({
+      page,
+      context,
+    }) => {
       // The whole point of the thing. Without a worker this is the browser's
       // own "no internet" page, which is where a shop in a basement ends.
       //
@@ -136,7 +139,9 @@ test.describe("a production build's service worker", () => {
         await expect(
           page.getByRole("navigation", { name: "Navegación principal" }),
         ).toBeVisible();
-        await expect(page.getByRole("link", { name: "Inventario" }).first()).toBeVisible();
+        await expect(
+          page.getByRole("link", { name: "Inventario" }).first(),
+        ).toBeVisible();
       } finally {
         await context.setOffline(false);
       }
@@ -186,7 +191,9 @@ test.describe("a production build's service worker", () => {
     await context.setOffline(true);
 
     try {
-      await page.goto("/prices/never-visited", { waitUntil: "domcontentloaded" });
+      await page.goto("/prices/never-visited", {
+        waitUntil: "domcontentloaded",
+      });
 
       // The precached `/offline` document, by its own words. Chromium's error
       // page says "no internet" too, in the browser's language and not ours —

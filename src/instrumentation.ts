@@ -48,9 +48,8 @@ export async function register(): Promise<void> {
     // takes a request, so every receipt this process creates is newer.
     const startedAt = new Date();
 
-    const { refuseToStartMisconfigured, warnAboutRiskyConfiguration } = await import(
-      "@/lib/auth/startup"
-    );
+    const { refuseToStartMisconfigured, warnAboutRiskyConfiguration } =
+      await import("@/lib/auth/startup");
     warnAboutRiskyConfiguration();
     refuseToStartMisconfigured();
 
@@ -60,9 +59,8 @@ export async function register(): Promise<void> {
     // a database that is slow to come up must not hold the server back, and
     // the cutoff, not the timing, is what keeps this process's own receipts
     // out of it. It logs its own failure and never throws.
-    const { recoverInterruptedReceipts } = await import(
-      "@/server/services/receipt-recovery"
-    );
+    const { recoverInterruptedReceipts } =
+      await import("@/server/services/receipt-recovery");
     void recoverInterruptedReceipts(startedAt);
   }
 }

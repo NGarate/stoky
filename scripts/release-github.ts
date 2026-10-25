@@ -24,7 +24,11 @@ function run(command: string, args: string[], cwd: string): string {
 
 /** OWNER/NAME of the repository gh resolves from the checkout. */
 export function repository(cwd: string): string {
-  return run("gh", ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"], cwd).trim();
+  return run(
+    "gh",
+    ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"],
+    cwd,
+  ).trim();
 }
 
 /** `git push` of `refspec` to the repository over HTTPS, authenticated by gh. */
@@ -32,7 +36,15 @@ export function pushOverHttps(cwd: string, refspec: string): void {
   const url = `https://github.com/${repository(cwd)}.git`;
   execFileSync(
     "git",
-    ["-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential", "push", url, refspec],
+    [
+      "-c",
+      "credential.helper=",
+      "-c",
+      "credential.helper=!gh auth git-credential",
+      "push",
+      url,
+      refspec,
+    ],
     { cwd, stdio: ["ignore", "inherit", "inherit"] },
   );
 }
@@ -51,8 +63,20 @@ export interface CiJob {
 }
 
 /** The newest `ci.yml` run of `sha` on `branch` (a tag name for a tag's run), or null. */
-export function newestCiRun(cwd: string, options: { branch: string; sha?: string; event?: string }): CiRun | null {
-  const args = ["run", "list", "--workflow", "ci.yml", "--branch", options.branch, "--limit", "1"];
+export function newestCiRun(
+  cwd: string,
+  options: { branch: string; sha?: string; event?: string },
+): CiRun | null {
+  const args = [
+    "run",
+    "list",
+    "--workflow",
+    "ci.yml",
+    "--branch",
+    options.branch,
+    "--limit",
+    "1",
+  ];
   if (options.event) args.push("--event", options.event);
   if (options.sha) args.push("--commit", options.sha);
   args.push("--json", "databaseId,status,conclusion,url");
@@ -62,7 +86,11 @@ export function newestCiRun(cwd: string, options: { branch: string; sha?: string
 
 /** The jobs of a run, by name. */
 export function ciJobs(cwd: string, id: number): CiJob[] {
-  return (JSON.parse(run("gh", ["run", "view", String(id), "--json", "jobs"], cwd)) as { jobs: CiJob[] }).jobs;
+  return (
+    JSON.parse(
+      run("gh", ["run", "view", String(id), "--json", "jobs"], cwd),
+    ) as { jobs: CiJob[] }
+  ).jobs;
 }
 
 /** Opens a pull request and returns its URL. */

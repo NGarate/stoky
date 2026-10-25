@@ -183,9 +183,15 @@ const publishes = (context: Context) => {
 /** Every trigger ci.yml declares, on the refs each can carry. */
 const triggers: Array<[string, Context]> = [
   ["push to master", run("push", "refs/heads/master", "branch")],
-  ["dispatch on master", run("workflow_dispatch", "refs/heads/master", "branch")],
+  [
+    "dispatch on master",
+    run("workflow_dispatch", "refs/heads/master", "branch"),
+  ],
   ["push of a tag", run("push", "refs/tags/v0.1.0-alpha.3", "tag")],
-  ["dispatch on a tag", run("workflow_dispatch", "refs/tags/v0.1.0-alpha.3", "tag")],
+  [
+    "dispatch on a tag",
+    run("workflow_dispatch", "refs/tags/v0.1.0-alpha.3", "tag"),
+  ],
   [
     "dispatch on another branch",
     run("workflow_dispatch", "refs/heads/fix/topic-2026-10-12", "branch"),
@@ -212,9 +218,12 @@ describe("the CI workflow's concurrency", () => {
     ).toBe(false);
   });
 
-  it.each(triggers)("never cancels a run that can publish: %s", (_, context) => {
-    if (publishes(context)) expect(cancels(context)).toBe(false);
-  });
+  it.each(triggers)(
+    "never cancels a run that can publish: %s",
+    (_, context) => {
+      if (publishes(context)) expect(cancels(context)).toBe(false);
+    },
+  );
 
   // The arriving run's `cancel-in-progress` is what cancels the running one,
   // so the rule is about every run that can land in a publishing run's group.
@@ -313,9 +322,12 @@ describe("the CI workflow's release path restores no cache", () => {
   /** Every step of `jobName` (or of every job) that uses `action`. */
   const using = (action: string, jobName?: string) => {
     const jobs = jobName ? [job(jobName)] : Object.values(workflow.jobs ?? {});
-    const steps = jobs.flatMap((j) => j.steps ?? []).filter(
-      (step) => typeof step.uses === "string" && step.uses.startsWith(`${action}@`),
-    );
+    const steps = jobs
+      .flatMap((j) => j.steps ?? [])
+      .filter(
+        (step) =>
+          typeof step.uses === "string" && step.uses.startsWith(`${action}@`),
+      );
     if (steps.length === 0) throw new Error(`no step uses ${action}`);
     return steps;
   };
@@ -480,7 +492,9 @@ describe("the CI workflow's release scans the bundle's service images", () => {
   };
   const scanStep = () => {
     const steps = (job("release-images").steps ?? []).filter(
-      (s) => typeof s.run === "string" && s.run.includes("scripts/scan-bundle-images.sh"),
+      (s) =>
+        typeof s.run === "string" &&
+        s.run.includes("scripts/scan-bundle-images.sh"),
     );
     expect(steps).toHaveLength(1);
     return steps[0];
@@ -491,14 +505,22 @@ describe("the CI workflow's release scans the bundle's service images", () => {
     expect(Array.isArray(needs) ? needs : [needs]).toContain("release-images");
     // A needed job that fails or is skipped skips the dependant, unless the
     // dependant opts out with a status function.
-    expect(String(job("release-draft").if)).not.toMatch(/always\(|failure\(|cancelled\(|!success\(/);
+    expect(String(job("release-draft").if)).not.toMatch(
+      /always\(|failure\(|cancelled\(|!success\(/,
+    );
   });
 
   it("runs on every tag, and on a pull request, but never on master", () => {
     const scan = job("release-images");
-    expect(condition(scan.if, run("push", "refs/tags/v0.1.0-alpha.4", "tag"))).toBe(true);
-    expect(condition(scan.if, run("pull_request", "refs/pull/42/merge", "branch"))).toBe(true);
-    expect(condition(scan.if, run("push", "refs/heads/master", "branch"))).toBe(false);
+    expect(
+      condition(scan.if, run("push", "refs/tags/v0.1.0-alpha.4", "tag")),
+    ).toBe(true);
+    expect(
+      condition(scan.if, run("pull_request", "refs/pull/42/merge", "branch")),
+    ).toBe(true);
+    expect(condition(scan.if, run("push", "refs/heads/master", "branch"))).toBe(
+      false,
+    );
   });
 
   it("scans what the bundle names, and cannot be tolerated", () => {
@@ -514,7 +536,8 @@ describe("the CI workflow's release scans the bundle's service images", () => {
   it("holds no credential: nothing to push, nothing to write", () => {
     expect(job("release-images").permissions).toBeUndefined();
     const checkout = (job("release-images").steps ?? []).find(
-      (s) => typeof s.uses === "string" && s.uses.startsWith("actions/checkout@"),
+      (s) =>
+        typeof s.uses === "string" && s.uses.startsWith("actions/checkout@"),
     );
     expect(String(checkout?.with?.["persist-credentials"])).toBe("false");
   });
@@ -667,9 +690,12 @@ describe("the workflows' action pins", () => {
       const parsed = Bun.YAML.parse(source) as {
         jobs?: Record<string, { "runs-on"?: unknown }>;
       };
-      const runners = Object.values(parsed.jobs ?? {}).map((job) => job["runs-on"]);
+      const runners = Object.values(parsed.jobs ?? {}).map(
+        (job) => job["runs-on"],
+      );
       expect(runners.length).toBeGreaterThan(0);
-      for (const runner of runners) expect(runner).toMatch(/^ubuntu-\d{2}\.\d{2}$/);
+      for (const runner of runners)
+        expect(runner).toMatch(/^ubuntu-\d{2}\.\d{2}$/);
     },
   );
 
@@ -742,13 +768,15 @@ describe("the weekly rescan of the published release", () => {
     const found = Object.entries(jobs).find(([, job]) =>
       job.steps?.some((s) => String(s.with?.["image-ref"]).includes("matrix.")),
     );
-    if (!found) throw new Error("rescan.yml has no job scanning a matrix image");
+    if (!found)
+      throw new Error("rescan.yml has no job scanning a matrix image");
     return found;
   };
 
   /** The minimal cron form: five fields, each a literal or `*`. */
   const cron = () => {
-    const schedule = rescan.on?.schedule as Array<{ cron?: unknown }> | undefined;
+    const schedule = rescan.on?.schedule as
+      Array<{ cron?: unknown }> | undefined;
     expect(schedule).toHaveLength(1);
     return String(schedule?.[0]?.cron).trim().split(/\s+/);
   };
@@ -804,12 +832,15 @@ describe("the weekly rescan of the published release", () => {
 
   it("scans every image the release's own Compose file resolves", () => {
     const images = steps.find(
-      (s) => typeof s.run === "string" && s.run.includes("config --format json"),
+      (s) =>
+        typeof s.run === "string" && s.run.includes("config --format json"),
     );
     if (typeof images?.run !== "string" || !images.id) {
       throw new Error("rescan.yml does not read the release's Compose file");
     }
-    expect(images.run).toMatch(/gh release download "\$RELEASE_TAG" --pattern docker-compose\.yml/);
+    expect(images.run).toMatch(
+      /gh release download "\$RELEASE_TAG" --pattern docker-compose\.yml/,
+    );
     expect(images.env?.STOKY_VERSION).toBe(images.env?.RELEASE_TAG);
 
     // The image list reaches the matrix unchanged: step -> job output -> include.
@@ -817,7 +848,9 @@ describe("the weekly rescan of the published release", () => {
       job.steps?.includes(images),
     ) ?? ["", {} as Job];
     const output = Object.entries(producerJob.outputs ?? {}).find(([, value]) =>
-      new RegExp(`steps\\.${images.id}\\.outputs\\.images\\b`).test(String(value)),
+      new RegExp(`steps\\.${images.id}\\.outputs\\.images\\b`).test(
+        String(value),
+      ),
     )?.[0];
     expect(output).toBeDefined();
     const [, scan] = scanJob();
@@ -854,13 +887,17 @@ describe("the weekly rescan of the published release", () => {
   });
 
   it("fails the run on a fixable critical or high finding, skipping only gosu", () => {
-    const gates = trivySteps.filter((s) => String(s.with?.["exit-code"]) === "1");
+    const gates = trivySteps.filter(
+      (s) => String(s.with?.["exit-code"]) === "1",
+    );
     expect(gates).toHaveLength(1);
     const [gate] = gates;
     expect(gate.with?.severity).toBe("CRITICAL,HIGH");
     expect(String(gate.with?.["ignore-unfixed"])).toBe("true");
     expect(gate.if).toBeUndefined();
-    expect((gate as { "continue-on-error"?: unknown })["continue-on-error"]).toBeUndefined();
+    expect(
+      (gate as { "continue-on-error"?: unknown })["continue-on-error"],
+    ).toBeUndefined();
     // One file, measured unreachable; anything broader is a new decision.
     expect(gate.with?.["skip-files"]).toBe("usr/local/bin/gosu");
     expect(gate.with?.["skip-dirs"]).toBeUndefined();
@@ -877,7 +914,9 @@ describe("the weekly rescan of the published release", () => {
     expect(scan["continue-on-error"]).toBeUndefined();
     const trivyEnv = [rescan.env, scan.env, ...trivySteps.map((s) => s.env)]
       .flatMap((env) => Object.keys(env ?? {}))
-      .filter((name) => name.startsWith("TRIVY_") && name !== "TRIVY_IMAGE_SRC");
+      .filter(
+        (name) => name.startsWith("TRIVY_") && name !== "TRIVY_IMAGE_SRC",
+      );
     expect(trivyEnv).toEqual([]);
   });
 
@@ -886,14 +925,22 @@ describe("the weekly rescan of the published release", () => {
   it("compares every published release's notes with its file, untolerated", () => {
     const runs = Object.entries(jobs).flatMap(([name, job]) =>
       (job.steps ?? [])
-        .filter((s) => typeof s.run === "string" && s.run.includes("scripts/check-published-notes.sh"))
+        .filter(
+          (s) =>
+            typeof s.run === "string" &&
+            s.run.includes("scripts/check-published-notes.sh"),
+        )
         .map((step) => ({ name, job, step })),
     );
     expect(runs).toHaveLength(1);
     const [{ job, step }] = runs;
-    expect(String(step.run).trim()).toBe("bash scripts/check-published-notes.sh");
+    expect(String(step.run).trim()).toBe(
+      "bash scripts/check-published-notes.sh",
+    );
     expect(step.if).toBeUndefined();
-    expect((step as { "continue-on-error"?: unknown })["continue-on-error"]).toBeUndefined();
+    expect(
+      (step as { "continue-on-error"?: unknown })["continue-on-error"],
+    ).toBeUndefined();
     expect(job.if).toBeUndefined();
     expect(job["continue-on-error"]).toBeUndefined();
     expect(job.needs).toBeUndefined();
@@ -910,7 +957,9 @@ describe("the weekly rescan of the published release", () => {
     const category = String(upload.with?.category);
     expect(category).toContain("${{ matrix.service }}");
     expect(category).not.toBe("trivy");
-    const visibility = String(upload.if).match(/needs\.([\w-]+)\.outputs\.([\w-]+)/);
+    const visibility = String(upload.if).match(
+      /needs\.([\w-]+)\.outputs\.([\w-]+)/,
+    );
     if (!visibility) throw new Error("the upload does not read the visibility");
     const key = `needs.${visibility[1]}.outputs.${visibility[2]}`;
     expect(condition(upload.if, { [key]: "false" })).toBe(true);
@@ -954,14 +1003,20 @@ describe("Dependabot's update configuration", () => {
   // Dependabot log nobody opens.
   it("covers the lockfile, the actions, the Dockerfile and the release bundle", () => {
     expect(
-      updates.map((u) => `${String(u["package-ecosystem"])} ${String(u.directory)}`).toSorted(),
+      updates
+        .map((u) => `${String(u["package-ecosystem"])} ${String(u.directory)}`)
+        .toSorted(),
     ).toEqual([
       "bun /",
       "docker /",
       "docker-compose /deploy",
       "github-actions /",
     ]);
-    for (const manifest of ["bun.lock", "Dockerfile", "deploy/docker-compose.yml"]) {
+    for (const manifest of [
+      "bun.lock",
+      "Dockerfile",
+      "deploy/docker-compose.yml",
+    ]) {
       expect(existsSync(join(root, manifest))).toBe(true);
     }
   });
@@ -970,7 +1025,9 @@ describe("Dependabot's update configuration", () => {
     "checks weekly and waits at least a week after a release: %s",
     (_, update) => {
       expect(update.schedule?.interval).toBe("weekly");
-      expect(Number(update.cooldown?.["default-days"])).toBeGreaterThanOrEqual(7);
+      expect(Number(update.cooldown?.["default-days"])).toBeGreaterThanOrEqual(
+        7,
+      );
       // Exemptions would let a dependency skip the wait.
       expect(update.cooldown?.exclude).toBeUndefined();
     },
@@ -1026,9 +1083,9 @@ describe("Dependabot's update configuration", () => {
     const convention = readFileSync(join(root, "CLAUDE.md"), "utf8");
     const listed = (label: string) =>
       [
-        ...(convention.match(new RegExp(`${label}:([^.]*)\\.`))?.[1] ?? "").matchAll(
-          /`([\w-]+)`/g,
-        ),
+        ...(
+          convention.match(new RegExp(`${label}:([^.]*)\\.`))?.[1] ?? ""
+        ).matchAll(/`([\w-]+)`/g),
       ].map((m) => m[1]);
     const types = listed("Types");
     const scopes = [...listed("Scopes"), "deps", "deps-dev"];
@@ -1039,7 +1096,8 @@ describe("Dependabot's update configuration", () => {
       const prefix = String(message?.prefix);
       const title = message?.include === "scope" ? `${prefix}(deps)` : prefix;
       const match = title.match(/^(\w+)(?:\(([\w-]+)\))?$/);
-      if (!match) throw new Error(`not a Conventional Commits prefix: ${title}`);
+      if (!match)
+        throw new Error(`not a Conventional Commits prefix: ${title}`);
       expect(types).toContain(match[1]);
       if (match[2]) expect(scopes).toContain(match[2]);
     }

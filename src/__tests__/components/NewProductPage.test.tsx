@@ -15,7 +15,10 @@ import { renderWithIntl } from "../utils/render";
  */
 
 const discard = mock((_id: string) => {});
-let lookupResult: { product: { id: string; name: string } | null; source: string };
+let lookupResult: {
+  product: { id: string; name: string } | null;
+  source: string;
+};
 
 mock.module("next/navigation", () => ({
   useRouter: () => ({ push: () => {}, replace: () => {}, refresh: () => {} }),
@@ -53,7 +56,9 @@ mock.module("@/lib/trpc/client", () => ({
     product: {
       getByBarcode: { useQuery: () => ({ data: null }) },
       scanBarcode: {
-        useMutation: (callbacks: { onSuccess?: (result: unknown) => Promise<void> }) => ({
+        useMutation: (callbacks: {
+          onSuccess?: (result: unknown) => Promise<void>;
+        }) => ({
           mutate: () => void callbacks.onSuccess?.(lookupResult),
           isPending: false,
         }),
@@ -65,7 +70,8 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
-const { default: NewProductPage } = await import("@/app/(dashboard)/products/new/page");
+const { default: NewProductPage } =
+  await import("@/app/(dashboard)/products/new/page");
 
 beforeEach(() => {
   discard.mockClear();
@@ -75,7 +81,10 @@ afterEach(cleanup);
 
 describe("a queued scan named by looking it up", () => {
   it("leaves the queue when Open Food Facts makes the product", async () => {
-    lookupResult = { product: { id: "p-new", name: "Galletas" }, source: "openfoodfacts" };
+    lookupResult = {
+      product: { id: "p-new", name: "Galletas" },
+      source: "openfoodfacts",
+    };
     renderWithIntl(<NewProductPage />);
 
     await userEvent.click(
@@ -86,7 +95,10 @@ describe("a queued scan named by looking it up", () => {
   });
 
   it("leaves the queue when the household already had it", async () => {
-    lookupResult = { product: { id: "p-old", name: "Galletas" }, source: "local" };
+    lookupResult = {
+      product: { id: "p-old", name: "Galletas" },
+      source: "local",
+    };
     renderWithIntl(<NewProductPage />);
 
     await userEvent.click(

@@ -37,11 +37,11 @@ describe("UploadZone", () => {
     renderWithIntl(<UploadZone onUpload={() => {}} />);
 
     expect(
-      screen.getByText(
-        "Arrastra una foto del ticket o pulsa para elegirla",
-      ),
+      screen.getByText("Arrastra una foto del ticket o pulsa para elegirla"),
     ).toBeInTheDocument();
-    expect(screen.getByText("JPG, PNG o WebP (máx. 10 MB)")).toBeInTheDocument();
+    expect(
+      screen.getByText("JPG, PNG o WebP (máx. 10 MB)"),
+    ).toBeInTheDocument();
   });
 
   it("offers exactly the types the server accepts, and nothing else", () => {
@@ -158,9 +158,7 @@ describe("UploadZone", () => {
     expect(preview).toBeInTheDocument();
     // The dropzone prompt is replaced by the preview.
     expect(
-      screen.queryByText(
-        "Arrastra una foto del ticket o pulsa para elegirla",
-      ),
+      screen.queryByText("Arrastra una foto del ticket o pulsa para elegirla"),
     ).toBeAbsent();
   });
 
@@ -191,7 +189,9 @@ describe("UploadZone", () => {
     await screen.findByAltText("Vista previa del ticket");
 
     const clear = screen.getByRole("button", { name: "Quitar la foto" });
-    expect((await minimumHeight(clear.className)) ?? 0).toBeGreaterThanOrEqual(48);
+    expect((await minimumHeight(clear.className)) ?? 0).toBeGreaterThanOrEqual(
+      48,
+    );
   });
 
   it("offers a camera capture action", () => {
@@ -205,9 +205,13 @@ describe("UploadZone", () => {
   it("draws the camera action as the Button primitive, focus outline and all", () => {
     renderWithIntl(<UploadZone onUpload={() => {}} />);
 
-    const camera = screen.getByRole("button", { name: /Hacer foto con la cámara/ });
+    const camera = screen.getByRole("button", {
+      name: /Hacer foto con la cámara/,
+    });
     expect(camera.className).toContain("focus-visible:outline-ring");
-    expect(camera.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    expect(camera.querySelector("svg")?.getAttribute("aria-hidden")).toBe(
+      "true",
+    );
   });
 
   it("disables the camera action while uploading", () => {
@@ -219,7 +223,9 @@ describe("UploadZone", () => {
   });
 
   it("shows the dropzone as unavailable while uploading", () => {
-    const { container } = renderWithIntl(<UploadZone onUpload={() => {}} isUploading />);
+    const { container } = renderWithIntl(
+      <UploadZone onUpload={() => {}} isUploading />,
+    );
 
     // react-dropzone disables at the root rather than on the input element,
     // so the affordance the user sees is the zone's own styling.

@@ -54,7 +54,10 @@ interface ProductRatingProps {
   barcode: string | null;
 }
 
-export function ProductRating({ snapshot, barcode }: ProductRatingProps): JSX.Element {
+export function ProductRating({
+  snapshot,
+  barcode,
+}: ProductRatingProps): JSX.Element {
   const t = useTranslations("products.rating");
   const rating = ratingFromSnapshot(snapshot);
 
@@ -63,15 +66,26 @@ export function ProductRating({ snapshot, barcode }: ProductRatingProps): JSX.El
     : "https://world.openfoodfacts.org";
 
   return (
-    <section aria-labelledby="product-rating-heading" className="rounded-lg border border-border bg-card p-4">
-      <h2 className="text-lg font-semibold text-heading" id="product-rating-heading">
+    <section
+      aria-labelledby="product-rating-heading"
+      className="rounded-lg border border-border bg-card p-4"
+    >
+      <h2
+        className="text-lg font-semibold text-heading"
+        id="product-rating-heading"
+      >
         {t("title")}
       </h2>
 
       {rating.kind === "noData" ? (
         <p className="mt-2 text-muted-foreground">
           {t("noData")}{" "}
-          <a className="text-primary underline" href={offUrl} rel="noreferrer" target="_blank">
+          <a
+            className="text-primary underline"
+            href={offUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
             {t("noDataContribute")}
           </a>
         </p>
@@ -86,8 +100,12 @@ export function ProductRating({ snapshot, barcode }: ProductRatingProps): JSX.El
           <p
             className={`mt-3 inline-flex items-baseline gap-3 rounded-md border px-4 py-2 ${WORD_TONE[rating.word]}`}
           >
-            <span className="text-2xl font-bold">{t(WORD_KEY[rating.word])}</span>
-            <span className="text-sm">{t("scoreOutOf", { score: rating.score })}</span>
+            <span className="text-2xl font-bold">
+              {t(WORD_KEY[rating.word])}
+            </span>
+            <span className="text-sm">
+              {t("scoreOutOf", { score: rating.score })}
+            </span>
           </p>
 
           <Disclosure className="mt-3" summary={t("showWhy")} variant="inline">
@@ -126,7 +144,10 @@ export function ProductRating({ snapshot, barcode }: ProductRatingProps): JSX.El
                 )}
               </li>
               <li>
-                {rating.breakdown.organic.isOrganic ? t("organicYes") : t("organicNo")} —{" "}
+                {rating.breakdown.organic.isOrganic
+                  ? t("organicYes")
+                  : t("organicNo")}{" "}
+                —{" "}
                 {t("points", {
                   points: rating.breakdown.organic.points,
                   max: rating.breakdown.organic.max,

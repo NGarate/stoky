@@ -154,9 +154,9 @@ describe("DashboardNav", () => {
     renderWithIntl(<DashboardNav />);
 
     for (const label of ["Panel", "Inventario", "Configuración"]) {
-      expect(
-        screen.getByRole("link", { name: label }).className,
-      ).toContain("min-h-[48px]");
+      expect(screen.getByRole("link", { name: label }).className).toContain(
+        "min-h-[48px]",
+      );
     }
   });
 
@@ -175,8 +175,9 @@ describe("DashboardNav", () => {
     expect(
       screen.queryByRole("group", { name: "Duración de los avisos" }),
     ).toBeAbsent();
-    expect(
-      screen.getByRole("link", { name: "Configuración" }),
-    ).toHaveAttribute("href", "/settings");
+    expect(screen.getByRole("link", { name: "Configuración" })).toHaveAttribute(
+      "href",
+      "/settings",
+    );
   });
 });

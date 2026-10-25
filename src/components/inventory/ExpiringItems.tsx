@@ -96,10 +96,7 @@ export function ExpiringItems({
 
       {hasExpiring ? (
         <section aria-labelledby="expiring-soon">
-          <h2
-            id="expiring-soon"
-            className="text-lg font-semibold text-heading"
-          >
+          <h2 id="expiring-soon" className="text-lg font-semibold text-heading">
             {t("expiringHeading", { days, count: expiringItems?.length ?? 0 })}
           </h2>
           <ul className="mt-3 divide-y divide-border">

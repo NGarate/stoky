@@ -224,7 +224,8 @@ const NOT_A_PURCHASE =
  * Words that only head a line: the till's own header fields. Anchored to the
  * start because `caja` and `hora` are also words a product name can contain.
  */
-const HEADER_FIELD = /^(?:factura|ticket|caja|hora|fecha|nif|cif|tel(?:efono)?)\b/;
+const HEADER_FIELD =
+  /^(?:factura|ticket|caja|hora|fecha|nif|cif|tel(?:efono)?)\b/;
 
 function isNotAPurchase(line: string): boolean {
   const normalised = normalizeText(line);
@@ -316,7 +317,10 @@ function parseLineItem(line: string): ParsedItem | null {
   // this a discount was booked as a 0,50 € purchase of a product called
   // "cupon".
   const lastEnd = (last.index ?? 0) + last[0].length;
-  if (/[-−]\s?$/.test(line.slice(0, last.index)) || /^[-−]/.test(line.slice(lastEnd))) {
+  if (
+    /[-−]\s?$/.test(line.slice(0, last.index)) ||
+    /^[-−]/.test(line.slice(lastEnd))
+  ) {
     return null;
   }
 
@@ -343,8 +347,7 @@ function parseLineItem(line: string): ParsedItem | null {
     namePart = explicit[2];
   } else if (
     leading &&
-    (leading[1] === "1" ||
-      multipliesOut(Number(leading[1]), unitPrice, price))
+    (leading[1] === "1" || multipliesOut(Number(leading[1]), unitPrice, price))
   ) {
     parsedQuantity = Number(leading[1]);
     namePart = leading[2];
@@ -358,7 +361,9 @@ function parseLineItem(line: string): ParsedItem | null {
 
   if (
     parsedQuantity !== undefined &&
-    (Number.isNaN(parsedQuantity) || parsedQuantity <= 0 || parsedQuantity >= 1000)
+    (Number.isNaN(parsedQuantity) ||
+      parsedQuantity <= 0 ||
+      parsedQuantity >= 1000)
   ) {
     return null;
   }

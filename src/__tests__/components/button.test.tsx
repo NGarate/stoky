@@ -144,7 +144,9 @@ describe("the destructive-ghost variant", () => {
     // A row's delete trigger. The screens wrapped a `<span className=
     // "text-destructive">` inside a ghost button to get this, and the red
     // fill is kept for the button that confirms.
-    const classes = screen.getByRole("button", { name: "Eliminar" }).className.split(/\s+/);
+    const classes = screen
+      .getByRole("button", { name: "Eliminar" })
+      .className.split(/\s+/);
     expect(classes).toContain("text-destructive");
     expect(classes).not.toContain("bg-destructive");
   });
@@ -179,9 +181,11 @@ describe("the link variant", () => {
     // dark — under the 3:1 that 1.4.1 asks of a colour-only cue. A touch
     // screen has no hover, so `hover:underline` was no cue at all. The rule
     // now matches `ItemRow`'s title and `BackLink`: a link is underlined.
-    const className = screen.getByRole("button", {
-      name: "Volver al inventario",
-    }).className.split(/\s+/);
+    const className = screen
+      .getByRole("button", {
+        name: "Volver al inventario",
+      })
+      .className.split(/\s+/);
     expect(className).toContain("underline");
     expect(className).not.toContain("hover:underline");
   });

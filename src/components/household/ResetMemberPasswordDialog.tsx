@@ -16,12 +16,7 @@ import type { FormEvent, JSX, RefObject } from "react";
 
 /** Every reason a reset can be refused, each with its own sentence. */
 export type ResetRefusal =
-  | "tooShort"
-  | "tooEasy"
-  | "identity"
-  | "notOwner"
-  | "tooMany"
-  | "failed";
+  "tooShort" | "tooEasy" | "identity" | "notOwner" | "tooMany" | "failed";
 
 /**
  * The server's refusal, in words the admin can act on.
@@ -35,7 +30,9 @@ export type ResetRefusal =
  */
 export function resetRefusalOf(error: unknown): ResetRefusal {
   const code =
-    error instanceof TRPCClientError ? (error.data?.code as string | undefined) : undefined;
+    error instanceof TRPCClientError
+      ? (error.data?.code as string | undefined)
+      : undefined;
   const message = error instanceof Error ? error.message : undefined;
 
   if (code === "TOO_MANY_REQUESTS") return "tooMany";
@@ -97,9 +94,13 @@ export function ResetMemberPasswordDialog({
     onClose();
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
     event.preventDefault();
-    const newPassword = String(new FormData(event.currentTarget).get("newPassword") ?? "");
+    const newPassword = String(
+      new FormData(event.currentTarget).get("newPassword") ?? "",
+    );
 
     if (newPassword.length < MIN_PASSWORD_LENGTH) {
       refuse("tooShort");
@@ -129,7 +130,8 @@ export function ResetMemberPasswordDialog({
     failed: t("resetFailed"),
   };
   const formId = `${fieldId}-form`;
-  const invalid = refusal === "tooShort" || refusal === "tooEasy" || refusal === "identity";
+  const invalid =
+    refusal === "tooShort" || refusal === "tooEasy" || refusal === "identity";
 
   return (
     <Dialog
@@ -167,7 +169,10 @@ export function ResetMemberPasswordDialog({
         noValidate
         onSubmit={handleSubmit}
       >
-        <label className="text-sm font-medium text-foreground" htmlFor={`${fieldId}-new`}>
+        <label
+          className="text-sm font-medium text-foreground"
+          htmlFor={`${fieldId}-new`}
+        >
           {t("resetPassword")}
         </label>
         <Input

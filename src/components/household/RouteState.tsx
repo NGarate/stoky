@@ -45,7 +45,13 @@ export function SectionState({
           <p className="text-muted-foreground">
             {paused ? offline("nothingSavedTitle") : t("loadFailedTitle")}
           </p>
-          <Button className="mt-2" onClick={onRetry} size="sm" type="button" variant="outline">
+          <Button
+            className="mt-2"
+            onClick={onRetry}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
             {paused ? offline("refresh") : t("retry")}
           </Button>
         </>
@@ -134,9 +140,7 @@ export function isNoHouseholdError(error: unknown): boolean {
 
 /** True when the server said the thing being asked for does not exist. */
 export function isNotFoundError(error: unknown): boolean {
-  return (
-    error instanceof TRPCClientError && error.data?.code === "NOT_FOUND"
-  );
+  return error instanceof TRPCClientError && error.data?.code === "NOT_FOUND";
 }
 
 export function RouteState({
@@ -207,11 +211,15 @@ export function RouteState({
         ) : isLoading && !paused ? (
           <div className="space-y-4" aria-busy="true">
             <p className="sr-only">{t("loading")}</p>
-            {["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4", "skeleton-5"].map(
-              (key) => (
-                <div key={key} className="h-16 animate-pulse rounded bg-muted" />
-              ),
-            )}
+            {[
+              "skeleton-1",
+              "skeleton-2",
+              "skeleton-3",
+              "skeleton-4",
+              "skeleton-5",
+            ].map((key) => (
+              <div key={key} className="h-16 animate-pulse rounded bg-muted" />
+            ))}
           </div>
         ) : (
           <div className="rounded-xl border border-input bg-card p-6">
@@ -267,12 +275,22 @@ function CreateHousehold(): JSX.Element {
   return (
     <div>
       <div className="rounded-xl border border-input bg-card p-6">
-        <h2 className="text-lg font-semibold text-heading">{t("noHouseholdTitle")}</h2>
-        <p className="mt-2 text-sm text-muted-foreground">{t("noHouseholdBody")}</p>
+        <h2 className="text-lg font-semibold text-heading">
+          {t("noHouseholdTitle")}
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {t("noHouseholdBody")}
+        </p>
 
-        <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={handleSubmit}>
+        <form
+          className="mt-4 flex flex-col gap-3 sm:flex-row"
+          onSubmit={handleSubmit}
+        >
           <div className="flex-1">
-            <label className="mb-1 block text-sm font-medium" htmlFor="household-name">
+            <label
+              className="mb-1 block text-sm font-medium"
+              htmlFor="household-name"
+            >
               {t("nameLabel")}
             </label>
             <Input
@@ -284,7 +302,10 @@ function CreateHousehold(): JSX.Element {
               required
               value={name}
             />
-            <p className="mt-1 text-sm text-muted-foreground" id="household-name-hint">
+            <p
+              className="mt-1 text-sm text-muted-foreground"
+              id="household-name-hint"
+            >
               {t("nameHint")}
             </p>
           </div>

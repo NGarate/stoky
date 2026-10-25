@@ -2,7 +2,11 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createTRPCRouter, writeProcedure, createTRPCContext } from "@/server/trpc/trpc";
+import {
+  createTRPCRouter,
+  writeProcedure,
+  createTRPCContext,
+} from "@/server/trpc/trpc";
 import { withReplay } from "@/server/trpc/replay";
 import { prisma } from "@/lib/prisma";
 import type { AppSession } from "@/lib/auth/session";
@@ -54,23 +58,39 @@ let householdId = "";
 
 const router = createTRPCRouter({
   makeLocation: writeProcedure
-    .input(z.object({ idempotencyKey: z.string().uuid(), composedByUserId: z.string(), name: z.string() }))
+    .input(
+      z.object({
+        idempotencyKey: z.string().uuid(),
+        composedByUserId: z.string(),
+        name: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) =>
       withReplay(ctx, {
         key: input.idempotencyKey,
         composedByUserId: input.composedByUserId,
         procedure: "repro.makeLocation",
         input,
-        apply: async (tx) => tx.storageLocation.create({ data: { name: input.name, householdId: ctx.householdId } }),
+        apply: async (tx) =>
+          tx.storageLocation.create({
+            data: { name: input.name, householdId: ctx.householdId },
+          }),
         ids: (r) => [r.id],
-        reread: async (db, ids) => db.storageLocation.findFirstOrThrow({ where: { id: ids[0] } }),
+        reread: async (db, ids) =>
+          db.storageLocation.findFirstOrThrow({ where: { id: ids[0] } }),
       }),
     ),
 });
 
 async function caller() {
   const session = {
-    user: { id: userId, email: "r@example.com", name: "R", householdId, role: "OWNER" },
+    user: {
+      id: userId,
+      email: "r@example.com",
+      name: "R",
+      householdId,
+      role: "OWNER",
+    },
     expires: new Date(Date.now() + 3600_000).toISOString(),
     expiresKind: "idle",
     sessionId: crypto.randomUUID(),
@@ -79,10 +99,17 @@ async function caller() {
 }
 
 beforeAll(async () => {
-  const h = await prisma.household.create({ data: { name: "Repro F Household" } });
+  const h = await prisma.household.create({
+    data: { name: "Repro F Household" },
+  });
   householdId = h.id;
   const u = await prisma.user.create({
-    data: { email: `repro-f-${Date.now()}@example.com`, name: "R", householdId, role: "OWNER" },
+    data: {
+      email: `repro-f-${Date.now()}@example.com`,
+      name: "R",
+      householdId,
+      role: "OWNER",
+    },
   });
   userId = u.id;
 });
@@ -101,8 +128,16 @@ describe("shape F", () => {
     it(`noise ${i}`, async () => {
       const api = await caller();
       const key = randomUUID();
-      await api.makeLocation({ idempotencyKey: key, composedByUserId: userId, name: "Estante" });
-      await api.makeLocation({ idempotencyKey: key, composedByUserId: userId, name: "Estante" });
+      await api.makeLocation({
+        idempotencyKey: key,
+        composedByUserId: userId,
+        name: "Estante",
+      });
+      await api.makeLocation({
+        idempotencyKey: key,
+        composedByUserId: userId,
+        name: "Estante",
+      });
       expect(true).not.toBe(false);
     });
   }
@@ -110,11 +145,19 @@ describe("shape F", () => {
   it("refuses a key reused for a different change", async () => {
     const api = await caller();
     const key = randomUUID();
-    await api.makeLocation({ idempotencyKey: key, composedByUserId: userId, name: "Estante" });
+    await api.makeLocation({
+      idempotencyKey: key,
+      composedByUserId: userId,
+      name: "Estante",
+    });
 
     let thrown: unknown;
     try {
-      await api.makeLocation({ idempotencyKey: key, composedByUserId: userId, name: "Otro sitio" });
+      await api.makeLocation({
+        idempotencyKey: key,
+        composedByUserId: userId,
+        name: "Otro sitio",
+      });
     } catch (error) {
       thrown = error;
     }

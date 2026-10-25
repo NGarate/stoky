@@ -39,11 +39,15 @@ type ChooserConfig = {
   contact_links?: Array<{ name?: unknown; url?: unknown; about?: unknown }>;
 };
 
-const chooser = Bun.YAML.parse(read(".github/ISSUE_TEMPLATE/config.yml")) as ChooserConfig;
+const chooser = Bun.YAML.parse(
+  read(".github/ISSUE_TEMPLATE/config.yml"),
+) as ChooserConfig;
 
 describe("vulnerability reporting channel", () => {
   it("publishes the private advisory form of this repository", () => {
-    expect(publishedChannel()).toBe("https://github.com/NGarate/stoky/security/advisories/new");
+    expect(publishedChannel()).toBe(
+      "https://github.com/NGarate/stoky/security/advisories/new",
+    );
   });
 
   it("sends the issue chooser to the same place SECURITY.md does", () => {
@@ -52,12 +56,16 @@ describe("vulnerability reporting channel", () => {
   });
 
   it("names the security link in Spanish first, then English", () => {
-    const link = (chooser.contact_links ?? []).find((l) => l.url === publishedChannel());
+    const link = (chooser.contact_links ?? []).find(
+      (l) => l.url === publishedChannel(),
+    );
     expect(typeof link?.name).toBe("string");
     expect(typeof link?.about).toBe("string");
     const name = link!.name as string;
     expect(name.indexOf("vulnerabilidad")).toBeGreaterThanOrEqual(0);
-    expect(name.indexOf("vulnerabilidad")).toBeLessThan(name.indexOf("vulnerability"));
+    expect(name.indexOf("vulnerabilidad")).toBeLessThan(
+      name.indexOf("vulnerability"),
+    );
   });
 
   it("keeps blank issues while there is no template to file an ordinary bug with", () => {
@@ -72,7 +80,9 @@ describe("vulnerability reporting channel", () => {
   it("says what to do when the form is not offered", () => {
     // The form exists for outsiders only while the repository's private
     // vulnerability reporting setting is on, which no file here controls.
-    expect(reportingSection()).toContain("https://github.com/NGarate/stoky/issues/new");
+    expect(reportingSection()).toContain(
+      "https://github.com/NGarate/stoky/issues/new",
+    );
   });
 
   it("says in both places that the form is the only channel while issues are closed", () => {
@@ -80,11 +90,15 @@ describe("vulnerability reporting channel", () => {
     // (scripts/github-settings.ts), so an issue offered as the way in would
     // send a reporter to a door that is shut.
     expect(reportingSection()).toContain("**The form is the only channel.**");
-    const about = (chooser.contact_links ?? []).find((l) => l.url === publishedChannel())?.about;
+    const about = (chooser.contact_links ?? []).find(
+      (l) => l.url === publishedChannel(),
+    )?.about;
     expect(typeof about).toBe("string");
     const text = about as string;
     expect(text.indexOf("único canal")).toBeGreaterThanOrEqual(0);
-    expect(text.indexOf("único canal")).toBeLessThan(text.indexOf("only channel"));
+    expect(text.indexOf("único canal")).toBeLessThan(
+      text.indexOf("only channel"),
+    );
   });
 
   it("keeps the anchor other documents link to", () => {

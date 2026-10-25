@@ -1,4 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+} from "bun:test";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
@@ -83,8 +90,12 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   if (OWNER.productId) {
-    await prisma.priceRecord.deleteMany({ where: { productId: OWNER.productId } });
-    await prisma.stockEntry.deleteMany({ where: { productId: OWNER.productId } });
+    await prisma.priceRecord.deleteMany({
+      where: { productId: OWNER.productId },
+    });
+    await prisma.stockEntry.deleteMany({
+      where: { productId: OWNER.productId },
+    });
     await prisma.product.deleteMany({ where: { id: OWNER.productId } });
   }
   const product = await prisma.product.create({
@@ -104,7 +115,9 @@ afterAll(async () => {
   await prisma.stockEntry.deleteMany({
     where: { product: { householdId: OWNER.householdId } },
   });
-  await prisma.product.deleteMany({ where: { householdId: OWNER.householdId } });
+  await prisma.product.deleteMany({
+    where: { householdId: OWNER.householdId },
+  });
   await prisma.store.deleteMany({ where: { householdId: OWNER.householdId } });
   await prisma.user.deleteMany({ where: { id: OWNER.userId } });
   await prisma.household.deleteMany({ where: { id: OWNER.householdId } });
@@ -118,7 +131,7 @@ describe("addStock writes the entry and its price together", () => {
     let thrown: unknown;
     try {
       await api.inventory.addStock({
-      ...envelope(OWNER.userId),
+        ...envelope(OWNER.userId),
         ...purchase,
         productId: OWNER.productId,
         storeId: OWNER.storeId,
@@ -165,7 +178,6 @@ describe("addStock writes the entry and its price together", () => {
       productId: OWNER.productId,
       quantity: 2,
       unit: "L",
-
     });
 
     expect(

@@ -32,7 +32,11 @@ const statusConfig = {
   [ReceiptStatus.UPLOADING]: { tone: "neutral", icon: Loader2, spin: true },
   [ReceiptStatus.PROCESSING]: { tone: "neutral", icon: Loader2, spin: true },
   [ReceiptStatus.PARSED]: { tone: "neutral", icon: Loader2, spin: true },
-  [ReceiptStatus.NEEDS_REVIEW]: { tone: "warn", icon: AlertCircle, spin: false },
+  [ReceiptStatus.NEEDS_REVIEW]: {
+    tone: "warn",
+    icon: AlertCircle,
+    spin: false,
+  },
   [ReceiptStatus.CONFIRMED]: { tone: "ok", icon: CheckCircle, spin: false },
   [ReceiptStatus.APPLIED]: { tone: "ok", icon: Check, spin: false },
   [ReceiptStatus.FAILED]: { tone: "danger", icon: AlertCircle, spin: false },

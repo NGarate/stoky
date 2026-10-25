@@ -143,13 +143,18 @@ describe("a token that claims more than the database allows", () => {
 
     expect(
       await codeOf(() =>
-        caller.product.create({ name: `${PREFIX}Should Not Exist`, defaultUnit: "unit" }),
+        caller.product.create({
+          name: `${PREFIX}Should Not Exist`,
+          defaultUnit: "unit",
+        }),
       ),
     ).toBe("FORBIDDEN");
 
     // And nothing was written on the way to being refused.
     expect(
-      await prisma.product.count({ where: { name: `${PREFIX}Should Not Exist` } }),
+      await prisma.product.count({
+        where: { name: `${PREFIX}Should Not Exist` },
+      }),
     ).toBe(0);
   });
 
@@ -173,7 +178,10 @@ describe("a token that claims more than the database allows", () => {
 
     expect(
       await codeOf(() =>
-        caller.product.create({ name: `${PREFIX}Allowed`, defaultUnit: "unit" }),
+        caller.product.create({
+          name: `${PREFIX}Allowed`,
+          defaultUnit: "unit",
+        }),
       ),
     ).toBeNull();
 
@@ -184,7 +192,10 @@ describe("a token that claims more than the database allows", () => {
 
     expect(
       await codeOf(() =>
-        caller.product.create({ name: `${PREFIX}Refused`, defaultUnit: "unit" }),
+        caller.product.create({
+          name: `${PREFIX}Refused`,
+          defaultUnit: "unit",
+        }),
       ),
     ).toBe("FORBIDDEN");
   });
@@ -192,7 +203,9 @@ describe("a token that claims more than the database allows", () => {
   it("is held to the database's household, not its own", async () => {
     // A token naming another household must not reach it. The row's
     // `householdId` is what the resolver receives, so the claim is inert.
-    const stranger = await createTestHousehold({ name: `${HOUSEHOLD} Stranger` });
+    const stranger = await createTestHousehold({
+      name: `${HOUSEHOLD} Stranger`,
+    });
     const user = await createTestUser({
       email: generateTestEmail("freshness-household"),
       name: `${PREFIX}Household`,
@@ -202,7 +215,11 @@ describe("a token that claims more than the database allows", () => {
     });
 
     const strangersProduct = await prisma.product.create({
-      data: { name: `${PREFIX}Stranger Product`, defaultUnit: "unit", householdId: stranger.id },
+      data: {
+        name: `${PREFIX}Stranger Product`,
+        defaultUnit: "unit",
+        householdId: stranger.id,
+      },
     });
 
     const caller = await callerWithClaims({

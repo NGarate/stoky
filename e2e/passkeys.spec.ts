@@ -60,7 +60,9 @@ async function register(page: Page): Promise<void> {
  */
 async function signedIn(page: Page): Promise<boolean> {
   return page.evaluate(async () => {
-    const response = await fetch("/api/auth/get-session", { cache: "no-store" });
+    const response = await fetch("/api/auth/get-session", {
+      cache: "no-store",
+    });
     return (await response.json()) !== null;
   });
 }
@@ -77,44 +79,61 @@ test.describe("passkeys", () => {
   }) => {
     const cdp = await context.newCDPSession(page);
     await cdp.send("WebAuthn.enable");
-    const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
-      options: {
-        protocol: "ctap2",
-        // 2.1, the version with credential management. The server asks for
-        // a discoverable credential only as `residentKey: "preferred"`, and
-        // the login page's sign-in names no account, so a credential that is
-        // not discoverable could never be found; the assertion on
-        // `isResidentCredential` below says so if this ever stops holding.
-        ctap2Version: "ctap2_1",
-        transport: "internal",
-        hasResidentKey: true,
-        hasUserVerification: true,
-        isUserVerified: true,
+    const { authenticatorId } = await cdp.send(
+      "WebAuthn.addVirtualAuthenticator",
+      {
+        options: {
+          protocol: "ctap2",
+          // 2.1, the version with credential management. The server asks for
+          // a discoverable credential only as `residentKey: "preferred"`, and
+          // the login page's sign-in names no account, so a credential that is
+          // not discoverable could never be found; the assertion on
+          // `isResidentCredential` below says so if this ever stops holding.
+          ctap2Version: "ctap2_1",
+          transport: "internal",
+          hasResidentKey: true,
+          hasUserVerification: true,
+          isUserVerified: true,
+        },
       },
-    });
+    );
 
     // ------------------------------------------------------------ add one --
     await register(page);
     await page.goto("/settings/security");
     const section = page.getByRole("region", { name: sec.passkeysTitle });
-    await expect(section.getByText(sec.passkeysNone)).toBeVisible({ timeout: 30_000 });
+    await expect(section.getByText(sec.passkeysNone)).toBeVisible({
+      timeout: 30_000,
+    });
     await section.getByRole("button", { name: sec.passkeysAdd }).click();
     const dialog = page.getByRole("dialog", { name: sec.passkeysAddTitle });
     // The step-up: the password, then the browser's prompt, which the
     // virtual authenticator answers.
     await dialog.getByLabel(es.reauth.password).fill(PASSWORD);
-    await dialog.getByRole("button", { name: sec.passkeysAddAction, exact: true }).click();
+    await dialog
+      .getByRole("button", { name: sec.passkeysAddAction, exact: true })
+      .click();
     await expect(dialog).toBeHidden({ timeout: 30_000 });
-    await expect(section.getByRole("listitem")).toHaveCount(1, { timeout: 30_000 });
+    await expect(section.getByRole("listitem")).toHaveCount(1, {
+      timeout: 30_000,
+    });
 
-    const { credentials } = await cdp.send("WebAuthn.getCredentials", { authenticatorId });
-    expect(credentials, "the browser holds no passkey after adding one").toHaveLength(1);
+    const { credentials } = await cdp.send("WebAuthn.getCredentials", {
+      authenticatorId,
+    });
+    expect(
+      credentials,
+      "the browser holds no passkey after adding one",
+    ).toHaveLength(1);
     expect(credentials[0].isResidentCredential).toBe(true);
     expect(credentials[0].rpId).toBe("localhost");
 
     // ----------------------------------------------------------- sign out --
     await page.goto("/settings");
-    await page.getByRole("button", { name: es.session.signOut }).first().click();
+    await page
+      .getByRole("button", { name: es.session.signOut })
+      .first()
+      .click();
     const confirm = page.getByRole("group", { name: es.session.signOutTitle });
     await expect(confirm).toBeVisible({ timeout: 15_000 });
     await confirm.getByRole("button", { name: es.session.signOut }).click();
@@ -124,13 +143,21 @@ test.describe("passkeys", () => {
     // ---------------------------------------------- sign in with the key --
     await page.waitForSelector('input[name="email"]');
     await page.waitForTimeout(1500);
-    await expect(page.getByRole("checkbox", { name: es.auth.rememberMe })).not.toBeChecked();
+    await expect(
+      page.getByRole("checkbox", { name: es.auth.rememberMe }),
+    ).not.toBeChecked();
     await page.getByRole("button", { name: es.auth.passkeySignIn }).click();
     await expect(page).not.toHaveURL(/\/login/, { timeout: 30_000 });
 
-    expect(await signedIn(page), "the passkey did not sign the browser in").toBe(true);
+    expect(
+      await signedIn(page),
+      "the passkey did not sign the browser in",
+    ).toBe(true);
     const session = await sessionCookie(context);
-    expect(session, "no session cookie after the passkey sign-in").toBeDefined();
+    expect(
+      session,
+      "no session cookie after the passkey sign-in",
+    ).toBeDefined();
     // The box was left alone, so the cookie dies with the browser (D141).
     expect(session!.expires).toBe(-1);
   });

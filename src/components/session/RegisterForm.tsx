@@ -34,7 +34,9 @@ export function RegisterForm(): JSX.Element {
 
   const isBusy = isSubmitting || isNavigating || registerMutation.isPending;
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
     event.preventDefault();
     setErrorKey(null);
     setIsSubmitting(true);
@@ -62,13 +64,21 @@ export function RegisterForm(): JSX.Element {
       // A browser session: the box is on the login form, and somebody
       // registering on a kitchen tablet signs in there with it ticked
       // (`/settings/screen` says so).
-      const result = await signInWithPassword({ email, password, rememberMe: false });
+      const result = await signInWithPassword({
+        email,
+        password,
+        rememberMe: false,
+      });
 
       // An account made a moment ago has no second step to ask for; if one
       // ever did, the generic sentence is right and the login form handles it.
       if (!result.ok) {
         setErrorKey(
-          getAuthErrorKey(undefined, "login", result.twoFactor ? undefined : result.code),
+          getAuthErrorKey(
+            undefined,
+            "login",
+            result.twoFactor ? undefined : result.code,
+          ),
         );
         return;
       }
@@ -118,7 +128,9 @@ export function RegisterForm(): JSX.Element {
               </p>
             </div>
             <div className="rounded-2xl border border-border bg-card p-5 text-sm text-foreground">
-              <p className="font-medium text-heading">{t("registerAsideTitle")}</p>
+              <p className="font-medium text-heading">
+                {t("registerAsideTitle")}
+              </p>
               <p className="mt-2 leading-6 text-muted-foreground">
                 {t("registerAsideBody")}
               </p>
@@ -203,7 +215,10 @@ export function RegisterForm(): JSX.Element {
                     required
                     type="password"
                   />
-                  <p className="text-sm text-muted-foreground" id="password-hint">
+                  <p
+                    className="text-sm text-muted-foreground"
+                    id="password-hint"
+                  >
                     {t("passwordHintRegister", { min: MIN_PASSWORD_LENGTH })}
                   </p>
                 </div>
@@ -221,7 +236,10 @@ export function RegisterForm(): JSX.Element {
                     name="householdName"
                     type="text"
                   />
-                  <p className="text-sm text-muted-foreground" id="household-hint">
+                  <p
+                    className="text-sm text-muted-foreground"
+                    id="household-hint"
+                  >
                     {t("householdHint")}
                   </p>
                 </div>

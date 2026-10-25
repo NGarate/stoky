@@ -30,9 +30,7 @@ function getUrl() {
  */
 seedOnlineManager();
 
-export function TRPCProvider(
-  props: Readonly<{ children: React.ReactNode }>,
-) {
+export function TRPCProvider(props: Readonly<{ children: React.ReactNode }>) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -55,7 +53,11 @@ export function TRPCProvider(
             retry: (failureCount, error) => {
               if (error instanceof TRPCClientError) {
                 const status = error.data?.httpStatus;
-                if (typeof status === "number" && status >= 400 && status < 500) {
+                if (
+                  typeof status === "number" &&
+                  status >= 400 &&
+                  status < 500
+                ) {
                   return false;
                 }
               }

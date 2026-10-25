@@ -64,7 +64,9 @@ export const REGISTRATION_CLOSED_MESSAGE =
 export const REGISTRATION_LOCK_KEY = 7_340_000_001n;
 
 /** Whether a refusal's message is this setting's. */
-export function isRegistrationClosedRefusal(message: string | undefined): boolean {
+export function isRegistrationClosedRefusal(
+  message: string | undefined,
+): boolean {
   return Boolean(message?.includes(REGISTRATION_CLOSED_MESSAGE));
 }
 
@@ -84,7 +86,10 @@ export function parseRegistrationMode(
   nodeEnv: string | undefined,
 ): RegistrationSetting {
   if (raw === undefined || raw === "") {
-    return { mode: nodeEnv === "production" ? "first-user" : "open", problem: null };
+    return {
+      mode: nodeEnv === "production" ? "first-user" : "open",
+      problem: null,
+    };
   }
 
   if (isRegistrationMode(raw)) return { mode: raw, problem: null };
@@ -110,7 +115,10 @@ export function registrationMode(
  * under a lock, so two people claiming a fresh instance at once cannot both
  * see zero.
  */
-export function registrationAllows(mode: RegistrationMode, userCount: number): boolean {
+export function registrationAllows(
+  mode: RegistrationMode,
+  userCount: number,
+): boolean {
   switch (mode) {
     case "open":
       return true;

@@ -30,7 +30,10 @@ describe("parsing the setting", () => {
 
   it("is open when unset anywhere else, so development and the suites can register", () => {
     for (const nodeEnv of ["development", "test", undefined]) {
-      expect(parseRegistrationMode(undefined, nodeEnv)).toEqual({ mode: "open", problem: null });
+      expect(parseRegistrationMode(undefined, nodeEnv)).toEqual({
+        mode: "open",
+        problem: null,
+      });
     }
   });
 
@@ -42,7 +45,10 @@ describe("parsing the setting", () => {
   it("takes each known value as written, whatever NODE_ENV says", () => {
     for (const mode of REGISTRATION_MODES) {
       for (const nodeEnv of ["production", "development", undefined]) {
-        expect(parseRegistrationMode(mode, nodeEnv)).toEqual({ mode, problem: null });
+        expect(parseRegistrationMode(mode, nodeEnv)).toEqual({
+          mode,
+          problem: null,
+        });
       }
     }
   });
@@ -50,7 +56,18 @@ describe("parsing the setting", () => {
   it("closes on anything it does not know — never falls back to open", () => {
     // The near misses are the dangerous ones: each reads as "open" or "on" to
     // a person, and a lenient parser would make a typo the least safe value.
-    for (const raw of ["Open", "OPEN", " open", "open ", "true", "yes", "1", "firstuser", "first_user", "disabled"]) {
+    for (const raw of [
+      "Open",
+      "OPEN",
+      " open",
+      "open ",
+      "true",
+      "yes",
+      "1",
+      "firstuser",
+      "first_user",
+      "disabled",
+    ]) {
       const setting = parseRegistrationMode(raw, "production");
       expect(setting.mode).toBe("closed");
       expect(setting.problem).not.toBeNull();
@@ -67,15 +84,25 @@ describe("parsing the setting", () => {
 
   it("is read from the environment it is given, on every call", () => {
     expect(registrationMode({ NODE_ENV: "production" })).toBe("first-user");
-    expect(registrationMode({ NODE_ENV: "production", STOKY_REGISTRATION: "open" })).toBe("open");
-    expect(registrationMode({ NODE_ENV: "development", STOKY_REGISTRATION: "closed" })).toBe("closed");
-    expect(registrationMode({ NODE_ENV: "development", STOKY_REGISTRATION: "nope" })).toBe("closed");
+    expect(
+      registrationMode({ NODE_ENV: "production", STOKY_REGISTRATION: "open" }),
+    ).toBe("open");
+    expect(
+      registrationMode({
+        NODE_ENV: "development",
+        STOKY_REGISTRATION: "closed",
+      }),
+    ).toBe("closed");
+    expect(
+      registrationMode({ NODE_ENV: "development", STOKY_REGISTRATION: "nope" }),
+    ).toBe("closed");
   });
 });
 
 describe("whether one more account may register", () => {
   it("always, when open", () => {
-    for (const count of [0, 1, 50]) expect(registrationAllows("open", count)).toBe(true);
+    for (const count of [0, 1, 50])
+      expect(registrationAllows("open", count)).toBe(true);
   });
 
   it("only while there are no accounts, when first-user", () => {
@@ -85,7 +112,8 @@ describe("whether one more account may register", () => {
   });
 
   it("never, when closed — not even the first", () => {
-    for (const count of [0, 1, 50]) expect(registrationAllows("closed", count)).toBe(false);
+    for (const count of [0, 1, 50])
+      expect(registrationAllows("closed", count)).toBe(false);
   });
 });
 
@@ -97,7 +125,10 @@ describe("whether one more account may register", () => {
  */
 describe("whether the register screen offers its form", () => {
   /** A count that records being asked. */
-  function counter(count: number): { calls: number; count: () => Promise<number> } {
+  function counter(count: number): {
+    calls: number;
+    count: () => Promise<number>;
+  } {
     const tally = {
       calls: 0,
       count: async () => {
@@ -128,31 +159,41 @@ describe("whether the register screen offers its form", () => {
 
   it("refuses on a first-user instance with an account", async () => {
     for (const count of [1, 50]) {
-      expect(await registrationOpen("first-user", counter(count).count)).toBe(false);
+      expect(await registrationOpen("first-user", counter(count).count)).toBe(
+        false,
+      );
     }
   });
 });
 
 describe("refusing to start", () => {
   it("throws on an unknown value in production", () => {
-    expect(() => assertKnownRegistrationMode("Open", "production", undefined)).toThrow(
-      /refusing to start.*STOKY_REGISTRATION/,
-    );
+    expect(() =>
+      assertKnownRegistrationMode("Open", "production", undefined),
+    ).toThrow(/refusing to start.*STOKY_REGISTRATION/);
   });
 
   it("accepts every known value and the unset default in production", () => {
     for (const raw of [...REGISTRATION_MODES, undefined, ""]) {
-      expect(() => assertKnownRegistrationMode(raw, "production", undefined)).not.toThrow();
+      expect(() =>
+        assertKnownRegistrationMode(raw, "production", undefined),
+      ).not.toThrow();
     }
   });
 
   it("does not stop development, where an unknown value is already closed", () => {
-    expect(() => assertKnownRegistrationMode("Open", "development", undefined)).not.toThrow();
+    expect(() =>
+      assertKnownRegistrationMode("Open", "development", undefined),
+    ).not.toThrow();
   });
 
   it("does not stop `next build`, which has no runtime configuration", () => {
     expect(() =>
-      assertKnownRegistrationMode("Open", "production", "phase-production-build"),
+      assertKnownRegistrationMode(
+        "Open",
+        "production",
+        "phase-production-build",
+      ),
     ).not.toThrow();
   });
 

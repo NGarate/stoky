@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -20,21 +28,32 @@ function setup(existingModules: boolean, installExit = 0, pnpm = false) {
   if (existingModules) mkdirSync(join(fixture, "node_modules"));
   const pnpmMarker = join(fixture, "node_modules/.modules.yaml");
   if (pnpm) writeFileSync(pnpmMarker, "packageManager: pnpm\n");
-  copyFileSync(join(root, "scripts/dev-local.sh"), join(fixture, "scripts/dev-local.sh"));
+  copyFileSync(
+    join(root, "scripts/dev-local.sh"),
+    join(fixture, "scripts/dev-local.sh"),
+  );
   copyFileSync(join(root, ".bun-version"), join(fixture, ".bun-version"));
   writeFileSync(join(fixture, ".env"), "");
   writeFileSync(join(fixture, "docker-compose.dev.yml"), "");
 
   const command = (name: string, body: string) => {
-    writeFileSync(join(fixture, "bin", name), `#!/bin/bash\n${body}\n`, { mode: 0o755 });
+    writeFileSync(join(fixture, "bin", name), `#!/bin/bash\n${body}\n`, {
+      mode: 0o755,
+    });
   };
-  command("docker", `case "$*" in
+  command(
+    "docker",
+    `case "$*" in
     --version) echo 'Docker test fixture' ;;
     *' ps '*) echo '{"Health":"healthy"}' ;;
-  esac`);
-  command("bun", `if [ "$1" = --version ]; then cat .bun-version; exit; fi
+  esac`,
+  );
+  command(
+    "bun",
+    `if [ "$1" = --version ]; then cat .bun-version; exit; fi
     echo "bun $*" >> "$SETUP_CALLS"
-    if [ "$1" = install ]; then exit "$INSTALL_EXIT"; fi`);
+    if [ "$1" = install ]; then exit "$INSTALL_EXIT"; fi`,
+  );
   command("bunx", 'echo "bunx $*" >> "$SETUP_CALLS"');
 
   const callsPath = join(fixture, "calls");

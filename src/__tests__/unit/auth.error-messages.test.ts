@@ -9,9 +9,9 @@ describe("getAuthErrorKey", () => {
     expect(getAuthErrorKey("Invalid email or password", "login")).toBe(
       "invalidCredentials",
     );
-    expect(getAuthErrorKey(undefined, "login", "INVALID_EMAIL_OR_PASSWORD")).toBe(
-      "invalidCredentials",
-    );
+    expect(
+      getAuthErrorKey(undefined, "login", "INVALID_EMAIL_OR_PASSWORD"),
+    ).toBe("invalidCredentials");
     // Too long to check is still "wrong": naming the rule would help a guesser.
     expect(getAuthErrorKey(undefined, "login", "PASSWORD_TOO_LONG")).toBe(
       "invalidCredentials",
@@ -19,7 +19,9 @@ describe("getAuthErrorKey", () => {
   });
 
   it("calls an untrusted origin unavailable, which is the instance's doing", () => {
-    expect(getAuthErrorKey(undefined, "login", "INVALID_ORIGIN")).toBe("authUnavailable");
+    expect(getAuthErrorKey(undefined, "login", "INVALID_ORIGIN")).toBe(
+      "authUnavailable",
+    );
     expect(getAuthErrorKey(undefined, "login", "MISSING_OR_NULL_ORIGIN")).toBe(
       "authUnavailable",
     );
@@ -78,7 +80,11 @@ describe("getAuthErrorKey", () => {
     // account's: another network cannot help, and the person may be the one
     // somebody else is locking out.
     expect(
-      getAuthErrorKey(undefined, "login", new SignInRefusedError("rate_limited", 1).code),
+      getAuthErrorKey(
+        undefined,
+        "login",
+        new SignInRefusedError("rate_limited", 1).code,
+      ),
     ).toBe("tooManyAttempts");
     expect(
       getAuthErrorKey(
@@ -98,7 +104,9 @@ describe("getAuthErrorKey", () => {
     // Its own sentence: "the one your app shows now" is wrong for paper.
     expect(words("INVALID_BACKUP_CODE")).toBe("backupCodeInvalid");
     expect(words("INVALID_TWO_FACTOR_COOKIE")).toBe("twoFactorExpired");
-    expect(words("TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE")).toBe("twoFactorExpired");
+    expect(words("TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE")).toBe(
+      "twoFactorExpired",
+    );
     expect(words("ACCOUNT_TEMPORARILY_LOCKED")).toBe("twoFactorLocked");
     // The account's day of codes, not the fifteen minutes: waiting will not help.
     expect(words("TOO_MANY_WRONG_CODES")).toBe("twoFactorCodesSpent");
@@ -121,8 +129,14 @@ describe("getAuthErrorKey", () => {
 
   it("has words in both languages for every key it can answer", async () => {
     const catalogues = {
-      es: (await import("../../../messages/es.json")).default.auth as Record<string, string>,
-      en: (await import("../../../messages/en.json")).default.auth as Record<string, string>,
+      es: (await import("../../../messages/es.json")).default.auth as Record<
+        string,
+        string
+      >,
+      en: (await import("../../../messages/en.json")).default.auth as Record<
+        string,
+        string
+      >,
     };
     for (const key of [
       "twoFactorInvalidCode",

@@ -31,10 +31,7 @@ interface TorchConstraints extends MediaTrackConstraints {
 
 /** What went wrong with the camera, as something a person can act on. */
 type CameraProblem =
-  | "cameraDenied"
-  | "cameraNotFound"
-  | "cameraBusy"
-  | "cameraErrorUnknown";
+  "cameraDenied" | "cameraNotFound" | "cameraBusy" | "cameraErrorUnknown";
 
 /**
  * The camera's refusal, read by its name rather than shown as its message.
@@ -91,7 +88,7 @@ export function BarcodeScanner({
     (barcode: string) => {
       onScan(barcode);
     },
-    [onScan]
+    [onScan],
   );
 
   const handleError = useCallback(
@@ -102,7 +99,7 @@ export function BarcodeScanner({
         onError?.(error);
       }
     },
-    [onError]
+    [onError],
   );
 
   /**
@@ -234,9 +231,7 @@ export function BarcodeScanner({
             className="absolute bottom-4 right-4 rounded-full"
             size="icon"
             variant="secondary"
-            aria-label={
-              torchEnabled ? t("torchOff") : t("torchOn")
-            }
+            aria-label={torchEnabled ? t("torchOff") : t("torchOn")}
             title={torchEnabled ? t("torchOff") : t("torchOn")}
           >
             {/* The glyph previews the action, as a button's icon must — it

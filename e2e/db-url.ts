@@ -15,7 +15,9 @@
  * database the suite is on.
  */
 
-export function e2eDatabaseUrl(env: Record<string, string | undefined> = process.env): string {
+export function e2eDatabaseUrl(
+  env: Record<string, string | undefined> = process.env,
+): string {
   if (env.E2E_DATABASE_URL) return env.E2E_DATABASE_URL;
   if (!env.DATABASE_URL) {
     throw new Error(
@@ -28,7 +30,9 @@ export function e2eDatabaseUrl(env: Record<string, string | undefined> = process
   return url.toString();
 }
 
-export function e2eValkeyUrl(env: Record<string, string | undefined> = process.env): string {
+export function e2eValkeyUrl(
+  env: Record<string, string | undefined> = process.env,
+): string {
   if (env.E2E_VALKEY_URL) return env.E2E_VALKEY_URL;
   // Same fallback as src/lib/valkey.ts, moved onto its own db index.
   const base = env.VALKEY_URL ?? "redis://localhost:6379";

@@ -64,7 +64,9 @@ export function MatchSelector({
             onClick={() => onSelect(candidate.productId)}
             variant="outline"
             className={`h-auto w-full justify-between whitespace-normal text-left ${
-              selectedId === candidate.productId ? "border-primary bg-accent" : ""
+              selectedId === candidate.productId
+                ? "border-primary bg-accent"
+                : ""
             }`}
           >
             {/* The name and nothing else. The matcher's similarity used to

@@ -33,7 +33,9 @@ import type { JSX } from "react";
  * server sends it already measured; a screen with only a date measures it
  * with the same helper rather than with `Date.now()` arithmetic.
  */
-export function expiryTone(daysUntilExpiry: number): "danger" | "warn" | "neutral" {
+export function expiryTone(
+  daysUntilExpiry: number,
+): "danger" | "warn" | "neutral" {
   if (daysUntilExpiry < 0) return "danger";
   if (daysUntilExpiry <= EXPIRING_SOON_DAYS) return "warn";
   return "neutral";

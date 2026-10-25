@@ -5,7 +5,10 @@ import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createContext, type ReactElement } from "react";
-import { renderWithIntl as renderWithIntlOnly, type TestLocale } from "../utils/render";
+import {
+  renderWithIntl as renderWithIntlOnly,
+  type TestLocale,
+} from "../utils/render";
 import { useComposer } from "@/components/offline/Composer";
 import { persistKey } from "@/lib/offline/persist";
 import type { FailedOp, QueuedOp } from "@/lib/offline/queue";
@@ -162,10 +165,34 @@ let invalidated = 0;
  * no two-step verification, and Olga, an owner who has it.
  */
 const MEMBERS = [
-  { id: "u-olga", name: "Olga", email: "olga@example.com", role: "OWNER", twoFactorEnabled: true },
-  { id: "u-alba", name: "Alba", email: "alba@example.com", role: "ADMIN", twoFactorEnabled: true },
-  { id: "u-ana", name: "Ana", email: "ana@example.com", role: "KITCHEN", twoFactorEnabled: true },
-  { id: "u-bea", name: "Bea", email: "bea@example.com", role: "MEMBER", twoFactorEnabled: false },
+  {
+    id: "u-olga",
+    name: "Olga",
+    email: "olga@example.com",
+    role: "OWNER",
+    twoFactorEnabled: true,
+  },
+  {
+    id: "u-alba",
+    name: "Alba",
+    email: "alba@example.com",
+    role: "ADMIN",
+    twoFactorEnabled: true,
+  },
+  {
+    id: "u-ana",
+    name: "Ana",
+    email: "ana@example.com",
+    role: "KITCHEN",
+    twoFactorEnabled: true,
+  },
+  {
+    id: "u-bea",
+    name: "Bea",
+    email: "bea@example.com",
+    role: "MEMBER",
+    twoFactorEnabled: false,
+  },
 ];
 /** Ana's sessions, as `household.memberSessions` answers them. */
 const ANA_SESSIONS = [
@@ -211,7 +238,11 @@ let members = MEMBERS;
 /** Whose two-step verification the next read of the list says is off. */
 let twoFactorOffOnRead: string[] = [];
 /** The people page's other mutations, which these tests never press. */
-const untouched = () => ({ mutate: () => {}, mutateAsync: async () => ({}), isPending: false });
+const untouched = () => ({
+  mutate: () => {},
+  mutateAsync: async () => ({}),
+  isPending: false,
+});
 
 mock.module("@/lib/trpc/client", () => ({
   api: {
@@ -222,7 +253,9 @@ mock.module("@/lib/trpc/client", () => ({
           invalidate: async () => {
             membersInvalidated++;
             members = members.map((member) =>
-              twoFactorOffOnRead.includes(member.id) ? { ...member, twoFactorEnabled: false } : member,
+              twoFactorOffOnRead.includes(member.id)
+                ? { ...member, twoFactorEnabled: false }
+                : member,
             );
           },
         },
@@ -230,7 +263,13 @@ mock.module("@/lib/trpc/client", () => ({
     }),
     household: {
       members: {
-        useQuery: () => ({ data: members, error: null, fetchStatus: "idle", isPending: false, refetch: async () => {} }),
+        useQuery: () => ({
+          data: members,
+          error: null,
+          fetchStatus: "idle",
+          isPending: false,
+          refetch: async () => {},
+        }),
       },
       memberSessions: {
         useQuery: (input: unknown, options?: { enabled?: boolean }) => {
@@ -278,7 +317,12 @@ mock.module("@/lib/trpc/client", () => ({
     auth: {
       me: { useQuery: () => ({ data: { id: "u-alba", role: meRole } }) },
       listSessions: {
-        useQuery: () => ({ data: DEVICES, error: null, fetchStatus: "idle", refetch: async () => {} }),
+        useQuery: () => ({
+          data: DEVICES,
+          error: null,
+          fetchStatus: "idle",
+          refetch: async () => {},
+        }),
       },
       endSessions: {
         useMutation: () => ({
@@ -289,7 +333,8 @@ mock.module("@/lib/trpc/client", () => ({
             return {
               ended: input.scope === "one" ? 1 : 2,
               includedCurrent:
-                input.scope === "all" || (input.scope === "one" && input.sessionId === "s-here"),
+                input.scope === "all" ||
+                (input.scope === "one" && input.sessionId === "s-here"),
             };
           },
         }),
@@ -311,12 +356,12 @@ mock.module("@/lib/trpc/client", () => ({
 const { SignOutButton } = await import("@/components/session/SignOutButton");
 const { DeviceList } = await import("@/components/session/DeviceList");
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
-const { ChangePasswordForm } = await import("@/components/session/ChangePasswordForm");
-const { default: PeoplePage } = await import("@/app/(dashboard)/settings/people/page");
-const {
-  PASSWORD_CONTAINS_IDENTITY_MESSAGE,
-  WRONG_CURRENT_PASSWORD_MESSAGE,
-} = await import("@/lib/validations/password");
+const { ChangePasswordForm } =
+  await import("@/components/session/ChangePasswordForm");
+const { default: PeoplePage } =
+  await import("@/app/(dashboard)/settings/people/page");
+const { PASSWORD_CONTAINS_IDENTITY_MESSAGE, WRONG_CURRENT_PASSWORD_MESSAGE } =
+  await import("@/lib/validations/password");
 
 function op(id: string): QueuedOp {
   return {
@@ -368,9 +413,13 @@ afterEach(cleanup);
 describe("with nothing waiting", () => {
   it("says so rather than warning about nothing", async () => {
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
 
-    expect(screen.getByRole("group")).toHaveTextContent(/no hay nada sin enviar/i);
+    expect(screen.getByRole("group")).toHaveTextContent(
+      /no hay nada sin enviar/i,
+    );
     // Nothing to send, so no such option is offered.
     expect(
       screen.queryByRole("button", { name: "Enviar y cerrar sesión" }),
@@ -379,9 +428,13 @@ describe("with nothing waiting", () => {
 
   it("takes the queue and the cached shell off the device before leaving", async () => {
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Cerrar sesión" })[0] as HTMLElement,
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
+    await userEvent.click(
+      screen.getAllByRole("button", {
+        name: "Cerrar sesión",
+      })[0] as HTMLElement,
     );
 
     // Both belong to the account that is leaving, and after the redirect this
@@ -396,9 +449,13 @@ describe("with nothing waiting", () => {
     // first thing the next account on this tab is shown, and what that
     // account's persister then saves under its own key.
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Cerrar sesión" })[0] as HTMLElement,
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
+    await userEvent.click(
+      screen.getAllByRole("button", {
+        name: "Cerrar sesión",
+      })[0] as HTMLElement,
     );
 
     expect(queriesAtSignOut).toBe(0);
@@ -412,7 +469,9 @@ describe("with unsent changes", () => {
 
   it("says how many, and does not leave without being told to", async () => {
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
 
     expect(screen.getByRole("group")).toHaveTextContent(
       /quedan 2 cambios sin enviar/i,
@@ -423,7 +482,9 @@ describe("with unsent changes", () => {
 
   it("offers to send them first", async () => {
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
     await userEvent.click(
       screen.getByRole("button", { name: "Enviar y cerrar sesión" }),
     );
@@ -434,7 +495,9 @@ describe("with unsent changes", () => {
 
   it("discards them only when that is the button pressed", async () => {
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
     await userEvent.click(
       screen.getByRole("button", { name: "Cerrar sesión y descartarlos" }),
     );
@@ -448,10 +511,13 @@ describe("with unsent changes", () => {
     // It deletes somebody's unsent changes, and was drawn in the same filled
     // primary as "Enviar y cerrar sesión", which keeps them.
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
 
     expect(
-      screen.getByRole("button", { name: "Cerrar sesión y descartarlos" }).className,
+      screen.getByRole("button", { name: "Cerrar sesión y descartarlos" })
+        .className,
     ).toContain("bg-destructive");
   });
 
@@ -460,13 +526,16 @@ describe("with unsent changes", () => {
     const confirm = await openEnd("Cerrar todas");
 
     expect(
-      within(confirm).getByRole("button", { name: "Cerrar y descartarlos" }).className,
+      within(confirm).getByRole("button", { name: "Cerrar y descartarlos" })
+        .className,
     ).toContain("bg-destructive");
   });
 
   it("lets the person stay, and changes nothing when they do", async () => {
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Seguir aquí" }));
 
     expect(signOutAction).not.toHaveBeenCalled();
@@ -490,7 +559,9 @@ describe("with changes the server refused", () => {
 
   it("does not say there is nothing to lose", async () => {
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
 
     const panel = screen.getByRole("group");
     expect(panel).not.toHaveTextContent(/no hay nada sin enviar/i);
@@ -499,7 +570,9 @@ describe("with changes the server refused", () => {
 
   it("names leaving for what it does to them, and offers to look first", async () => {
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
 
     expect(
       screen.getByRole("button", { name: "Cerrar sesión y descartarlos" }),
@@ -511,7 +584,9 @@ describe("with changes the server refused", () => {
 
   it("does not offer to send them, which cannot help", async () => {
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
 
     expect(
       screen.queryByRole("button", { name: "Enviar y cerrar sesión" }),
@@ -523,13 +598,17 @@ describe("with changes the server refused", () => {
 
     const confirm = await openEnd("Cerrar todas");
 
-    expect(confirm).toHaveTextContent(/hay 3 cambios que el servidor no aceptó/i);
+    expect(confirm).toHaveTextContent(
+      /hay 3 cambios que el servidor no aceptó/i,
+    );
     // Sending first cannot help them, so leaving is drawn as what it does.
     expect(
       within(confirm).getByRole("button", { name: "Cerrar todas" }).className,
     ).toContain("bg-destructive");
     expect(
-      within(confirm).getByRole("link", { name: "Ver los cambios sin guardar" }),
+      within(confirm).getByRole("link", {
+        name: "Ver los cambios sin guardar",
+      }),
     ).toHaveAttribute("href", "/settings/unsaved");
   });
 
@@ -548,7 +627,9 @@ describe("on a shared device", () => {
     renderWithIntl(<SignOutButton />);
 
     // The kitchen tablet is the case this exists for.
-    expect(screen.getByText(/si este dispositivo lo usa más gente/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/si este dispositivo lo usa más gente/i),
+    ).toBeInTheDocument();
   });
 });
 
@@ -590,7 +671,10 @@ async function confirmWith(
   button: string,
   password = "cocina despensa nevera",
 ): Promise<void> {
-  await userEvent.type(within(dialog).getByLabelText("Tu contraseña"), password);
+  await userEvent.type(
+    within(dialog).getByLabelText("Tu contraseña"),
+    password,
+  );
   await userEvent.click(within(dialog).getByRole("button", { name: button }));
 }
 
@@ -616,7 +700,9 @@ describe("ending sessions: asking first", () => {
     renderDevices();
 
     const dialog = await openEnd("Cerrar todas");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Cancelar" }),
+    );
 
     expect(steps).toEqual([]);
     expect(screen.queryByRole("dialog")).toBeAbsent();
@@ -629,8 +715,15 @@ describe("ending sessions: the order the work happens in", () => {
 
     await confirmWith(await openEnd("Cerrar todas"), "Cerrar todas");
 
-    expect(steps).toEqual(["endSessions", "purgeQueue", "purgeShell", "signOut"]);
-    expect(endInputs).toEqual([{ currentPassword: "cocina despensa nevera", scope: "all" }]);
+    expect(steps).toEqual([
+      "endSessions",
+      "purgeQueue",
+      "purgeShell",
+      "signOut",
+    ]);
+    expect(endInputs).toEqual([
+      { currentPassword: "cocina despensa nevera", scope: "all" },
+    ]);
   });
 
   it("leaves the same way when the session ended is this one", async () => {
@@ -641,9 +734,18 @@ describe("ending sessions: the order the work happens in", () => {
       "Cerrar esta sesión",
     );
 
-    expect(steps).toEqual(["endSessions", "purgeQueue", "purgeShell", "signOut"]);
+    expect(steps).toEqual([
+      "endSessions",
+      "purgeQueue",
+      "purgeShell",
+      "signOut",
+    ]);
     expect(endInputs).toEqual([
-      { currentPassword: "cocina despensa nevera", scope: "one", sessionId: "s-here" },
+      {
+        currentPassword: "cocina despensa nevera",
+        scope: "one",
+        sessionId: "s-here",
+      },
     ]);
   });
 
@@ -655,7 +757,9 @@ describe("ending sessions: the order the work happens in", () => {
     await confirmWith(await openEnd("Cerrar las demás"), "Cerrar las demás");
 
     expect(steps).toEqual(["endSessions"]);
-    expect(endInputs).toEqual([{ currentPassword: "cocina despensa nevera", scope: "others" }]);
+    expect(endInputs).toEqual([
+      { currentPassword: "cocina despensa nevera", scope: "others" },
+    ]);
     expect(purgeAll).not.toHaveBeenCalled();
     expect(signOutAction).not.toHaveBeenCalled();
     expect(invalidated).toBe(1);
@@ -672,7 +776,11 @@ describe("ending sessions: the order the work happens in", () => {
 
     expect(steps).toEqual(["endSessions"]);
     expect(endInputs).toEqual([
-      { currentPassword: "cocina despensa nevera", scope: "one", sessionId: "s-phone" },
+      {
+        currentPassword: "cocina despensa nevera",
+        scope: "one",
+        sessionId: "s-phone",
+      },
     ]);
     expect(purgeAll).not.toHaveBeenCalled();
     expect(signOutAction).not.toHaveBeenCalled();
@@ -707,7 +815,9 @@ describe("ending sessions: the order the work happens in", () => {
     const dialog = await openEnd("Cerrar las demás");
 
     expect(dialog).not.toHaveTextContent("sin enviar");
-    expect(within(dialog).getByRole("button", { name: "Cerrar las demás" })).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "Cerrar las demás" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -731,8 +841,13 @@ describe("ending sessions: when the server refuses", () => {
 
     await confirmWith(await openEnd("Cerrar todas"), "Cerrar todas");
 
-    expect(screen.getByRole("alert")).toHaveTextContent("La contraseña no es correcta");
-    expect(screen.getByLabelText("Tu contraseña")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "La contraseña no es correcta",
+    );
+    expect(screen.getByLabelText("Tu contraseña")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
   });
 
   it("says a spent budget as one, not as a wrong password", async () => {
@@ -751,7 +866,9 @@ describe("ending sessions: when the server refuses", () => {
     const dialog = await openEnd("Cerrar todas");
     await confirmWith(dialog, "Cerrar todas");
 
-    expect(within(dialog).getByRole("button", { name: "Cerrar todas" })).not.toBeDisabled();
+    expect(
+      within(dialog).getByRole("button", { name: "Cerrar todas" }),
+    ).not.toBeDisabled();
   });
 });
 
@@ -793,7 +910,9 @@ describe("when sending first does not empty the queue", () => {
 
   it("discards nothing and does not sign out, from the sign-out control", async () => {
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
     await userEvent.click(
       screen.getByRole("button", { name: "Enviar y cerrar sesión" }),
     );
@@ -805,17 +924,23 @@ describe("when sending first does not empty the queue", () => {
 
   it("says the changes are still here, rather than nothing", async () => {
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
     await userEvent.click(
       screen.getByRole("button", { name: "Enviar y cerrar sesión" }),
     );
 
-    expect(screen.getByRole("alert")).toHaveTextContent("tus cambios siguen aquí");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "tus cambios siguen aquí",
+    );
   });
 
   it("leaves the controls usable, so sending can be tried again", async () => {
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
     const send = screen.getByRole("button", { name: "Enviar y cerrar sesión" });
     await userEvent.click(send);
 
@@ -840,9 +965,13 @@ describe("when signing out fails after the purge", () => {
 
   it("does not claim it worked, and says the data is already gone", async () => {
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Cerrar sesión" })[0] as HTMLElement,
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
+    await userEvent.click(
+      screen.getAllByRole("button", {
+        name: "Cerrar sesión",
+      })[0] as HTMLElement,
     );
 
     // The purge did happen — that is the point of saying so rather than
@@ -858,13 +987,17 @@ describe("when signing out fails after the purge", () => {
     // failure after that point left every button — cancel included — disabled
     // with no way out but a reload.
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
     const commit = screen.getAllByRole("button", {
       name: "Cerrar sesión",
     })[0] as HTMLElement;
     await userEvent.click(commit);
 
-    expect(screen.getByRole("button", { name: "Seguir aquí" })).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Seguir aquí" }),
+    ).not.toBeDisabled();
   });
 
   it("tells the devices list that the sessions *were* ended", async () => {
@@ -874,7 +1007,9 @@ describe("when signing out fails after the purge", () => {
     renderDevices();
     await confirmWith(await openEnd("Cerrar todas"), "Cerrar todas");
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Se han cerrado las sesiones");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Se han cerrado las sesiones",
+    );
   });
 
   it("says only this session was ended, when that is the one asked for", async () => {
@@ -933,9 +1068,13 @@ describe("the persisted reads, which nothing was watching", () => {
     expect(window.localStorage.getItem(key)).not.toBeNull();
 
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Cerrar sesión" })[0] as HTMLElement,
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
+    await userEvent.click(
+      screen.getAllByRole("button", {
+        name: "Cerrar sesión",
+      })[0] as HTMLElement,
     );
 
     expect(window.localStorage.getItem(key)).toBeNull();
@@ -950,7 +1089,9 @@ describe("the persisted reads, which nothing was watching", () => {
     window.localStorage.setItem(key, JSON.stringify({ anything: true }));
 
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
     await userEvent.click(
       screen.getByRole("button", { name: "Enviar y cerrar sesión" }),
     );
@@ -976,7 +1117,9 @@ describe("where focus goes when the question appears", () => {
 
   it("moves to the panel on the sign-out control too", async () => {
     renderWithIntl(<SignOutButton />);
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar sesión" }),
+    );
 
     expect(document.activeElement).toBe(
       screen.getByRole("group", { name: "¿Cerrar sesión?" }),
@@ -1012,12 +1155,19 @@ async function changePassword(
   fields: { current?: string; next?: string; again?: string } = {},
 ): Promise<void> {
   const { current = CURRENT, next = NEXT, again = next } = fields;
-  if (current) await userEvent.type(screen.getByLabelText("Contraseña actual"), current);
-  if (next) await userEvent.type(screen.getByLabelText("Contraseña nueva"), next);
+  if (current)
+    await userEvent.type(screen.getByLabelText("Contraseña actual"), current);
+  if (next)
+    await userEvent.type(screen.getByLabelText("Contraseña nueva"), next);
   if (again) {
-    await userEvent.type(screen.getByLabelText("Repite la contraseña nueva"), again);
+    await userEvent.type(
+      screen.getByLabelText("Repite la contraseña nueva"),
+      again,
+    );
   }
-  await userEvent.click(screen.getByRole("button", { name: "Cambiar la contraseña" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Cambiar la contraseña" }),
+  );
 }
 
 describe("changing the password", () => {
@@ -1071,7 +1221,9 @@ describe("changing the password", () => {
 
     await changePassword();
 
-    expect(changeInputs).toEqual([{ currentPassword: CURRENT, newPassword: NEXT }]);
+    expect(changeInputs).toEqual([
+      { currentPassword: CURRENT, newPassword: NEXT },
+    ]);
     expect(steps).toEqual(["changePassword"]);
     expect(purgeAll).not.toHaveBeenCalled();
     expect(postMessage).not.toHaveBeenCalled();
@@ -1136,11 +1288,16 @@ describe("changing the password", () => {
     expect(screen.getByLabelText("Contraseña nueva")).toHaveValue(NEXT);
     expect(screen.queryByText("Contraseña cambiada")).toBeAbsent();
     expect(invalidated).toBe(0);
-    expect(screen.getByRole("button", { name: "Cambiar la contraseña" })).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Cambiar la contraseña" }),
+    ).not.toBeDisabled();
   });
 
   it("names a new password built from the person's name or address", async () => {
-    changeRefusal = trpcRefusal("BAD_REQUEST", PASSWORD_CONTAINS_IDENTITY_MESSAGE);
+    changeRefusal = trpcRefusal(
+      "BAD_REQUEST",
+      PASSWORD_CONTAINS_IDENTITY_MESSAGE,
+    );
     renderWithIntl(<ChangePasswordForm />);
 
     await changePassword();
@@ -1164,7 +1321,10 @@ describe("changing the password", () => {
   });
 
   it("says to wait when the limit is spent", async () => {
-    changeRefusal = trpcRefusal("TOO_MANY_REQUESTS", "Too many attempts at the password.");
+    changeRefusal = trpcRefusal(
+      "TOO_MANY_REQUESTS",
+      "Too many attempts at the password.",
+    );
     renderWithIntl(<ChangePasswordForm />);
 
     await changePassword();
@@ -1180,7 +1340,9 @@ describe("changing the password", () => {
     expect(
       screen.getByRole("button", { name: "Change the password" }),
     ).toHaveAccessibleDescription(/this one stays signed in/);
-    expect(screen.getByLabelText("Repeat the new password")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Repeat the new password"),
+    ).toBeInTheDocument();
   });
 });
 
@@ -1205,7 +1367,9 @@ describe("a member's sessions, from the people page", () => {
   }
 
   const rowOf = (name: string) =>
-    screen.getAllByRole("listitem").find((item) => within(item).queryByText(name, { exact: true }));
+    screen
+      .getAllByRole("listitem")
+      .find((item) => within(item).queryByText(name, { exact: true }));
 
   it("is offered on another member's row, beside removing them, and not on the admin's own", () => {
     renderPeople();
@@ -1214,10 +1378,16 @@ describe("a member's sessions, from the people page", () => {
     const alba = rowOf("Alba");
     if (!ana || !alba) throw new Error("the members are not listed");
     // "They left" and "their phone was stolen" are different acts, both offered.
-    expect(within(ana).getByRole("button", { name: "Ver sus sesiones" })).toBeInTheDocument();
-    expect(within(ana).getByRole("button", { name: "Quitar del hogar" })).toBeInTheDocument();
+    expect(
+      within(ana).getByRole("button", { name: "Ver sus sesiones" }),
+    ).toBeInTheDocument();
+    expect(
+      within(ana).getByRole("button", { name: "Quitar del hogar" }),
+    ).toBeInTheDocument();
     // Your own are in Seguridad y acceso, behind your password.
-    expect(within(alba).queryByRole("button", { name: "Ver sus sesiones" })).toBeNull();
+    expect(
+      within(alba).queryByRole("button", { name: "Ver sus sesiones" }),
+    ).toBeNull();
     // Nothing is read until somebody asks.
     expect(memberSessionsFor).toBeNull();
   });
@@ -1227,7 +1397,9 @@ describe("a member's sessions, from the people page", () => {
 
     const ana = rowOf("Ana");
     if (!ana) throw new Error("Ana is not listed");
-    await userEvent.click(within(ana).getByRole("button", { name: "Ver sus sesiones" }));
+    await userEvent.click(
+      within(ana).getByRole("button", { name: "Ver sus sesiones" }),
+    );
 
     const dialog = screen.getByRole("dialog", { name: "Sesiones de Ana" });
     expect(memberSessionsFor).toEqual({ userId: "u-ana" });
@@ -1240,31 +1412,47 @@ describe("a member's sessions, from the people page", () => {
     renderPeople();
     const ana = rowOf("Ana");
     if (!ana) throw new Error("Ana is not listed");
-    await userEvent.click(within(ana).getByRole("button", { name: "Ver sus sesiones" }));
+    await userEvent.click(
+      within(ana).getByRole("button", { name: "Ver sus sesiones" }),
+    );
     const dialog = screen.getByRole("dialog", { name: "Sesiones de Ana" });
 
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Cerrar esta: Pantalla de cocina" }),
+      within(dialog).getByRole("button", {
+        name: "Cerrar esta: Pantalla de cocina",
+      }),
     );
 
-    expect(memberEndInputs).toEqual([{ userId: "u-ana", sessionId: "m-tablet" }]);
+    expect(memberEndInputs).toEqual([
+      { userId: "u-ana", sessionId: "m-tablet" },
+    ]);
     expect(
-      await screen.findByText("Se ha cerrado la sesión de Ana en Pantalla de cocina."),
+      await screen.findByText(
+        "Se ha cerrado la sesión de Ana en Pantalla de cocina.",
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("dialog", { name: "Sesiones de Ana" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Sesiones de Ana" }),
+    ).toBeInTheDocument();
   });
 
   it("ends every one with no session named, and closes", async () => {
     renderPeople();
     const ana = rowOf("Ana");
     if (!ana) throw new Error("Ana is not listed");
-    await userEvent.click(within(ana).getByRole("button", { name: "Ver sus sesiones" }));
+    await userEvent.click(
+      within(ana).getByRole("button", { name: "Ver sus sesiones" }),
+    );
     const dialog = screen.getByRole("dialog", { name: "Sesiones de Ana" });
 
-    await userEvent.click(within(dialog).getByRole("button", { name: "Cerrar todas sus sesiones" }));
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Cerrar todas sus sesiones" }),
+    );
 
     expect(memberEndInputs).toEqual([{ userId: "u-ana" }]);
-    expect(await screen.findByText("Se han cerrado las sesiones de Ana.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Se han cerrado las sesiones de Ana."),
+    ).toBeInTheDocument();
     // `hidden: true`, measured: with the dialog left open, the plain query
     // still answered null here under happy-dom, so it could not see the
     // dialog fail to close.
@@ -1272,21 +1460,31 @@ describe("a member's sessions, from the people page", () => {
   });
 
   it("says an owner's are an owner's to end, in the dialog, and ends nothing", async () => {
-    const refused = new TRPCClientError<never>("Only an owner may change who owns this household");
+    const refused = new TRPCClientError<never>(
+      "Only an owner may change who owns this household",
+    );
     Object.defineProperty(refused, "data", { value: { code: "FORBIDDEN" } });
     memberEndRefusal = refused;
     renderPeople();
     const ana = rowOf("Ana");
     if (!ana) throw new Error("Ana is not listed");
-    await userEvent.click(within(ana).getByRole("button", { name: "Ver sus sesiones" }));
+    await userEvent.click(
+      within(ana).getByRole("button", { name: "Ver sus sesiones" }),
+    );
     const dialog = screen.getByRole("dialog", { name: "Sesiones de Ana" });
 
-    await userEvent.click(within(dialog).getByRole("button", { name: "Cerrar todas sus sesiones" }));
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Cerrar todas sus sesiones" }),
+    );
 
     expect(
-      await within(dialog).findByText("Solo una persona propietaria puede cerrar las sesiones de otra."),
+      await within(dialog).findByText(
+        "Solo una persona propietaria puede cerrar las sesiones de otra.",
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("dialog", { name: "Sesiones de Ana" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Sesiones de Ana" }),
+    ).toBeInTheDocument();
   });
 
   it("says before a removal that it signs the member out on every device", async () => {
@@ -1296,7 +1494,9 @@ describe("a member's sessions, from the people page", () => {
     const ana = rowOf("Ana");
     if (!ana) throw new Error("Ana is not listed");
 
-    await userEvent.click(within(ana).getByRole("button", { name: "Quitar del hogar" }));
+    await userEvent.click(
+      within(ana).getByRole("button", { name: "Quitar del hogar" }),
+    );
 
     expect(
       screen.getByRole("group", { name: "¿Quitar a Ana del hogar?" }),
@@ -1327,8 +1527,14 @@ describe("every session in the household, from the people page", () => {
 
   async function openHouseholdEnd(): Promise<HTMLElement> {
     const section = screen.getByRole("region", { name: TITLE });
-    await userEvent.click(within(section).getByRole("button", { name: "Cerrar todas las sesiones" }));
-    return screen.getByRole("dialog", { name: "¿Cerrar todas las sesiones del hogar?" });
+    await userEvent.click(
+      within(section).getByRole("button", {
+        name: "Cerrar todas las sesiones",
+      }),
+    );
+    return screen.getByRole("dialog", {
+      name: "¿Cerrar todas las sesiones del hogar?",
+    });
   }
 
   it("is offered to an owner", () => {
@@ -1343,14 +1549,18 @@ describe("every session in the household, from the people page", () => {
     renderPeople();
 
     expect(screen.queryByRole("region", { name: TITLE })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Cerrar todas las sesiones" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Cerrar todas las sesiones" }),
+    ).toBeNull();
   });
 
   it("says before the fact that the owner is signed out too, and ends nothing on opening", async () => {
     meRole = "OWNER";
     renderPeople();
 
-    expect(await openHouseholdEnd()).toHaveTextContent("también la tuya en este");
+    expect(await openHouseholdEnd()).toHaveTextContent(
+      "también la tuya en este",
+    );
     expect(steps).toEqual([]);
   });
 
@@ -1360,13 +1570,23 @@ describe("every session in the household, from the people page", () => {
 
     await confirmWith(await openHouseholdEnd(), "Cerrar todas las sesiones");
 
-    expect(householdEndInputs).toEqual([{ currentPassword: "cocina despensa nevera" }]);
-    expect(steps).toEqual(["endHouseholdSessions", "purgeQueue", "purgeShell", "signOut"]);
+    expect(householdEndInputs).toEqual([
+      { currentPassword: "cocina despensa nevera" },
+    ]);
+    expect(steps).toEqual([
+      "endHouseholdSessions",
+      "purgeQueue",
+      "purgeShell",
+      "signOut",
+    ]);
   });
 
   it("discards nothing on a wrong password, and says so in the dialog", async () => {
     meRole = "OWNER";
-    householdEndRefusal = trpcRefusal("BAD_REQUEST", WRONG_CURRENT_PASSWORD_MESSAGE);
+    householdEndRefusal = trpcRefusal(
+      "BAD_REQUEST",
+      WRONG_CURRENT_PASSWORD_MESSAGE,
+    );
     renderPeople();
 
     const dialog = await openHouseholdEnd();
@@ -1374,12 +1594,17 @@ describe("every session in the household, from the people page", () => {
 
     expect(steps).toEqual(["endHouseholdSessions"]);
     expect(signOutAction).not.toHaveBeenCalled();
-    expect(within(dialog).getByRole("alert")).toHaveTextContent("La contraseña no es correcta");
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      "La contraseña no es correcta",
+    );
   });
 
   it("says an owner's act is an owner's, when the role changed under the page", async () => {
     meRole = "OWNER";
-    householdEndRefusal = trpcRefusal("FORBIDDEN", "Only an owner may end every session in the household");
+    householdEndRefusal = trpcRefusal(
+      "FORBIDDEN",
+      "Only an owner may end every session in the household",
+    );
     renderPeople();
 
     const dialog = await openHouseholdEnd();
@@ -1433,36 +1658,54 @@ describe("a member's two-step verification, from the people page", () => {
   }
 
   async function openRemoval(name: string): Promise<HTMLElement> {
-    await userEvent.click(within(rowOf(name)).getByRole("button", { name: BUTTON }));
-    return screen.getByRole("dialog", { name: `¿Quitar la verificación en dos pasos de ${name}?` });
+    await userEvent.click(
+      within(rowOf(name)).getByRole("button", { name: BUTTON }),
+    );
+    return screen.getByRole("dialog", {
+      name: `¿Quitar la verificación en dos pasos de ${name}?`,
+    });
   }
 
   it("says on every row whether it is on, in words", () => {
     renderPeople();
 
     expect(rowOf("Ana")).toHaveTextContent("Verificación en dos pasosActivada");
-    expect(rowOf("Bea")).toHaveTextContent("Verificación en dos pasosDesactivada");
+    expect(rowOf("Bea")).toHaveTextContent(
+      "Verificación en dos pasosDesactivada",
+    );
   });
 
   it("is offered to an admin only on another member's row that has it, and never on an owner's", () => {
     meRole = "ADMIN";
     renderPeople();
 
-    expect(within(rowOf("Ana")).getByRole("button", { name: BUTTON })).toBeInTheDocument();
+    expect(
+      within(rowOf("Ana")).getByRole("button", { name: BUTTON }),
+    ).toBeInTheDocument();
     // Nothing to remove.
-    expect(within(rowOf("Bea")).queryByRole("button", { name: BUTTON })).toBeNull();
+    expect(
+      within(rowOf("Bea")).queryByRole("button", { name: BUTTON }),
+    ).toBeNull();
     // Your own is turned off from Seguridad y acceso.
-    expect(within(rowOf("Alba")).queryByRole("button", { name: BUTTON })).toBeNull();
+    expect(
+      within(rowOf("Alba")).queryByRole("button", { name: BUTTON }),
+    ).toBeNull();
     // An owner's is another owner's to remove.
-    expect(within(rowOf("Olga")).queryByRole("button", { name: BUTTON })).toBeNull();
+    expect(
+      within(rowOf("Olga")).queryByRole("button", { name: BUTTON }),
+    ).toBeNull();
   });
 
   it("is offered to an owner on another owner's row", () => {
     meRole = "OWNER";
     renderPeople();
 
-    expect(within(rowOf("Olga")).getByRole("button", { name: BUTTON })).toBeInTheDocument();
-    expect(within(rowOf("Alba")).queryByRole("button", { name: BUTTON })).toBeNull();
+    expect(
+      within(rowOf("Olga")).getByRole("button", { name: BUTTON }),
+    ).toBeInTheDocument();
+    expect(
+      within(rowOf("Alba")).queryByRole("button", { name: BUTTON }),
+    ).toBeNull();
   });
 
   it("says what it costs, asks for the password, and sends nothing on opening", async () => {
@@ -1470,7 +1713,9 @@ describe("a member's two-step verification, from the people page", () => {
 
     const dialog = await openRemoval("Ana");
 
-    expect(dialog).toHaveTextContent("Se cerrarán todas sus sesiones y tendrá que configurarla de nuevo");
+    expect(dialog).toHaveTextContent(
+      "Se cerrarán todas sus sesiones y tendrá que configurarla de nuevo",
+    );
     expect(within(dialog).getByLabelText("Tu contraseña")).toBeInTheDocument();
     expect(twoFactorRemovals).toEqual([]);
   });
@@ -1480,7 +1725,9 @@ describe("a member's two-step verification, from the people page", () => {
 
     await confirmWith(await openRemoval("Ana"), "Quitar la verificación");
 
-    expect(twoFactorRemovals).toEqual([{ userId: "u-ana", currentPassword: "cocina despensa nevera" }]);
+    expect(twoFactorRemovals).toEqual([
+      { userId: "u-ana", currentPassword: "cocina despensa nevera" },
+    ]);
     expect(
       await screen.findByText(
         "Se ha quitado la verificación en dos pasos de Ana y se han cerrado sus sesiones. Pídele que la configure de nuevo en cuanto entre.",
@@ -1499,8 +1746,14 @@ describe("a member's two-step verification, from the people page", () => {
 
       await confirmWith(await openRemoval("Ana"), "Quitar la verificación");
 
-      await waitFor(() => expect(screen.queryAllByRole("dialog", { hidden: true })).toHaveLength(0));
-      expect(within(rowOf("Ana")).queryByRole("button", { name: BUTTON })).toBeNull();
+      await waitFor(() =>
+        expect(screen.queryAllByRole("dialog", { hidden: true })).toHaveLength(
+          0,
+        ),
+      );
+      expect(
+        within(rowOf("Ana")).queryByRole("button", { name: BUTTON }),
+      ).toBeNull();
       await waitFor(() => expect(document.activeElement?.tagName).toBe("UL"));
     } finally {
       twoFactorOffOnRead = [];
@@ -1509,18 +1762,26 @@ describe("a member's two-step verification, from the people page", () => {
   });
 
   it("says a wrong password in the dialog, and stays open", async () => {
-    twoFactorRemovalRefusal = trpcRefusal("BAD_REQUEST", WRONG_CURRENT_PASSWORD_MESSAGE);
+    twoFactorRemovalRefusal = trpcRefusal(
+      "BAD_REQUEST",
+      WRONG_CURRENT_PASSWORD_MESSAGE,
+    );
     renderPeople();
 
     const dialog = await openRemoval("Ana");
     await confirmWith(dialog, "Quitar la verificación");
 
-    expect(within(dialog).getByRole("alert")).toHaveTextContent("La contraseña no es correcta");
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      "La contraseña no es correcta",
+    );
     expect(membersInvalidated).toBe(0);
   });
 
   it("says an owner's is another owner's, when the role changed under the page", async () => {
-    twoFactorRemovalRefusal = trpcRefusal("FORBIDDEN", "Only an owner may change who owns this household");
+    twoFactorRemovalRefusal = trpcRefusal(
+      "FORBIDDEN",
+      "Only an owner may change who owns this household",
+    );
     renderPeople();
 
     const dialog = await openRemoval("Ana");
@@ -1532,7 +1793,10 @@ describe("a member's two-step verification, from the people page", () => {
   });
 
   it("says the member changed, and reads the list again", async () => {
-    twoFactorRemovalRefusal = trpcRefusal("CONFLICT", "This member has no two-step verification to remove");
+    twoFactorRemovalRefusal = trpcRefusal(
+      "CONFLICT",
+      "This member has no two-step verification to remove",
+    );
     renderPeople();
 
     const dialog = await openRemoval("Ana");

@@ -25,7 +25,9 @@ describe("deviceIdFromRequest", () => {
     const id = mintDeviceId();
     expect(
       deviceIdFromRequest(
-        requestWith(`authjs.csrf-token=abc; ${DEVICE_ID_COOKIE}=${id}; NEXT_LOCALE=es`),
+        requestWith(
+          `authjs.csrf-token=abc; ${DEVICE_ID_COOKIE}=${id}; NEXT_LOCALE=es`,
+        ),
       ),
     ).toBe(id);
   });
@@ -39,7 +41,9 @@ describe("deviceIdFromRequest", () => {
     // `x_stoky_device` is somebody else's cookie, and matching on a suffix
     // would let it stand in for the device.
     expect(
-      deviceIdFromRequest(requestWith(`x_${DEVICE_ID_COOKIE}=${mintDeviceId()}`)),
+      deviceIdFromRequest(
+        requestWith(`x_${DEVICE_ID_COOKIE}=${mintDeviceId()}`),
+      ),
     ).toBeUndefined();
   });
 
@@ -47,7 +51,9 @@ describe("deviceIdFromRequest", () => {
     // It becomes half of a Valkey key; only what `proxy.ts` could have minted
     // gets that far.
     for (const value of ["", "not-a-uuid", "*", `${mintDeviceId()}x`]) {
-      expect(deviceIdFromRequest(requestWith(`${DEVICE_ID_COOKIE}=${value}`))).toBeUndefined();
+      expect(
+        deviceIdFromRequest(requestWith(`${DEVICE_ID_COOKIE}=${value}`)),
+      ).toBeUndefined();
     }
   });
 });
@@ -59,11 +65,15 @@ describe("deviceIdFromHeaders", () => {
     // depend on it.
     const id = mintDeviceId();
     expect(
-      deviceIdFromHeaders(new Headers({ cookie: `NEXT_LOCALE=es; ${DEVICE_ID_COOKIE}=${id}` })),
+      deviceIdFromHeaders(
+        new Headers({ cookie: `NEXT_LOCALE=es; ${DEVICE_ID_COOKIE}=${id}` }),
+      ),
     ).toBe(id);
     expect(deviceIdFromHeaders(new Headers())).toBeUndefined();
     expect(
-      deviceIdFromHeaders(new Headers({ cookie: `${DEVICE_ID_COOKIE}=not-a-uuid` })),
+      deviceIdFromHeaders(
+        new Headers({ cookie: `${DEVICE_ID_COOKIE}=not-a-uuid` }),
+      ),
     ).toBeUndefined();
   });
 });

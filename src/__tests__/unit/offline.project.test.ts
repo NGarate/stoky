@@ -72,7 +72,9 @@ describe("projectShoppingItems", () => {
     // The picker is controlled by the row's `storeId`. Only ticks were
     // folded, so a shop chosen with no signal reverted the moment it was
     // chosen, and choosing it again queued a second write.
-    const withStore = [{ id: "a", isChecked: false, storeId: "s1" as string | null }];
+    const withStore = [
+      { id: "a", isChecked: false, storeId: "s1" as string | null },
+    ];
 
     const projected = projectShoppingItems(withStore, [
       op("shopping.updateItem", { id: "a", storeId: "s2" }),
@@ -83,7 +85,9 @@ describe("projectShoppingItems", () => {
   });
 
   it("shows a shop cleared offline as cleared", () => {
-    const withStore = [{ id: "a", isChecked: false, storeId: "s1" as string | null }];
+    const withStore = [
+      { id: "a", isChecked: false, storeId: "s1" as string | null },
+    ];
 
     const projected = projectShoppingItems(withStore, [
       op("shopping.updateItem", { id: "a", storeId: null }),
@@ -129,7 +133,10 @@ describe("projectShoppingItems", () => {
     // A tick or a removal sent with the operation's id is refused by the
     // server as a row that does not exist. The screens can only avoid that if
     // the row says what it is.
-    const added = op("shopping.addItem", { shoppingListId: "list-1", productId: "p" });
+    const added = op("shopping.addItem", {
+      shoppingListId: "list-1",
+      productId: "p",
+    });
 
     const projected = projectShoppingItems(rows, [added], "list-1");
 
@@ -217,8 +224,16 @@ describe("projectShoppingItems", () => {
 describe("projectStockTotals", () => {
   it("converts an old queued dozen input to the migrated stock unit", () => {
     const projected = projectStockTotals(new Map([["eggs", 36]]), [
-      op("inventory.consumeStock", { productId: "eggs", quantity: 1, unit: "docena" }),
-      op("inventory.consumeStock", { productId: "eggs", quantity: 1, unit: "unidad" }),
+      op("inventory.consumeStock", {
+        productId: "eggs",
+        quantity: 1,
+        unit: "docena",
+      }),
+      op("inventory.consumeStock", {
+        productId: "eggs",
+        quantity: 1,
+        unit: "unidad",
+      }),
     ]);
     expect(projected.get("eggs")).toBe(23);
   });
@@ -317,7 +332,9 @@ describe("pendingProductIds", () => {
   });
 
   it("is empty when only list changes are waiting", () => {
-    expect(pendingProductIds([op("shopping.removeItem", { id: "a" })]).size).toBe(0);
+    expect(
+      pendingProductIds([op("shopping.removeItem", { id: "a" })]).size,
+    ).toBe(0);
   });
 });
 
@@ -333,7 +350,9 @@ describe("what the lists already cover", () => {
   });
 
   it("folds an unsent addition into what the server reported", () => {
-    const projected = projectOnListQuantities(new Map([["p1", 2]]), [add("p1", 3)]);
+    const projected = projectOnListQuantities(new Map([["p1", 2]]), [
+      add("p1", 3),
+    ]);
 
     expect(projected.get("p1")).toBe(5);
   });

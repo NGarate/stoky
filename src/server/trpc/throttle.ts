@@ -72,7 +72,10 @@ export async function enforceRateLimit(
   message: string,
   { whenUnavailable = "refuse" }: { whenUnavailable?: WhenUnavailable } = {},
 ): Promise<boolean> {
-  return (await consumeOrRefuse(limit, identifier, message, whenUnavailable)) !== null;
+  return (
+    (await consumeOrRefuse(limit, identifier, message, whenUnavailable)) !==
+    null
+  );
 }
 
 /**

@@ -36,7 +36,13 @@ mock.module("recharts", () => ({
   ResponsiveContainer: ({ children }: { children: ReactNode }) => (
     <div data-testid="chart">{children}</div>
   ),
-  LineChart: ({ data, children }: { data: ChartRow[]; children: ReactNode }) => {
+  LineChart: ({
+    data,
+    children,
+  }: {
+    data: ChartRow[];
+    children: ReactNode;
+  }) => {
     chartData = data;
     return <div>{children}</div>;
   },
@@ -131,10 +137,7 @@ describe("PriceChart", () => {
 
   it("names a record with no store in the reader's language", () => {
     renderWithIntl(
-      <PriceChart
-        data={[{ date: "2026-01-05T00:00:00.000Z", price: 2 }]}
-       
-      />,
+      <PriceChart data={[{ date: "2026-01-05T00:00:00.000Z", price: 2 }]} />,
     );
 
     // It used to be the literal "Unknown" — an English word in a Spanish
@@ -150,8 +153,16 @@ describe("PriceChart", () => {
     renderWithIntl(
       <PriceChart
         data={[
-          { date: "2026-01-05T00:00:00.000Z", price: 1.19, storeName: "Mercadona" },
-          { date: "2026-02-10T00:00:00.000Z", price: 1.09, storeName: "Mercadona" },
+          {
+            date: "2026-01-05T00:00:00.000Z",
+            price: 1.19,
+            storeName: "Mercadona",
+          },
+          {
+            date: "2026-02-10T00:00:00.000Z",
+            price: 1.09,
+            storeName: "Mercadona",
+          },
         ]}
       />,
     );
@@ -163,7 +174,9 @@ describe("PriceChart", () => {
     renderWithIntl(<PriceChart data={data} />);
     const legend = screen.getByRole("list", { name: "Tiendas en la gráfica" });
     expect(
-      within(legend).getAllByRole("listitem").map((item) => item.textContent),
+      within(legend)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
     ).toEqual(["Mercadona", "Carrefour"]);
   });
 
@@ -175,7 +188,9 @@ describe("PriceChart", () => {
     // swatch and the word is ordinary foreground text.
     expect(screen.queryByTestId("recharts-legend")).not.toBeInTheDocument();
     const legend = screen.getByRole("list", { name: "Tiendas en la gráfica" });
-    for (const [index, item] of within(legend).getAllByRole("listitem").entries()) {
+    for (const [index, item] of within(legend)
+      .getAllByRole("listitem")
+      .entries()) {
       expect(item.className).toContain("text-foreground");
       expect(item.style.color).toBe("");
       const swatch = item.querySelector("[aria-hidden='true']") as HTMLElement;
@@ -222,7 +237,6 @@ describe("PriceChart", () => {
         data={[
           { date: "2026-01-05T00:00:00.000Z", price: 2, storeName: "Lidl" },
         ]}
-       
       />,
     );
 
@@ -262,13 +276,17 @@ describe("PriceChart", () => {
   it("offers the values as a table, which is what makes the chart optional", async () => {
     renderWithIntl(<PriceChart data={data} />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Ver como tabla" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Ver como tabla" }),
+    );
 
     // axe cannot read an SVG, and two of the four series sit below 3:1 on the
     // light card. The table is what makes both acceptable.
     const table = screen.getByRole("table");
     expect(table).toBeInTheDocument();
-    expect(within(table).getAllByRole("columnheader").length).toBeGreaterThan(1);
+    expect(within(table).getAllByRole("columnheader").length).toBeGreaterThan(
+      1,
+    );
   });
 
   it("gives each date one row, which is what makes the date a key", async () => {

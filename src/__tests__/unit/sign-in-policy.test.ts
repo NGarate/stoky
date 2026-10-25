@@ -38,14 +38,23 @@ interface Script {
   known?: boolean | Error;
 }
 
-function fakeLimiter(script: Script = {}): { limiter: SignInLimiter; calls: Call[] } {
+function fakeLimiter(script: Script = {}): {
+  limiter: SignInLimiter;
+  calls: Call[];
+} {
   const calls: Call[] = [];
   const limiter: SignInLimiter = {
     consume: async (limit: RateLimit, identifier: string) => {
       calls.push(["consume", limit.prefix, identifier]);
       const answer = script.consume?.[limit.prefix];
       if (answer instanceof Error) throw answer;
-      return { allowed: true, remaining: 1, retryAfterSeconds: 0, window: 1, ...answer };
+      return {
+        allowed: true,
+        remaining: 1,
+        retryAfterSeconds: 0,
+        window: 1,
+        ...answer,
+      };
     },
     refund: async (limit, identifier, window) => {
       calls.push(["refund", limit.prefix, identifier, window]);
@@ -110,7 +119,9 @@ describe("a refusal's Retry-After", () => {
     const { limiter } = fakeLimiter({
       consume: { [ADDRESS]: { allowed: false, retryAfterSeconds: 437 } },
     });
-    const refused = await refusal(chargeSignInAttempt(headers(), EMAIL, limiter));
+    const refused = await refusal(
+      chargeSignInAttempt(headers(), EMAIL, limiter),
+    );
     expect(refused.code).toBe("rate_limited");
     expect(refused.retryAfterSeconds).toBe(437);
   });
@@ -119,7 +130,9 @@ describe("a refusal's Retry-After", () => {
     const { limiter } = fakeLimiter({
       consume: { [ACCOUNT]: { allowed: false, retryAfterSeconds: 812 } },
     });
-    const refused = await refusal(chargeSignInAttempt(headers(), EMAIL, limiter));
+    const refused = await refusal(
+      chargeSignInAttempt(headers(), EMAIL, limiter),
+    );
     expect(refused.code).toBe("account_rate_limited");
     expect(refused.retryAfterSeconds).toBe(812);
   });
@@ -131,7 +144,9 @@ describe("a refusal's Retry-After", () => {
       const { limiter } = fakeLimiter({
         consume: { [prefix]: { allowed: false, retryAfterSeconds: 0 } },
       });
-      const refused = await refusal(chargeSignInAttempt(headers(), EMAIL, limiter));
+      const refused = await refusal(
+        chargeSignInAttempt(headers(), EMAIL, limiter),
+      );
       expect(refused.retryAfterSeconds).toBe(1);
     }
   });
@@ -141,7 +156,9 @@ describe("a refusal's Retry-After", () => {
     const { limiter } = fakeLimiter({
       consume: { [ADDRESS]: new RateLimitUnavailableError(new Error("down")) },
     });
-    const refused = await refusal(chargeSignInAttempt(headers(), EMAIL, limiter));
+    const refused = await refusal(
+      chargeSignInAttempt(headers(), EMAIL, limiter),
+    );
     expect(refused.code).toBe("auth_unavailable");
     expect(refused.retryAfterSeconds).toBeNull();
   });
@@ -152,24 +169,32 @@ describe("failing closed", () => {
     const { limiter } = fakeLimiter({
       consume: { [ACCOUNT]: new RateLimitUnavailableError(new Error("down")) },
     });
-    expect((await refusal(chargeSignInAttempt(headers(), EMAIL, limiter))).code).toBe(
-      "auth_unavailable",
-    );
+    expect(
+      (await refusal(chargeSignInAttempt(headers(), EMAIL, limiter))).code,
+    ).toBe("auth_unavailable");
   });
 
   it("refuses when a device's standing cannot be checked", async () => {
-    const { limiter } = fakeLimiter({ known: new RateLimitUnavailableError(new Error("down")) });
-    const withDevice = headers({ cookie: `${DEVICE_ID_COOKIE}=${mintDeviceId()}` });
-    expect((await refusal(chargeSignInAttempt(withDevice, EMAIL, limiter))).code).toBe(
-      "auth_unavailable",
-    );
+    const { limiter } = fakeLimiter({
+      known: new RateLimitUnavailableError(new Error("down")),
+    });
+    const withDevice = headers({
+      cookie: `${DEVICE_ID_COOKIE}=${mintDeviceId()}`,
+    });
+    expect(
+      (await refusal(chargeSignInAttempt(withDevice, EMAIL, limiter))).code,
+    ).toBe("auth_unavailable");
   });
 });
 
 describe("what an attempt is charged to", () => {
   it("counts a malformed address against the address, and nothing else", async () => {
     const { limiter, calls } = fakeLimiter();
-    const attempt = await chargeSignInAttempt(headers(), "not an address", limiter);
+    const attempt = await chargeSignInAttempt(
+      headers(),
+      "not an address",
+      limiter,
+    );
     expect(attempt.outcome).toBe("malformed");
     expect(calls).toEqual([["consume", ADDRESS, "203.0.113.9"]]);
   });
@@ -177,18 +202,25 @@ describe("what an attempt is charged to", () => {
   it("charges an unknown browser to the shared account budget", async () => {
     const { limiter, calls } = fakeLimiter({ known: false });
     const device = mintDeviceId();
-    const charged = await charge(limiter, { cookie: `${DEVICE_ID_COOKIE}=${device}` });
+    const charged = await charge(limiter, {
+      cookie: `${DEVICE_ID_COOKIE}=${device}`,
+    });
     const account = accountIdentifier("ana@example.com");
 
     expect(charged.email).toBe("ana@example.com");
-    expect(charged.charged).toMatchObject({ kind: "account", identifier: account });
+    expect(charged.charged).toMatchObject({
+      kind: "account",
+      identifier: account,
+    });
     expect(calls.at(-1)).toEqual(["consume", ACCOUNT, account]);
   });
 
   it("charges a known browser to its own budget on the account", async () => {
     const { limiter, calls } = fakeLimiter({ known: true });
     const device = mintDeviceId();
-    const charged = await charge(limiter, { cookie: `${DEVICE_ID_COOKIE}=${device}` });
+    const charged = await charge(limiter, {
+      cookie: `${DEVICE_ID_COOKIE}=${device}`,
+    });
 
     expect(charged.charged.kind).toBe("device");
     expect(calls.at(-1)?.[1]).toBe(DEVICE);
@@ -199,7 +231,9 @@ describe("what an attempt is charged to", () => {
 
 describe("settling a charge", () => {
   it("refunds the address into the window it was charged in, and clears only the budget charged", async () => {
-    const { limiter, calls } = fakeLimiter({ consume: { [ADDRESS]: { window: 1_234_567 } } });
+    const { limiter, calls } = fakeLimiter({
+      consume: { [ADDRESS]: { window: 1_234_567 } },
+    });
     const charged = await charge(limiter);
     calls.length = 0;
 
@@ -215,7 +249,9 @@ describe("settling a charge", () => {
     const device = mintDeviceId();
     const withDevice = fakeLimiter();
     await signInSucceeded(
-      await charge(withDevice.limiter, { cookie: `${DEVICE_ID_COOKIE}=${device}` }),
+      await charge(withDevice.limiter, {
+        cookie: `${DEVICE_ID_COOKIE}=${device}`,
+      }),
       USER,
       "password",
       withDevice.limiter,
@@ -227,8 +263,15 @@ describe("settling a charge", () => {
     ]);
 
     const without = fakeLimiter();
-    await signInSucceeded(await charge(without.limiter), USER, "password", without.limiter);
-    expect(without.calls.some(([name]) => name === "rememberDevice")).toBe(false);
+    await signInSucceeded(
+      await charge(without.limiter),
+      USER,
+      "password",
+      without.limiter,
+    );
+    expect(without.calls.some(([name]) => name === "rememberDevice")).toBe(
+      false,
+    );
   });
 
   it("records who got in, how, and from where — never the address typed", async () => {
@@ -274,10 +317,14 @@ describe("settling a charge", () => {
     };
     warn.mockClear();
 
-    await expect(signInSucceeded(charged, USER, "password", limiter)).rejects.toThrow();
+    await expect(
+      signInSucceeded(charged, USER, "password", limiter),
+    ).rejects.toThrow();
 
     expect(
-      warn.mock.calls.some(([first]: unknown[]) => String(first).includes("auth.signin.succeeded")),
+      warn.mock.calls.some(([first]: unknown[]) =>
+        String(first).includes("auth.signin.succeeded"),
+      ),
     ).toBe(false);
   });
 

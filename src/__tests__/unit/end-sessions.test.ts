@@ -28,19 +28,31 @@ function fakeDb(
   const sessionFindMany = mock(async (_args: unknown) =>
     owners.map((userId, index) => ({ id: `s-${index + 1}`, userId })),
   );
-  const userFindMany = mock(async (_args: unknown) => members.map((id) => ({ id })));
-  const verificationFindMany = mock(async (args: { where: { value: { in: string[] } } }) =>
-    Object.entries(challenges)
-      .filter(([, value]) => args.where.value.in.includes(value))
-      .map(([identifier]) => ({ identifier })),
+  const userFindMany = mock(async (_args: unknown) =>
+    members.map((id) => ({ id })),
+  );
+  const verificationFindMany = mock(
+    async (args: { where: { value: { in: string[] } } }) =>
+      Object.entries(challenges)
+        .filter(([, value]) => args.where.value.in.includes(value))
+        .map(([identifier]) => ({ identifier })),
   );
   const verificationDeleteMany = mock(async (_args: unknown) => ({ count: 0 }));
   const db = {
     session: { deleteMany, findMany: sessionFindMany },
     user: { findMany: userFindMany },
-    verification: { findMany: verificationFindMany, deleteMany: verificationDeleteMany },
+    verification: {
+      findMany: verificationFindMany,
+      deleteMany: verificationDeleteMany,
+    },
   } as unknown as SessionDb;
-  return { db, deleteMany, userFindMany, verificationFindMany, verificationDeleteMany };
+  return {
+    db,
+    deleteMany,
+    userFindMany,
+    verificationFindMany,
+    verificationDeleteMany,
+  };
 }
 
 describe("endSessions", () => {
@@ -54,8 +66,12 @@ describe("endSessions", () => {
   it("refuses a filter whose value went missing, and deletes nothing", async () => {
     const { db, deleteMany } = fakeDb();
 
-    await expect(endSessions(db, { userId: undefined })).rejects.toThrow(/every session/);
-    await expect(endSessions(db, { userId: "user-1", id: undefined })).rejects.toThrow();
+    await expect(endSessions(db, { userId: undefined })).rejects.toThrow(
+      /every session/,
+    );
+    await expect(
+      endSessions(db, { userId: "user-1", id: undefined }),
+    ).rejects.toThrow();
     expect(deleteMany).not.toHaveBeenCalled();
   });
 
@@ -75,9 +91,15 @@ describe("endSessions", () => {
     const now = new Date();
 
     expect(
-      await endSessions(db, { userId: "user-1", id: { not: "s-1" }, expiresAt: { lt: now } }),
+      await endSessions(db, {
+        userId: "user-1",
+        id: { not: "s-1" },
+        expiresAt: { lt: now },
+      }),
     ).toBe(1);
-    expect(await endSessions(db, { userId: "user-1", id: { in: ["s-2", "s-3"] } })).toBe(1);
+    expect(
+      await endSessions(db, { userId: "user-1", id: { in: ["s-2", "s-3"] } }),
+    ).toBe(1);
     expect(deleteMany).toHaveBeenCalledTimes(2);
   });
 
@@ -90,7 +112,9 @@ describe("endSessions", () => {
 
   describe("with the two-step sign-ins in progress (D148)", () => {
     const deleted = (call: unknown) =>
-      (call as { where: { identifier: { in: string[] } } }).where.identifier.in.sort();
+      (
+        call as { where: { identifier: { in: string[] } } }
+      ).where.identifier.in.sort();
 
     it("deletes the challenges of the account it names, and their attempt counters", async () => {
       const { db, verificationFindMany, verificationDeleteMany } = fakeDb(0, {
@@ -103,7 +127,10 @@ describe("endSessions", () => {
       await endSessions(db, { userId: "user-1" });
 
       expect(verificationFindMany).toHaveBeenCalledWith({
-        where: { identifier: { startsWith: "2fa-" }, value: { in: ["user-1"] } },
+        where: {
+          identifier: { startsWith: "2fa-" },
+          value: { in: ["user-1"] },
+        },
         select: { identifier: true },
       });
       expect(deleted(verificationDeleteMany.mock.calls[0][0])).toEqual([
@@ -127,16 +154,18 @@ describe("endSessions", () => {
         where: { householdId: "h-1" },
         select: { id: true },
       });
-      expect(verificationFindMany.mock.calls[0][0].where.value.in.sort()).toEqual([
-        "user-1",
-        "user-2",
-      ]);
+      expect(
+        verificationFindMany.mock.calls[0][0].where.value.in.sort(),
+      ).toEqual(["user-1", "user-2"]);
     });
 
     it("keeps an admin's guard on the account when it looks for whose they are", async () => {
       const { db, userFindMany } = fakeDb(1);
 
-      await endSessions(db, { userId: "user-1", user: { householdId: "h-1", role: "MEMBER" } });
+      await endSessions(db, {
+        userId: "user-1",
+        user: { householdId: "h-1", role: "MEMBER" },
+      });
 
       expect(userFindMany).toHaveBeenCalledWith({
         where: { id: "user-1", householdId: "h-1", role: "MEMBER" },
@@ -170,14 +199,18 @@ describe("endSessions", () => {
 
   describe("with the step-ups the ended sessions held (D151)", () => {
     it("deletes each ended session's confirmation, and no other session's", async () => {
-      const { db, verificationDeleteMany } = fakeDb(2, { owners: ["user-1", "user-1"] });
+      const { db, verificationDeleteMany } = fakeDb(2, {
+        owners: ["user-1", "user-1"],
+      });
 
       await endSessions(db, { userId: "user-1" }, { challenges: false });
 
       // Found before the delete, so the ids are the rows that went.
       expect(verificationDeleteMany).toHaveBeenCalledTimes(1);
       expect(verificationDeleteMany.mock.calls[0][0]).toEqual({
-        where: { identifier: { in: ["stoky-step-up:s-1", "stoky-step-up:s-2"] } },
+        where: {
+          identifier: { in: ["stoky-step-up:s-1", "stoky-step-up:s-2"] },
+        },
       });
     });
 

@@ -18,7 +18,8 @@ import {
  * `integration/two-factor.test.ts`.
  */
 
-const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+const sha256 = (text: string) =>
+  createHash("sha256").update(text).digest("hex");
 
 describe("the codes", () => {
   it("carry at least the 112 bits ASVS 6.5.2 asks of a hashed lookup secret", () => {
@@ -34,7 +35,9 @@ describe("the codes", () => {
     expect(codes).toHaveLength(BACKUP_CODE_COUNT);
     expect(BACKUP_CODE_COUNT).toBe(10);
     for (const code of codes) {
-      expect(code).toMatch(/^[0-9A-HJKMNP-TV-Z]{4}(-[0-9A-HJKMNP-TV-Z]{4}){5}$/);
+      expect(code).toMatch(
+        /^[0-9A-HJKMNP-TV-Z]{4}(-[0-9A-HJKMNP-TV-Z]{4}){5}$/,
+      );
       expect(code.replaceAll("-", "")).toHaveLength(BACKUP_CODE_LENGTH);
     }
     expect(new Set(codes).size).toBe(codes.length);
@@ -49,7 +52,9 @@ describe("the codes", () => {
       for (let i = 0; i < bytes.length; i += 1) bytes[i] = next++ % 256;
       return bytes;
     };
-    const characters = generateBackupCodes(counting).join("").replaceAll("-", "");
+    const characters = generateBackupCodes(counting)
+      .join("")
+      .replaceAll("-", "");
     expect(characters.slice(0, 32)).toBe(CROCKFORD_ALPHABET);
     const counts = new Map<string, number>();
     for (const character of characters.slice(0, 224)) {
@@ -65,7 +70,9 @@ describe("the codes", () => {
 
 describe("normaliseBackupCode", () => {
   it("reads a code typed in lower case, with spaces or dashes, as the one shown", () => {
-    expect(normaliseBackupCode("abcd-efgh-jkmn-pqrs-tvwx-yz01")).toBe("ABCDEFGHJKMNPQRSTVWXYZ01");
+    expect(normaliseBackupCode("abcd-efgh-jkmn-pqrs-tvwx-yz01")).toBe(
+      "ABCDEFGHJKMNPQRSTVWXYZ01",
+    );
     expect(normaliseBackupCode("  ab cd\tEF-GH  ")).toBe("ABCDEFGH");
   });
 
@@ -76,7 +83,9 @@ describe("normaliseBackupCode", () => {
 
 describe("hashBackupCode", () => {
   it("is sha256 of the normalised code, prefixed", () => {
-    expect(hashBackupCode("ab cd-o1")).toBe(`${BACKUP_CODE_HASH_PREFIX}${sha256("ABCD01")}`);
+    expect(hashBackupCode("ab cd-o1")).toBe(
+      `${BACKUP_CODE_HASH_PREFIX}${sha256("ABCD01")}`,
+    );
     expect(hashBackupCode("ABCD-0I")).toBe(hashBackupCode("abcd 0l"));
   });
 
@@ -100,7 +109,9 @@ describe("storeBackupCodes", () => {
   });
 
   it("leaves codes already hashed as they are, so spending one keeps the rest", async () => {
-    const once = await storeBackupCodes.encrypt(JSON.stringify(["AAAA-BBBB", "CCCC-DDDD"]));
+    const once = await storeBackupCodes.encrypt(
+      JSON.stringify(["AAAA-BBBB", "CCCC-DDDD"]),
+    );
     expect(await storeBackupCodes.encrypt(once)).toBe(once);
   });
 
@@ -111,9 +122,11 @@ describe("storeBackupCodes", () => {
 
   it("refuses anything but a list of strings", async () => {
     // Said in words, not as whatever TypeError the first `.map` would raise.
-    await expect(storeBackupCodes.encrypt(JSON.stringify({ code: "AAAA" }))).rejects.toThrow(
-      "not a list of strings",
-    );
-    await expect(storeBackupCodes.encrypt(JSON.stringify([1, 2]))).rejects.toThrow("not a list of strings");
+    await expect(
+      storeBackupCodes.encrypt(JSON.stringify({ code: "AAAA" })),
+    ).rejects.toThrow("not a list of strings");
+    await expect(
+      storeBackupCodes.encrypt(JSON.stringify([1, 2])),
+    ).rejects.toThrow("not a list of strings");
   });
 });

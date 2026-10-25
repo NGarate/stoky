@@ -51,8 +51,12 @@ describe("ItemRow", () => {
       />,
     );
 
-    const terms = [...container.querySelectorAll("dt")].map((n) => n.textContent);
-    const values = [...container.querySelectorAll("dd")].map((n) => n.textContent);
+    const terms = [...container.querySelectorAll("dt")].map(
+      (n) => n.textContent,
+    );
+    const values = [...container.querySelectorAll("dd")].map(
+      (n) => n.textContent,
+    );
     expect(terms).toEqual(["Stock total", "Categoría"]);
     expect(values).toEqual(["0 paquete", "Café"]);
   });
@@ -79,7 +83,11 @@ describe("ItemRow", () => {
   it("tints the row for a state, and never only tints it", () => {
     const { container } = list(
       <ItemRow
-        status={<Badge tone="warn" variant="outline">Stock bajo</Badge>}
+        status={
+          <Badge tone="warn" variant="outline">
+            Stock bajo
+          </Badge>
+        }
         title="Café molido"
         tone="warn"
       />,
@@ -187,7 +195,8 @@ describe("ItemRow's description", () => {
     const description = screen.getByText("Las tiendas donde compras.");
     expect(link.contains(description)).toBe(false);
     expect(
-      link.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING,
+      link.compareDocumentPosition(description) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 });
@@ -202,7 +211,15 @@ describe("the settings index", () => {
    */
   it("lists its screens as ItemRows and carries no section about nothing", () => {
     const source = readFileSync(
-      join(import.meta.dir, "..", "..", "app", "(dashboard)", "settings", "page.tsx"),
+      join(
+        import.meta.dir,
+        "..",
+        "..",
+        "app",
+        "(dashboard)",
+        "settings",
+        "page.tsx",
+      ),
       "utf8",
     );
 

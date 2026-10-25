@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -16,7 +23,8 @@ const RUN_URL = `https://github.com/${REPO}/actions/runs/123456`;
 const fixtures: string[] = [];
 
 afterEach(() => {
-  for (const fixture of fixtures.splice(0)) rmSync(fixture, { recursive: true, force: true });
+  for (const fixture of fixtures.splice(0))
+    rmSync(fixture, { recursive: true, force: true });
 });
 
 type Options = {
@@ -34,14 +42,24 @@ type Options = {
 function setup(options: Options = {}) {
   const fixture = mkdtempSync(join(tmpdir(), "stoky-release-publish-"));
   fixtures.push(fixture);
-  for (const directory of ["scripts", "bin"]) mkdirSync(join(fixture, directory), { recursive: true });
-  copyFileSync(join(root, "scripts/release-publish.sh"), join(fixture, "scripts/release-publish.sh"));
+  for (const directory of ["scripts", "bin"])
+    mkdirSync(join(fixture, directory), { recursive: true });
+  copyFileSync(
+    join(root, "scripts/release-publish.sh"),
+    join(fixture, "scripts/release-publish.sh"),
+  );
   const calls = join(fixture, "calls");
   const listed = join(fixture, "run-list-attempts");
   writeFileSync(calls, "");
   writeFileSync(listed, "0");
-  writeFileSync(join(fixture, "scripts/release-verify-draft.sh"), `echo "verify $*" >> "${calls}"\nexit ${options.verifyExit ?? 0}\n`);
-  writeFileSync(join(fixture, "scripts/check-published-notes.sh"), `echo "notes $*" >> "${calls}"\nexit ${options.notesExit ?? 0}\n`);
+  writeFileSync(
+    join(fixture, "scripts/release-verify-draft.sh"),
+    `echo "verify $*" >> "${calls}"\nexit ${options.verifyExit ?? 0}\n`,
+  );
+  writeFileSync(
+    join(fixture, "scripts/check-published-notes.sh"),
+    `echo "notes $*" >> "${calls}"\nexit ${options.notesExit ?? 0}\n`,
+  );
   writeFileSync(
     join(fixture, "bin/gh"),
     `#!/bin/bash
@@ -72,8 +90,15 @@ exit 99
       STOKY_PUBLISH_POLL_ATTEMPTS: "3",
     };
     delete env.GH_REPO;
-    const result = Bun.spawnSync(["bash", "scripts/release-publish.sh", ...args], { cwd: fixture, env });
-    return { exitCode: result.exitCode, stdout: result.stdout.toString(), stderr: result.stderr.toString() };
+    const result = Bun.spawnSync(
+      ["bash", "scripts/release-publish.sh", ...args],
+      { cwd: fixture, env },
+    );
+    return {
+      exitCode: result.exitCode,
+      stdout: result.stdout.toString(),
+      stderr: result.stderr.toString(),
+    };
   };
   return {
     publish: (tag: string) => run(tag, "--repo", REPO),
@@ -82,7 +107,8 @@ exit 99
   };
 }
 
-const edit = (calls: string[]) => calls.filter((call) => call.startsWith("gh release edit"));
+const edit = (calls: string[]) =>
+  calls.filter((call) => call.startsWith("gh release edit"));
 
 describe("publishing a release draft", () => {
   it.each([
@@ -97,21 +123,28 @@ describe("publishing a release draft", () => {
     ["v1.10.0", ["v1.9.0", "v1.2.0"], false, true],
     // A published prerelease of a later version does not hold latest back.
     ["v1.1.0", ["v1.0.0", "v1.2.0-beta.1"], false, true],
-  ] as const)("publishes %s over %j as prerelease=%p, latest=%p", (tag, published, prerelease, latest) => {
-    const fixture = setup({ published: [...published] });
-    const result = fixture.publish(tag);
-    expect(result.exitCode).toBe(0);
-    expect(edit(fixture.calls())).toEqual([
-      `gh release edit ${tag} --repo ${REPO} --draft=false --prerelease=${prerelease} --latest=${latest}`,
-    ]);
-    expect(result.stdout).toContain(`Published ${tag} (prerelease=${prerelease}, latest=${latest})`);
-  });
+  ] as const)(
+    "publishes %s over %j as prerelease=%p, latest=%p",
+    (tag, published, prerelease, latest) => {
+      const fixture = setup({ published: [...published] });
+      const result = fixture.publish(tag);
+      expect(result.exitCode).toBe(0);
+      expect(edit(fixture.calls())).toEqual([
+        `gh release edit ${tag} --repo ${REPO} --draft=false --prerelease=${prerelease} --latest=${latest}`,
+      ]);
+      expect(result.stdout).toContain(
+        `Published ${tag} (prerelease=${prerelease}, latest=${latest})`,
+      );
+    },
+  );
 
   it("verifies, publishes, checks the notes and dispatches the rescan, in that order", () => {
     const fixture = setup({ dispatchPrintsUrl: true });
     const result = fixture.publish("v0.1.0-alpha.5");
     expect(result.exitCode).toBe(0);
-    const steps = fixture.calls().filter((call) => !call.startsWith("gh release view"));
+    const steps = fixture
+      .calls()
+      .filter((call) => !call.startsWith("gh release view"));
     expect(steps).toEqual([
       `verify v0.1.0-alpha.5 --repo ${REPO}`,
       `gh release edit v0.1.0-alpha.5 --repo ${REPO} --draft=false --prerelease=true --latest=false`,
@@ -119,14 +152,18 @@ describe("publishing a release draft", () => {
       `gh workflow run rescan.yml --repo ${REPO} --ref master`,
     ]);
     expect(result.stdout).toContain(`rescan   ${RUN_URL}`);
-    expect(result.stdout).toContain(`release  https://github.com/${REPO}/releases/tag/v0.1.0-alpha.5`);
+    expect(result.stdout).toContain(
+      `release  https://github.com/${REPO}/releases/tag/v0.1.0-alpha.5`,
+    );
   });
 
   it("finds the rescan run when gh does not print it", () => {
     const fixture = setup({ listedFromAttempt: 2 });
     const result = fixture.publish("v0.1.0-alpha.5");
     expect(result.exitCode).toBe(0);
-    expect(fixture.calls().filter((call) => call.startsWith("gh run list"))).toHaveLength(2);
+    expect(
+      fixture.calls().filter((call) => call.startsWith("gh run list")),
+    ).toHaveLength(2);
     expect(result.stdout).toContain(`rescan   ${RUN_URL}`);
   });
 
@@ -143,7 +180,9 @@ describe("publishing a release draft", () => {
     const result = fixture.publish("v0.1.0-alpha.5");
     expect(result.exitCode).toBe(1);
     expect(edit(fixture.calls())).toHaveLength(1);
-    expect(fixture.calls()).toContain(`gh workflow run rescan.yml --repo ${REPO} --ref master`);
+    expect(fixture.calls()).toContain(
+      `gh workflow run rescan.yml --repo ${REPO} --ref master`,
+    );
     expect(result.stdout).toContain("notes    FAIL");
   });
 

@@ -4,7 +4,11 @@ import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
 import { OpenFoodFactsClient } from "@/server/services/openFoodFacts";
 
 // Create a mock response factory
-const createMockResponse = (data: unknown, ok = true, status = 200): Response => {
+const createMockResponse = (
+  data: unknown,
+  ok = true,
+  status = 200,
+): Response => {
   return new Response(JSON.stringify(data), {
     status,
     headers: { "Content-Type": "application/json" },
@@ -22,7 +26,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
     client = new OpenFoodFactsClient();
     await client.clearAllCache();
     fetchSpy.mockClear();
-    Object.defineProperty(fetchSpy, 'preconnect', {
+    Object.defineProperty(fetchSpy, "preconnect", {
       value: () => Promise.resolve(),
       writable: false,
       enumerable: true,
@@ -61,7 +65,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
           product: mockProduct,
           status: 1,
           status_verbose: "product found",
-        })
+        }),
       );
 
       const result = await client.getProductByBarcode("1234567890123");
@@ -83,7 +87,11 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
             code: "8410000678901",
             product_name: "Leche entera",
             serving_quantity: 250,
-            nutriments: { "energy-kcal": 63, "energy-kcal_100g": 63, proteins: 3.1 },
+            nutriments: {
+              "energy-kcal": 63,
+              "energy-kcal_100g": 63,
+              proteins: 3.1,
+            },
           },
           status: 1,
           status_verbose: "product found",
@@ -110,7 +118,12 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
       // "Product 9990000000017" instead of a question for the person.
       const stub = {
         code: "9990000000017",
-        product: { code: "9990000000017", empty: 1, completeness: 0, countries: "Ireland" },
+        product: {
+          code: "9990000000017",
+          empty: 1,
+          completeness: 0,
+          countries: "Ireland",
+        },
         status: 1,
         status_verbose: "product found",
       };
@@ -128,10 +141,18 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
     it("drops a stub an earlier version cached as a product", async () => {
       await client.clearAllCache();
       // As the previous release wrote it: the parsed stub, stored as a hit.
-      const { valkeyProductCache } = await import("@/server/services/product-cache");
-      await valkeyProductCache.set("9990000000017", JSON.stringify({ code: "9990000000017" }));
+      const { valkeyProductCache } =
+        await import("@/server/services/product-cache");
+      await valkeyProductCache.set(
+        "9990000000017",
+        JSON.stringify({ code: "9990000000017" }),
+      );
       fetchSpy.mockResolvedValue(
-        createMockResponse({ code: "9990000000017", status: 0, status_verbose: "product not found" }),
+        createMockResponse({
+          code: "9990000000017",
+          status: 0,
+          status_verbose: "product not found",
+        }),
       );
 
       expect(await client.getProductByBarcode("9990000000017")).toBeNull();
@@ -144,7 +165,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
           code: "0000000000000",
           status: 0,
           status_verbose: "product not found",
-        })
+        }),
       );
 
       const result = await client.getProductByBarcode("0000000000000");
@@ -162,7 +183,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
           },
           status: 1,
           status_verbose: "product found",
-        })
+        }),
       );
 
       await client.getProductByBarcode("1234567890123");
@@ -182,7 +203,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
           },
           status: 1,
           status_verbose: "product found",
-        })
+        }),
       );
 
       const firstResult = await client.getProductByBarcode("1234567890123");
@@ -196,9 +217,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
     });
 
     it("should handle API errors gracefully", async () => {
-      fetchSpy.mockResolvedValue(
-        createMockResponse({}, false, 500)
-      );
+      fetchSpy.mockResolvedValue(createMockResponse({}, false, 500));
 
       const result = await client.getProductByBarcode("1234567890123");
 
@@ -214,9 +233,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
     });
 
     it("should handle invalid JSON responses", async () => {
-      fetchSpy.mockResolvedValue(
-        new Response("invalid json", { status: 200 })
-      );
+      fetchSpy.mockResolvedValue(new Response("invalid json", { status: 200 }));
 
       const result = await client.getProductByBarcode("1234567890123");
 
@@ -229,7 +246,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
           code: "1234567890123",
           status: 1,
           status_verbose: "product found",
-        })
+        }),
       );
 
       const result = await client.getProductByBarcode("1234567890123");
@@ -242,7 +259,11 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
       // relying on that. A raw `../` or `?` would otherwise change which
       // Open Food Facts URL this server requests.
       fetchSpy.mockResolvedValue(
-        createMockResponse({ code: "x", status: 0, status_verbose: "not found" }),
+        createMockResponse({
+          code: "x",
+          status: 0,
+          status_verbose: "not found",
+        }),
       );
 
       await client.getProductByBarcode("../search?x=1");
@@ -257,7 +278,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
           code: "1234567890123",
           product: { code: "1234567890123" },
           status: 1,
-        })
+        }),
       );
 
       await client.getProductByBarcode("1234567890123");
@@ -273,7 +294,9 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
       ) as { version: string };
       const init = fetchSpy.mock.calls[0]?.[1];
       const userAgent = new Headers(init?.headers).get("user-agent");
-      expect(userAgent).toBe(`Stoky/${version} (+https://github.com/NGarate/stoky)`);
+      expect(userAgent).toBe(
+        `Stoky/${version} (+https://github.com/NGarate/stoky)`,
+      );
     });
   });
 
@@ -331,7 +354,10 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
         ["33cl", "33 cl", "cl"],
         ["1,5l", "1,5 l", "l"],
       ]) {
-        expect([client.extractUnit(compact), client.extractUnit(spaced)]).toEqual([unit, unit]);
+        expect([
+          client.extractUnit(compact),
+          client.extractUnit(spaced),
+        ]).toEqual([unit, unit]);
       }
     });
 
@@ -372,7 +398,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
           code: "1234567890123",
           product: { code: "1234567890123", product_name: "Test" },
           status: 1,
-        })
+        }),
       );
 
       await client.getProductByBarcode("1234567890123");
@@ -385,7 +411,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
           code: "1234567890123",
           product: { code: "1234567890123", product_name: "Test" },
           status: 1,
-        })
+        }),
       );
 
       await client.getProductByBarcode("1234567890123");
@@ -403,7 +429,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
           product: { code: "1234567890123", product_name: "Leche entera" },
           status: 1,
           status_verbose: "product found",
-        })
+        }),
       );
 
       const first = await client.getProductByBarcode("1234567890123");
@@ -420,7 +446,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
           code: "1234567890123",
           product: { code: "1234567890123", product_name: "Test" },
           status: 1,
-        })
+        }),
       );
 
       await client.getProductByBarcode("1234567890123");
@@ -433,7 +459,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
           code: "1234567890123",
           product: { code: "1234567890123", product_name: "Test" },
           status: 1,
-        })
+        }),
       );
 
       await client.getProductByBarcode("1234567890123");
@@ -468,7 +494,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
           product: mockProduct,
           status: 1,
           status_verbose: "product found",
-        })
+        }),
       );
 
       const result = await client.getProductByBarcode("1234567890123");
@@ -491,7 +517,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
           product: mockProduct,
           status: 1,
           status_verbose: "product found",
-        })
+        }),
       );
 
       const result = await client.getProductByBarcode("1234567890123");
@@ -512,7 +538,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
           code: "1234567890123",
           product: mockProduct,
           status: 1,
-        })
+        }),
       );
 
       const result = await client.getProductByBarcode("1234567890123");
@@ -532,7 +558,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
 
     it("should handle malformed responses", async () => {
       fetchSpy.mockResolvedValue(
-        new Response("not an object", { status: 200 })
+        new Response("not an object", { status: 200 }),
       );
 
       const result = await client.getProductByBarcode("1234567890123");
@@ -546,7 +572,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
           code: "1234567890123",
           product: { code: "1234567890123" },
           status: "success",
-        })
+        }),
       );
 
       const result = await client.getProductByBarcode("1234567890123");
@@ -555,9 +581,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
     });
 
     it("should handle rate limiting responses", async () => {
-      fetchSpy.mockResolvedValue(
-        createMockResponse({}, false, 429)
-      );
+      fetchSpy.mockResolvedValue(createMockResponse({}, false, 429));
 
       const result = await client.getProductByBarcode("1234567890123");
 
@@ -565,9 +589,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
     });
 
     it("should handle unauthorized responses", async () => {
-      fetchSpy.mockResolvedValue(
-        createMockResponse({}, false, 403)
-      );
+      fetchSpy.mockResolvedValue(createMockResponse({}, false, 403));
 
       const result = await client.getProductByBarcode("1234567890123");
 
@@ -581,7 +603,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
         createMockResponse({
           code: "1234567890123",
           status: 0,
-        })
+        }),
       );
 
       await client.getProductByBarcode("1234567890123");

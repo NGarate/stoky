@@ -9,7 +9,9 @@ import type { JSX, RefObject } from "react";
 
 /** The tRPC code a refusal carries, read through nothing else. */
 function codeOf(error: unknown): string | undefined {
-  return error instanceof TRPCClientError ? (error.data?.code as string | undefined) : undefined;
+  return error instanceof TRPCClientError
+    ? (error.data?.code as string | undefined)
+    : undefined;
 }
 
 /**
@@ -62,15 +64,21 @@ export function RemoveMemberTwoFactorDialog({
   async function submit(currentPassword: string): Promise<void> {
     if (member === null) return;
     const target = member;
-    await remove.mutateAsync({ userId: target.id, currentPassword }).catch(async (error: unknown) => {
-      // The row the admin chose from is out of date: read it again, so the
-      // button goes from the row that no longer has anything to remove.
-      if (codeOf(error) === "CONFLICT") await utils.household.members.invalidate();
-      throw error;
-    });
+    await remove
+      .mutateAsync({ userId: target.id, currentPassword })
+      .catch(async (error: unknown) => {
+        // The row the admin chose from is out of date: read it again, so the
+        // button goes from the row that no longer has anything to remove.
+        if (codeOf(error) === "CONFLICT")
+          await utils.household.members.invalidate();
+        throw error;
+      });
     snackbar.show({
       kind: "confirm",
-      message: { key: "household.removeTwoFactorDone", values: { name: target.name } },
+      message: {
+        key: "household.removeTwoFactorDone",
+        values: { name: target.name },
+      },
     });
     await utils.household.members.invalidate();
     onClose();
@@ -85,7 +93,13 @@ export function RemoveMemberTwoFactorDialog({
 
   return (
     <ReauthDialog
-      actions={[{ id: "remove", label: t("removeTwoFactorAction"), variant: "destructive" }]}
+      actions={[
+        {
+          id: "remove",
+          label: t("removeTwoFactorAction"),
+          variant: "destructive",
+        },
+      ]}
       describe={describe}
       description={t("removeTwoFactorBody")}
       onClose={onClose}

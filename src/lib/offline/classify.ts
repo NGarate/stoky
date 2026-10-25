@@ -30,11 +30,7 @@ import { TRPCClientError } from "@trpc/client";
  * shelf. `REDESIGN_PLAN.md` §5.5.3 — allow and reconcile, never discard.
  */
 export type MutationOutcome =
-  | "transient"
-  | "auth"
-  | "permanent"
-  | "reconcile"
-  | "review";
+  "transient" | "auth" | "permanent" | "reconcile" | "review";
 
 /** The HTTP status the server answered with, if it answered at all. */
 export function httpStatusOf(error: unknown): number | null {

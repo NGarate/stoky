@@ -85,7 +85,8 @@ services:
     # full cache refuses the limiter's writes: the same sign-in outage) and
     # not volatile-ttl (it evicts the short-lived counters first). Starts with
     # valkey-server so the image's entrypoint still drops root.
-    command: [valkey-server, --maxmemory, 160mb, --maxmemory-policy, allkeys-lru]
+    command:
+      [valkey-server, --maxmemory, 160mb, --maxmemory-policy, allkeys-lru]
     volumes:
       - valkey_data:/data
     networks:
@@ -205,7 +206,15 @@ services:
     networks:
       - traefik
     healthcheck:
-      test: [CMD, traefik, healthcheck, --ping, --ping.entrypoint=health, --entrypoints.health.address=:8082]
+      test:
+        [
+          CMD,
+          traefik,
+          healthcheck,
+          --ping,
+          --ping.entrypoint=health,
+          --entrypoints.health.address=:8082,
+        ]
       interval: 10s
       timeout: 5s
       retries: 5

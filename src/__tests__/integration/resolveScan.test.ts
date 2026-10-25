@@ -18,7 +18,11 @@ import { MAX_NAME_LENGTH } from "@/lib/validations/bounds";
 import { closeValkey } from "@/lib/valkey";
 import { valkeyProductCache } from "@/server/services/product-cache";
 import { ThrottledError } from "@/server/trpc/throttle";
-import { createMockSession, createTestUser, generateTestEmail } from "../utils/test-helpers";
+import {
+  createMockSession,
+  createTestUser,
+  generateTestEmail,
+} from "../utils/test-helpers";
 
 /**
  * `product.resolveScan` — the replayable scan T7 adds.
@@ -62,9 +66,7 @@ function offProduct(name: string) {
     brands: "Marca",
     categories: "Lácteos, Leche",
     quantity: "1 L",
-  } as unknown as Awaited<
-    ReturnType<typeof openFoodFacts.getProductByBarcode>
-  >;
+  } as unknown as Awaited<ReturnType<typeof openFoodFacts.getProductByBarcode>>;
 }
 
 beforeAll(async () => {
@@ -84,11 +86,15 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-  await prisma.product.deleteMany({ where: { householdId: OWNER.householdId } });
+  await prisma.product.deleteMany({
+    where: { householdId: OWNER.householdId },
+  });
 });
 
 afterAll(async () => {
-  await prisma.product.deleteMany({ where: { householdId: OWNER.householdId } });
+  await prisma.product.deleteMany({
+    where: { householdId: OWNER.householdId },
+  });
   await prisma.user.deleteMany({ where: { id: OWNER.userId } });
   await prisma.household.deleteMany({ where: { id: OWNER.householdId } });
   await prisma.$disconnect();
@@ -311,7 +317,11 @@ describe("Open Food Facts lookups, metered", () => {
       requests.push(String(url));
       const code = /product\/(\d+)\.json/.exec(String(url))?.[1] ?? "";
       return new Response(
-        JSON.stringify({ code, status: 0, status_verbose: "product not found" }),
+        JSON.stringify({
+          code,
+          status: 0,
+          status_verbose: "product not found",
+        }),
         { status: 404, headers: { "Content-Type": "application/json" } },
       );
     }) as typeof fetch);
@@ -324,10 +334,13 @@ describe("Open Food Facts lookups, metered", () => {
   });
 
   afterAll(async () => {
-    if (original === undefined) delete process.env.RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS;
+    if (original === undefined)
+      delete process.env.RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS;
     else process.env.RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS = original;
     for (const code of barcodes) await valkeyProductCache.delete(code);
-    await prisma.product.deleteMany({ where: { householdId: OWNER.householdId } });
+    await prisma.product.deleteMany({
+      where: { householdId: OWNER.householdId },
+    });
     await prisma.user.deleteMany({ where: { id: { in: users } } });
     await closeValkey();
   });
@@ -335,9 +348,9 @@ describe("Open Food Facts lookups, metered", () => {
   it("refuses the lookup past the budget before it leaves, on either procedure", async () => {
     const api = await meteredCaller();
 
-    expect((await api.product.scanBarcode({ barcode: freshBarcode() })).source).toBe(
-      "not_found",
-    );
+    expect(
+      (await api.product.scanBarcode({ barcode: freshBarcode() })).source,
+    ).toBe("not_found");
     const unknown = await refusal(() =>
       api.product.resolveScan({ ...envelope(), barcode: freshBarcode() }),
     );
@@ -353,7 +366,9 @@ describe("Open Food Facts lookups, metered", () => {
     // 429, which `classify.ts` makes a review question for this procedure,
     // carrying the wait for `Retry-After`.
     expect(queued.cause).toBeInstanceOf(ThrottledError);
-    expect((queued.cause as ThrottledError).retryAfterSeconds).toBeGreaterThan(0);
+    expect((queued.cause as ThrottledError).retryAfterSeconds).toBeGreaterThan(
+      0,
+    );
 
     const connected = await refusal(() =>
       api.product.scanBarcode({ barcode: freshBarcode() }),
@@ -370,7 +385,12 @@ describe("Open Food Facts lookups, metered", () => {
     // More of each than the whole budget.
     const local = freshBarcode();
     await prisma.product.create({
-      data: { name: "Ya conocido", barcode: local, defaultUnit: "unit", householdId: OWNER.householdId },
+      data: {
+        name: "Ya conocido",
+        barcode: local,
+        defaultUnit: "unit",
+        householdId: OWNER.householdId,
+      },
     });
     const knownUnknown = freshBarcode();
     await valkeyProductCache.setMissing(knownUnknown);
@@ -383,10 +403,12 @@ describe("Open Food Facts lookups, metered", () => {
     }
 
     for (let i = 0; i <= ATTEMPTS; i++) {
-      expect((await api.product.scanBarcode({ barcode: local })).source).toBe("local");
-      expect((await api.product.scanBarcode({ barcode: knownUnknown })).source).toBe(
-        "not_found",
+      expect((await api.product.scanBarcode({ barcode: local })).source).toBe(
+        "local",
       );
+      expect(
+        (await api.product.scanBarcode({ barcode: knownUnknown })).source,
+      ).toBe("not_found");
     }
     for (const code of cachedHits) {
       expect((await api.product.scanBarcode({ barcode: code })).source).toBe(
@@ -397,11 +419,13 @@ describe("Open Food Facts lookups, metered", () => {
 
     // The whole budget is still there, and still enforced.
     for (let i = 0; i < ATTEMPTS; i++) {
-      expect((await api.product.scanBarcode({ barcode: freshBarcode() })).source).toBe(
-        "not_found",
-      );
+      expect(
+        (await api.product.scanBarcode({ barcode: freshBarcode() })).source,
+      ).toBe("not_found");
     }
-    const past = await refusal(() => api.product.scanBarcode({ barcode: freshBarcode() }));
+    const past = await refusal(() =>
+      api.product.scanBarcode({ barcode: freshBarcode() }),
+    );
     expect(past.code).toBe("TOO_MANY_REQUESTS");
     expect(requests).toHaveLength(ATTEMPTS);
   });
@@ -417,9 +441,9 @@ describe("Open Food Facts lookups, metered", () => {
     process.env.VALKEY_URL = "redis://127.0.0.1:1";
 
     try {
-      expect((await api.product.scanBarcode({ barcode: freshBarcode() })).source).toBe(
-        "not_found",
-      );
+      expect(
+        (await api.product.scanBarcode({ barcode: freshBarcode() })).source,
+      ).toBe("not_found");
       expect(requests).toHaveLength(0);
     } finally {
       await closeValkey();

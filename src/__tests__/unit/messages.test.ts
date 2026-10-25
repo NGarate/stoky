@@ -150,7 +150,10 @@ describe("typography", () => {
   const valueOf = (catalogue: Catalogue, key: string): string =>
     key
       .split(".")
-      .reduce<unknown>((node, part) => (node as Catalogue)?.[part], catalogue) as string;
+      .reduce<unknown>(
+        (node, part) => (node as Catalogue)?.[part],
+        catalogue,
+      ) as string;
 
   const offending = (
     catalogue: Catalogue,
@@ -208,7 +211,10 @@ describe("one action, one name", () => {
         const names = keys.map((key) =>
           key
             .split(".")
-            .reduce<unknown>((node, part) => (node as Catalogue)?.[part], catalogue),
+            .reduce<unknown>(
+              (node, part) => (node as Catalogue)?.[part],
+              catalogue,
+            ),
         );
         expect(new Set(names).size).toBe(1);
       });
@@ -242,8 +248,12 @@ describe("decoration lives in components, not in the catalogue", () => {
 
   test("no catalogue string carries a glyph a component draws", () => {
     const offenders = [
-      ...spanish.map((key) => [key, "es", value(es as Catalogue, key)] as const),
-      ...english.map((key) => [key, "en", value(en as Catalogue, key)] as const),
+      ...spanish.map(
+        (key) => [key, "es", value(es as Catalogue, key)] as const,
+      ),
+      ...english.map(
+        (key) => [key, "en", value(en as Catalogue, key)] as const,
+      ),
     ]
       .filter(([, , text]) => typeof text === "string" && DRAWN.test(text))
       .map(([key, locale]) => `${locale}:${key}`);
@@ -275,8 +285,12 @@ describe("decoration lives in components, not in the catalogue", () => {
 describe("a number in a sentence agrees with it", () => {
   test("every {count} carries a plural rule", () => {
     const offenders = [
-      ...spanish.map((key) => [key, "es", value(es as Catalogue, key)] as const),
-      ...english.map((key) => [key, "en", value(en as Catalogue, key)] as const),
+      ...spanish.map(
+        (key) => [key, "es", value(es as Catalogue, key)] as const,
+      ),
+      ...english.map(
+        (key) => [key, "en", value(en as Catalogue, key)] as const,
+      ),
     ]
       .filter(
         ([, , text]) =>
@@ -291,13 +305,12 @@ describe("a number in a sentence agrees with it", () => {
 
   test("would notice one", () => {
     const bare = "{count} artículos";
-    const declined =
-      "{count, plural, one {# artículo} other {# artículos}}";
+    const declined = "{count, plural, one {# artículo} other {# artículos}}";
 
     expect(bare.includes("{count}") && !bare.includes("plural")).toBe(true);
-    expect(
-      declined.includes("{count}") && !declined.includes("plural"),
-    ).toBe(false);
+    expect(declined.includes("{count}") && !declined.includes("plural")).toBe(
+      false,
+    );
   });
 });
 
@@ -340,7 +353,11 @@ describe("a password hint states the minimum the server enforces", () => {
         expect(raw as string).toContain("{min}");
         expect(raw as string).not.toMatch(/\d/);
 
-        const t = createTranslator({ locale, messages, namespace }) as unknown as (
+        const t = createTranslator({
+          locale,
+          messages,
+          namespace,
+        }) as unknown as (
           key: string,
           values: Record<string, number>,
         ) => string;
@@ -364,11 +381,15 @@ describe("a password hint states the minimum the server enforces", () => {
     );
     expect(router).toMatch(/^ {2}changePassword: protectedProcedure\b/m);
 
-    expect(value(es as Catalogue, "household.addPasswordHint")).toMatch(/cambiar/i);
+    expect(value(es as Catalogue, "household.addPasswordHint")).toMatch(
+      /cambiar/i,
+    );
     expect(value(es as Catalogue, "household.addPasswordHint")).toContain(
       value(es as Catalogue, "navigation.settings") as string,
     );
-    expect(value(en as Catalogue, "household.addPasswordHint")).toMatch(/change/i);
+    expect(value(en as Catalogue, "household.addPasswordHint")).toMatch(
+      /change/i,
+    );
     expect(value(en as Catalogue, "household.addPasswordHint")).toContain(
       value(en as Catalogue, "navigation.settings") as string,
     );
@@ -422,7 +443,10 @@ describe("a password hint states the minimum the server enforces", () => {
   test("no component writes a password length as a literal", () => {
     const files = componentSources();
 
-    const LITERAL = [/minLength=\{\s*\d+\s*\}/, /password\.length\s*[<>]=?\s*\d+/];
+    const LITERAL = [
+      /minLength=\{\s*\d+\s*\}/,
+      /password\.length\s*[<>]=?\s*\d+/,
+    ];
     const offenders = files.filter((file) => {
       const source = readFileSync(file, "utf8");
       return LITERAL.some((pattern) => pattern.test(source));
@@ -433,11 +457,18 @@ describe("a password hint states the minimum the server enforces", () => {
   });
 
   test("would notice one", () => {
-    const LITERAL = [/minLength=\{\s*\d+\s*\}/, /password\.length\s*[<>]=?\s*\d+/];
+    const LITERAL = [
+      /minLength=\{\s*\d+\s*\}/,
+      /password\.length\s*[<>]=?\s*\d+/,
+    ];
     expect(LITERAL[0].test("minLength={8}")).toBe(true);
     expect(LITERAL[1].test("password.length < 8")).toBe(true);
-    expect(LITERAL.some((p) => p.test("minLength={MIN_PASSWORD_LENGTH}"))).toBe(false);
-    expect(LITERAL.some((p) => p.test("password.length < MIN_PASSWORD_LENGTH"))).toBe(false);
+    expect(LITERAL.some((p) => p.test("minLength={MIN_PASSWORD_LENGTH}"))).toBe(
+      false,
+    );
+    expect(
+      LITERAL.some((p) => p.test("password.length < MIN_PASSWORD_LENGTH")),
+    ).toBe(false);
   });
 });
 

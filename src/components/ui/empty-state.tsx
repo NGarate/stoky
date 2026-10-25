@@ -75,7 +75,9 @@ export function EmptyState({
     >
       <p className={titleVariants({ density })}>{title}</p>
       {body ? <p className={bodyVariants({ density })}>{body}</p> : null}
-      {action ? <div className="mt-4 flex flex-wrap gap-2">{action}</div> : null}
+      {action ? (
+        <div className="mt-4 flex flex-wrap gap-2">{action}</div>
+      ) : null}
     </div>
   );
 }

@@ -53,7 +53,7 @@ function buildLocationTree(
     name: string;
     parentId: string | null;
     _count?: { stockEntries: number };
-  }>
+  }>,
 ): LocationNode[] {
   const map = new Map<string, LocationNode>();
   const roots: LocationNode[] = [];
@@ -100,7 +100,7 @@ function buildLocationTree(
  */
 function flattenTree(
   nodes: LocationNode[],
-  ancestors: string[] = []
+  ancestors: string[] = [],
 ): LocationOption[] {
   return nodes.flatMap((node) => [
     {
@@ -181,13 +181,13 @@ export function LocationPicker({
 
   const selectedIndex = useMemo(
     () => options.findIndex((option) => option.locationId === value),
-    [options, value]
+    [options, value],
   );
 
   const selectedOption = useMemo(
     () =>
       value ? options.find((option) => option.locationId === value) : undefined,
-    [options, value]
+    [options, value],
   );
 
   const close = useCallback(() => {
@@ -200,7 +200,7 @@ export function LocationPicker({
       setActiveIndex(Math.min(Math.max(index, 0), options.length - 1));
       setIsOpen(true);
     },
-    [options.length]
+    [options.length],
   );
 
   const choose = useCallback(
@@ -210,7 +210,7 @@ export function LocationPicker({
       onChange(option.locationId);
       close();
     },
-    [close, onChange, options]
+    [close, onChange, options],
   );
 
   // Focus never leaves the trigger while the panel is open — that is what
@@ -219,7 +219,11 @@ export function LocationPicker({
   // unlike NavSheet, whose focus moves into the panel it opens.
   const handleTriggerKeyDown = (event: React.KeyboardEvent) => {
     if (!isOpen) {
-      if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+      if (
+        event.key === "ArrowDown" ||
+        event.key === "Enter" ||
+        event.key === " "
+      ) {
         event.preventDefault();
         open(selectedIndex >= 0 ? selectedIndex : 0);
       } else if (event.key === "ArrowUp") {
@@ -367,7 +371,9 @@ export function LocationPicker({
         // Callers that name the control pass `labelledBy`; the fallback keeps a
         // stand-alone picker from being an unnamed field.
         aria-label={labelledBy ? undefined : t("locationLabel")}
-        onClick={() => (isOpen ? close() : open(selectedIndex >= 0 ? selectedIndex : 0))}
+        onClick={() =>
+          isOpen ? close() : open(selectedIndex >= 0 ? selectedIndex : 0)
+        }
         onKeyDown={handleTriggerKeyDown}
         className="flex min-h-[48px] w-full items-center rounded border border-input bg-card px-3 py-2 pr-8 text-left text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
@@ -433,7 +439,9 @@ export function LocationPicker({
                       ? "bg-accent font-semibold text-accent-foreground"
                       : "text-foreground hover:bg-muted"
                   }`}
-                  style={{ paddingLeft: `${0.75 + option.ancestors.length * 1.25}rem` }}
+                  style={{
+                    paddingLeft: `${0.75 + option.ancestors.length * 1.25}rem`,
+                  }}
                 >
                   {/* The indentation is the visual half of the depth; this is
                       the half a screen reader gets. */}

@@ -3,7 +3,10 @@ import { readSession } from "@/lib/auth";
 import { getAuth } from "@/lib/auth/instance";
 import { endPresentedSession, tidyAfterSignIn } from "@/lib/auth/sign-in-tidy";
 import { prisma } from "@/lib/prisma";
-import { handleAuthRequest, type AuthHandlerOptions } from "@/server/http/auth-handler";
+import {
+  handleAuthRequest,
+  type AuthHandlerOptions,
+} from "@/server/http/auth-handler";
 
 /**
  * Wiring only. What the auth API does with a request — which endpoints it
@@ -19,7 +22,9 @@ const options: AuthHandlerOptions = {
     // Without a refresh: reading the session being replaced must not move it.
     presented: async (headers) => {
       const session = await readSession(headers, { refresh: false });
-      return session ? { id: session.sessionId, userId: session.user.id } : null;
+      return session
+        ? { id: session.sessionId, userId: session.user.id }
+        : null;
     },
     tidy: (input) => tidyAfterSignIn(prisma, input),
     end: (previous, account) => endPresentedSession(prisma, previous, account),

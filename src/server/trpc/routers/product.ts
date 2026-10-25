@@ -159,7 +159,7 @@ export const productRouter = createTRPCRouter({
       const productsWithStock = products.map((product) => {
         const totalStock = product.stockEntries.reduce(
           (sum, entry) => sum + entry.quantity,
-          0
+          0,
         );
         return {
           ...product,
@@ -209,7 +209,7 @@ export const productRouter = createTRPCRouter({
 
       const totalStock = product.stockEntries.reduce(
         (sum, entry) => sum + entry.quantity,
-        0
+        0,
       );
 
       return {
@@ -250,7 +250,7 @@ export const productRouter = createTRPCRouter({
 
       const totalStock = product.stockEntries.reduce(
         (sum, entry) => sum + entry.quantity,
-        0
+        0,
       );
 
       return {
@@ -299,36 +299,68 @@ export const productRouter = createTRPCRouter({
           where: { id, householdId: ctx.householdId },
         });
         if (!existingProduct) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Product not found" });
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Product not found",
+          });
         }
         const target = data.defaultUnit;
         if (target && target !== existingProduct.defaultUnit) {
-          const entries = await tx.stockEntry.findMany({ where: { productId: id } });
-          const prices = await tx.priceRecord.findMany({ where: { productId: id } });
-          const items = await tx.shoppingItem.findMany({ where: { productId: id } });
+          const entries = await tx.stockEntry.findMany({
+            where: { productId: id },
+          });
+          const prices = await tx.priceRecord.findMany({
+            where: { productId: id },
+          });
+          const items = await tx.shoppingItem.findMany({
+            where: { productId: id },
+          });
           const rows = [...entries, ...prices, ...items];
-          if (rows.some((row) => unitConversion(row.unit, target) === undefined)) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Unit conversion needs a known quantity per package" });
+          if (
+            rows.some((row) => unitConversion(row.unit, target) === undefined)
+          ) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Unit conversion needs a known quantity per package",
+            });
           }
           for (const row of entries) {
-            await tx.stockEntry.update({ where: { id: row.id }, data: {
-              quantity: row.quantity * unitConversion(row.unit, target)!, unit: target,
-            } });
+            await tx.stockEntry.update({
+              where: { id: row.id },
+              data: {
+                quantity: row.quantity * unitConversion(row.unit, target)!,
+                unit: target,
+              },
+            });
           }
           for (const row of prices) {
-            await tx.priceRecord.update({ where: { id: row.id }, data: {
-              quantity: row.quantity * unitConversion(row.unit, target)!, unit: target,
-            } });
+            await tx.priceRecord.update({
+              where: { id: row.id },
+              data: {
+                quantity: row.quantity * unitConversion(row.unit, target)!,
+                unit: target,
+              },
+            });
           }
           for (const row of items) {
-            await tx.shoppingItem.update({ where: { id: row.id }, data: {
-              quantity: row.quantity * unitConversion(row.unit, target)!, unit: target,
-            } });
+            await tx.shoppingItem.update({
+              where: { id: row.id },
+              data: {
+                quantity: row.quantity * unitConversion(row.unit, target)!,
+                unit: target,
+              },
+            });
           }
-          if (data.minStock === undefined && existingProduct.minStock !== null) {
+          if (
+            data.minStock === undefined &&
+            existingProduct.minStock !== null
+          ) {
             const factor = unitConversion(existingProduct.defaultUnit, target);
             if (factor === undefined) {
-              throw new TRPCError({ code: "BAD_REQUEST", message: "Unit conversion needs a known quantity per package" });
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "Unit conversion needs a known quantity per package",
+              });
             }
             data.minStock = existingProduct.minStock * factor;
           }
@@ -486,7 +518,7 @@ export const productRouter = createTRPCRouter({
       if (existingProduct) {
         const totalStock = existingProduct.stockEntries.reduce(
           (sum, entry) => sum + entry.quantity,
-          0
+          0,
         );
         return {
           product: {

@@ -90,9 +90,10 @@ describe("target size, resolved from the real stylesheet", () => {
     const className = screen.getByRole("textbox").className;
     const height = await minimumHeight(className);
 
-    expect(height, `resolved to ${height}px from: ${className}`).toBeGreaterThanOrEqual(
-      FLOOR,
-    );
+    expect(
+      height,
+      `resolved to ${height}px from: ${className}`,
+    ).toBeGreaterThanOrEqual(FLOOR);
   });
 
   /**
@@ -129,15 +130,19 @@ describe("target size, resolved from the real stylesheet", () => {
         ? await minimumHeight(label.className)
         : await minimumHeight(input.className);
     const width =
-      covers && anchored ? container?.pixels.get("min-width") : own.pixels.get("width");
+      covers && anchored
+        ? container?.pixels.get("min-width")
+        : own.pixels.get("width");
 
-    expect(height, `resolved to ${height}px from: ${input.className}`).toBeGreaterThanOrEqual(
-      FLOOR,
-    );
+    expect(
+      height,
+      `resolved to ${height}px from: ${input.className}`,
+    ).toBeGreaterThanOrEqual(FLOOR);
     // A two-letter label is the width case, as it is for RadioOption.
-    expect(width, `resolved to ${width}px wide from: ${input.className}`).toBeGreaterThanOrEqual(
-      FLOOR,
-    );
+    expect(
+      width,
+      `resolved to ${width}px wide from: ${input.className}`,
+    ).toBeGreaterThanOrEqual(FLOOR);
   });
 
   /**

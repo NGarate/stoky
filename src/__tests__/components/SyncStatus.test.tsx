@@ -162,14 +162,16 @@ describe("an unread queue is not a saved one", () => {
   it("looks identical either way, which is why the attribute exists", () => {
     queueState = { ...queueState, hydrated: false };
     const { container } = renderWithIntl(<SyncStatus />);
-    const unread = container.querySelector('[data-testid="sync-calm"]')?.innerHTML;
+    const unread = container.querySelector(
+      '[data-testid="sync-calm"]',
+    )?.innerHTML;
     cleanup();
 
     queueState = { ...queueState, hydrated: true };
     const second = renderWithIntl(<SyncStatus />);
-    const saved = second.container
-      .querySelector('[data-testid="sync-calm"]')
-      ?.innerHTML;
+    const saved = second.container.querySelector(
+      '[data-testid="sync-calm"]',
+    )?.innerHTML;
 
     expect(unread).toBe(saved);
     expect(saved).toBe("");
@@ -210,10 +212,9 @@ describe("the two live regions", () => {
     queueState = { ...queueState, status: "needs-signin", pending: [op("a")] };
     renderWithIntl(<SyncStatus />);
 
-    expect(screen.getByRole("link", { name: "Volver a entrar" })).toHaveAttribute(
-      "href",
-      "/login",
-    );
+    expect(
+      screen.getByRole("link", { name: "Volver a entrar" }),
+    ).toHaveAttribute("href", "/login");
     expect(screen.queryByRole("button", { name: "Enviar ahora" })).toBeAbsent();
   });
 
@@ -227,7 +228,12 @@ describe("the two live regions", () => {
 
 describe("every state has words", () => {
   const cases: { name: string; apply: () => void }[] = [
-    { name: "pending", apply: () => { queueState.pending = [op("a")]; } },
+    {
+      name: "pending",
+      apply: () => {
+        queueState.pending = [op("a")];
+      },
+    },
     {
       name: "syncing",
       apply: () => {
@@ -235,11 +241,23 @@ describe("every state has words", () => {
         queueState.pending = [op("a")];
       },
     },
-    { name: "needs-signin", apply: () => { queueState.status = "needs-signin"; } },
-    { name: "full", apply: () => { queueState.full = true; } },
+    {
+      name: "needs-signin",
+      apply: () => {
+        queueState.status = "needs-signin";
+      },
+    },
+    {
+      name: "full",
+      apply: () => {
+        queueState.full = true;
+      },
+    },
     {
       name: "failed",
-      apply: () => { queueState.failed = [failed("f", "refused")]; },
+      apply: () => {
+        queueState.failed = [failed("f", "refused")];
+      },
     },
     {
       name: "needs-reconciliation",
@@ -272,7 +290,10 @@ describe("a change that did not save", () => {
       failed: [
         {
           ...failed("f1", "refused"),
-          label: { key: "shopping.itemUpdated", values: { name: "Leche entera" } },
+          label: {
+            key: "shopping.itemUpdated",
+            values: { name: "Leche entera" },
+          },
         },
       ],
     };
@@ -287,11 +308,20 @@ describe("a change that did not save", () => {
     // drawn in the same filled primary as "Volver a intentarlo" beside it.
     queueState = {
       ...queueState,
-      failed: [failed("f1", "refused"), { ...failed("s1", "needs-review"), path: "product.resolveScan", input: { barcode: "1" } }],
+      failed: [
+        failed("f1", "refused"),
+        {
+          ...failed("s1", "needs-review"),
+          path: "product.resolveScan",
+          input: { barcode: "1" },
+        },
+      ],
     };
     renderWithIntl(<SyncStatus />);
 
-    for (const button of screen.getAllByRole("button", { name: /^Descartar: / })) {
+    for (const button of screen.getAllByRole("button", {
+      name: /^Descartar: /,
+    })) {
       expect(button.className).toContain("bg-destructive");
     }
   });
@@ -300,7 +330,9 @@ describe("a change that did not save", () => {
     queueState = { ...queueState, failed: [failed("f1", "refused")] };
     renderWithIntl(<SyncStatus />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Volver a intentarlo" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Volver a intentarlo" }),
+    );
     expect(retry).toHaveBeenCalledWith("f1");
 
     await userEvent.click(screen.getByRole("button", { name: /^Descartar: / }));
@@ -396,10 +428,7 @@ describe("a refused consumption", () => {
     renderWithIntl(<SyncStatus />);
 
     await userEvent.click(screen.getByRole("button", { name: "Revisar" }));
-    await userEvent.type(
-      screen.getByLabelText(/cuánto hay ahora/i),
-      "3",
-    );
+    await userEvent.type(screen.getByLabelText(/cuánto hay ahora/i), "3");
     // The button is asserted separately from the submission: happy-dom does
     // not perform implicit form submission when a submit button is clicked, so
     // clicking alone would prove nothing — and submitting alone would not

@@ -111,7 +111,9 @@ describe("a loop of locations already in the database", () => {
     const api = await caller();
 
     const outcome = await within(
-      api.location.update({ id: outside.id, parentId: a.id }).catch((e: unknown) => e),
+      api.location
+        .update({ id: outside.id, parentId: a.id })
+        .catch((e: unknown) => e),
     );
     expect(outcome).toBeInstanceOf(TRPCError);
     expect((outcome as TRPCError).code).toBe("BAD_REQUEST");
@@ -131,7 +133,9 @@ describe("a loop of locations already in the database", () => {
     expect(roots).toContain(b.id);
     const nodeA = tree.find((node) => node.id === a.id);
     expect(nodeA?.children.map((child) => child.id)).toEqual([below.id]);
-    expect(idsIn(tree).filter((id) => [a.id, b.id, below.id].includes(id))).toHaveLength(3);
+    expect(
+      idsIn(tree).filter((id) => [a.id, b.id, below.id].includes(id)),
+    ).toHaveLength(3);
   });
 
   it("refuses a chain of ancestors deeper than the walk will read", async () => {
@@ -143,7 +147,9 @@ describe("a loop of locations already in the database", () => {
     const api = await caller();
 
     const outcome = await within(
-      api.location.update({ id: loose.id, parentId: parent.id }).catch((e: unknown) => e),
+      api.location
+        .update({ id: loose.id, parentId: parent.id })
+        .catch((e: unknown) => e),
     );
     expect(outcome).toBeInstanceOf(TRPCError);
     expect((outcome as TRPCError).code).toBe("BAD_REQUEST");
@@ -152,41 +158,40 @@ describe("a loop of locations already in the database", () => {
 });
 
 describe("two moves sent together", () => {
-  it(
-    `never leave two locations inside each other (${ROUNDS} rounds)`,
-    async () => {
-      const api = await caller();
-      const loops: number[] = [];
-      const refusals: string[] = [];
+  it(`never leave two locations inside each other (${ROUNDS} rounds)`, async () => {
+    const api = await caller();
+    const loops: number[] = [];
+    const refusals: string[] = [];
 
-      for (let round = 0; round < ROUNDS; round++) {
-        const a = await location(`Carrera ${round} A`);
-        const b = await location(`Carrera ${round} B`);
+    for (let round = 0; round < ROUNDS; round++) {
+      const a = await location(`Carrera ${round} A`);
+      const b = await location(`Carrera ${round} B`);
 
-        // As one batched request runs them: concurrently.
-        const outcomes = await Promise.allSettled([
-          api.location.update({ id: a.id, parentId: b.id }),
-          api.location.update({ id: b.id, parentId: a.id }),
-        ]);
+      // As one batched request runs them: concurrently.
+      const outcomes = await Promise.allSettled([
+        api.location.update({ id: a.id, parentId: b.id }),
+        api.location.update({ id: b.id, parentId: a.id }),
+      ]);
 
-        const [rowA, rowB] = await Promise.all([
-          prisma.storageLocation.findUniqueOrThrow({ where: { id: a.id } }),
-          prisma.storageLocation.findUniqueOrThrow({ where: { id: b.id } }),
-        ]);
-        if (rowA.parentId === b.id && rowB.parentId === a.id) loops.push(round);
+      const [rowA, rowB] = await Promise.all([
+        prisma.storageLocation.findUniqueOrThrow({ where: { id: a.id } }),
+        prisma.storageLocation.findUniqueOrThrow({ where: { id: b.id } }),
+      ]);
+      if (rowA.parentId === b.id && rowB.parentId === a.id) loops.push(round);
 
-        // One move lands; the other reads the tree it left and is refused.
-        refusals.push(
-          outcomes
-            .filter((outcome) => outcome.status === "rejected")
-            .map((outcome) => ((outcome as PromiseRejectedResult).reason as TRPCError).code)
-            .join(","),
-        );
-      }
+      // One move lands; the other reads the tree it left and is refused.
+      refusals.push(
+        outcomes
+          .filter((outcome) => outcome.status === "rejected")
+          .map(
+            (outcome) =>
+              ((outcome as PromiseRejectedResult).reason as TRPCError).code,
+          )
+          .join(","),
+      );
+    }
 
-      expect(loops).toEqual([]);
-      expect(refusals).toEqual(Array(ROUNDS).fill("BAD_REQUEST"));
-    },
-    60_000,
-  );
+    expect(loops).toEqual([]);
+    expect(refusals).toEqual(Array(ROUNDS).fill("BAD_REQUEST"));
+  }, 60_000);
 });

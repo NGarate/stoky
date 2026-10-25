@@ -7,7 +7,12 @@ import {
   MAX_UNIT_LENGTH,
 } from "./bounds";
 
-export const stockOperationSchema = z.enum(["PURCHASE", "CONSUME", "ADJUST", "TRANSFER"]);
+export const stockOperationSchema = z.enum([
+  "PURCHASE",
+  "CONSUME",
+  "ADJUST",
+  "TRANSFER",
+]);
 
 /**
  * What every stock movement carries, whatever kind it is.
@@ -61,9 +66,14 @@ export const consumeStockSchema = stockMovement.extend({
  */
 export const adjustStockSchema = stockMovement.extend({
   expectedStock: z.number().finite().optional(),
-  quantity: z.number().finite().min(-MAX_QUANTITY).max(MAX_QUANTITY).refine((value) => value !== 0, {
-    message: "An adjustment of zero changes nothing",
-  }),
+  quantity: z
+    .number()
+    .finite()
+    .min(-MAX_QUANTITY)
+    .max(MAX_QUANTITY)
+    .refine((value) => value !== 0, {
+      message: "An adjustment of zero changes nothing",
+    }),
   reason: z.string().min(1).max(MAX_NOTE_LENGTH),
 });
 
@@ -72,15 +82,19 @@ export const storageLocationSchema = z.object({
   parentId: z.string().max(MAX_ID_LENGTH).optional(),
 });
 
-export const updateStorageLocationSchema = storageLocationSchema.partial().extend({
-  id: z.string().max(MAX_ID_LENGTH),
-});
+export const updateStorageLocationSchema = storageLocationSchema
+  .partial()
+  .extend({
+    id: z.string().max(MAX_ID_LENGTH),
+  });
 
 export type AddStockInput = z.infer<typeof addStockSchema>;
 export type ConsumeStockInput = z.infer<typeof consumeStockSchema>;
 export type AdjustStockInput = z.infer<typeof adjustStockSchema>;
 export type StorageLocationInput = z.infer<typeof storageLocationSchema>;
-export type UpdateStorageLocationInput = z.infer<typeof updateStorageLocationSchema>;
+export type UpdateStorageLocationInput = z.infer<
+  typeof updateStorageLocationSchema
+>;
 
 /**
  * What the stock list asks for.

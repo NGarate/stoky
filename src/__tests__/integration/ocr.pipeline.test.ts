@@ -1,4 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach, beforeAll } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  beforeAll,
+} from "bun:test";
 import { prisma } from "@/lib/prisma";
 import {
   processReceiptOcr,
@@ -6,7 +13,10 @@ import {
   terminateWorker,
   timedRecogniser,
 } from "@/server/services/ocr";
-import { parseReceiptText, saveParsedItems } from "@/server/services/receiptParser";
+import {
+  parseReceiptText,
+  saveParsedItems,
+} from "@/server/services/receiptParser";
 import { matchReceiptItems } from "@/server/services/productMatcher";
 import { failInterruptedReceipts } from "@/server/services/receipt-recovery";
 import { ReceiptStatus, MatchStatus } from "@prisma/client";
@@ -49,11 +59,11 @@ describe("OCR Pipeline Integration", () => {
 
   afterEach(async () => {
     await terminateWorker();
-    
+
     const receipts = await prisma.receipt.findMany({
       where: { householdId: testHouseholdId },
     });
-    
+
     for (const receipt of receipts) {
       await prisma.receiptItem.deleteMany({
         where: { receiptId: receipt.id },
@@ -161,11 +171,11 @@ TOTAL: 12,90 EUR`;
       const parsed = parseReceiptText(ocrText);
 
       const multiQuantityItems = parsed.items.filter(
-        (item) => item.parsedQuantity && item.parsedQuantity > 1
+        (item) => item.parsedQuantity && item.parsedQuantity > 1,
       );
 
       expect(multiQuantityItems.length).toBeGreaterThan(0);
-      
+
       for (const item of multiQuantityItems) {
         expect(item.parsedQuantity).toBeGreaterThan(1);
         expect(item.parsedPrice).toBeGreaterThan(0);
@@ -213,7 +223,7 @@ Leche semi desnatada 1,25
 
       const autoMatched = matches.filter((m) => m.autoMatch !== null);
       expect(autoMatched.length).toBeGreaterThan(0);
-      
+
       for (const match of autoMatched) {
         if (match.autoMatch) {
           expect(match.autoMatch.similarity).toBeGreaterThanOrEqual(0.7);
@@ -322,7 +332,7 @@ Producto completamente diferente xyz123 5,00
       const matches = await matchReceiptItems(receipt.id);
 
       const noMatchItems = matches.filter(
-        (m) => !m.autoMatch && m.candidates.length === 0
+        (m) => !m.autoMatch && m.candidates.length === 0,
       );
 
       expect(noMatchItems.length).toBeGreaterThan(0);
@@ -385,7 +395,10 @@ Producto completamente diferente xyz123 5,00
         },
       });
 
-      const text = await processReceiptOcr(receipt.id, async () => "LECHE 1,25\n");
+      const text = await processReceiptOcr(
+        receipt.id,
+        async () => "LECHE 1,25\n",
+      );
 
       expect(text).toBe("LECHE 1,25\n");
       const updated = await prisma.receipt.findUnique({
@@ -420,13 +433,20 @@ Producto completamente diferente xyz123 5,00
           terminations += 1;
         },
       }));
-      const ocr = processReceiptOcr(receipt.id, timedRecogniser(stuck, () => 50)).then(
+      const ocr = processReceiptOcr(
+        receipt.id,
+        timedRecogniser(stuck, () => 50),
+      ).then(
         () => "PARSED",
         (error: unknown) => (error as Error).message,
       );
-      const guard = new Promise((resolve) => setTimeout(() => resolve("still waiting"), 3000));
+      const guard = new Promise((resolve) =>
+        setTimeout(() => resolve("still waiting"), 3000),
+      );
 
-      expect(await Promise.race([ocr, guard])).toBe("OCR did not finish within 50 ms");
+      expect(await Promise.race([ocr, guard])).toBe(
+        "OCR did not finish within 50 ms",
+      );
       expect(terminations).toBe(1);
       const updated = await prisma.receipt.findUnique({
         where: { id: receipt.id },
@@ -561,7 +581,7 @@ Vuelva pronto`;
       const parsed = parseReceiptText(ocrText);
 
       const invalidItems = parsed.items.filter((item) =>
-        /iva|total|factura|caja|hora|nif|operador/i.test(item.parsedName)
+        /iva|total|factura|caja|hora|nif|operador/i.test(item.parsedName),
       );
 
       expect(invalidItems.length).toBe(0);
@@ -605,8 +625,10 @@ Huevos 2,50
 
       for (let i = 0; i < parsed.items.length; i++) {
         const original = parsed.items[i];
-        const saved = savedItems.find((s) => s.parsedName === original.parsedName);
-        
+        const saved = savedItems.find(
+          (s) => s.parsedName === original.parsedName,
+        );
+
         expect(saved).toBeDefined();
         expect(saved?.parsedPrice).toBe(original.parsedPrice);
         expect(saved?.parsedQuantity).toBe(original.parsedQuantity ?? 1);
@@ -656,9 +678,10 @@ Huevos 2,50
       updated = await prisma.receipt.findUnique({
         where: { id: receipt.id },
       });
-      
-      const isValidStatus = updated?.status === ReceiptStatus.CONFIRMED || 
-                            updated?.status === ReceiptStatus.NEEDS_REVIEW;
+
+      const isValidStatus =
+        updated?.status === ReceiptStatus.CONFIRMED ||
+        updated?.status === ReceiptStatus.NEEDS_REVIEW;
       expect(isValidStatus).toBe(true);
     });
 

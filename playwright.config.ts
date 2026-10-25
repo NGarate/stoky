@@ -53,7 +53,9 @@ const PASSKEY_URL = `http://localhost:${PORT}`;
  */
 const PASSKEYS_TESTABLE = (() => {
   const base = new URL(BASE_URL);
-  return base.port === PORT && ["127.0.0.1", "localhost"].includes(base.hostname);
+  return (
+    base.port === PORT && ["127.0.0.1", "localhost"].includes(base.hostname)
+  );
 })();
 
 /**
@@ -135,7 +137,8 @@ const LAYOUT_SPECS = [
  * which is a judgement rather than a measurement: `ubuntu-latest` has four cores
  * and has to run the dev server on them too.
  */
-const WORKERS = Number(process.env.PLAYWRIGHT_WORKERS) || (process.env.CI ? 2 : 4);
+const WORKERS =
+  Number(process.env.PLAYWRIGHT_WORKERS) || (process.env.CI ? 2 : 4);
 
 export default defineConfig({
   testDir: "./e2e",
@@ -288,7 +291,9 @@ export default defineConfig({
             use: {
               ...devices["Desktop Chrome"],
               baseURL: PASSKEY_URL,
-              launchOptions: { args: ["--host-resolver-rules=MAP localhost 127.0.0.1"] },
+              launchOptions: {
+                args: ["--host-resolver-rules=MAP localhost 127.0.0.1"],
+              },
             },
             dependencies: ["seed"],
           },
@@ -375,7 +380,9 @@ export default defineConfig({
       // Secure flag, and both are plain http, so that is unchanged.
       // A server the passkeys project is not run against keeps the one entry.
       STOKY_URLS:
-        PASSKEYS_TESTABLE && PASSKEY_URL !== BASE_URL ? `${PASSKEY_URL},${BASE_URL}` : BASE_URL,
+        PASSKEYS_TESTABLE && PASSKEY_URL !== BASE_URL
+          ? `${PASSKEY_URL},${BASE_URL}`
+          : BASE_URL,
       // The auth rate limiter (ISSUES.md CRITICAL-4) counts per IP, and every
       // browser project reaches the dev server without a proxy in front of it,
       // so the whole matrix shares one bucket. At the shipped limits — 5

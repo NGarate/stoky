@@ -29,7 +29,9 @@ export const instant = false;
 export default async function RegisterPage(): Promise<JSX.Element> {
   await connection();
 
-  const open = await registrationOpen(registrationMode(), () => prisma.user.count());
+  const open = await registrationOpen(registrationMode(), () =>
+    prisma.user.count(),
+  );
 
   return open ? <RegisterForm /> : <RegistrationClosed />;
 }

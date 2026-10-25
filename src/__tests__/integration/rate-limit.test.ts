@@ -76,10 +76,13 @@ async function withUnreachableCache(body: () => Promise<void>): Promise<void> {
   }
 }
 
-const inspector = new Redis(process.env.VALKEY_URL ?? "redis://localhost:6379", {
-  maxRetriesPerRequest: 1,
-  connectTimeout: 2000,
-});
+const inspector = new Redis(
+  process.env.VALKEY_URL ?? "redis://localhost:6379",
+  {
+    maxRetriesPerRequest: 1,
+    connectTimeout: 2000,
+  },
+);
 
 beforeEach(async () => {
   const keys = await inspector.keys(`${LIMIT.prefix}:*`);
@@ -110,7 +113,8 @@ describe("consumeRateLimit", () => {
 
   it("keeps refusing once the budget is spent", async () => {
     const id = nextIdentifier();
-    for (let i = 0; i < LIMIT.attempts + 3; i++) await consumeRateLimit(LIMIT, id);
+    for (let i = 0; i < LIMIT.attempts + 3; i++)
+      await consumeRateLimit(LIMIT, id);
 
     const result = await consumeRateLimit(LIMIT, id);
     expect(result.allowed).toBe(false);
@@ -120,7 +124,8 @@ describe("consumeRateLimit", () => {
     const spender = nextIdentifier();
     const bystander = nextIdentifier();
 
-    for (let i = 0; i <= LIMIT.attempts; i++) await consumeRateLimit(LIMIT, spender);
+    for (let i = 0; i <= LIMIT.attempts; i++)
+      await consumeRateLimit(LIMIT, spender);
 
     expect((await consumeRateLimit(LIMIT, spender)).allowed).toBe(false);
     expect((await consumeRateLimit(LIMIT, bystander)).allowed).toBe(true);
@@ -338,7 +343,8 @@ describe("the per-account limit, through the auth route", () => {
   });
 
   afterAll(() => {
-    if (original === undefined) delete process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
+    if (original === undefined)
+      delete process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
     else process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS = original;
   });
 
@@ -351,10 +357,15 @@ describe("the per-account limit, through the auth route", () => {
     for (let i = 0; i < ATTEMPTS; i++) {
       // Wrong password, no such account — both irrelevant, because the count
       // happens before either is looked at.
-      expect((await signInWith({ email, password: "wrong password here" })).status).toBe(401);
+      expect(
+        (await signInWith({ email, password: "wrong password here" })).status,
+      ).toBe(401);
     }
 
-    const refused = await signInWith({ email, password: "wrong password here" });
+    const refused = await signInWith({
+      email,
+      password: "wrong password here",
+    });
 
     // The account's own refusal, not the address's: the person is told the
     // account is being tried, because another network would not help them.
@@ -384,19 +395,30 @@ describe("the per-account limit, through the auth route", () => {
     // spend a limit that exists to stop someone guessing.
     const email = generateTestEmail("resets");
     const password = "cocina despensa nevera";
-    const household = await createTestHousehold({ name: `Rate Limit Household ${process.pid}` });
-    await createTestUser({ email, name: generateTestName("Resets"), password, householdId: household.id });
+    const household = await createTestHousehold({
+      name: `Rate Limit Household ${process.pid}`,
+    });
+    await createTestUser({
+      email,
+      name: generateTestName("Resets"),
+      password,
+      householdId: household.id,
+    });
 
     try {
       for (let i = 0; i < ATTEMPTS - 1; i++) {
-        expect((await signInWith({ email, password: "wrong password here" })).status).toBe(401);
+        expect(
+          (await signInWith({ email, password: "wrong password here" })).status,
+        ).toBe(401);
       }
 
       // The last attempt of the budget, and it is correct.
       expect((await signInWith({ email, password })).status).toBe(200);
 
       // Which means the next one is not refused.
-      expect((await signInWith({ email, password: "wrong password here" })).status).toBe(401);
+      expect(
+        (await signInWith({ email, password: "wrong password here" })).status,
+      ).toBe(401);
     } finally {
       await cleanupTestUsers(email);
       await cleanupTestHouseholds(`Rate Limit Household ${process.pid}`);
@@ -432,9 +454,11 @@ describe("known devices, through the auth route", () => {
   });
 
   afterAll(async () => {
-    if (originalAccount === undefined) delete process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
+    if (originalAccount === undefined)
+      delete process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
     else process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS = originalAccount;
-    if (originalDevice === undefined) delete process.env.RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS;
+    if (originalDevice === undefined)
+      delete process.env.RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS;
     else process.env.RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS = originalDevice;
 
     // Valkey is shared with whatever else is running against it, so only the
@@ -442,7 +466,9 @@ describe("known devices, through the auth route", () => {
     for (const email of accounts) {
       const account = accountIdentifier(email);
       const keys = [
-        ...(await inspector.keys(`${loginDeviceRateLimit().prefix}:${account}:*`)),
+        ...(await inspector.keys(
+          `${loginDeviceRateLimit().prefix}:${account}:*`,
+        )),
         `${loginAccountRateLimit().prefix}:${account}`,
         `rl:known:${account}`,
       ];
@@ -468,7 +494,9 @@ describe("known devices, through the auth route", () => {
   /** A browser that has signed in to `email` once, successfully. */
   async function knownDevice(email: string): Promise<string> {
     const deviceId = crypto.randomUUID();
-    expect((await signInWith({ email, password: PASSWORD }, { deviceId })).status).toBe(200);
+    expect(
+      (await signInWith({ email, password: PASSWORD }, { deviceId })).status,
+    ).toBe(200);
     return deviceId;
   }
 
@@ -489,7 +517,10 @@ describe("known devices, through the auth route", () => {
 
     await fillSharedBudget(email);
 
-    expect((await signInWith({ email, password: PASSWORD }, { deviceId: phone })).status).toBe(200);
+    expect(
+      (await signInWith({ email, password: PASSWORD }, { deviceId: phone }))
+        .status,
+    ).toBe(200);
   });
 
   it("still refuses a browser with no device cookie once the shared budget is full", async () => {
@@ -510,7 +541,14 @@ describe("known devices, through the auth route", () => {
 
     await fillSharedBudget(email);
 
-    expect((await signInWith({ email, password: PASSWORD }, { deviceId: crypto.randomUUID() })).status).toBe(429);
+    expect(
+      (
+        await signInWith(
+          { email, password: PASSWORD },
+          { deviceId: crypto.randomUUID() },
+        )
+      ).status,
+    ).toBe(429);
   });
 
   it("does not remember a device whose sign-in failed", async () => {
@@ -520,13 +558,21 @@ describe("known devices, through the auth route", () => {
     const email = await member("failed");
     const guesser = crypto.randomUUID();
 
-    expect((await signInWith({ email, password: WRONG }, { deviceId: guesser })).status).toBe(401);
+    expect(
+      (await signInWith({ email, password: WRONG }, { deviceId: guesser }))
+        .status,
+    ).toBe(401);
     for (let i = 1; i < ACCOUNT_ATTEMPTS; i++) {
       expect((await signInWith({ email, password: WRONG })).status).toBe(401);
     }
 
-    expect((await signInWith({ email, password: WRONG }, { deviceId: guesser })).status).toBe(429);
-    expect(await inspector.exists(`rl:known:${accountIdentifier(email)}`)).toBe(0);
+    expect(
+      (await signInWith({ email, password: WRONG }, { deviceId: guesser }))
+        .status,
+    ).toBe(429);
+    expect(await inspector.exists(`rl:known:${accountIdentifier(email)}`)).toBe(
+      0,
+    );
   });
 
   it("does not trust a device recorded for another account", async () => {
@@ -538,7 +584,14 @@ describe("known devices, through the auth route", () => {
 
     await fillSharedBudget(victim);
 
-    expect((await signInWith({ email: victim, password: PASSWORD }, { deviceId: tablet })).status).toBe(429);
+    expect(
+      (
+        await signInWith(
+          { email: victim, password: PASSWORD },
+          { deviceId: tablet },
+        )
+      ).status,
+    ).toBe(429);
   });
 
   it("gives a known device a budget of its own that still runs out, without touching the shared one", async () => {
@@ -548,9 +601,15 @@ describe("known devices, through the auth route", () => {
     const phone = await knownDevice(email);
 
     for (let i = 0; i < DEVICE_ATTEMPTS; i++) {
-      expect((await signInWith({ email, password: WRONG }, { deviceId: phone })).status).toBe(401);
+      expect(
+        (await signInWith({ email, password: WRONG }, { deviceId: phone }))
+          .status,
+      ).toBe(401);
     }
-    expect((await signInWith({ email, password: PASSWORD }, { deviceId: phone })).code).toBe("ACCOUNT_RATE_LIMITED");
+    expect(
+      (await signInWith({ email, password: PASSWORD }, { deviceId: phone }))
+        .code,
+    ).toBe("ACCOUNT_RATE_LIMITED");
 
     const shared = `${loginAccountRateLimit().prefix}:${accountIdentifier(email)}`;
     expect(await inspector.get(shared)).toBeNull();
@@ -566,7 +625,10 @@ describe("known devices, through the auth route", () => {
     for (let i = 0; i < ACCOUNT_ATTEMPTS - 1; i++) {
       expect((await signInWith({ email, password: WRONG })).status).toBe(401);
     }
-    expect((await signInWith({ email, password: PASSWORD }, { deviceId: phone })).status).toBe(200);
+    expect(
+      (await signInWith({ email, password: PASSWORD }, { deviceId: phone }))
+        .status,
+    ).toBe(200);
 
     const shared = `${loginAccountRateLimit().prefix}:${accountIdentifier(email)}`;
     expect(await inspector.get(shared)).toBe(String(ACCOUNT_ATTEMPTS - 1));
@@ -575,18 +637,35 @@ describe("known devices, through the auth route", () => {
   it("keeps the twenty most recent devices and forgets the oldest", async () => {
     const email = await member("cap");
     const devices: string[] = [];
-    for (let i = 0; i <= KNOWN_DEVICE_CAP; i++) devices.push(await knownDevice(email));
+    for (let i = 0; i <= KNOWN_DEVICE_CAP; i++)
+      devices.push(await knownDevice(email));
 
     const key = `rl:known:${accountIdentifier(email)}`;
     expect(await inspector.zcard(key)).toBe(KNOWN_DEVICE_CAP);
-    expect(await inspector.ttl(key)).toBeGreaterThan(KNOWN_DEVICE_TTL_SECONDS - 60);
+    expect(await inspector.ttl(key)).toBeGreaterThan(
+      KNOWN_DEVICE_TTL_SECONDS - 60,
+    );
 
     await fillSharedBudget(email);
 
     // The first one recorded is the one pushed out, so it is a stranger again…
-    expect((await signInWith({ email, password: PASSWORD }, { deviceId: devices[0] })).status).toBe(429);
+    expect(
+      (
+        await signInWith(
+          { email, password: PASSWORD },
+          { deviceId: devices[0] },
+        )
+      ).status,
+    ).toBe(429);
     // …and the newest is still known.
-    expect((await signInWith({ email, password: PASSWORD }, { deviceId: devices[KNOWN_DEVICE_CAP] })).status).toBe(200);
+    expect(
+      (
+        await signInWith(
+          { email, password: PASSWORD },
+          { deviceId: devices[KNOWN_DEVICE_CAP] },
+        )
+      ).status,
+    ).toBe(200);
   });
 
   it("cannot be pre-empted by a forged address naming the device set", async () => {
@@ -598,17 +677,27 @@ describe("known devices, through the auth route", () => {
     const address = `known:${accountIdentifier(email)}`;
     const deviceId = crypto.randomUUID();
 
-    expect((await signInWith({ email, password: WRONG }, { address })).status).toBe(401);
-    expect((await signInWith({ email, password: PASSWORD }, { address, deviceId })).status).toBe(200);
+    expect(
+      (await signInWith({ email, password: WRONG }, { address })).status,
+    ).toBe(401);
+    expect(
+      (await signInWith({ email, password: PASSWORD }, { address, deviceId }))
+        .status,
+    ).toBe(200);
     await fillSharedBudget(email);
-    expect((await signInWith({ email, password: PASSWORD }, { deviceId })).status).toBe(200);
+    expect(
+      (await signInWith({ email, password: PASSWORD }, { deviceId })).status,
+    ).toBe(200);
   });
 
   it("fails closed when it cannot ask whether a device is known", async () => {
     let thrown: unknown;
     await withUnreachableCache(async () => {
       try {
-        await isKnownDevice(accountIdentifier("anyone@example.com"), crypto.randomUUID());
+        await isKnownDevice(
+          accountIdentifier("anyone@example.com"),
+          crypto.randomUUID(),
+        );
       } catch (error) {
         thrown = error;
       }
@@ -668,9 +757,15 @@ describe("the per-address limit, through the auth route", () => {
     rounds: for (let round = 0; round < 4; round++) {
       for (let guess = 0; guess < ATTEMPTS - 1; guess++) {
         const victim = generateTestEmail(`${MARKER}-victim-${round}-${guess}`);
-        await signInWith({ email: victim, password: "wrong password here" }, { address });
+        await signInWith(
+          { email: victim, password: "wrong password here" },
+          { address },
+        );
       }
-      const own = await signInWith({ email: mine, password: PASSWORD }, { address });
+      const own = await signInWith(
+        { email: mine, password: PASSWORD },
+        { address },
+      );
       if (own.status !== 200) {
         refused = own.code;
         break rounds;
@@ -704,7 +799,10 @@ describe("the per-address limit, through the auth route", () => {
     const mine = await ownAccount("household");
 
     for (let i = 0; i < ATTEMPTS + 2; i++) {
-      expect((await signInWith({ email: mine, password: PASSWORD }, { address })).status).toBe(200);
+      expect(
+        (await signInWith({ email: mine, password: PASSWORD }, { address }))
+          .status,
+      ).toBe(200);
     }
   });
 });
@@ -728,14 +826,20 @@ describe("an IPv6 client, through the auth route", () => {
 
   beforeEach(async () => {
     process.env.RATE_LIMIT_LOGIN_ATTEMPTS = String(ATTEMPTS);
-    await inspector.del(`rl:login:${PREFIX}::/64`, `rl:login:${NEIGHBOUR}::/64`);
+    await inspector.del(
+      `rl:login:${PREFIX}::/64`,
+      `rl:login:${NEIGHBOUR}::/64`,
+    );
   });
 
   afterAll(async () => {
     console.warn = realWarn;
     if (original === undefined) delete process.env.RATE_LIMIT_LOGIN_ATTEMPTS;
     else process.env.RATE_LIMIT_LOGIN_ATTEMPTS = original;
-    await inspector.del(`rl:login:${PREFIX}::/64`, `rl:login:${NEIGHBOUR}::/64`);
+    await inspector.del(
+      `rl:login:${PREFIX}::/64`,
+      `rl:login:${NEIGHBOUR}::/64`,
+    );
   });
 
   // Malformed, so nothing is looked up and nothing is hashed: the per-address
@@ -747,15 +851,21 @@ describe("an IPv6 client, through the auth route", () => {
     // and what an attacker does on purpose. Per address, none of these would
     // ever be refused.
     for (let host = 1; host <= ATTEMPTS; host++) {
-      expect((await signInWith(malformed, { address: `${PREFIX}::${host}` })).status).toBe(400);
+      expect(
+        (await signInWith(malformed, { address: `${PREFIX}::${host}` })).status,
+      ).toBe(400);
     }
 
-    const refused = await signInWith(malformed, { address: `${PREFIX}:dead:beef:1234:5678` });
+    const refused = await signInWith(malformed, {
+      address: `${PREFIX}:dead:beef:1234:5678`,
+    });
     expect(refused.status).toBe(429);
     expect(refused.code).toBe("RATE_LIMITED");
 
     // The next subscriber's /64 is somebody else, and keeps its own budget.
-    expect((await signInWith(malformed, { address: `${NEIGHBOUR}::1` })).status).toBe(400);
+    expect(
+      (await signInWith(malformed, { address: `${NEIGHBOUR}::1` })).status,
+    ).toBe(400);
   });
 
   it("writes the full address to the security log, not the /64", async () => {
@@ -862,7 +972,9 @@ describe("the registration limit, through the router", () => {
     // status code cannot make. If the limit ran after the write, the endpoint
     // would still be a way to fill the user table and to make the server spend
     // 250ms of Argon2id per call on demand.
-    expect(await prisma.user.findUnique({ where: { email: over.email } })).toBeNull();
+    expect(
+      await prisma.user.findUnique({ where: { email: over.email } }),
+    ).toBeNull();
   });
 
   it("counts each address separately, so one abuser does not close the door", async () => {
@@ -873,10 +985,14 @@ describe("the registration limit, through the router", () => {
     for (let i = 0; i < ATTEMPTS; i++) {
       await spender.auth.register(account(`spender-${i}`));
     }
-    await expect(spender.auth.register(account("spender-over"))).rejects.toThrow();
+    await expect(
+      spender.auth.register(account("spender-over")),
+    ).rejects.toThrow();
 
     const bystander = await callerFrom(nextIdentifier());
-    expect((await bystander.auth.register(account("bystander"))).success).toBe(true);
+    expect((await bystander.auth.register(account("bystander"))).success).toBe(
+      true,
+    );
   });
 
   it("counts an IPv6 client by its /64, so rotating addresses buys nothing", async () => {
@@ -886,7 +1002,9 @@ describe("the registration limit, through the router", () => {
     const prefix = `2001:db8:${(process.pid & 0xffff).toString(16)}:${(Date.now() & 0xffff).toString(16)}`;
     for (let host = 1; host <= ATTEMPTS; host++) {
       const caller = await callerFrom(`${prefix}::${host}`);
-      expect((await caller.auth.register(account(`v6-${host}`))).success).toBe(true);
+      expect((await caller.auth.register(account(`v6-${host}`))).success).toBe(
+        true,
+      );
     }
 
     const rotated = await callerFrom(`${prefix}:dead:beef:1234:5678`);

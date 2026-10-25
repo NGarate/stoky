@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { prisma } from "@/lib/prisma";
-import { parseReceiptText, saveParsedItems } from "@/server/services/receiptParser";
+import {
+  parseReceiptText,
+  saveParsedItems,
+} from "@/server/services/receiptParser";
 import { ReceiptStatus, MatchStatus } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, rm } from "node:fs/promises";
@@ -115,11 +118,31 @@ GRACIAS POR SU COMPRA`;
           parsedQuantity,
         })),
       ).toEqual([
-        { parsedName: "leche semi 1l", parsedPrice: 1.25, parsedQuantity: undefined },
-        { parsedName: "pan de molde", parsedPrice: 0.95, parsedQuantity: undefined },
-        { parsedName: "huevos frescos docena", parsedPrice: 2.5, parsedQuantity: undefined },
-        { parsedName: "manzanas golden kg", parsedPrice: 2.3, parsedQuantity: undefined },
-        { parsedName: "yogur natural pack 4", parsedPrice: 1.8, parsedQuantity: undefined },
+        {
+          parsedName: "leche semi 1l",
+          parsedPrice: 1.25,
+          parsedQuantity: undefined,
+        },
+        {
+          parsedName: "pan de molde",
+          parsedPrice: 0.95,
+          parsedQuantity: undefined,
+        },
+        {
+          parsedName: "huevos frescos docena",
+          parsedPrice: 2.5,
+          parsedQuantity: undefined,
+        },
+        {
+          parsedName: "manzanas golden kg",
+          parsedPrice: 2.3,
+          parsedQuantity: undefined,
+        },
+        {
+          parsedName: "yogur natural pack 4",
+          parsedPrice: 1.8,
+          parsedQuantity: undefined,
+        },
       ]);
     });
 
@@ -408,7 +431,8 @@ OTRO PRODUCTO CON NOMBRE MUY LARGO QUE OCUPA MUCHO ESPACIO 2,50`;
     });
 
     it("should handle text with no line breaks", () => {
-      const ocrText = "TIENDA Producto1 1,25 Producto2 2,50 Producto3 3,75 Total 7,50";
+      const ocrText =
+        "TIENDA Producto1 1,25 Producto2 2,50 Producto3 3,75 Total 7,50";
 
       const result = parseReceiptText(ocrText);
 
@@ -656,7 +680,9 @@ Leche semi desnatada 1L 1,25
 
       await saveParsedItems(receipt.id, parseReceiptText("LIDL\nLeche 1,25"));
 
-      const saved = await prisma.receipt.findUnique({ where: { id: receipt.id } });
+      const saved = await prisma.receipt.findUnique({
+        where: { id: receipt.id },
+      });
       expect(saved?.storeId).toBe(chosen.id);
       // And the header's guess was not created as a store on the side.
       const stores = await prisma.store.findMany({

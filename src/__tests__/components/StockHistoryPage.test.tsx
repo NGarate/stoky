@@ -21,7 +21,13 @@ mock.module("recharts", () => ({
   ResponsiveContainer: ({ children }: { children: ReactNode }) => (
     <div data-testid="chart">{children}</div>
   ),
-  LineChart: ({ data, children }: { data: ChartRow[]; children: ReactNode }) => {
+  LineChart: ({
+    data,
+    children,
+  }: {
+    data: ChartRow[];
+    children: ReactNode;
+  }) => {
     chartData = data;
     return <div>{children}</div>;
   },
@@ -74,9 +80,8 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
-const { StockHistoryView } = await import(
-  "@/app/(dashboard)/products/[id]/history/page"
-);
+const { StockHistoryView } =
+  await import("@/app/(dashboard)/products/[id]/history/page");
 
 beforeEach(() => {
   chartData = [];
@@ -98,11 +103,12 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-
 /** A refusal as the client receives it: the code is what RouteState reads. */
 function notFoundError(): TRPCClientError<never> {
   const error = new TRPCClientError<never>("Product not found");
-  Object.defineProperty(error, "data", { value: { code: "NOT_FOUND", httpStatus: 404 } });
+  Object.defineProperty(error, "data", {
+    value: { code: "NOT_FOUND", httpStatus: 404 },
+  });
   return error;
 }
 
@@ -154,8 +160,12 @@ describe("the stock history", () => {
         .map((term) => term.textContent);
       expect(terms).toEqual(["Movimiento", "Cambio", "Ubicación", "Quedó"]);
     }
-    expect(within(rows[0] as HTMLElement).getByText("Nevera")).toBeInTheDocument();
-    expect(within(rows[0] as HTMLElement).getByText("+4 L")).toBeInTheDocument();
+    expect(
+      within(rows[0] as HTMLElement).getByText("Nevera"),
+    ).toBeInTheDocument();
+    expect(
+      within(rows[0] as HTMLElement).getByText("+4 L"),
+    ).toBeInTheDocument();
   });
 
   it("says so when there is no ledger yet, instead of an empty chart", () => {

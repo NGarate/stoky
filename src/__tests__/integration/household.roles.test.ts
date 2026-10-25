@@ -73,20 +73,31 @@ async function codeOf(call: () => Promise<unknown>): Promise<string | null> {
 }
 
 const roleOf = async (id: string) =>
-  (await prisma.user.findUniqueOrThrow({ where: { id }, select: { role: true } })).role;
+  (
+    await prisma.user.findUniqueOrThrow({
+      where: { id },
+      select: { role: true },
+    })
+  ).role;
 
 beforeEach(async () => {
   // A household per test: these procedures count owners, so tests sharing one
   // would decide each other's outcomes.
   await prisma.user.deleteMany({ where: { name: { startsWith: PREFIX } } });
-  await prisma.household.deleteMany({ where: { name: { startsWith: PREFIX } } });
+  await prisma.household.deleteMany({
+    where: { name: { startsWith: PREFIX } },
+  });
   householdId = (await createTestHousehold({ name: `${PREFIX}Household` })).id;
-  strangerHouseholdId = (await createTestHousehold({ name: `${PREFIX}Stranger` })).id;
+  strangerHouseholdId = (
+    await createTestHousehold({ name: `${PREFIX}Stranger` })
+  ).id;
 });
 
 afterAll(async () => {
   await prisma.user.deleteMany({ where: { name: { startsWith: PREFIX } } });
-  await prisma.household.deleteMany({ where: { name: { startsWith: PREFIX } } });
+  await prisma.household.deleteMany({
+    where: { name: { startsWith: PREFIX } },
+  });
 });
 
 describe("whose member it is", () => {
@@ -95,14 +106,20 @@ describe("whose member it is", () => {
     const outsider = await member("MEMBER", "Outsider", strangerHouseholdId);
 
     expect(
-      await codeOf(() => caller.household.updateRole({ userId: outsider.id, role: "ADMIN" })),
+      await codeOf(() =>
+        caller.household.updateRole({ userId: outsider.id, role: "ADMIN" }),
+      ),
     ).toBe("NOT_FOUND");
     expect(
-      await codeOf(() => caller.household.removeMember({ userId: outsider.id })),
+      await codeOf(() =>
+        caller.household.removeMember({ userId: outsider.id }),
+      ),
     ).toBe("NOT_FOUND");
 
     expect(await roleOf(outsider.id)).toBe("MEMBER");
-    const row = await prisma.user.findUniqueOrThrow({ where: { id: outsider.id } });
+    const row = await prisma.user.findUniqueOrThrow({
+      where: { id: outsider.id },
+    });
     expect(row.householdId).toBe(strangerHouseholdId);
   });
 });
@@ -116,7 +133,9 @@ describe("who may touch ownership", () => {
     const owner = await member("OWNER", "Second");
 
     expect(
-      await codeOf(() => admin.household.updateRole({ userId: owner.id, role: "MEMBER" })),
+      await codeOf(() =>
+        admin.household.updateRole({ userId: owner.id, role: "MEMBER" }),
+      ),
     ).toBe("FORBIDDEN");
     expect(await roleOf(owner.id)).toBe("OWNER");
   });
@@ -126,7 +145,9 @@ describe("who may touch ownership", () => {
     const admin = await member("ADMIN", "Admin");
 
     expect(
-      await codeOf(() => admin.caller.household.updateRole({ userId: admin.id, role: "OWNER" })),
+      await codeOf(() =>
+        admin.caller.household.updateRole({ userId: admin.id, role: "OWNER" }),
+      ),
     ).toBe("FORBIDDEN");
     expect(await roleOf(admin.id)).toBe("ADMIN");
   });
@@ -146,10 +167,12 @@ describe("who may touch ownership", () => {
     const other = await member("MEMBER", "Other");
 
     expect(
-      (await owner.household.updateRole({ userId: other.id, role: "OWNER" })).role,
+      (await owner.household.updateRole({ userId: other.id, role: "OWNER" }))
+        .role,
     ).toBe("OWNER");
     expect(
-      (await owner.household.updateRole({ userId: other.id, role: "KITCHEN" })).role,
+      (await owner.household.updateRole({ userId: other.id, role: "KITCHEN" }))
+        .role,
     ).toBe("KITCHEN");
   });
 });
@@ -161,7 +184,9 @@ describe("the household keeps an owner", () => {
     const sole = await member("OWNER", "Sole");
 
     expect(
-      await codeOf(() => sole.caller.household.updateRole({ userId: sole.id, role: "ADMIN" })),
+      await codeOf(() =>
+        sole.caller.household.updateRole({ userId: sole.id, role: "ADMIN" }),
+      ),
     ).toBe("CONFLICT");
     expect(await roleOf(sole.id)).toBe("OWNER");
   });
@@ -170,7 +195,9 @@ describe("the household keeps an owner", () => {
     const sole = await member("OWNER", "Sole");
 
     expect(
-      await codeOf(() => sole.caller.household.removeMember({ userId: sole.id })),
+      await codeOf(() =>
+        sole.caller.household.removeMember({ userId: sole.id }),
+      ),
     ).toBe("CONFLICT");
 
     const row = await prisma.user.findUniqueOrThrow({ where: { id: sole.id } });
@@ -183,10 +210,15 @@ describe("the household keeps an owner", () => {
     const first = await member("OWNER", "First");
     const second = await member("MEMBER", "Second");
 
-    await first.caller.household.updateRole({ userId: second.id, role: "OWNER" });
+    await first.caller.household.updateRole({
+      userId: second.id,
+      role: "OWNER",
+    });
 
     expect(
-      await codeOf(() => first.caller.household.updateRole({ userId: first.id, role: "MEMBER" })),
+      await codeOf(() =>
+        first.caller.household.updateRole({ userId: first.id, role: "MEMBER" }),
+      ),
     ).toBeNull();
     expect(await roleOf(first.id)).toBe("MEMBER");
   });
@@ -206,13 +238,26 @@ describe("the household keeps an owner", () => {
       const second = await member("OWNER", `RaceB${round}`);
 
       const [a, b] = await Promise.all([
-        codeOf(() => first.caller.household.updateRole({ userId: first.id, role: "MEMBER" })),
-        codeOf(() => second.caller.household.removeMember({ userId: second.id })),
+        codeOf(() =>
+          first.caller.household.updateRole({
+            userId: first.id,
+            role: "MEMBER",
+          }),
+        ),
+        codeOf(() =>
+          second.caller.household.removeMember({ userId: second.id }),
+        ),
       ]);
       outcomes.push(`${a}/${b}`);
 
-      const owners = await prisma.user.count({ where: { householdId, role: "OWNER" } });
-      expect({ round, owners, outcomes }).toEqual({ round, owners: 1, outcomes });
+      const owners = await prisma.user.count({
+        where: { householdId, role: "OWNER" },
+      });
+      expect({ round, owners, outcomes }).toEqual({
+        round,
+        owners: 1,
+        outcomes,
+      });
 
       // Exactly one of the two went ahead, and the other was told why.
       expect([a, b].filter((code) => code === null)).toHaveLength(1);
@@ -247,7 +292,10 @@ describe("when it takes effect", () => {
 
     expect(
       await codeOf(() =>
-        target.caller.product.create({ name: `${PREFIX}Allowed`, defaultUnit: "unit" }),
+        target.caller.product.create({
+          name: `${PREFIX}Allowed`,
+          defaultUnit: "unit",
+        }),
       ),
     ).toBeNull();
 
@@ -255,10 +303,15 @@ describe("when it takes effect", () => {
 
     expect(
       await codeOf(() =>
-        target.caller.product.create({ name: `${PREFIX}Refused`, defaultUnit: "unit" }),
+        target.caller.product.create({
+          name: `${PREFIX}Refused`,
+          defaultUnit: "unit",
+        }),
       ),
     ).toBe("FORBIDDEN");
 
-    await prisma.product.deleteMany({ where: { name: { startsWith: PREFIX } } });
+    await prisma.product.deleteMany({
+      where: { name: { startsWith: PREFIX } },
+    });
   });
 });

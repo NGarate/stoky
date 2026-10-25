@@ -110,7 +110,16 @@ describe("OCR Service", () => {
     // "2147483648" is one past the longest delay a timer holds: the runtime
     // would fire it after 1 ms and fail every scan.
     it("keeps the default for anything that would weaken the bound", () => {
-      for (const configured of [undefined, "", "0", "-5", "1.5", "abc", "Infinity", "2147483648"]) {
+      for (const configured of [
+        undefined,
+        "",
+        "0",
+        "-5",
+        "1.5",
+        "abc",
+        "Infinity",
+        "2147483648",
+      ]) {
         expect(ocrTimeoutMs(configured)).toBe(DEFAULT_OCR_TIMEOUT_MS);
       }
       expect(DEFAULT_OCR_TIMEOUT_MS).toBe(120_000);
@@ -137,7 +146,8 @@ describe("OCR Service", () => {
           recognize(_image: Buffer): Promise<{ data: { text: string } }> {
             worker.recognitions += 1;
             if (behaviour === "hang") return new Promise(() => {});
-            if (behaviour === "throw") return Promise.reject(new Error("unreadable"));
+            if (behaviour === "throw")
+              return Promise.reject(new Error("unreadable"));
             return Promise.resolve({ data: { text: behaviour } });
           },
           async terminate() {
@@ -162,7 +172,9 @@ describe("OCR Service", () => {
           (text) => ({ text }),
           (error: unknown) => ({ error: (error as Error).message }),
         ),
-        new Promise((resolve) => setTimeout(() => resolve("still waiting"), LIMIT * 10)),
+        new Promise((resolve) =>
+          setTimeout(() => resolve("still waiting"), LIMIT * 10),
+        ),
       ]);
     }
 

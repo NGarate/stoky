@@ -20,7 +20,9 @@ import type { AppRouter } from "@/server/trpc/router";
  * change just deleted: signed out, by the change meant to keep it in. A plain
  * `httpLink` request is answered whole, headers after the resolver.
  */
-export const UNSTREAMED_PATHS: ReadonlySet<string> = new Set(["auth.changePassword"]);
+export const UNSTREAMED_PATHS: ReadonlySet<string> = new Set([
+  "auth.changePassword",
+]);
 
 export interface LinkOptions {
   /** Where tRPC is served: `/api/trpc`, absolute on the server. */

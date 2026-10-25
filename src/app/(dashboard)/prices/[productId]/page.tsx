@@ -57,31 +57,39 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
         title={t("prices.history")}
       />
       <div className="space-y-6">
+        <div className="flex flex-wrap items-center gap-4">
+          <label
+            htmlFor="days-select"
+            className="text-sm font-medium md:text-lg"
+          >
+            {t("common.date")}:
+          </label>
+          <Select
+            id="days-select"
+            value={days}
+            onChange={(e) => setDays(Number(e.target.value))}
+          >
+            <option value={30}>30 {t("common.days")}</option>
+            <option value={90}>90 {t("common.days")}</option>
+            <option value={180}>6 {t("common.months")}</option>
+            <option value={365}>1 {t("common.year")}</option>
+          </Select>
+        </div>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <label htmlFor="days-select" className="text-sm font-medium md:text-lg">{t("common.date")}:</label>
-        <Select
-          id="days-select"
-          value={days}
-          onChange={(e) => setDays(Number(e.target.value))}
-        >
-          <option value={30}>30 {t("common.days")}</option>
-          <option value={90}>90 {t("common.days")}</option>
-          <option value={180}>6 {t("common.months")}</option>
-          <option value={365}>1 {t("common.year")}</option>
-        </Select>
-      </div>
+        <div className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
+          <h2 className={`mb-4 ${sectionHeading()}`}>
+            {t("prices.chart.title")}
+          </h2>
+          {chartData.length > 0 ? (
+            <PriceChart data={chartData} />
+          ) : (
+            <p className="py-8 text-center text-muted-foreground">
+              {t("prices.noPrices")}
+            </p>
+          )}
+        </div>
 
-      <div className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
-        <h2 className={`mb-4 ${sectionHeading()}`}>{t("prices.chart.title")}</h2>
-        {chartData.length > 0 ? (
-          <PriceChart data={chartData} />
-        ) : (
-          <p className="py-8 text-center text-muted-foreground">{t("prices.noPrices")}</p>
-        )}
-      </div>
-
-      <StoreComparison productId={productId} />
+        <StoreComparison productId={productId} />
       </div>
     </PageShell>
   );

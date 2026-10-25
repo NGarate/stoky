@@ -52,20 +52,38 @@
  * failed, 2 a usage error or a question git or gh could not answer.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as github from "./release-github";
 import { REPOSITORY } from "./release-notes";
-import { git, originTagExists, packageVersion, previousTag, ReleaseError, resolveTag } from "./release-version";
+import {
+  git,
+  originTagExists,
+  packageVersion,
+  previousTag,
+  ReleaseError,
+  resolveTag,
+} from "./release-version";
 
 export const NEXT_NOTES = "docs/releases/NEXT.md";
-export const REQUIRED_HEADINGS = ["## Cómo actualizar", "## Qué ha cambiado", "## English"];
+export const REQUIRED_HEADINGS = [
+  "## Cómo actualizar",
+  "## Qué ha cambiado",
+  "## English",
+];
 const CHANGES_HEADING = "## Qué ha cambiado";
 /** The guide describes the release it ships with; upgrade paths live in the notes. */
 const RELEASE_AFTER = /the release after/i;
 const ZERO_DIGEST = `sha256:${"0".repeat(64)}`;
-const USAGE = "usage: bun scripts/release-prepare.ts <bump|vX.Y.Z[-alpha.N]> [--refresh-images] [--no-push]";
+const USAGE =
+  "usage: bun scripts/release-prepare.ts <bump|vX.Y.Z[-alpha.N]> [--refresh-images] [--no-push]";
 
 export interface PrepareDeps {
   /** The repository's root. */
@@ -78,7 +96,12 @@ export interface PrepareDeps {
   refreshImages: () => number;
   push: (refspec: string) => void;
   /** Opens the pull request; returns its URL. */
-  createPullRequest: (options: { base: string; head: string; title: string; bodyFile: string }) => string;
+  createPullRequest: (options: {
+    base: string;
+    head: string;
+    title: string;
+    bodyFile: string;
+  }) => string;
   out: (line: string) => void;
   err: (line: string) => void;
 }
@@ -88,7 +111,8 @@ export function defaultDeps(cwd: string): PrepareDeps {
     cwd,
     fetch: () => git(cwd, ["fetch", "--quiet", "origin"]),
     remoteTagExists: (tag) => originTagExists(cwd, tag),
-    ciRun: (sha) => github.newestCiRun(cwd, { branch: "master", event: "push", sha }),
+    ciRun: (sha) =>
+      github.newestCiRun(cwd, { branch: "master", event: "push", sha }),
     refreshImages: () => {
       const script = join(cwd, "scripts/release-refresh-images.ts");
       if (!existsSync(script)) {
@@ -105,27 +129,49 @@ export function defaultDeps(cwd: string): PrepareDeps {
 }
 
 /** The body of `heading`'s section (up to the next `## `) replaced by `body`. */
-export function replaceSection(markdown: string, heading: string, body: string): string {
+export function replaceSection(
+  markdown: string,
+  heading: string,
+  body: string,
+): string {
   const lines = markdown.split("\n");
   const start = lines.findIndex((line) => line.trimEnd() === heading);
   if (start === -1) throw new ReleaseError(`no "${heading}" heading to fill.`);
-  const after = lines.findIndex((line, index) => index > start && line.startsWith("## "));
+  const after = lines.findIndex(
+    (line, index) => index > start && line.startsWith("## "),
+  );
   const tail = after === -1 ? [] : ["", ...lines.slice(after)];
-  const result = [...lines.slice(0, start + 1), "", body.replace(/\n+$/, ""), ...tail].join("\n");
+  const result = [
+    ...lines.slice(0, start + 1),
+    "",
+    body.replace(/\n+$/, ""),
+    ...tail,
+  ].join("\n");
   return after === -1 ? `${result}\n` : result;
 }
 
 /** Every `tag` in `text` that is the whole version, so v0.1.0-alpha.4 leaves v0.1.0-alpha.40 alone. */
 function tagPattern(tag: string): RegExp {
-  return new RegExp(`(?<![0-9A-Za-z.])${tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![0-9A-Za-z])`, "g");
+  return new RegExp(
+    `(?<![0-9A-Za-z.])${tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![0-9A-Za-z])`,
+    "g",
+  );
 }
 
 /** Replaces the one line `pattern` matches in `file`, or refuses. */
-function setLine(cwd: string, file: string, pattern: RegExp, line: string): void {
+function setLine(
+  cwd: string,
+  file: string,
+  pattern: RegExp,
+  line: string,
+): void {
   const path = join(cwd, file);
   const text = readFileSync(path, "utf8");
   const matches = text.match(new RegExp(pattern.source, "gm")) ?? [];
-  if (matches.length !== 1) throw new ReleaseError(`${file} must have exactly one line matching ${pattern}.`);
+  if (matches.length !== 1)
+    throw new ReleaseError(
+      `${file} must have exactly one line matching ${pattern}.`,
+    );
   writeFileSync(path, text.replace(new RegExp(pattern.source, "m"), line));
 }
 
@@ -142,13 +188,28 @@ export function applyPreparation(
 
   const pkgPath = join(cwd, "package.json");
   const pkg = readFileSync(pkgPath, "utf8");
-  const updated = pkg.replace(/^(\s*"version":\s*")[^"]*(")/m, `$1${version}$2`);
+  const updated = pkg.replace(
+    /^(\s*"version":\s*")[^"]*(")/m,
+    `$1${version}$2`,
+  );
   if ((JSON.parse(updated) as { version?: string }).version !== version) {
-    throw new ReleaseError("package.json's top-level version could not be set.");
+    throw new ReleaseError(
+      "package.json's top-level version could not be set.",
+    );
   }
   writeFileSync(pkgPath, updated);
-  setLine(cwd, "deploy/example.env", /^STOKY_VERSION=.*$/, `STOKY_VERSION=${tag}`);
-  setLine(cwd, "deploy/install.sh", /^DEFAULT_VERSION=.*$/, `DEFAULT_VERSION=${tag}`);
+  setLine(
+    cwd,
+    "deploy/example.env",
+    /^STOKY_VERSION=.*$/,
+    `STOKY_VERSION=${tag}`,
+  );
+  setLine(
+    cwd,
+    "deploy/install.sh",
+    /^DEFAULT_VERSION=.*$/,
+    `DEFAULT_VERSION=${tag}`,
+  );
 
   const replaced: Record<string, number> = {};
   for (const doc of ["README.md", "docs/INSTALL.md"]) {
@@ -161,11 +222,21 @@ export function applyPreparation(
   const notes = `docs/releases/${tag}.md`;
   git(cwd, ["mv", NEXT_NOTES, notes]);
   const notesPath = join(cwd, notes);
-  writeFileSync(notesPath, replaceSection(readFileSync(notesPath, "utf8"), CHANGES_HEADING, list));
+  writeFileSync(
+    notesPath,
+    replaceSection(readFileSync(notesPath, "utf8"), CHANGES_HEADING, list),
+  );
 
   return {
     // NEXT.md's removal is already staged by the git mv.
-    paths: ["package.json", "deploy/example.env", "deploy/install.sh", "README.md", "docs/INSTALL.md", notes],
+    paths: [
+      "package.json",
+      "deploy/example.env",
+      "deploy/install.sh",
+      "README.md",
+      "docs/INSTALL.md",
+      notes,
+    ],
     replaced,
   };
 }
@@ -185,25 +256,40 @@ interface Options {
 function parseArgs(argv: string[]): Options | null {
   const positional = argv.filter((arg) => !arg.startsWith("--"));
   const flags = argv.filter((arg) => arg.startsWith("--"));
-  if (positional.length !== 1 || flags.some((flag) => flag !== "--refresh-images" && flag !== "--no-push")) {
+  if (
+    positional.length !== 1 ||
+    flags.some((flag) => flag !== "--refresh-images" && flag !== "--no-push")
+  ) {
     return null;
   }
-  return { request: positional[0], refreshImages: flags.includes("--refresh-images"), push: !flags.includes("--no-push") };
+  return {
+    request: positional[0],
+    refreshImages: flags.includes("--refresh-images"),
+    push: !flags.includes("--no-push"),
+  };
 }
 
 /** Every refusal of step 1; changes nothing but the fetched remote refs. */
 function checkPreconditions(options: Options, deps: PrepareDeps) {
   const { cwd } = deps;
   const branch = git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]).trim();
-  if (branch !== "master") throw new ReleaseError(`the checkout is on ${branch}. Releases start from master: git switch master`);
+  if (branch !== "master")
+    throw new ReleaseError(
+      `the checkout is on ${branch}. Releases start from master: git switch master`,
+    );
   const dirty = git(cwd, ["status", "--porcelain"]).trimEnd();
   if (dirty) {
-    throw new ReleaseError(`the working tree is not clean. Commit or stash these first:\n${dirty}`);
+    throw new ReleaseError(
+      `the working tree is not clean. Commit or stash these first:\n${dirty}`,
+    );
   }
   try {
     deps.fetch();
   } catch (error) {
-    throw new ReleaseError(`git fetch origin failed: ${(error as { stderr?: string }).stderr?.trim() ?? error}`, 2);
+    throw new ReleaseError(
+      `git fetch origin failed: ${(error as { stderr?: string }).stderr?.trim() ?? error}`,
+      2,
+    );
   }
   const local = git(cwd, ["rev-parse", "master"]).trim();
   const remote = git(cwd, ["rev-parse", "origin/master"]).trim();
@@ -215,13 +301,19 @@ function checkPreconditions(options: Options, deps: PrepareDeps) {
   }
   const run = deps.ciRun(local);
   if (!run) {
-    throw new ReleaseError(`no CI push run on master for ${local.slice(0, 7)} yet. Push master and wait for its run.`);
+    throw new ReleaseError(
+      `no CI push run on master for ${local.slice(0, 7)} yet. Push master and wait for its run.`,
+    );
   }
   if (run.status !== "completed") {
-    throw new ReleaseError(`CI for ${local.slice(0, 7)} is still ${run.status}: wait for it to pass. ${run.url}`);
+    throw new ReleaseError(
+      `CI for ${local.slice(0, 7)} is still ${run.status}: wait for it to pass. ${run.url}`,
+    );
   }
   if (run.conclusion !== "success") {
-    throw new ReleaseError(`CI for ${local.slice(0, 7)} ended ${run.conclusion}: master must be green first. ${run.url}`);
+    throw new ReleaseError(
+      `CI for ${local.slice(0, 7)} ended ${run.conclusion}: master must be green first. ${run.url}`,
+    );
   }
   const notesPath = join(cwd, NEXT_NOTES);
   if (!existsSync(notesPath)) {
@@ -231,7 +323,9 @@ function checkPreconditions(options: Options, deps: PrepareDeps) {
   }
   const missing = missingHeadings(readFileSync(notesPath, "utf8"));
   if (missing.length) {
-    throw new ReleaseError(`${NEXT_NOTES} lacks ${missing.map((h) => `"${h}"`).join(", ")}. Add them on master first.`);
+    throw new ReleaseError(
+      `${NEXT_NOTES} lacks ${missing.map((h) => `"${h}"`).join(", ")}. Add them on master first.`,
+    );
   }
   const forward = readFileSync(join(cwd, "docs/INSTALL.md"), "utf8")
     .split("\n")
@@ -241,20 +335,33 @@ function checkPreconditions(options: Options, deps: PrepareDeps) {
     throw new ReleaseError(
       "docs/INSTALL.md speaks of a release after this one; the guide describes the current release only, " +
         "and what depends on the version an installation comes from belongs in the notes. Reword it on master:\n" +
-        forward.map(([n, line]) => `  docs/INSTALL.md:${n}: ${line}`).join("\n"),
+        forward
+          .map(([n, line]) => `  docs/INSTALL.md:${n}: ${line}`)
+          .join("\n"),
     );
   }
   const previous = previousTag(cwd);
-  if (!previous) throw new ReleaseError("there is no v* tag to list the changes since.");
+  if (!previous)
+    throw new ReleaseError("there is no v* tag to list the changes since.");
   const current = packageVersion(cwd);
   if (`v${current}` !== previous) {
-    throw new ReleaseError(`package.json says ${current}, but the newest tag is ${previous}. They must agree before a bump.`);
+    throw new ReleaseError(
+      `package.json says ${current}, but the newest tag is ${previous}. They must agree before a bump.`,
+    );
   }
-  const { tag, hint } = resolveTag(options.request, { cwd, remoteTagExists: deps.remoteTagExists });
+  const { tag, hint } = resolveTag(options.request, {
+    cwd,
+    remoteTagExists: deps.remoteTagExists,
+  });
   const branchName = `release/${tag}`;
-  for (const ref of [`refs/heads/${branchName}`, `refs/remotes/origin/${branchName}`]) {
+  for (const ref of [
+    `refs/heads/${branchName}`,
+    `refs/remotes/origin/${branchName}`,
+  ]) {
     if (git(cwd, ["for-each-ref", ref]).trim()) {
-      throw new ReleaseError(`${ref} already exists. Delete it if it is a failed attempt, then run this again.`);
+      throw new ReleaseError(
+        `${ref} already exists. Delete it if it is a failed attempt, then run this again.`,
+      );
     }
   }
   return { tag, previous, current, hint, branchName, base: local };
@@ -292,8 +399,12 @@ export function prepare(argv: string[], deps: PrepareDeps): number {
 
   if (options.refreshImages) {
     const code = deps.refreshImages();
-    if (code === 1) return leave("a candidate service image is red under the release scan; nothing was refreshed.");
-    if (code !== 0) return leave(`scripts/release-refresh-images.ts failed (exit ${code}).`);
+    if (code === 1)
+      return leave(
+        "a candidate service image is red under the release scan; nothing was refreshed.",
+      );
+    if (code !== 0)
+      return leave(`scripts/release-refresh-images.ts failed (exit ${code}).`);
     const changed = git(cwd, ["status", "--porcelain"]).trimEnd();
     if (changed === " M deploy/docker-compose.yml") {
       git(cwd, ["add", "deploy/docker-compose.yml"]);
@@ -310,30 +421,44 @@ export function prepare(argv: string[], deps: PrepareDeps): number {
       ]);
       deps.out(subject);
     } else if (changed) {
-      return leave(`the image refresh changed more than deploy/docker-compose.yml:\n${changed}`);
+      return leave(
+        `the image refresh changed more than deploy/docker-compose.yml:\n${changed}`,
+      );
     } else {
-      deps.out("The service images are already the newest clean builds; nothing to commit.");
+      deps.out(
+        "The service images are already the newest clean builds; nothing to commit.",
+      );
     }
   }
 
   let list: string;
   try {
-    list = execFileSync("bun", [join(cwd, "scripts/release-notes.ts"), previous, tag], {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    list = execFileSync(
+      "bun",
+      [join(cwd, "scripts/release-notes.ts"), previous, tag],
+      {
+        cwd,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
   } catch (error) {
-    return leave(`scripts/release-notes.ts failed: ${(error as { stderr?: string }).stderr?.trim() ?? error}`);
+    return leave(
+      `scripts/release-notes.ts failed: ${(error as { stderr?: string }).stderr?.trim() ?? error}`,
+    );
   }
-  const count = Number(git(cwd, ["rev-list", "--count", `${previous}..HEAD`]).trim());
+  const count = Number(
+    git(cwd, ["rev-list", "--count", `${previous}..HEAD`]).trim(),
+  );
 
   let prepared: ReturnType<typeof applyPreparation>;
   try {
     prepared = applyPreparation(cwd, { previous, tag, list });
   } catch (error) {
     if (!(error instanceof ReleaseError)) throw error;
-    return leave(`${error.message} The working tree holds the edits made before it.`);
+    return leave(
+      `${error.message} The working tree holds the edits made before it.`,
+    );
   }
   git(cwd, ["add", "--", ...prepared.paths]);
   const notes = `docs/releases/${tag}.md`;
@@ -348,17 +473,29 @@ export function prepare(argv: string[], deps: PrepareDeps): number {
       "leaves out, so the list stays exact with it in the range.",
     "Written by scripts/release-prepare.ts.",
   ];
-  git(cwd, ["commit", "--quiet", "-m", `chore: prepare ${tag}`, ...body.flatMap((paragraph) => ["-m", paragraph])]);
+  git(cwd, [
+    "commit",
+    "--quiet",
+    "-m",
+    `chore: prepare ${tag}`,
+    ...body.flatMap((paragraph) => ["-m", paragraph]),
+  ]);
   deps.out(`chore: prepare ${tag} (${count} commit(s) since ${previous})`);
 
   const assets = mkdtempSync(join(tmpdir(), "stoky-release-prepare-"));
   try {
-    const check = spawnSync("bash", [join(cwd, "scripts/release-assets.sh"), tag, assets, ZERO_DIGEST], {
-      cwd,
-      encoding: "utf8",
-    });
+    const check = spawnSync(
+      "bash",
+      [join(cwd, "scripts/release-assets.sh"), tag, assets, ZERO_DIGEST],
+      {
+        cwd,
+        encoding: "utf8",
+      },
+    );
     if (check.status !== 0) {
-      return leave(`scripts/release-assets.sh refused ${tag}:\n${(check.stderr || check.stdout).trimEnd()}`);
+      return leave(
+        `scripts/release-assets.sh refused ${tag}:\n${(check.stderr || check.stdout).trimEnd()}`,
+      );
     }
   } finally {
     rmSync(assets, { recursive: true, force: true });
@@ -387,7 +524,9 @@ export function prepare(argv: string[], deps: PrepareDeps): number {
       bodyFile: join(cwd, notes),
     });
   } catch (error) {
-    return leave(`the branch is pushed, but the pull request could not be opened: ${(error as Error).message}`);
+    return leave(
+      `the branch is pushed, but the pull request could not be opened: ${(error as Error).message}`,
+    );
   }
   deps.out(`Pull request: ${url}`);
   deps.out(
@@ -402,9 +541,13 @@ export function prepare(argv: string[], deps: PrepareDeps): number {
 
 if (import.meta.main) {
   try {
-    process.exit(prepare(Bun.argv.slice(2), defaultDeps(join(import.meta.dir, ".."))));
+    process.exit(
+      prepare(Bun.argv.slice(2), defaultDeps(join(import.meta.dir, ".."))),
+    );
   } catch (error) {
-    console.error(`Error: ${(error as { stderr?: string }).stderr?.trim() || (error as Error).message}`);
+    console.error(
+      `Error: ${(error as { stderr?: string }).stderr?.trim() || (error as Error).message}`,
+    );
     process.exit(2);
   }
 }

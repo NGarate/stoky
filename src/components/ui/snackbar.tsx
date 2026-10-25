@@ -133,8 +133,12 @@ export function SnackbarProvider({
     const entry: Entry = { ...input, id };
 
     setQueued((current) => {
-      const undos = current.filter((queuedEntry) => queuedEntry.kind !== "confirm");
-      const confirms = current.filter((queuedEntry) => queuedEntry.kind === "confirm");
+      const undos = current.filter(
+        (queuedEntry) => queuedEntry.kind !== "confirm",
+      );
+      const confirms = current.filter(
+        (queuedEntry) => queuedEntry.kind === "confirm",
+      );
 
       // A confirmation replaces a confirmation — nobody needs the previous
       // one — but never an undo. Taking away the button someone is reaching
@@ -356,7 +360,10 @@ function SnackbarRoot({
 
       {undoable ? (
         <Toast.Action
-          altText={t(entry.undoLabel?.key ?? "snackbar.undo", entry.undoLabel?.values)}
+          altText={t(
+            entry.undoLabel?.key ?? "snackbar.undo",
+            entry.undoLabel?.values,
+          )}
           asChild
         >
           <button

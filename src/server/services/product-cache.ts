@@ -94,7 +94,12 @@ export const valkeyProductCache: ProductCache = {
     try {
       // `EX` rather than a stored timestamp: Valkey expires the key itself, so
       // there is no stale entry to step over and no clock to compare against.
-      await valkey().set(PREFIX + barcode, value, "EX", PRODUCT_CACHE_TTL_SECONDS);
+      await valkey().set(
+        PREFIX + barcode,
+        value,
+        "EX",
+        PRODUCT_CACHE_TTL_SECONDS,
+      );
     } catch {
       // The next lookup fetches. That is the whole cost.
     }
@@ -112,7 +117,12 @@ export const valkeyProductCache: ProductCache = {
 
   async setMissing(barcode) {
     try {
-      await valkey().set(MISS_PREFIX + barcode, "1", "EX", PRODUCT_MISS_TTL_SECONDS);
+      await valkey().set(
+        MISS_PREFIX + barcode,
+        "1",
+        "EX",
+        PRODUCT_MISS_TTL_SECONDS,
+      );
     } catch {
       // The next lookup asks again, which is what happened before misses
       // were remembered at all.

@@ -50,7 +50,9 @@ function headerOf(response: APIResponse, name: string): string {
 }
 
 test.describe("the headers a response actually carries", () => {
-  test("every configured security header reaches a page", async ({ request }) => {
+  test("every configured security header reaches a page", async ({
+    request,
+  }) => {
     const response = await request.get("/login");
     expect(response.status()).toBe(200);
 
@@ -97,7 +99,8 @@ test.describe("the headers a response actually carries", () => {
     // and a newer one that drops a token turns it red when the pin moves.
     const complaints: string[] = [];
     page.on("console", (message) => {
-      if (message.text().includes("Permissions-Policy")) complaints.push(message.text());
+      if (message.text().includes("Permissions-Policy"))
+        complaints.push(message.text());
     });
 
     const response = await page.goto("/login", { waitUntil: "load" });
@@ -150,7 +153,9 @@ test.describe("isolated from other origins", () => {
         body: "<!doctype html><title>elsewhere</title>",
       }),
     );
-    await page.context().grantPermissions(["local-network-access"], { origin: ELSEWHERE });
+    await page
+      .context()
+      .grantPermissions(["local-network-access"], { origin: ELSEWHERE });
   });
 
   test("a page on another origin that opens Stoky keeps no handle to it", async ({
@@ -177,7 +182,9 @@ test.describe("isolated from other origins", () => {
 
     await expect
       .poll(() =>
-        page.evaluate(() => (Reflect.get(window, "stoky") as Window | null)?.closed),
+        page.evaluate(
+          () => (Reflect.get(window, "stoky") as Window | null)?.closed,
+        ),
       )
       .toBe(true);
   });
@@ -192,7 +199,10 @@ test.describe("isolated from other origins", () => {
     await page.goto(`${ELSEWHERE}/`);
 
     const icon = `${baseURL}/icons/icon-192.png`;
-    const failed = page.waitForEvent("requestfailed", (request) => request.url() === icon);
+    const failed = page.waitForEvent(
+      "requestfailed",
+      (request) => request.url() === icon,
+    );
     const loaded = await page.evaluate(
       (src) =>
         new Promise<boolean>((resolve) => {
@@ -223,7 +233,8 @@ test.describe("isolated from other origins", () => {
       // above and the page's `img-src`. Its stand-in answers as a server that
       // knows nothing of Stoky does — no CORS, no CORP — and keeps the test
       // off the internet.
-      const photo = "https://images.openfoodfacts.org/images/products/e2e/front.png";
+      const photo =
+        "https://images.openfoodfacts.org/images/products/e2e/front.png";
       const referers: (string | undefined)[] = [];
       await page.route("https://images.openfoodfacts.org/**", async (route) => {
         referers.push((await route.request().allHeaders())["referer"]);
@@ -253,7 +264,8 @@ test.describe("isolated from other origins", () => {
           () =>
             [...document.querySelectorAll("a[href]")]
               .map((a) => a.getAttribute("href") ?? "")
-              .find((href) => /^\/products\/(?!new$|scan$)[^/]+$/.test(href)) ?? null,
+              .find((href) => /^\/products\/(?!new$|scan$)[^/]+$/.test(href)) ??
+            null,
         )
         .then((handle) => handle.jsonValue());
       // waitForFunction resolves only on a truthy value, so never null here.
@@ -262,7 +274,11 @@ test.describe("isolated from other origins", () => {
       const img = page.locator(`img[src="${photo}"]`);
       await expect(img).toBeVisible();
       await expect
-        .poll(() => img.evaluate((el: HTMLImageElement) => (el.complete ? el.naturalWidth : 0)))
+        .poll(() =>
+          img.evaluate((el: HTMLImageElement) =>
+            el.complete ? el.naturalWidth : 0,
+          ),
+        )
         .toBeGreaterThan(0);
 
       // And it told Open Food Facts nothing about where it was shown. Under
@@ -345,7 +361,9 @@ test.describe("the Content-Security-Policy, as production serves it", () => {
     const second = await request.get("/login");
 
     const nonceOf = (response: APIResponse) =>
-      /'nonce-([a-f0-9]+)'/.exec(headerOf(response, "content-security-policy"))?.[1];
+      /'nonce-([a-f0-9]+)'/.exec(
+        headerOf(response, "content-security-policy"),
+      )?.[1];
 
     expect(nonceOf(first)).toMatch(/^[a-f0-9]{32}$/);
     expect(nonceOf(second)).toMatch(/^[a-f0-9]{32}$/);
@@ -360,7 +378,10 @@ test.describe("the Content-Security-Policy, as production serves it", () => {
     // which is the opposite policy. The name-only version of this test did
     // exactly that for five directives (SECURITY_REVIEW §8's "eight of the
     // thirteen unaudited"; seven, once counted).
-    const csp = headerOf(await request.get("/login"), "content-security-policy");
+    const csp = headerOf(
+      await request.get("/login"),
+      "content-security-policy",
+    );
     const directives = csp.split("; ");
 
     // Over plain http — this suite's transport — the transport-keyed
@@ -406,7 +427,10 @@ test.describe("the Content-Security-Policy, as production serves it", () => {
   test("does not allow eval in production", async ({ request }) => {
     // Development needs it and production must not have it, which is exactly
     // the difference a dev-server test would miss.
-    const csp = headerOf(await request.get("/login"), "content-security-policy");
+    const csp = headerOf(
+      await request.get("/login"),
+      "content-security-policy",
+    );
 
     expect(csp).not.toContain("unsafe-eval");
   });
@@ -419,7 +443,10 @@ test.describe("the Content-Security-Policy, as production serves it", () => {
     // defect that shipped once already: it upgraded every fetch to https on a
     // plain-http install, and a Safari user got a rendered page whose every
     // tRPC call died.
-    const csp = headerOf(await request.get("/login"), "content-security-policy");
+    const csp = headerOf(
+      await request.get("/login"),
+      "content-security-policy",
+    );
 
     expect(csp).not.toContain("upgrade-insecure-requests");
   });
@@ -491,7 +518,10 @@ test.describe("what a prefetch label cannot do", () => {
     // parsed before the sign-in limit can count it.
     const labelled = await request.post("/api/auth/sign-in/email", {
       headers: { "content-type": "application/json", purpose: "prefetch" },
-      data: JSON.stringify({ email: "nadie@example.com", password: "A".repeat(1024 * 1024) }),
+      data: JSON.stringify({
+        email: "nadie@example.com",
+        password: "A".repeat(1024 * 1024),
+      }),
       maxRedirects: 0,
     });
     expect(labelled.status()).toBe(413);
@@ -613,7 +643,11 @@ test.describe("a page that is not there", () => {
     // that merely looks like an icon is the same document, which is why the
     // icons are excluded by name. `proxy-matcher.test.ts` pins the path list;
     // this is what reaches the wire for three of them.
-    for (const path of ["/icons/does-not-exist", "/icons/does-not-exist.png", "/sw.jsx"]) {
+    for (const path of [
+      "/icons/does-not-exist",
+      "/icons/does-not-exist.png",
+      "/sw.jsx",
+    ]) {
       const response = await request.get(path);
 
       expect(response.status(), path).toBe(404);
@@ -626,7 +660,9 @@ test.describe("a page that is not there", () => {
 });
 
 test.describe("the image optimiser", () => {
-  test("is not there, and its 404 is a page with the policy", async ({ request }) => {
+  test("is not there, and its 404 is a page with the policy", async ({
+    request,
+  }) => {
     // Nothing renders `next/image`, and until 2026-10-12 the endpoint was
     // live anyway: it took any same-origin path, fetched it through the whole
     // router for an anonymous caller and sent back what sniffed as an image
@@ -638,7 +674,9 @@ test.describe("the image optimiser", () => {
     // carry the policy like any other miss. With the matcher still skipping
     // `/_next/image` it arrived with none — measured before the exclusion was
     // dropped.
-    const response = await request.get("/_next/image?url=%2Ficons%2Ficon-192.png&w=64&q=75");
+    const response = await request.get(
+      "/_next/image?url=%2Ficons%2Ficon-192.png&w=64&q=75",
+    );
 
     expect(response.status()).toBe(404);
     expect(headerOf(response, "content-type")).toContain("text/html");

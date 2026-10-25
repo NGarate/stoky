@@ -38,6 +38,8 @@ describe("StoreSelector", () => {
     expect(select.className).toContain("focus-visible:outline-ring");
     expect(select.className).toContain("bg-background");
     expect(select.className).not.toContain("bg-card");
-    expect(screen.getByRole("option", { name: "Mercadona" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Mercadona" }),
+    ).toBeInTheDocument();
   });
 });

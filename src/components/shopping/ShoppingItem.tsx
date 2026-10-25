@@ -98,7 +98,11 @@ export function ShoppingItem({
     const label = { key: "shopping.itemUpdated", values: { name } };
     const queued = enqueue({
       path: "shopping.updateItem",
-      input: { id: item.id, ...input, ...("quantity" in input ? { quantityUnit: item.unit } : {}) },
+      input: {
+        id: item.id,
+        ...input,
+        ...("quantity" in input ? { quantityUnit: item.unit } : {}),
+      },
       label,
     });
 
@@ -297,9 +301,7 @@ export function ShoppingItem({
             <span className="sr-only">
               {item.isChecked ? t("untick", { name }) : t("tickOff", { name })}
             </span>
-            {item.isChecked ? (
-              <Badge tone="ok">{t("bought")}</Badge>
-            ) : null}
+            {item.isChecked ? <Badge tone="ok">{t("bought")}</Badge> : null}
           </label>
         ) : (
           /* The same fact without the control: a reader who cannot tick it
@@ -310,7 +312,9 @@ export function ShoppingItem({
         )
       }
       title={
-        <span className={item.isChecked ? "text-muted-foreground line-through" : ""}>
+        <span
+          className={item.isChecked ? "text-muted-foreground line-through" : ""}
+        >
           {name}
         </span>
       }

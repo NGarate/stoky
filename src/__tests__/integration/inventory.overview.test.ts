@@ -119,7 +119,9 @@ afterAll(async () => {
   await prisma.stockEntry.deleteMany({
     where: { product: { householdId: OWNER.householdId } },
   });
-  await prisma.product.deleteMany({ where: { householdId: OWNER.householdId } });
+  await prisma.product.deleteMany({
+    where: { householdId: OWNER.householdId },
+  });
   await prisma.storageLocation.deleteMany({
     where: { householdId: OWNER.householdId },
   });
@@ -240,7 +242,10 @@ describe("the stock overview", () => {
 
   it("still answers for a page number a person could reach", async () => {
     const api = await caller();
-    const page = await api.inventory.getStockOverview({ limit: 20, page: 10_000 });
+    const page = await api.inventory.getStockOverview({
+      limit: 20,
+      page: 10_000,
+    });
 
     expect(page.products).toEqual([]);
     expect(page.total).toBe(FIXTURES.length);
@@ -423,8 +428,9 @@ describe("what the household's lists already cover", () => {
     const api = await caller();
     const productId = ids.get("Leche entera")!;
     const before = await api.inventory.getStockOverview({ limit: 100 });
-    const stockBefore = before.products.find((p) => p.name === "Leche entera")
-      ?.totalStock;
+    const stockBefore = before.products.find(
+      (p) => p.name === "Leche entera",
+    )?.totalStock;
 
     await prisma.shoppingItem.createMany({
       data: [

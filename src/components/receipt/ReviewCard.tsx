@@ -34,7 +34,11 @@ interface ReceiptItem {
 
 interface ReviewCardProps {
   item: ReceiptItem;
-  onConfirm: (action: "MATCH" | "CREATE" | "SKIP", productId?: string, customName?: string) => void;
+  onConfirm: (
+    action: "MATCH" | "CREATE" | "SKIP",
+    productId?: string,
+    customName?: string,
+  ) => void;
 }
 
 export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
@@ -67,7 +71,6 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
 
   const isAutoMatched = item.matchStatus === "AUTO_MATCHED";
 
-
   return (
     <div
       // Only a confirmed line is tinted, because only that is a state — and
@@ -87,7 +90,8 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
           {item.parsedPrice && (
             <p className="text-sm text-muted-foreground">
               {formatMoney(locale, item.parsedPrice, DEFAULT_CURRENCY)}
-              {item.parsedQuantity && item.parsedQuantity > 1 &&
+              {item.parsedQuantity &&
+                item.parsedQuantity > 1 &&
                 ` × ${item.parsedQuantity}`}
             </p>
           )}
@@ -122,7 +126,11 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
                   candidates={item.candidates}
                   selectedId={selectedProductId}
                   onSelect={handleSelect}
-                  autoMatch={item.matchConfidence && item.matchConfidence >= 0.7 ? item.matchedProduct : null}
+                  autoMatch={
+                    item.matchConfidence && item.matchConfidence >= 0.7
+                      ? item.matchedProduct
+                      : null
+                  }
                 />
               )}
 
@@ -157,7 +165,9 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
                     The visible words start the per-line name (2.5.3). */}
                 <Button
                   type="button"
-                  aria-label={t("skipLineOf", { name: item.parsedName || item.rawText })}
+                  aria-label={t("skipLineOf", {
+                    name: item.parsedName || item.rawText,
+                  })}
                   variant="outline"
                   size="sm"
                   onClick={() => onConfirm("SKIP")}

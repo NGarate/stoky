@@ -1,6 +1,10 @@
 import { describe, it, expect, mock } from "bun:test";
 import { TRPCClientError } from "@trpc/client";
-import { MAX_PENDING, openWriteQueue, type QueuedOp } from "@/lib/offline/queue";
+import {
+  MAX_PENDING,
+  openWriteQueue,
+  type QueuedOp,
+} from "@/lib/offline/queue";
 import { createMemoryStorage } from "@/lib/offline/storage";
 
 /**
@@ -190,7 +194,10 @@ describe("an offline scan of an unknown barcode", () => {
     queue.enqueue({
       path: "product.resolveScan",
       input: { barcode: "8410000999999" },
-      label: { key: "offline.scannedBarcode", values: { barcode: "8410000999999" } },
+      label: {
+        key: "offline.scannedBarcode",
+        values: { barcode: "8410000999999" },
+      },
     });
     queue.enqueue({ ...tick(), input: { id: "after" } });
     await queue.drain();
@@ -333,7 +340,9 @@ describe("a queue composed in another household", () => {
 
     expect(queue.getState().pending[0]?.householdId).toBe(HOUSEHOLD);
     // Persisted, so the next session restores it bound rather than blank.
-    expect(storage.read(USER)).toMatchObject({ pending: [{ householdId: HOUSEHOLD }] });
+    expect(storage.read(USER)).toMatchObject({
+      pending: [{ householdId: HOUSEHOLD }],
+    });
   });
 
   it("stamps changes with the household it was told about since opening", () => {
@@ -639,7 +648,9 @@ describe("a change made with a hold", () => {
     let heldMidFlight: number | null = null;
 
     const { queue } = openHeld(async () => {
-      heldMidFlight = queue.holdRemainingMs(queue.getState().pending[0]?.id ?? "");
+      heldMidFlight = queue.holdRemainingMs(
+        queue.getState().pending[0]?.id ?? "",
+      );
       await gate;
     });
     // No hold, so it is eligible immediately and reaches the sender; the

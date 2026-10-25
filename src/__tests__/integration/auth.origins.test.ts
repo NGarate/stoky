@@ -34,7 +34,11 @@ let email: string;
 
 beforeAll(async () => {
   email = generateTestEmail(MARKER);
-  await createTestUser({ email, name: `Origins ${MARKER}`, password: PASSWORD });
+  await createTestUser({
+    email,
+    name: `Origins ${MARKER}`,
+    password: PASSWORD,
+  });
 });
 
 afterAll(async () => {
@@ -82,7 +86,9 @@ function signInFrom(origins: string[], env: Record<string, string>): Answer[] {
     },
   });
   if (child.exitCode !== 0) throw new Error(child.stderr.toString());
-  return JSON.parse(child.stdout.toString().trim().split("\n").at(-1)!) as Answer[];
+  return JSON.parse(
+    child.stdout.toString().trim().split("\n").at(-1)!,
+  ) as Answer[];
 }
 
 describe("a sign-in with two addresses listed", () => {

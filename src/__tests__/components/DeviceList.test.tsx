@@ -88,21 +88,31 @@ mock.module("@/lib/trpc/client", () => ({
         listSessions: {
           invalidate: async () => {
             invalidated++;
-            rows = rows.filter((candidate) => !endedOnRead.includes(candidate.id));
+            rows = rows.filter(
+              (candidate) => !endedOnRead.includes(candidate.id),
+            );
           },
         },
       },
     }),
     auth: {
       listSessions: {
-        useQuery: () => ({ data: rows, error: null, fetchStatus: "idle", refetch: async () => {} }),
+        useQuery: () => ({
+          data: rows,
+          error: null,
+          fetchStatus: "idle",
+          refetch: async () => {},
+        }),
       },
       endSessions: {
         useMutation: () => ({
           mutateAsync: async (input: { scope: string }) => {
             calls.push(input);
             if (refusal !== null) throw refusal;
-            return { ended: input.scope === "one" ? 1 : 2, includedCurrent: false };
+            return {
+              ended: input.scope === "one" ? 1 : 2,
+              includedCurrent: false,
+            };
           },
         }),
       },
@@ -112,7 +122,8 @@ mock.module("@/lib/trpc/client", () => ({
 
 const { DeviceList } = await import("@/components/session/DeviceList");
 const { reauthRefusalOf } = await import("@/components/session/ReauthDialog");
-const { EndSessionError } = await import("@/components/session/use-end-session");
+const { EndSessionError } =
+  await import("@/components/session/use-end-session");
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
 
 function renderList() {
@@ -131,7 +142,10 @@ function renderList() {
 function rowNamed(name: string): HTMLElement {
   const item = screen
     .getAllByRole("listitem")
-    .find((candidate) => within(candidate).queryByText(name, { selector: "span" }) !== null);
+    .find(
+      (candidate) =>
+        within(candidate).queryByText(name, { selector: "span" }) !== null,
+    );
   if (!item) throw new Error(`no row titled ${name}`);
   return item;
 }
@@ -150,7 +164,9 @@ describe("what each session is shown as", () => {
   it("marks this device's session, and only that one", () => {
     renderList();
 
-    expect(within(rowNamed("Firefox en Linux")).getByText("Este dispositivo")).toBeInTheDocument();
+    expect(
+      within(rowNamed("Firefox en Linux")).getByText("Este dispositivo"),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("Este dispositivo")).toHaveLength(1);
   });
 
@@ -168,7 +184,9 @@ describe("what each session is shown as", () => {
     renderList();
 
     expect(
-      within(rowNamed("Dispositivo desconocido")).getByText("Se cierra tras 15 min sin uso"),
+      within(rowNamed("Dispositivo desconocido")).getByText(
+        "Se cierra tras 15 min sin uso",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -178,15 +196,21 @@ describe("what each session is shown as", () => {
     renderList();
 
     expect(screen.getByText(/hasta 10 sesiones abiertas/)).toBeInTheDocument();
-    expect(screen.getByText(/la que lleva más tiempo sin usarse/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/la que lleva más tiempo sin usarse/),
+    ).toBeInTheDocument();
   });
 
   it("offers to end the others only when there are others", () => {
     rows = [HERE];
     renderList();
 
-    expect(screen.queryByRole("button", { name: "Cerrar las demás" })).toBeAbsent();
-    expect(screen.getByRole("button", { name: "Cerrar todas" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Cerrar las demás" }),
+    ).toBeAbsent();
+    expect(
+      screen.getByRole("button", { name: "Cerrar todas" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -202,18 +226,27 @@ describe("every action asks for the password", () => {
     await userEvent.click(screen.getByRole("button", { name }));
 
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByLabelText("Tu contraseña")).toHaveAttribute("type", "password");
+    expect(within(dialog).getByLabelText("Tu contraseña")).toHaveAttribute(
+      "type",
+      "password",
+    );
     expect(calls).toEqual([]);
   });
 
   it("refuses an empty password without asking the server", async () => {
     renderList();
 
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar las demás" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cerrar las demás" }),
+    );
     const dialog = screen.getByRole("dialog");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Cerrar las demás" }));
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Cerrar las demás" }),
+    );
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Escribe tu contraseña.");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Escribe tu contraseña.",
+    );
     expect(calls).toEqual([]);
   });
 });
@@ -222,12 +255,21 @@ describe("ending another device's session", () => {
   async function endTablet(): Promise<HTMLElement> {
     renderList();
     await userEvent.click(
-      screen.getByRole("button", { name: /^Cerrar esta sesión: Pantalla de cocina$/ }),
+      screen.getByRole("button", {
+        name: /^Cerrar esta sesión: Pantalla de cocina$/,
+      }),
     );
     const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveAccessibleName("¿Cerrar la sesión de Pantalla de cocina?");
-    await userEvent.type(within(dialog).getByLabelText("Tu contraseña"), "cocina despensa nevera");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Cerrar esta sesión" }));
+    expect(dialog).toHaveAccessibleName(
+      "¿Cerrar la sesión de Pantalla de cocina?",
+    );
+    await userEvent.type(
+      within(dialog).getByLabelText("Tu contraseña"),
+      "cocina despensa nevera",
+    );
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Cerrar esta sesión" }),
+    );
     return dialog;
   }
 
@@ -235,7 +277,11 @@ describe("ending another device's session", () => {
     await endTablet();
 
     expect(calls).toEqual([
-      { currentPassword: "cocina despensa nevera", scope: "one", sessionId: "s-tablet" },
+      {
+        currentPassword: "cocina despensa nevera",
+        scope: "one",
+        sessionId: "s-tablet",
+      },
     ]);
     expect(invalidated).toBe(1);
     expect(screen.queryByRole("dialog")).toBeAbsent();
@@ -252,7 +298,9 @@ describe("ending another device's session", () => {
     await endTablet();
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeAbsent());
-    expect(screen.queryByText("Pantalla de cocina", { selector: "span" })).toBeAbsent();
+    expect(
+      screen.queryByText("Pantalla de cocina", { selector: "span" }),
+    ).toBeAbsent();
     await waitFor(() => expect(document.activeElement?.tagName).toBe("UL"));
   });
 
@@ -261,7 +309,9 @@ describe("ending another device's session", () => {
 
     await endTablet();
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Esa sesión ya estaba cerrada.");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Esa sesión ya estaba cerrada.",
+    );
     expect(invalidated).toBe(1);
   });
 });
@@ -276,10 +326,14 @@ describe("reading a refusal", () => {
     });
 
     expect(reauthRefusalOf(wrapped)).toBe("tooMany");
-    expect(reauthRefusalOf(trpcRefusal("BAD_REQUEST", "The current password is not correct"))).toBe(
-      "wrong",
-    );
+    expect(
+      reauthRefusalOf(
+        trpcRefusal("BAD_REQUEST", "The current password is not correct"),
+      ),
+    ).toBe("wrong");
     // Any other BAD_REQUEST is not the password's fault.
-    expect(reauthRefusalOf(trpcRefusal("BAD_REQUEST", "Choose the session to end"))).toBe("failed");
+    expect(
+      reauthRefusalOf(trpcRefusal("BAD_REQUEST", "Choose the session to end")),
+    ).toBe("failed");
   });
 });

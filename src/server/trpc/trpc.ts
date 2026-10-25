@@ -108,7 +108,8 @@ const domainErrors = t.middleware(async ({ next }) => {
     // same shape of problem — something below the router knows what went wrong
     // and the transport does not — and they are disjoint, so the order between
     // them does not matter.
-    const translated = translatePrismaError(cause) ?? translateServiceError(cause);
+    const translated =
+      translatePrismaError(cause) ?? translateServiceError(cause);
     if (translated) throw translated;
   }
   return result;
@@ -189,7 +190,9 @@ const securityEvents = t.middleware(async ({ ctx, next, path }) => {
 
 // Outside `domainErrors`, so what gets logged is the code the caller actually
 // received rather than the one the resolver happened to throw first.
-export const publicProcedure = t.procedure.use(securityEvents).use(domainErrors);
+export const publicProcedure = t.procedure
+  .use(securityEvents)
+  .use(domainErrors);
 
 /**
  * The cause a resolver attaches to a NOT_FOUND that is not a household row
@@ -303,52 +306,54 @@ export const protectedProcedure = publicProcedure.use(({ ctx, next }) => {
  * way (`isHouseholdMiss`). The one NOT_FOUND left out is a resolver's answer
  * about the world rather than about a row, which it marks `NotHouseholdData`.
  */
-export const householdProcedure = protectedProcedure.use(async ({ ctx, next }) => {
-  const membership = await ctx.db.user.findUnique({
-    where: { id: ctx.session.user.id },
-    select: { householdId: true, role: true },
+export const householdProcedure = protectedProcedure
+  .use(async ({ ctx, next }) => {
+    const membership = await ctx.db.user.findUnique({
+      where: { id: ctx.session.user.id },
+      select: { householdId: true, role: true },
+    });
+
+    if (!membership) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "This account no longer exists",
+      });
+    }
+
+    if (!membership.householdId) {
+      // PRECONDITION_FAILED rather than FORBIDDEN: nothing is wrong with the
+      // account, it is missing a household, and that is a state the client can
+      // resolve by creating one. See ISSUES.md HOUSE-1.
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "This account does not belong to a household yet",
+      });
+    }
+
+    return next({
+      ctx: {
+        session: ctx.session,
+        householdId: membership.householdId,
+        role: membership.role,
+      },
+    });
+  })
+  .use(async ({ ctx, next, path }) => {
+    const result = await next();
+
+    if (!result.ok && isHouseholdMiss(result.error)) {
+      logSecurityEvent("access.denied", {
+        path,
+        code: "NOT_FOUND",
+        reason: "not-found",
+        userId: ctx.session.user.id,
+        householdId: ctx.householdId,
+        address: ctx.headers ? clientAddress(ctx.headers) : undefined,
+      });
+    }
+
+    return result;
   });
-
-  if (!membership) {
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "This account no longer exists",
-    });
-  }
-
-  if (!membership.householdId) {
-    // PRECONDITION_FAILED rather than FORBIDDEN: nothing is wrong with the
-    // account, it is missing a household, and that is a state the client can
-    // resolve by creating one. See ISSUES.md HOUSE-1.
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "This account does not belong to a household yet",
-    });
-  }
-
-  return next({
-    ctx: {
-      session: ctx.session,
-      householdId: membership.householdId,
-      role: membership.role,
-    },
-  });
-}).use(async ({ ctx, next, path }) => {
-  const result = await next();
-
-  if (!result.ok && isHouseholdMiss(result.error)) {
-    logSecurityEvent("access.denied", {
-      path,
-      code: "NOT_FOUND",
-      reason: "not-found",
-      userId: ctx.session.user.id,
-      householdId: ctx.householdId,
-      address: ctx.headers ? clientAddress(ctx.headers) : undefined,
-    });
-  }
-
-  return result;
-});
 
 /**
  * Household data: stock, products, lists, receipts, prices. Every role except

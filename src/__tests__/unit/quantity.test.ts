@@ -14,8 +14,16 @@ import {
  * "24 unidad", "He usado 1 unit", "0 unit" in a Spanish interface. These use
  * the real catalogues, so a reworded or missing `common.unitCount` fails here.
  */
-const tEs = createTranslator({ locale: "es", messages: es, namespace: "common" }) as unknown as CountTranslator;
-const tEn = createTranslator({ locale: "en", messages: en, namespace: "common" }) as unknown as CountTranslator;
+const tEs = createTranslator({
+  locale: "es",
+  messages: es,
+  namespace: "common",
+}) as unknown as CountTranslator;
+const tEn = createTranslator({
+  locale: "en",
+  messages: en,
+  namespace: "common",
+}) as unknown as CountTranslator;
 
 describe("formatQuantity", () => {
   it("writes the stored count token as a word, pluralised", () => {
@@ -27,7 +35,15 @@ describe("formatQuantity", () => {
   });
 
   it("treats every spelling of a count unit as the same unit", () => {
-    for (const stored of ["unit", "units", "unidad", "unidades", "ud", "uds", " Unidad "]) {
+    for (const stored of [
+      "unit",
+      "units",
+      "unidad",
+      "unidades",
+      "ud",
+      "uds",
+      " Unidad ",
+    ]) {
       expect(formatQuantity(tEs, 2, stored)).toBe("2 unidades");
     }
   });
@@ -49,14 +65,16 @@ describe("displayLabelValues", () => {
     expect(
       displayLabelValues(tEs, { quantity: 1, unit: "unit", name: "Huevos" }),
     ).toEqual({ quantity: 1, unit: "unidad", name: "Huevos" });
-    expect(displayLabelValues(tEn, { quantity: 4, unit: "unidad" })?.unit).toBe("units");
+    expect(displayLabelValues(tEn, { quantity: 4, unit: "unidad" })?.unit).toBe(
+      "units",
+    );
   });
 
   it("counts an adjustment's unit by the stock it lands on", () => {
     // products.adjust.saved: "«{name}» queda en {stock} {unit}".
-    expect(displayLabelValues(tEs, { stock: 5, unit: "unit", name: "x" })?.unit).toBe(
-      "unidades",
-    );
+    expect(
+      displayLabelValues(tEs, { stock: 5, unit: "unit", name: "x" })?.unit,
+    ).toBe("unidades");
   });
 
   it("leaves a label without a unit alone", () => {

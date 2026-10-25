@@ -3,11 +3,7 @@ import { readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import es from "../../../messages/es.json";
 import en from "../../../messages/en.json";
-import {
-  ROUTE_TITLES,
-  documentTitle,
-  titleKeyFor,
-} from "@/lib/route-titles";
+import { ROUTE_TITLES, documentTitle, titleKeyFor } from "@/lib/route-titles";
 
 /**
  * WCAG 2.4.2: every route has a title of its own.

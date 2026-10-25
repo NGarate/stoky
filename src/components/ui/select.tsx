@@ -18,8 +18,7 @@ import { cn } from "@/lib/utils";
  *
  * Five screens had this written out, each with its own copy of the 48px floor.
  */
-export interface SelectProps
-  extends React.SelectHTMLAttributes<HTMLSelectElement> {}
+export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {}
 
 const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
   ({ className, children, ...props }, ref) => {

@@ -35,7 +35,9 @@ describe("what gets a header", () => {
   it("is not fooled by something that merely looks like one", () => {
     // The check is on the type, not on a duck-typed field, so an error whose
     // cause happens to carry a number cannot invent a wait.
-    expect(retryAfterSeconds([{ cause: { retryAfterSeconds: 99 } }])).toBeNull();
+    expect(
+      retryAfterSeconds([{ cause: { retryAfterSeconds: 99 } }]),
+    ).toBeNull();
   });
 });
 

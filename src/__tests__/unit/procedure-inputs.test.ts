@@ -67,36 +67,54 @@ describe("mutation inputs", () => {
   it("auth.endSessions asks for the password, and for the session when it ends one", () => {
     // D143. Without the password a session somebody else holds could end the
     // owner's; without the id, "one" would have nothing to scope to.
-    const schema = (procedures["auth.endSessions"] as ProcedureDef)._def.inputs[0] as {
+    const schema = (procedures["auth.endSessions"] as ProcedureDef)._def
+      .inputs[0] as {
       safeParse: (value: unknown) => { success: boolean };
     };
     const ok = (value: unknown) => schema.safeParse(value).success;
 
     expect(ok({ currentPassword: "x", scope: "all" })).toBe(true);
     expect(ok({ currentPassword: "x", scope: "others" })).toBe(true);
-    expect(ok({ currentPassword: "x", scope: "one", sessionId: "s1" })).toBe(true);
+    expect(ok({ currentPassword: "x", scope: "one", sessionId: "s1" })).toBe(
+      true,
+    );
 
     expect(ok({ scope: "all" })).toBe(false);
     expect(ok({ currentPassword: "", scope: "all" })).toBe(false);
     expect(ok({ currentPassword: "x", scope: "one" })).toBe(false);
-    expect(ok({ currentPassword: "x", scope: "one", sessionId: "" })).toBe(false);
-    expect(ok({ currentPassword: "x", scope: "one", sessionId: "s".repeat(65) })).toBe(false);
+    expect(ok({ currentPassword: "x", scope: "one", sessionId: "" })).toBe(
+      false,
+    );
+    expect(
+      ok({ currentPassword: "x", scope: "one", sessionId: "s".repeat(65) }),
+    ).toBe(false);
     expect(ok({ currentPassword: "x", scope: "everyone" })).toBe(false);
-    expect(ok({ currentPassword: "x".repeat(MAX_PASSWORD_LENGTH + 1), scope: "all" })).toBe(false);
+    expect(
+      ok({
+        currentPassword: "x".repeat(MAX_PASSWORD_LENGTH + 1),
+        scope: "all",
+      }),
+    ).toBe(false);
   });
 
   it("household.removeMemberTwoFactor asks for the admin's password, and names one member", () => {
     // D150. Without the password a session somebody else holds could strip a
     // member's second step; without a bounded id there is nobody to scope to.
-    const schema = (procedures["household.removeMemberTwoFactor"] as ProcedureDef)._def
-      .inputs[0] as { safeParse: (value: unknown) => { success: boolean } };
+    const schema = (
+      procedures["household.removeMemberTwoFactor"] as ProcedureDef
+    )._def.inputs[0] as { safeParse: (value: unknown) => { success: boolean } };
     const ok = (value: unknown) => schema.safeParse(value).success;
 
     expect(ok({ userId: "u1", currentPassword: "x" })).toBe(true);
 
     expect(ok({ userId: "u1" })).toBe(false);
     expect(ok({ userId: "u1", currentPassword: "" })).toBe(false);
-    expect(ok({ userId: "u1", currentPassword: "x".repeat(MAX_PASSWORD_LENGTH + 1) })).toBe(false);
+    expect(
+      ok({
+        userId: "u1",
+        currentPassword: "x".repeat(MAX_PASSWORD_LENGTH + 1),
+      }),
+    ).toBe(false);
     expect(ok({ currentPassword: "x" })).toBe(false);
     expect(ok({ userId: "", currentPassword: "x" })).toBe(false);
     expect(ok({ userId: "u".repeat(65), currentPassword: "x" })).toBe(false);
@@ -105,7 +123,8 @@ describe("mutation inputs", () => {
   it("auth.confirmPassword asks for the password and nothing else", () => {
     // D151. The step-up before a passkey is added or removed: without the
     // password a session somebody else holds could add their passkey to it.
-    const schema = (procedures["auth.confirmPassword"] as ProcedureDef)._def.inputs[0] as {
+    const schema = (procedures["auth.confirmPassword"] as ProcedureDef)._def
+      .inputs[0] as {
       safeParse: (value: unknown) => { success: boolean; data?: unknown };
     };
     const ok = (value: unknown) => schema.safeParse(value).success;
@@ -113,12 +132,16 @@ describe("mutation inputs", () => {
     expect(ok({ currentPassword: "x" })).toBe(true);
     // The session is the context's, never the input's: an id sent here is
     // not read, so it cannot name another session's step-up.
-    expect(schema.safeParse({ currentPassword: "x", sessionId: "s1" }).data).toEqual({
+    expect(
+      schema.safeParse({ currentPassword: "x", sessionId: "s1" }).data,
+    ).toEqual({
       currentPassword: "x",
     });
 
     expect(ok({})).toBe(false);
     expect(ok({ currentPassword: "" })).toBe(false);
-    expect(ok({ currentPassword: "x".repeat(MAX_PASSWORD_LENGTH + 1) })).toBe(false);
+    expect(ok({ currentPassword: "x".repeat(MAX_PASSWORD_LENGTH + 1) })).toBe(
+      false,
+    );
   });
 });

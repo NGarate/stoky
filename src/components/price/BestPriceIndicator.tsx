@@ -66,7 +66,9 @@ export function BestPriceIndicator({
     // "+15%" and nothing else, so what that number meant was carried by the
     // pill being amber. `premiumOver` already existed for this sentence;
     // `StoreComparison` has been using it.
-    const priceDiff = ((currentPrice / bestPrice.unitPrice - 1) * 100).toFixed(0);
+    const priceDiff = ((currentPrice / bestPrice.unitPrice - 1) * 100).toFixed(
+      0,
+    );
     return (
       <Badge tone="warn">
         {t("premiumOver", { percent: `+${priceDiff}%` })}
@@ -80,10 +82,16 @@ export function BestPriceIndicator({
       <span className="text-sm text-muted-foreground">{t("bestPrice")}:</span>
       {/* Ink, not `ok`: a ranking is not a state (see the note above). */}
       <span className="font-medium text-foreground">
-        {formatUnitPrice(locale, bestPrice.unitPrice, bestPrice.currency ?? DEFAULT_CURRENCY)}{" "}
+        {formatUnitPrice(
+          locale,
+          bestPrice.unitPrice,
+          bestPrice.currency ?? DEFAULT_CURRENCY,
+        )}{" "}
         {t("perUnit", { unit: units.unit(bestPrice.unit, 1) })}
       </span>
-      <span className="text-sm text-muted-foreground">{t("atStore", { store: bestPrice.store.name })}</span>
+      <span className="text-sm text-muted-foreground">
+        {t("atStore", { store: bestPrice.store.name })}
+      </span>
     </div>
   );
 }

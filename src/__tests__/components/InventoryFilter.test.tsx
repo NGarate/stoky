@@ -90,9 +90,7 @@ describe("the restock filter", () => {
         needsRestock: true,
       },
     ]);
-    expect(
-      screen.getByText("Solo lo que se está acabando"),
-    ).toBeTruthy();
+    expect(screen.getByText("Solo lo que se está acabando")).toBeTruthy();
 
     const clear = screen.getByRole("link", { name: "Ver todo el inventario" });
     expect(clear.getAttribute("href")).toBe("/inventory");
@@ -196,7 +194,12 @@ describe("finding something in a long inventory", () => {
   });
 
   it("says how many products the description matches", () => {
-    overviewStub.data = { products: [row("p1", "Café")], total: 7, page: 1, pageCount: 1 };
+    overviewStub.data = {
+      products: [row("p1", "Café")],
+      total: 7,
+      page: 1,
+      pageCount: 1,
+    };
     renderWithIntl(<InventoryView />, { locale: "es" });
 
     // Seven, not one: the count answers "how much is there", which is the
@@ -209,7 +212,9 @@ describe("finding something in a long inventory", () => {
     overviewStub.data = { products: [], total: 0, page: 1, pageCount: 1 };
     renderWithIntl(<InventoryView />, { locale: "es" });
 
-    expect(screen.getByText(/Ningún producto coincide con «zzz»/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Ningún producto coincide con «zzz»/),
+    ).toBeInTheDocument();
   });
 
   it("puts the search in the address, so a filtered list can be sent to someone", async () => {
@@ -238,7 +243,10 @@ describe("finding something in a long inventory", () => {
     searchParams = new URLSearchParams("sort=stock-high");
     renderWithIntl(<InventoryView />, { locale: "es" });
 
-    expect(overviewCalls[0]).toMatchObject({ sort: "stock", direction: "desc" });
+    expect(overviewCalls[0]).toMatchObject({
+      sort: "stock",
+      direction: "desc",
+    });
   });
 
   it("ignores an order it does not know rather than asking for it", () => {

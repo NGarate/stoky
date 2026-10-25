@@ -25,11 +25,28 @@ mock.module("@/lib/trpc/client", () => ({
       getExpiringItems: {
         useQuery: () =>
           expiringState === null
-            ? { data: expiringData, isLoading: false, error: null, fetchStatus: "idle", refetch: () => {} }
-            : { ...expiringState, data: undefined, isLoading: false, refetch: () => {} },
+            ? {
+                data: expiringData,
+                isLoading: false,
+                error: null,
+                fetchStatus: "idle",
+                refetch: () => {},
+              }
+            : {
+                ...expiringState,
+                data: undefined,
+                isLoading: false,
+                refetch: () => {},
+              },
       },
       getExpiredItems: {
-        useQuery: () => ({ data: expiredData, isLoading: false, error: null, fetchStatus: "idle", refetch: () => {} }),
+        useQuery: () => ({
+          data: expiredData,
+          isLoading: false,
+          error: null,
+          fetchStatus: "idle",
+          refetch: () => {},
+        }),
       },
     },
   },
@@ -76,7 +93,9 @@ describe("ExpiringItems without an answer", () => {
 
     renderWithIntl(<ExpiringItems />, { locale: "es" });
 
-    expect(await screen.findByText("Aquí todavía no hay nada guardado")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Aquí todavía no hay nada guardado"),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText("No hay productos caducados ni próximos a caducar"),
     ).toBeAbsent();
@@ -87,7 +106,9 @@ describe("ExpiringItems without an answer", () => {
 
     renderWithIntl(<ExpiringItems />, { locale: "es" });
 
-    expect(await screen.findByText("No se han podido cargar los datos")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No se han podido cargar los datos"),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText("No hay productos caducados ni próximos a caducar"),
     ).toBeAbsent();
@@ -124,13 +145,17 @@ describe("ExpiringItems", () => {
     expiredData = [expiredItem("1", 3)];
     expiringData = [];
     renderWithIntl(<ExpiringItems />, { locale: "es" });
-    expect(await screen.findByText("Producto caducado (1)")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Producto caducado (1)"),
+    ).toBeInTheDocument();
 
     cleanup();
 
     expiredData = [expiredItem("1", 3), expiredItem("2", 5)];
     renderWithIntl(<ExpiringItems />, { locale: "es" });
-    expect(await screen.findByText("Productos caducados (2)")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Productos caducados (2)"),
+    ).toBeInTheDocument();
   });
 
   it("says so when nothing is expired or expiring, in English", async () => {

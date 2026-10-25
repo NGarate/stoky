@@ -13,7 +13,9 @@
  *
  * Returns the reason for refusing, or null when the seed may run.
  */
-export function demoSeedRefusal(env: Record<string, string | undefined>): string | null {
+export function demoSeedRefusal(
+  env: Record<string, string | undefined>,
+): string | null {
   // Trimmed and lower-cased: a refusal that a stray space or a capital letter
   // walks past is not a refusal. Next itself only honours the exact value, but
   // nothing here is harmed by refusing more readily than it does.

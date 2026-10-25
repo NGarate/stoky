@@ -1,4 +1,8 @@
-import { SECRET_VARIABLE, readRenamed, type RenamedValue } from "@/lib/env-names";
+import {
+  SECRET_VARIABLE,
+  readRenamed,
+  type RenamedValue,
+} from "@/lib/env-names";
 
 /**
  * Refusing to start with a signing key anybody can read.

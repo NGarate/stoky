@@ -88,7 +88,11 @@ beforeAll(async () => {
   Object.assign(B, await makeHousehold("B"));
 
   const product = await prisma.product.create({
-    data: { name: "Leche entera", defaultUnit: "L", householdId: A.householdId },
+    data: {
+      name: "Leche entera",
+      defaultUnit: "L",
+      householdId: A.householdId,
+    },
   });
   A.productId = product.id;
 });
@@ -98,7 +102,9 @@ afterAll(async () => {
   await prisma.stockEntry.deleteMany({
     where: { product: { householdId: { in: households } } },
   });
-  await prisma.product.deleteMany({ where: { householdId: { in: households } } });
+  await prisma.product.deleteMany({
+    where: { householdId: { in: households } },
+  });
   await prisma.storageLocation.deleteMany({
     where: { householdId: { in: households } },
   });

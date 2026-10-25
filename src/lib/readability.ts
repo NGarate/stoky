@@ -39,15 +39,17 @@ export type SupportedLocale = "es" | "en";
  * would otherwise be counted as a sentence ending.
  */
 export function toProse(text: string): string {
-  return text
-    // next-intl placeholders: {count}, {name, plural, ...}
-    .replace(/\{[^}]*\}/g, " ")
-    // Any markup that reached a catalogue string
-    .replace(/<[^>]*>/g, " ")
-    // Ellipses would otherwise read as three sentence endings
-    .replace(/\.{2,}|…/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return (
+    text
+      // next-intl placeholders: {count}, {name, plural, ...}
+      .replace(/\{[^}]*\}/g, " ")
+      // Any markup that reached a catalogue string
+      .replace(/<[^>]*>/g, " ")
+      // Ellipses would otherwise read as three sentence endings
+      .replace(/\.{2,}|…/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 function countWords(prose: string): string[] {
@@ -120,7 +122,10 @@ export function countEnglishSyllables(word: string): number {
  * - **es** — Fernández-Huerta: `206.84 − 60·(syllables/words) − 1.02·(words/sentences)`
  * - **en** — Flesch Reading Ease: `206.835 − 84.6·(syllables/words) − 1.015·(words/sentences)`
  */
-export function readability(text: string, locale: SupportedLocale): ReadabilityScore {
+export function readability(
+  text: string,
+  locale: SupportedLocale,
+): ReadabilityScore {
   const prose = toProse(text);
   const words = countWords(prose);
   const sentences = countSentences(prose);
@@ -129,7 +134,8 @@ export function readability(text: string, locale: SupportedLocale): ReadabilityS
     return { score: 100, words: 0, sentences: 0, syllables: 0 };
   }
 
-  const counter = locale === "es" ? countSpanishSyllables : countEnglishSyllables;
+  const counter =
+    locale === "es" ? countSpanishSyllables : countEnglishSyllables;
   const syllables = words.reduce((total, word) => total + counter(word), 0);
 
   const syllablesPerWord = syllables / words.length;

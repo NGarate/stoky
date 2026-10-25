@@ -55,7 +55,10 @@ export function Pagination({
   return (
     <nav
       aria-label={label}
-      className={cn("mt-6 flex flex-wrap items-center justify-between gap-3", className)}
+      className={cn(
+        "mt-6 flex flex-wrap items-center justify-between gap-3",
+        className,
+      )}
     >
       {page > 1 ? (
         <Link className={step} href={hrefFor(page - 1)}>

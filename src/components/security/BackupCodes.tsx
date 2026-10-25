@@ -36,16 +36,16 @@ export function BackupCodes({
   const text = `${t("fileHeading")}\n\n${codes.join("\n")}\n`;
 
   function copy(): void {
-    void navigator.clipboard
-      .writeText(text)
-      .then(
-        () => setCopied("copied"),
-        () => setCopied("failed"),
-      );
+    void navigator.clipboard.writeText(text).then(
+      () => setCopied("copied"),
+      () => setCopied("failed"),
+    );
   }
 
   function download(): void {
-    const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+    const url = URL.createObjectURL(
+      new Blob([text], { type: "text/plain;charset=utf-8" }),
+    );
     const link = document.createElement("a");
     link.href = url;
     link.download = t("fileName");
@@ -55,7 +55,11 @@ export function BackupCodes({
 
   return (
     <div className="space-y-4">
-      <h3 className="text-base font-semibold text-heading" ref={heading} tabIndex={-1}>
+      <h3
+        className="text-base font-semibold text-heading"
+        ref={heading}
+        tabIndex={-1}
+      >
         {t("codesTitle")}
       </h3>
       <p className="text-foreground">{t("codesIntro")}</p>
@@ -77,8 +81,16 @@ export function BackupCodes({
           {t("download")}
         </Button>
       </div>
-      <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
-        {copied === "copied" ? t("copied") : copied === "failed" ? t("copyFailed") : null}
+      <p
+        aria-live="polite"
+        className="text-sm text-muted-foreground"
+        role="status"
+      >
+        {copied === "copied"
+          ? t("copied")
+          : copied === "failed"
+            ? t("copyFailed")
+            : null}
       </p>
       <Button onClick={onDone} type="button">
         {t("codesDone")}

@@ -16,7 +16,8 @@ const script = join(root, "scripts/release-notes.ts");
 const fixtures: string[] = [];
 
 afterEach(() => {
-  for (const fixture of fixtures.splice(0)) rmSync(fixture, { recursive: true, force: true });
+  for (const fixture of fixtures.splice(0))
+    rmSync(fixture, { recursive: true, force: true });
 });
 
 function repository() {
@@ -46,7 +47,10 @@ function repository() {
     return git("rev-parse", "HEAD").trim();
   };
   const notes = (...args: string[]) =>
-    Bun.spawnSync(["bun", script, ...args], { cwd: dir, env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null" } });
+    Bun.spawnSync(["bun", script, ...args], {
+      cwd: dir,
+      env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null" },
+    });
   commit("chore: the first commit");
   git("tag", "v0.1.0");
   return { dir, git, commit, notes };
@@ -58,7 +62,10 @@ function sections(list: string): Record<string, string[]> {
   let current = "";
   for (const line of list.split("\n")) {
     if (line.startsWith("### ")) result[(current = line.slice(4))] = [];
-    else if (line.startsWith("* ")) result[current].push(line.slice(2).replace(/ \(\[`[0-9a-f]{7}`\]\(.*\)\)$/, ""));
+    else if (line.startsWith("* "))
+      result[current].push(
+        line.slice(2).replace(/ \(\[`[0-9a-f]{7}`\]\(.*\)\)$/, ""),
+      );
   }
   return result;
 }
@@ -96,12 +103,17 @@ describe("a release's change list", () => {
   it("lists a breaking or security change once, ahead of its type", () => {
     const { commit, notes } = repository();
     commit("feat(auth)!: replace the sign-in library");
-    commit("fix(auth): refuse a reused code\n\nBREAKING CHANGE: old codes stop working");
+    commit(
+      "fix(auth): refuse a reused code\n\nBREAKING CHANGE: old codes stop working",
+    );
     commit("fix(auth): limit sign-in attempts\n\nChangelog: security");
     commit("feat(ui): a new badge\n\nChangelog: skip");
     const list = notes("v0.1.0", "v0.2.0").stdout.toString();
     expect(sections(list)).toEqual({
-      "🚨 Cambios incompatibles": ["feat(auth)!: replace the sign-in library", "fix(auth): refuse a reused code"],
+      "🚨 Cambios incompatibles": [
+        "feat(auth)!: replace the sign-in library",
+        "fix(auth): refuse a reused code",
+      ],
       "🔒 Seguridad": ["fix(auth): limit sign-in attempts"],
     });
     // In the order the headings are written, the breaking ones first.
@@ -115,7 +127,9 @@ describe("a release's change list", () => {
     expect(list).toContain(
       `* feat(shopping): share a list in [#42](https://github.com/NGarate/stoky/pull/42) ([\`${sha.slice(0, 7)}\`](https://github.com/NGarate/stoky/commit/${sha}))`,
     );
-    expect(list).toContain("**Changelog completo**: https://github.com/NGarate/stoky/compare/v0.1.0...v0.2.0");
+    expect(list).toContain(
+      "**Changelog completo**: https://github.com/NGarate/stoky/compare/v0.1.0...v0.2.0",
+    );
     expect(list.startsWith("<!-- cambios:inicio v0.1.0 -->\n")).toBe(true);
     expect(list.trimEnd().endsWith("<!-- cambios:fin -->")).toBe(true);
   });
@@ -126,10 +140,9 @@ describe("a release's change list", () => {
     git("tag", "v0.2.0");
     commit("feat: first after");
     commit("feat: second after");
-    expect(sections(notes("v0.2.0", "v0.3.0").stdout.toString())["🚀 Novedades"]).toEqual([
-      "feat: first after",
-      "feat: second after",
-    ]);
+    expect(
+      sections(notes("v0.2.0", "v0.3.0").stdout.toString())["🚀 Novedades"],
+    ).toEqual(["feat: first after", "feat: second after"]);
   });
 
   it("refuses a previous version that is not a tag", () => {
@@ -146,9 +159,19 @@ describe("checking a release's notes against its commits", () => {
     fixture.commit("fix(receipts): keep the total");
     const list = fixture.notes("v0.1.0", "v0.2.0").stdout.toString();
     const file = join(fixture.dir, "notes.md");
-    const write = (body: string) => writeFileSync(file, `# Stoky v0.2.0\n\nPrólogo.\n\n## Qué ha cambiado\n\n${body}\n`);
+    const write = (body: string) =>
+      writeFileSync(
+        file,
+        `# Stoky v0.2.0\n\nPrólogo.\n\n## Qué ha cambiado\n\n${body}\n`,
+      );
     write(list.trimEnd());
-    return { ...fixture, list, file, write, check: () => fixture.notes("--check", file, "v0.2.0") };
+    return {
+      ...fixture,
+      list,
+      file,
+      write,
+      check: () => fixture.notes("--check", file, "v0.2.0"),
+    };
   };
 
   it("passes when the list is the one the commits give", () => {
@@ -160,12 +183,21 @@ describe("checking a release's notes against its commits", () => {
     commit("fix(prices): round the euro");
     const result = check();
     expect(result.exitCode).toBe(1);
-    expect(result.stderr.toString()).toContain("bun scripts/release-notes.ts v0.1.0 v0.2.0");
+    expect(result.stderr.toString()).toContain(
+      "bun scripts/release-notes.ts v0.1.0 v0.2.0",
+    );
   });
 
   it("fails when the list was edited by hand", () => {
     const { list, write, check } = withNotes();
-    write(list.replace("* fix(receipts): keep the total", "* fix(receipts): keep the total, better").trimEnd());
+    write(
+      list
+        .replace(
+          "* fix(receipts): keep the total",
+          "* fix(receipts): keep the total, better",
+        )
+        .trimEnd(),
+    );
     expect(check().exitCode).toBe(1);
   });
 

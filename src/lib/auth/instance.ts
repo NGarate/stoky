@@ -24,7 +24,10 @@ import {
   initialExpiry,
   persistentAtCreate,
 } from "@/lib/auth/session-policy";
-import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
+import {
+  MAX_PASSWORD_LENGTH,
+  MIN_PASSWORD_LENGTH,
+} from "@/lib/validations/password";
 
 /**
  * The Better Auth instance, built once, on first use (PROGRESS D135).
@@ -82,7 +85,9 @@ let generatedSecret: string | undefined;
  * `BETTER_AUTH_SECRET` or `AUTH_SECRET`" and an empty entry in `secrets` as an
  * error.
  */
-export function resolveSecret(env: Record<string, string | undefined> = process.env): string {
+export function resolveSecret(
+  env: Record<string, string | undefined> = process.env,
+): string {
   // Already trimmed, by the same rule the guard judged it under.
   const { value, name } = configuredSecret(env);
   if (value) return value;
@@ -177,7 +182,10 @@ function passkeyPlugin(env: Record<string, string | undefined>) {
       rpID,
       rpName: "Stoky",
       origin,
-      authenticatorSelection: { residentKey: "preferred", userVerification: "required" },
+      authenticatorSelection: {
+        residentKey: "preferred",
+        userVerification: "required",
+      },
       registration: {
         afterVerification: async ({ verification }) => {
           requireUserVerification(verification.registrationInfo?.userVerified);
@@ -185,7 +193,9 @@ function passkeyPlugin(env: Record<string, string | undefined>) {
       },
       authentication: {
         afterVerification: async ({ verification }) => {
-          requireUserVerification(verification.authenticationInfo?.userVerified);
+          requireUserVerification(
+            verification.authenticationInfo?.userVerified,
+          );
         },
       },
     }),
@@ -250,7 +260,12 @@ function build(env: Record<string, string | undefined>) {
         // The `stoky_device` cookie, for the list of a person's sessions
         // (D143). `returned: false` keeps it out of every answer Better Auth
         // gives, `get-session` included: it is a cookie value.
-        deviceId: { type: "string", required: false, input: false, returned: false },
+        deviceId: {
+          type: "string",
+          required: false,
+          input: false,
+          returned: false,
+        },
       },
     },
     rateLimit: { enabled: false },
@@ -299,14 +314,20 @@ function build(env: Record<string, string | undefined>) {
           before: async (session, ctx) => {
             const now = new Date();
             const prior = ctx?.context?.session?.session as
-              | { authenticatedAt?: Date | string | null; persistent?: boolean | null }
+              | {
+                  authenticatedAt?: Date | string | null;
+                  persistent?: boolean | null;
+                }
               | undefined;
-            const deviceId = (ctx?.headers && deviceIdFromHeaders(ctx.headers)) ?? null;
+            const deviceId =
+              (ctx?.headers && deviceIdFromHeaders(ctx.headers)) ?? null;
 
             let authenticatedAt: Date;
             let persistent: boolean;
             if (prior) {
-              authenticatedAt = prior.authenticatedAt ? new Date(prior.authenticatedAt) : now;
+              authenticatedAt = prior.authenticatedAt
+                ? new Date(prior.authenticatedAt)
+                : now;
               persistent = prior.persistent === true;
             } else {
               authenticatedAt = now;
@@ -356,7 +377,10 @@ function build(env: Record<string, string | undefined>) {
             const update = patch as { expiresAt?: Date | string };
             if (update.expiresAt === undefined) return;
             const current = ctx?.context?.session?.session as
-              | { authenticatedAt?: Date | string | null; persistent?: boolean | null }
+              | {
+                  authenticatedAt?: Date | string | null;
+                  persistent?: boolean | null;
+                }
               | undefined;
             if (current?.persistent === true && current.authenticatedAt) {
               update.expiresAt = clampRemembered({
@@ -394,7 +418,10 @@ function build(env: Record<string, string | undefined>) {
         // Better Auth's 60-bit codes encrypted with `STOKY_SECRET` (D149,
         // `src/lib/auth/backup-codes.ts`): the database alone gives none
         // back, and a rotation of the secret leaves them working.
-        backupCodeOptions: { customBackupCodesGenerate: generateBackupCodes, storeBackupCodes },
+        backupCodeOptions: {
+          customBackupCodesGenerate: generateBackupCodes,
+          storeBackupCodes,
+        },
       }),
       // Passkeys (D151), where they can work; see `passkeyPlugin`.
       ...passkeyPlugin(env),

@@ -44,13 +44,17 @@ describe("recoverInterruptedReceipts", () => {
     // Filtered: in the full unit run, an auth test's security-log line
     // (`auth.signin.failed`) lands in this spy too — measured.
     const ours = () =>
-      warned.mock.calls.map(([message]) => String(message)).filter((m) => /interrupted/.test(m));
+      warned.mock.calls
+        .map(([message]) => String(message))
+        .filter((m) => /interrupted/.test(m));
     try {
       await recovery.recoverInterruptedReceipts(
         new Date(),
         dbThat(() => Promise.resolve({ count: 2 })),
       );
-      expect(ours()).toEqual([expect.stringMatching(/^Marked 2 receipt\(s\) FAILED/)]);
+      expect(ours()).toEqual([
+        expect.stringMatching(/^Marked 2 receipt\(s\) FAILED/),
+      ]);
 
       warned.mockClear();
       await recovery.recoverInterruptedReceipts(
@@ -70,7 +74,10 @@ describe("at server start", () => {
 
   it("runs from the instrumentation hook, cut off at the moment the server started", async () => {
     // Replaced, so the suite never sweeps whatever database `.env` names.
-    const sweep = spyOn(recovery, "recoverInterruptedReceipts").mockResolvedValue();
+    const sweep = spyOn(
+      recovery,
+      "recoverInterruptedReceipts",
+    ).mockResolvedValue();
     const runtime = env.NEXT_RUNTIME;
     env.NEXT_RUNTIME = "nodejs";
     try {
@@ -95,7 +102,10 @@ describe("at server start", () => {
   });
 
   it("does not run outside the Node runtime", async () => {
-    const sweep = spyOn(recovery, "recoverInterruptedReceipts").mockResolvedValue();
+    const sweep = spyOn(
+      recovery,
+      "recoverInterruptedReceipts",
+    ).mockResolvedValue();
     const runtime = env.NEXT_RUNTIME;
     env.NEXT_RUNTIME = "edge";
     try {

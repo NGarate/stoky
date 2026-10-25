@@ -121,16 +121,20 @@ async function excludedNodes(cdp: CDPSession): Promise<{
   function walk(node: RawDomNode, skipping: boolean, announcing: boolean) {
     const tag = node.nodeName.toLowerCase();
     const nowSkipping =
-      skipping || tag === "nextjs-portal" || node.shadowRootType === "user-agent";
+      skipping ||
+      tag === "nextjs-portal" ||
+      node.shadowRootType === "user-agent";
     const nowAnnouncing = announcing || tag === "next-route-announcer";
 
     if (nowSkipping) skip.add(node.backendNodeId);
     if (nowAnnouncing) announcer.add(node.backendNodeId);
 
-    for (const child of node.children ?? []) walk(child, nowSkipping, nowAnnouncing);
+    for (const child of node.children ?? [])
+      walk(child, nowSkipping, nowAnnouncing);
     for (const shadow of node.shadowRoots ?? [])
       walk(shadow, nowSkipping, nowAnnouncing);
-    if (node.contentDocument) walk(node.contentDocument, nowSkipping, nowAnnouncing);
+    if (node.contentDocument)
+      walk(node.contentDocument, nowSkipping, nowAnnouncing);
   }
 
   walk(root, false, false);
@@ -179,7 +183,8 @@ async function snapshot(page: Page): Promise<AxNode[]> {
         backendId: raw.backendDOMNodeId,
         subtreeEnd: 0,
         routeAnnouncer:
-          raw.backendDOMNodeId !== undefined && announcer.has(raw.backendDOMNodeId),
+          raw.backendDOMNodeId !== undefined &&
+          announcer.has(raw.backendDOMNodeId),
       };
       out.push(node);
       for (const child of raw.childIds ?? []) walk(child);
@@ -219,7 +224,9 @@ async function attachBoxes(cdp: CDPSession, nodes: AxNode[]): Promise<void> {
     try {
       const { model } = (await cdp.send("DOM.getBoxModel", {
         backendNodeId: node.backendId,
-      })) as unknown as { model: { border: number[]; width: number; height: number } };
+      })) as unknown as {
+        model: { border: number[]; width: number; height: number };
+      };
       const [x1, y1, , , x3, y3] = model.border as [
         number,
         number,
@@ -293,7 +300,9 @@ function keyNamedNodes(nodes: AxNode[]): string[] {
         node.role !== "InlineTextBox" &&
         isTranslationKey(node.name),
     )
-    .map((node) => `  ${node.role} — untranslated key as its name, "${node.name}"`);
+    .map(
+      (node) => `  ${node.role} — untranslated key as its name, "${node.name}"`,
+    );
 }
 
 /**
@@ -425,10 +434,15 @@ function report(where: string, what: string, lines: string[]): string {
  */
 function assertTree(nodes: AxNode[], where: string): void {
   const unnamed = unnamedControls(nodes);
-  expect(unnamed, report(where, "unnamed interactive node(s)", unnamed)).toEqual([]);
+  expect(
+    unnamed,
+    report(where, "unnamed interactive node(s)", unnamed),
+  ).toEqual([]);
 
   const keys = keyNamedNodes(nodes);
-  expect(keys, report(where, "untranslated key(s) in the tree", keys)).toEqual([]);
+  expect(keys, report(where, "untranslated key(s) in the tree", keys)).toEqual(
+    [],
+  );
 
   const order = readingOrderFindings(nodes);
   expect(order, report(where, "reading-order finding(s)", order)).toEqual([]);
@@ -468,7 +482,9 @@ test.describe("Screen-reader journeys", () => {
     await page.fill('input[name="email"]', DEMO_EMAIL);
     await page.fill('input[name="password"]', "definitely-not-the-password");
     await page.click('button[type="submit"]');
-    await expect(page.getByText(/no son correctos|is not right/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/no son correctos|is not right/i)).toBeVisible({
+      timeout: 20_000,
+    });
 
     const rejected = await snapshot(page);
     assertTree(rejected, "/login after a rejected sign-in");
@@ -577,7 +593,6 @@ test.describe("Screen-reader journeys", () => {
 
       // And it says *what*, not merely that something happened.
       await expect(dialog).toContainText("Arroz redondo");
-
     });
 
     test("consume stock", async ({ page }) => {
@@ -635,7 +650,9 @@ test.describe("Screen-reader journeys", () => {
       // the server's own message cannot, so a refusal without a number in it
       // means the browser check was skipped and the reader is being told "no"
       // and left to guess by how much.
-      const quantified = alerts.flatMap((a) => a.parts).filter((p) => /\d/.test(p));
+      const quantified = alerts
+        .flatMap((a) => a.parts)
+        .filter((p) => /\d/.test(p));
       expect(
         quantified,
         `the refusal is announced but never says how much there actually is: ${alerts.map((a) => a.text).join(" / ")}`,
@@ -648,7 +665,8 @@ test.describe("Screen-reader journeys", () => {
       // digit whether or not the refusal is attached to it.
       const quantity = page.locator("input[name=quantity]");
       await expect(quantity).toHaveAttribute("aria-invalid", "true");
-      const describedBy = (await quantity.getAttribute("aria-describedby")) ?? "";
+      const describedBy =
+        (await quantity.getAttribute("aria-describedby")) ?? "";
       const described = await page.evaluate(
         (ids) =>
           ids
@@ -672,7 +690,9 @@ test.describe("Screen-reader journeys", () => {
       // Followed, not constructed: a receipt id typed into a URL would audit a
       // page nobody can reach, which is the blind spot dynamic-routes.spec.ts
       // exists to close.
-      const firstRow = page.locator('a[href*="/receipts/"][href$="/review"]').first();
+      const firstRow = page
+        .locator('a[href*="/receipts/"][href$="/review"]')
+        .first();
       await expect(firstRow).toBeVisible();
       await firstRow.click();
       await page.waitForURL(/\/receipts\/[^/]+\/review$/, { timeout: 30_000 });
@@ -773,7 +793,10 @@ async function firstProductValue(page: Page): Promise<string> {
     options.map((option) => option.getAttribute("value") ?? ""),
   );
   const value = values.find((candidate) => candidate !== "");
-  expect(value, "the product picker offered no products to choose from").toBeTruthy();
+  expect(
+    value,
+    "the product picker offered no products to choose from",
+  ).toBeTruthy();
   return value as string;
 }
 
@@ -782,7 +805,9 @@ async function writableProductValue(page: Page): Promise<string> {
     "select[name=productId]",
     (select, name) => {
       const options = Array.from((select as HTMLSelectElement).options);
-      const match = options.find((option) => option.textContent?.includes(name as string));
+      const match = options.find((option) =>
+        option.textContent?.includes(name as string),
+      );
       return match?.value ?? "";
     },
     WRITABLE_PRODUCT,

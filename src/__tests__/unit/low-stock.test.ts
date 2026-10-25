@@ -1,5 +1,9 @@
 import { describe, it, expect } from "bun:test";
-import { isLowStock, needsMoreOnList, needsRestock } from "@/lib/stock/low-stock";
+import {
+  isLowStock,
+  needsMoreOnList,
+  needsRestock,
+} from "@/lib/stock/low-stock";
 
 /**
  * The two questions, and the gap between them.
@@ -54,7 +58,14 @@ describe("needsRestock", () => {
 
   it("is strictly broader than isLowStock, never narrower", () => {
     const cases: Array<[number, number | null]> = [
-      [0, null], [0, 2], [1, 2], [2, 2], [5, 2], [3, null], [0, 0], [-1, 0],
+      [0, null],
+      [0, 2],
+      [1, 2],
+      [2, 2],
+      [5, 2],
+      [3, null],
+      [0, 0],
+      [-1, 0],
     ];
     for (const [stock, min] of cases) {
       if (isLowStock(stock, min)) {
@@ -81,7 +92,12 @@ describe("needsMoreOnList", () => {
   });
 
   it("is exactly isLowStock when the list holds nothing", () => {
-    for (const [stock, min] of [[0, 2], [1, 2], [2, 2], [5, 2]] as const) {
+    for (const [stock, min] of [
+      [0, 2],
+      [1, 2],
+      [2, 2],
+      [5, 2],
+    ] as const) {
       expect(needsMoreOnList(stock, 0, min)).toBe(isLowStock(stock, min));
     }
   });

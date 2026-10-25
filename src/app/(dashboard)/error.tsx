@@ -59,19 +59,18 @@ export default function DashboardError({
         <h1 className="text-2xl font-bold text-danger-foreground md:text-3xl">
           {t("boundaryTitle")}
         </h1>
-        <p className="mt-4 leading-6 text-danger-foreground">{t("boundaryBody")}</p>
+        <p className="mt-4 leading-6 text-danger-foreground">
+          {t("boundaryBody")}
+        </p>
 
         <div className="mt-6 flex flex-wrap gap-3">
           {/* 48px, the floor this project holds everything to (PROGRESS D17). A
               person meeting this screen on a phone is already having a bad time. */}
-          <Button
-            onClick={() => retry()}
-            type="button"
-          >
+          <Button onClick={() => retry()} type="button">
             {t("boundaryRetry")}
           </Button>
           <Button asChild variant="outline">
-            <Link href="/dashboard" > {t("boundaryHome")} </Link>
+            <Link href="/dashboard"> {t("boundaryHome")} </Link>
           </Button>
         </div>
 

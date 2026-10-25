@@ -110,15 +110,17 @@ function labelKeysIn(file: string): Usage[] {
   const source = readFileSync(file, "utf8");
   const pattern = /\bkey:\s*"([^"]+)"/g;
 
-  return [...source.matchAll(pattern)]
-    .map((match) => match[1] as string)
-    // `key:` is a common property name — an HTTP header in `proxy.ts`, a
-    // sentinel in `LocationPicker`. A catalogue key is always
-    // `namespace.name`, dotted and camelCase, so that shape is the filter.
-    // The cost of being wrong here is one direction only: a key this misses
-    // is unguarded, never a false failure on correct code.
-    .filter((key) => /^[a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)+$/.test(key))
-    .map((key) => ({ file, key }));
+  return (
+    [...source.matchAll(pattern)]
+      .map((match) => match[1] as string)
+      // `key:` is a common property name — an HTTP header in `proxy.ts`, a
+      // sentinel in `LocationPicker`. A catalogue key is always
+      // `namespace.name`, dotted and camelCase, so that shape is the filter.
+      // The cost of being wrong here is one direction only: a key this misses
+      // is unguarded, never a false failure on correct code.
+      .filter((key) => /^[a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)+$/.test(key))
+      .map((key) => ({ file, key }))
+  );
 }
 
 const ALL_USAGES = sourceFiles(SOURCE_ROOT).flatMap((file) => [
@@ -136,15 +138,17 @@ describe("the keys components actually ask for", () => {
   it("sees the keys that are written as data, not called", () => {
     // The op labels and snackbar messages. Without this the second scan could
     // silently match nothing and the first assertion would not notice.
-    expect(
-      ALL_USAGES.some((usage) => usage.key.startsWith("offline.")),
-    ).toBe(true);
+    expect(ALL_USAGES.some((usage) => usage.key.startsWith("offline."))).toBe(
+      true,
+    );
   });
 
   it("all exist in the Spanish catalogue", () => {
     const missing = ALL_USAGES.filter(
       (usage) => !has(es as Record<string, unknown>, usage.key),
-    ).map((usage) => `${usage.key} (${usage.file.replace(SOURCE_ROOT, "src")})`);
+    ).map(
+      (usage) => `${usage.key} (${usage.file.replace(SOURCE_ROOT, "src")})`,
+    );
 
     // next-intl throws MISSING_MESSAGE at render, so before this the only
     // thing that found one was opening the page in a browser.
@@ -154,7 +158,9 @@ describe("the keys components actually ask for", () => {
   it("all exist in the English catalogue", () => {
     const missing = ALL_USAGES.filter(
       (usage) => !has(en as Record<string, unknown>, usage.key),
-    ).map((usage) => `${usage.key} (${usage.file.replace(SOURCE_ROOT, "src")})`);
+    ).map(
+      (usage) => `${usage.key} (${usage.file.replace(SOURCE_ROOT, "src")})`,
+    );
 
     expect(missing).toEqual([]);
   });
@@ -242,7 +248,9 @@ describe("the keys the catalogue holds", () => {
 
   function used(key: string): boolean {
     if (called.has(key) || everyLiteral.has(key)) return true;
-    if (Object.keys(DYNAMIC_PREFIXES).some((prefix) => key.startsWith(prefix))) {
+    if (
+      Object.keys(DYNAMIC_PREFIXES).some((prefix) => key.startsWith(prefix))
+    ) {
       return true;
     }
     const cut = key.lastIndexOf(".");
@@ -272,7 +280,8 @@ describe("the keys the catalogue holds", () => {
 
   it("names a real file for every dynamic prefix", () => {
     const missing = Object.values(DYNAMIC_PREFIXES).filter(
-      (path) => !files.some((file) => file.endsWith(path.replace(/^src\//, ""))),
+      (path) =>
+        !files.some((file) => file.endsWith(path.replace(/^src\//, ""))),
     );
     expect(missing).toEqual([]);
   });

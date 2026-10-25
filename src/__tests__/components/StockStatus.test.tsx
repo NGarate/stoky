@@ -72,13 +72,17 @@ describe("StockStatus on and off a tinted row", () => {
   }
 
   it("outlines run out on a row already tinted danger", () => {
-    renderWithIntl(<StockStatus isLowStock={true} onTintedRow totalStock={0} />);
+    renderWithIntl(
+      <StockStatus isLowStock={true} onTintedRow totalStock={0} />,
+    );
     expect(pill("Sin stock")).toContain("border-danger-foreground");
     expect(pill("Sin stock")).not.toContain("bg-danger");
   });
 
   it("outlines low on a row already tinted warn", () => {
-    renderWithIntl(<StockStatus isLowStock={true} onTintedRow totalStock={1} />);
+    renderWithIntl(
+      <StockStatus isLowStock={true} onTintedRow totalStock={1} />,
+    );
     expect(pill("Queda poco")).toContain("border-warn-foreground");
     expect(pill("Queda poco")).not.toContain("bg-warn");
   });
@@ -94,7 +98,9 @@ describe("StockStatus on and off a tinted row", () => {
   });
 
   it("keeps healthy filled either way: a healthy row has no tint to clash with", () => {
-    renderWithIntl(<StockStatus isLowStock={false} onTintedRow totalStock={5} />);
+    renderWithIntl(
+      <StockStatus isLowStock={false} onTintedRow totalStock={5} />,
+    );
     expect(pill("Correcto")).toContain("bg-ok");
   });
 });

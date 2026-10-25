@@ -185,9 +185,7 @@ describe("CompactNav", () => {
 
     const sheet = screen.getByRole("dialog");
     expect(within(sheet).queryByLabelText("Idioma")).toBeAbsent();
-    expect(
-      within(sheet).queryByRole("group", { name: "Tema" }),
-    ).toBeAbsent();
+    expect(within(sheet).queryByRole("group", { name: "Tema" })).toBeAbsent();
     expect(
       within(sheet).getByRole("link", { name: "Configuración" }),
     ).toHaveAttribute("href", "/settings");

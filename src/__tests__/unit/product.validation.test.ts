@@ -39,7 +39,7 @@ describe("updateProductSchema", () => {
     expect("barcode" in parsed && parsed.barcode !== undefined).toBe(false);
   });
 
-  it("refuses an empty-string barcode — clearing is null, not \"\"", () => {
+  it('refuses an empty-string barcode — clearing is null, not ""', () => {
     expect(() =>
       updateProductSchema.parse({ id: "p1", barcode: "" }),
     ).toThrow();

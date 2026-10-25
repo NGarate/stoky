@@ -52,7 +52,9 @@ describe("a rated product", () => {
     // and the certification that was not there.
     expect(screen.getByText(/Nutri-Score E/)).toBeInTheDocument();
     expect(screen.getByText(/E322 · sin riesgo conocido/)).toBeInTheDocument();
-    expect(screen.getByText("Sin certificado ecológico — 0 de 10 puntos")).toBeInTheDocument();
+    expect(
+      screen.getByText("Sin certificado ecológico — 0 de 10 puntos"),
+    ).toBeInTheDocument();
   });
 
   it("distinguishes a stated zero additives from missing data, in words", async () => {
@@ -103,7 +105,11 @@ describe("the honest states", () => {
 describe("the licence", () => {
   it("credits Open Food Facts in every state", () => {
     // ODbL. The attribution is part of the work, not a nicety (§6).
-    for (const snapshot of [NUTELLA, null, { nutriscore_grade: "not-applicable" }]) {
+    for (const snapshot of [
+      NUTELLA,
+      null,
+      { nutriscore_grade: "not-applicable" },
+    ]) {
       const { unmount } = renderWithIntl(
         <ProductRating barcode="301762" snapshot={snapshot} />,
       );

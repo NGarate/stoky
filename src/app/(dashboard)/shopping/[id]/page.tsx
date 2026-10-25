@@ -9,7 +9,10 @@ import { ConfirmDialog } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { sectionHeading } from "@/components/ui/section";
-import { ProductPicker, type PickedProduct } from "@/components/inventory/ProductPicker";
+import {
+  ProductPicker,
+  type PickedProduct,
+} from "@/components/inventory/ProductPicker";
 import { CreateProductInline } from "@/components/receipt/CreateProductInline";
 import { api } from "@/lib/trpc/client";
 import { ShoppingItem } from "@/components/shopping/ShoppingItem";
@@ -80,7 +83,10 @@ export function ShoppingListView({ id }: { id: string }) {
     onSuccess: () => {
       snackbar.show({
         kind: "confirm",
-        message: { key: "shopping.listDeleted", values: { name: list?.name ?? "" } },
+        message: {
+          key: "shopping.listDeleted",
+          values: { name: list?.name ?? "" },
+        },
       });
       router.replace("/shopping/lists");
       // Taken out of the persisted copies first. Being marked stale below
@@ -224,57 +230,56 @@ export function ShoppingListView({ id }: { id: string }) {
         title={list.name}
       />
       <div className="space-y-6">
-
-      {/* Destructive, irreversible, and with no inverse to offer afterwards —
+        {/* Destructive, irreversible, and with no inverse to offer afterwards —
           the one shape a snackbar cannot serve. Deleting a list cascades its
           items and no procedure puts them back, so the honest moment to ask
           is before rather than after. */}
-      <ConfirmDialog
-        confirmLabel={t("shopping.deleteConfirm")}
-        description={t("shopping.deleteConfirmBody")}
-        onCancel={() => setConfirmingDelete(false)}
-        onConfirm={() => {
-          setConfirmingDelete(false);
-          deleteListMutation.mutate({ id });
-        }}
-        open={confirmingDelete}
-        pending={deleteListMutation.isPending}
-        returnFocus={deleteRef}
-        title={t("shopping.deleteConfirmTitle", { name: list.name })}
-      />
+        <ConfirmDialog
+          confirmLabel={t("shopping.deleteConfirm")}
+          description={t("shopping.deleteConfirmBody")}
+          onCancel={() => setConfirmingDelete(false)}
+          onConfirm={() => {
+            setConfirmingDelete(false);
+            deleteListMutation.mutate({ id });
+          }}
+          open={confirmingDelete}
+          pending={deleteListMutation.isPending}
+          returnFocus={deleteRef}
+          title={t("shopping.deleteConfirmTitle", { name: list.name })}
+        />
 
-      {totalItems > 0 && (
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="mb-2 flex justify-between text-sm">
-            <span>{t("shopping.progress")}</span>
-            {/* A sentence, not "2/5 elementos": what the bar counts is what
+        {totalItems > 0 && (
+          <div className="rounded-lg border border-border bg-card p-4">
+            <div className="mb-2 flex justify-between text-sm">
+              <span>{t("shopping.progress")}</span>
+              {/* A sentence, not "2/5 elementos": what the bar counts is what
                 has been bought. */}
-            <span>
-              {t("shopping.progressValue", {
-                checked: checkedItems,
-                total: totalItems,
-              })}
-            </span>
+              <span>
+                {t("shopping.progressValue", {
+                  checked: checkedItems,
+                  total: totalItems,
+                })}
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-gauge-track">
+              <div
+                className="h-2 rounded-full bg-gauge transition-all"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
           </div>
-          <div className="h-2 rounded-full bg-gauge-track">
-            <div
-              className="h-2 rounded-full bg-gauge transition-all"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between">
-        <h2 className={sectionHeading()}>{t("shopping.items")}</h2>
-        {!isAdding && (
-          <Button onClick={() => setIsAdding(true)} type="button">
-            {t("shopping.addItem")}
-          </Button>
         )}
-      </div>
 
-      {/* Two panels, never one nested inside the other.
+        <div className="flex items-center justify-between">
+          <h2 className={sectionHeading()}>{t("shopping.items")}</h2>
+          {!isAdding && (
+            <Button onClick={() => setIsAdding(true)} type="button">
+              {t("shopping.addItem")}
+            </Button>
+          )}
+        </div>
+
+        {/* Two panels, never one nested inside the other.
           `CreateProductInline` is itself a `<form>`, and it used to be
           rendered inside this screen's add-item `<form>`. Nesting forms is
           invalid HTML, and Chromium's behaviour was measured rather than
@@ -284,125 +289,130 @@ export function ShoppingListView({ id }: { id: string }) {
           produced a native submission with no `product.create` request at
           all — a page load that threw away the name just typed.
           So the two forms are siblings, chosen between rather than stacked. */}
-      {isAdding && creating && (
-        <div className="rounded-lg border border-border bg-card p-4">
-          {/* The kindness free text used to provide, in a better place:
+        {isAdding && creating && (
+          <div className="rounded-lg border border-border bg-card p-4">
+            {/* The kindness free text used to provide, in a better place:
               writing something the household has never bought still takes
               one step, and leaves it with a thing it can price next time. */}
-          <CreateProductInline
-            defaultName=""
-            onCancel={() => setCreating(false)}
-            onCreate={(name) =>
-              createProduct.mutate({
-                name,
-                defaultUnit: newItem.unit || "unit",
-              })
-            }
-          />
-        </div>
-      )}
-
-      {isAdding && !creating && (
-        <form
-          onSubmit={handleAddItem}
-          className="rounded-lg border border-border bg-card p-4"
-        >
-          <div className="space-y-3">
-            <ProductPicker
-              error={productError ?? undefined}
-              hint={t("shopping.productSelectHint")}
-              onChange={(chosen) => {
-                setProduct(chosen);
-                setProductError(null);
-                if (chosen && !newItem.unit) {
-                  setNewItem((current) => ({
-                    ...current,
-                    unit: chosen.defaultUnit,
-                  }));
-                }
-              }}
-              value={product?.id ?? ""}
+            <CreateProductInline
+              defaultName=""
+              onCancel={() => setCreating(false)}
+              onCreate={(name) =>
+                createProduct.mutate({
+                  name,
+                  defaultUnit: newItem.unit || "unit",
+                })
+              }
             />
-            <Button
-              onClick={() => setCreating(true)}
-              type="button"
-              variant="ghost"
-            >
-              {t("shopping.createProductPrompt")}
-            </Button>
+          </div>
+        )}
 
-            <div className="flex flex-wrap items-end gap-2">
-              <div>
-                <label
-                  className="mb-1 block font-medium text-foreground text-sm"
-                  htmlFor={quantityId}
-                >
-                  {t("shopping.quantityLabel")}
-                </label>
-                <Input
-                  className="w-28"
-                  id={quantityId}
-                  inputMode="decimal"
-                  min="0.1"
-                  onChange={(e) =>
-                    setNewItem({
-                      ...newItem,
-                      quantity: Number.parseFloat(e.target.value) || 1,
-                    })
+        {isAdding && !creating && (
+          <form
+            onSubmit={handleAddItem}
+            className="rounded-lg border border-border bg-card p-4"
+          >
+            <div className="space-y-3">
+              <ProductPicker
+                error={productError ?? undefined}
+                hint={t("shopping.productSelectHint")}
+                onChange={(chosen) => {
+                  setProduct(chosen);
+                  setProductError(null);
+                  if (chosen && !newItem.unit) {
+                    setNewItem((current) => ({
+                      ...current,
+                      unit: chosen.defaultUnit,
+                    }));
                   }
-                  step="any"
-                  type="number"
-                  value={newItem.quantity}
-                />
-              </div>
-              <div>
-                <label
-                  className="mb-1 block font-medium text-foreground text-sm"
-                  htmlFor={unitId}
-                >
-                  {t("shopping.unitLabel")}
-                </label>
-                <Input
-                  className="w-32"
-                  id={unitId}
-                  onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
-                  value={newItem.unit}
-                />
-              </div>
-              {/* "Añadir a la lista", not a bare "Añadir": the button that
+                }}
+                value={product?.id ?? ""}
+              />
+              <Button
+                onClick={() => setCreating(true)}
+                type="button"
+                variant="ghost"
+              >
+                {t("shopping.createProductPrompt")}
+              </Button>
+
+              <div className="flex flex-wrap items-end gap-2">
+                <div>
+                  <label
+                    className="mb-1 block font-medium text-foreground text-sm"
+                    htmlFor={quantityId}
+                  >
+                    {t("shopping.quantityLabel")}
+                  </label>
+                  <Input
+                    className="w-28"
+                    id={quantityId}
+                    inputMode="decimal"
+                    min="0.1"
+                    onChange={(e) =>
+                      setNewItem({
+                        ...newItem,
+                        quantity: Number.parseFloat(e.target.value) || 1,
+                      })
+                    }
+                    step="any"
+                    type="number"
+                    value={newItem.quantity}
+                  />
+                </div>
+                <div>
+                  <label
+                    className="mb-1 block font-medium text-foreground text-sm"
+                    htmlFor={unitId}
+                  >
+                    {t("shopping.unitLabel")}
+                  </label>
+                  <Input
+                    className="w-32"
+                    id={unitId}
+                    onChange={(e) =>
+                      setNewItem({ ...newItem, unit: e.target.value })
+                    }
+                    value={newItem.unit}
+                  />
+                </div>
+                {/* "Añadir a la lista", not a bare "Añadir": the button that
                   opened this form says "Añadir un producto", and the one
                   that commits it says where the product goes. */}
-              <Button disabled={createProduct.isPending} type="submit">
-                {t("shopping.addToList")}
-              </Button>
-              <Button onClick={resetForm} type="button" variant="outline">
-                {t("common.cancel")}
-              </Button>
+                <Button disabled={createProduct.isPending} type="submit">
+                  {t("shopping.addToList")}
+                </Button>
+                <Button onClick={resetForm} type="button" variant="outline">
+                  {t("common.cancel")}
+                </Button>
+              </div>
             </div>
-          </div>
-        </form>
-      )}
+          </form>
+        )}
 
-      {/* A `<ul>`, because `ItemRow` renders an `<li>` and every other screen
+        {/* A `<ul>`, because `ItemRow` renders an `<li>` and every other screen
           that adopted it already wraps its rows. This one wrapped them in a
           `<div>`, so each row was an orphaned list item: drawn with a bullet,
           and announced without the count that makes a list worth being one. */}
-      {items.length === 0 ? (
-        // No button of its own: "Añadir artículo" sits directly above, and a
-        // second one a line below it would be the same control twice.
-        <EmptyState body={t("shopping.addItems")} title={t("shopping.emptyList")} />
-      ) : (
-        <ul className="space-y-2">
-          {items.map((item) => (
-            <ShoppingItem
-              canWrite={canWrite}
-              item={item}
-              key={item.id}
-              stores={stores}
-            />
-          ))}
-        </ul>
-      )}
+        {items.length === 0 ? (
+          // No button of its own: "Añadir artículo" sits directly above, and a
+          // second one a line below it would be the same control twice.
+          <EmptyState
+            body={t("shopping.addItems")}
+            title={t("shopping.emptyList")}
+          />
+        ) : (
+          <ul className="space-y-2">
+            {items.map((item) => (
+              <ShoppingItem
+                canWrite={canWrite}
+                item={item}
+                key={item.id}
+                stores={stores}
+              />
+            ))}
+          </ul>
+        )}
       </div>
     </PageShell>
   );

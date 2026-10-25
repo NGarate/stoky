@@ -40,7 +40,16 @@ import { join } from "node:path";
 /** The tag shape `scripts/release-assets.sh` accepts; OCI tags take no `+build`. */
 export const TAG = /^v\d+\.\d+\.\d+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$/;
 export const PRERELEASE_ID = "alpha";
-export const BUMPS = ["prerelease", "prepatch", "preminor", "premajor", "patch", "minor", "major", "release"] as const;
+export const BUMPS = [
+  "prerelease",
+  "prepatch",
+  "preminor",
+  "premajor",
+  "patch",
+  "minor",
+  "major",
+  "release",
+] as const;
 export type Bump = (typeof BUMPS)[number];
 export const USAGE = `usage: bun scripts/release-version.ts <${BUMPS.join("|")}|vX.Y.Z[-alpha.N]>`;
 
@@ -65,8 +74,17 @@ const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
 function parse(version: string): Version {
   const match = version.match(SEMVER);
-  if (!match) throw new ReleaseError(`"${version}" is not a version this script understands (X.Y.Z[-alpha.N]).`, 2);
-  return { major: +match[1], minor: +match[2], patch: +match[3], pre: match[4] ? match[4].split(".") : [] };
+  if (!match)
+    throw new ReleaseError(
+      `"${version}" is not a version this script understands (X.Y.Z[-alpha.N]).`,
+      2,
+    );
+  return {
+    major: +match[1],
+    minor: +match[2],
+    patch: +match[3],
+    pre: match[4] ? match[4].split(".") : [],
+  };
 }
 
 function format({ major, minor, patch, pre }: Version): string {
@@ -91,11 +109,17 @@ export function increment(current: string, bump: Bump): string {
       }
       const last = v.pre.at(-1) ?? "";
       if (v.pre[0] === PRERELEASE_ID && /^\d+$/.test(last)) {
-        return format({ ...v, pre: [...v.pre.slice(0, -1), String(Number(last) + 1)] });
+        return format({
+          ...v,
+          pre: [...v.pre.slice(0, -1), String(Number(last) + 1)],
+        });
       }
       // 1.0.0-alpha → 1.0.0-alpha.1; another identifier (beta) restarts at
       // alpha.1, which sorts lower and is refused by the order check.
-      return format({ ...v, pre: v.pre[0] === PRERELEASE_ID ? [...v.pre, "1"] : first });
+      return format({
+        ...v,
+        pre: v.pre[0] === PRERELEASE_ID ? [...v.pre, "1"] : first,
+      });
     }
     case "prepatch":
       return format({ ...v, patch: v.patch + 1, pre: first });
@@ -104,7 +128,11 @@ export function increment(current: string, bump: Bump): string {
     case "premajor":
       return format({ major: v.major + 1, minor: 0, patch: 0, pre: first });
     case "patch":
-      return format({ ...v, patch: prerelease ? v.patch : v.patch + 1, pre: [] });
+      return format({
+        ...v,
+        patch: prerelease ? v.patch : v.patch + 1,
+        pre: [],
+      });
     case "minor":
       return prerelease && v.patch === 0
         ? format({ ...v, pre: [] })
@@ -114,7 +142,10 @@ export function increment(current: string, bump: Bump): string {
         ? format({ ...v, pre: [] })
         : format({ major: v.major + 1, minor: 0, patch: 0, pre: [] });
     case "release":
-      if (!prerelease) throw new ReleaseError(`${current} is already a release. Use patch, minor or major.`);
+      if (!prerelease)
+        throw new ReleaseError(
+          `${current} is already a release. Use patch, minor or major.`,
+        );
       return format({ ...v, pre: [] });
   }
 }
@@ -129,26 +160,47 @@ export function nextTag(current: string, request: string): string {
   let next: string;
   if (isBump(request)) next = increment(current, request);
   else if (/^v?\d/.test(request)) next = request.replace(/^v/, "");
-  else throw new ReleaseError(`"${request}" is neither a bump nor a version.\n${USAGE}`, 2);
+  else
+    throw new ReleaseError(
+      `"${request}" is neither a bump nor a version.\n${USAGE}`,
+      2,
+    );
   const tag = `v${next}`;
   if (!TAG.test(tag) || !SEMVER.test(next)) {
-    throw new ReleaseError(`${tag} is not a release tag scripts/release-assets.sh accepts (such as v0.1.0-alpha.1).`);
+    throw new ReleaseError(
+      `${tag} is not a release tag scripts/release-assets.sh accepts (such as v0.1.0-alpha.1).`,
+    );
   }
   if (Bun.semver.order(next, current) !== 1) {
-    throw new ReleaseError(`${tag} is not greater than the current version, ${current}.`);
+    throw new ReleaseError(
+      `${tag} is not greater than the current version, ${current}.`,
+    );
   }
   return tag;
 }
 
 /** The markers `scripts/release-notes.ts` files under 🚨 Cambios incompatibles. */
 export function isBreaking(subject: string, body: string): boolean {
-  return /^\w+(\([^)]+\))?!: \S/.test(subject) || /^BREAKING[ -]CHANGE: /m.test(body);
+  return (
+    /^\w+(\([^)]+\))?!: \S/.test(subject) || /^BREAKING[ -]CHANGE: /m.test(body)
+  );
 }
 
 /** Said on stderr when a breaking change is about to ship under a small bump. */
-export function breakingHint(request: string, current: string, breaking: string[]): string | null {
-  if (breaking.length === 0 || !["patch", "prepatch", "prerelease"].includes(request)) return null;
-  const larger = parse(current).major === 0 ? "a minor (preminor or minor)" : "a major (premajor or major)";
+export function breakingHint(
+  request: string,
+  current: string,
+  breaking: string[],
+): string | null {
+  if (
+    breaking.length === 0 ||
+    !["patch", "prepatch", "prerelease"].includes(request)
+  )
+    return null;
+  const larger =
+    parse(current).major === 0
+      ? "a minor (preminor or minor)"
+      : "a major (premajor or major)";
   return (
     `Note: ${breaking.length} commit(s) since the previous release are marked breaking ` +
     `(${breaking.join("; ")}). A breaking change ${parse(current).major === 0 ? "in 0.x " : ""}usually takes ${larger}, ` +
@@ -172,17 +224,27 @@ export function localTagExists(cwd: string, tag: string): boolean {
 /** Whether `origin` has `tag`. Throws when origin cannot be asked: unknown is not "no". */
 export function originTagExists(cwd: string, tag: string): boolean {
   try {
-    return git(cwd, ["ls-remote", "--tags", "origin", `refs/tags/${tag}`]).trim() !== "";
+    return (
+      git(cwd, ["ls-remote", "--tags", "origin", `refs/tags/${tag}`]).trim() !==
+      ""
+    );
   } catch (error) {
-    const detail = (error as { stderr?: string }).stderr?.trim() ?? String(error);
-    throw new ReleaseError(`Could not ask origin whether ${tag} exists: ${detail}`, 2);
+    const detail =
+      (error as { stderr?: string }).stderr?.trim() ?? String(error);
+    throw new ReleaseError(
+      `Could not ask origin whether ${tag} exists: ${detail}`,
+      2,
+    );
   }
 }
 
 /** The newest `v*` tag reachable from HEAD, or null in a history with none. */
 export function previousTag(cwd: string): string | null {
   try {
-    return git(cwd, ["describe", "--tags", "--abbrev=0", "--match", "v*"]).trim() || null;
+    return (
+      git(cwd, ["describe", "--tags", "--abbrev=0", "--match", "v*"]).trim() ||
+      null
+    );
   } catch {
     return null;
   }
@@ -190,7 +252,12 @@ export function previousTag(cwd: string): string | null {
 
 /** Short SHA and subject of each commit since `previous` that carries a breaking marker. */
 export function breakingSince(cwd: string, previous: string): string[] {
-  const log = git(cwd, ["log", "--no-merges", "--format=%h%x1f%s%x1f%b%x1e", `${previous}..HEAD`]);
+  const log = git(cwd, [
+    "log",
+    "--no-merges",
+    "--format=%h%x1f%s%x1f%b%x1e",
+    `${previous}..HEAD`,
+  ]);
   return log
     .split("\x1e")
     .map((record) => record.replace(/^\n/, ""))
@@ -211,7 +278,11 @@ export function defaultVersionDeps(cwd: string): VersionDeps {
 }
 
 export function packageVersion(cwd: string): string {
-  return (JSON.parse(readFileSync(join(cwd, "package.json"), "utf8")) as { version: string }).version;
+  return (
+    JSON.parse(readFileSync(join(cwd, "package.json"), "utf8")) as {
+      version: string;
+    }
+  ).version;
 }
 
 export interface Resolved {
@@ -225,10 +296,14 @@ export interface Resolved {
 export function resolveTag(request: string, deps: VersionDeps): Resolved {
   const current = packageVersion(deps.cwd);
   const tag = nextTag(current, request);
-  if (localTagExists(deps.cwd, tag)) throw new ReleaseError(`${tag} already exists here (git tag -l ${tag}).`);
-  if (deps.remoteTagExists(tag)) throw new ReleaseError(`${tag} already exists on origin.`);
+  if (localTagExists(deps.cwd, tag))
+    throw new ReleaseError(`${tag} already exists here (git tag -l ${tag}).`);
+  if (deps.remoteTagExists(tag))
+    throw new ReleaseError(`${tag} already exists on origin.`);
   const previous = previousTag(deps.cwd);
-  const hint = previous ? breakingHint(request, current, breakingSince(deps.cwd, previous)) : null;
+  const hint = previous
+    ? breakingHint(request, current, breakingSince(deps.cwd, previous))
+    : null;
   return { tag, current, previous, hint };
 }
 
@@ -238,7 +313,10 @@ function main(argv: string[]): number {
     return 2;
   }
   try {
-    const { tag, hint } = resolveTag(argv[0], defaultVersionDeps(join(import.meta.dir, "..")));
+    const { tag, hint } = resolveTag(
+      argv[0],
+      defaultVersionDeps(join(import.meta.dir, "..")),
+    );
     if (hint) console.error(hint);
     console.log(tag);
     return 0;

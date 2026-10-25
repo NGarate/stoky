@@ -1,5 +1,13 @@
 import "../setup/matchers";
-import { describe, it, expect, afterEach, beforeEach, jest, mock } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  afterEach,
+  beforeEach,
+  jest,
+  mock,
+} from "bun:test";
 import { act, cleanup } from "@testing-library/react";
 import { onlineManager } from "@tanstack/react-query";
 import { renderWithIntl } from "../utils/render";
@@ -22,16 +30,18 @@ mock.module("@/lib/trpc/client", () => ({
     auth: {
       me: {
         useQuery: () => ({
-          data: serverHousehold === null ? undefined : { household: { id: serverHousehold } },
+          data:
+            serverHousehold === null
+              ? undefined
+              : { household: { id: serverHousehold } },
         }),
       },
     },
   },
 }));
 
-const { WriteQueueProvider } = await import(
-  "@/components/offline/WriteQueueProvider"
-);
+const { WriteQueueProvider } =
+  await import("@/components/offline/WriteQueueProvider");
 const { openWriteQueue } = await import("@/lib/offline/queue");
 const { createMemoryStorage } = await import("@/lib/offline/storage");
 
@@ -320,7 +330,11 @@ describe("refreshing what is on screen", () => {
     // screen kept its answer from before the write that just landed.
     let queue: ReturnType<typeof makeQueue>;
     const send = mock(async () => {
-      queue.enqueue({ ...tick, input: { id: "item-2", isChecked: true }, holdMs: 60_000 });
+      queue.enqueue({
+        ...tick,
+        input: { id: "item-2", isChecked: true },
+        holdMs: 60_000,
+      });
     });
     queue = makeQueue(send);
     queue.enqueue(tick);

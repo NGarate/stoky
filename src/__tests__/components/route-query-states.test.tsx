@@ -37,7 +37,11 @@ interface QueryStub {
 let queryStub: QueryStub;
 
 const noop = (): void => {};
-const idleMutation = { mutate: noop, mutateAsync: async () => {}, isPending: false };
+const idleMutation = {
+  mutate: noop,
+  mutateAsync: async () => {},
+  isPending: false,
+};
 
 mock.module("next/navigation", () => ({
   useParams: () => ({ id: "r1" }),
@@ -93,24 +97,21 @@ mock.module("@/lib/trpc/client", () => ({
 }));
 
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
-const { default: ReceiptsPage } = await import("@/app/(dashboard)/receipts/page");
-const { default: ReviewPage } = await import(
-  "@/app/(dashboard)/receipts/[id]/review/page"
-);
+const { default: ReceiptsPage } =
+  await import("@/app/(dashboard)/receipts/page");
+const { default: ReviewPage } =
+  await import("@/app/(dashboard)/receipts/[id]/review/page");
 const { default: PricesPage } = await import("@/app/(dashboard)/prices/page");
-const { default: PriceHistoryPage } = await import(
-  "@/app/(dashboard)/prices/[productId]/page"
-);
-const { ProductDetailView } = await import("@/app/(dashboard)/products/[id]/page");
-const { AdjustStockView } = await import(
-  "@/app/(dashboard)/products/[id]/adjust/page"
-);
-const { StockHistoryView } = await import(
-  "@/app/(dashboard)/products/[id]/history/page"
-);
-const { default: AppliedPage } = await import(
-  "@/app/(dashboard)/receipts/[id]/applied/page"
-);
+const { default: PriceHistoryPage } =
+  await import("@/app/(dashboard)/prices/[productId]/page");
+const { ProductDetailView } =
+  await import("@/app/(dashboard)/products/[id]/page");
+const { AdjustStockView } =
+  await import("@/app/(dashboard)/products/[id]/adjust/page");
+const { StockHistoryView } =
+  await import("@/app/(dashboard)/products/[id]/history/page");
+const { default: AppliedPage } =
+  await import("@/app/(dashboard)/receipts/[id]/applied/page");
 
 function trpcError(code: string, httpStatus: number): TRPCClientError<never> {
   const error = new TRPCClientError<never>("refused");
@@ -139,7 +140,11 @@ const ROUTES = [
     render: () => <ReviewPage />,
     lie: /Ticket no encontrado|Este ticket ya no existe/,
   },
-  { name: "/prices", render: () => <PricesPage />, lie: /No hay precios registrados|Todavía no hay precios/ },
+  {
+    name: "/prices",
+    render: () => <PricesPage />,
+    lie: /No hay precios registrados|Todavía no hay precios/,
+  },
   {
     name: "/prices/[productId]",
     render: () => <PriceHistoryPage params={params} />,
@@ -170,10 +175,26 @@ const ROUTES = [
 
 /** The routes that hand-rolled their states, and where each one's way back goes. */
 const DETAIL_ROUTES = [
-  { name: "/products/[id]", render: () => <ProductDetailView id="p1" />, back: "/products" },
-  { name: "/products/[id]/adjust", render: () => <AdjustStockView id="p1" />, back: "/products/p1" },
-  { name: "/products/[id]/history", render: () => <StockHistoryView id="p1" />, back: "/products/p1" },
-  { name: "/receipts/[id]/applied", render: () => <AppliedPage params={receiptParams} />, back: "/receipts" },
+  {
+    name: "/products/[id]",
+    render: () => <ProductDetailView id="p1" />,
+    back: "/products",
+  },
+  {
+    name: "/products/[id]/adjust",
+    render: () => <AdjustStockView id="p1" />,
+    back: "/products/p1",
+  },
+  {
+    name: "/products/[id]/history",
+    render: () => <StockHistoryView id="p1" />,
+    back: "/products/p1",
+  },
+  {
+    name: "/receipts/[id]/applied",
+    render: () => <AppliedPage params={receiptParams} />,
+    back: "/receipts",
+  },
 ] as const;
 
 function mount(ui: React.ReactElement): void {
@@ -204,7 +225,9 @@ describe("a route whose query cannot answer", () => {
 
       mount(render());
 
-      expect(await screen.findByText("Aquí todavía no hay nada guardado")).toBeInTheDocument();
+      expect(
+        await screen.findByText("Aquí todavía no hay nada guardado"),
+      ).toBeInTheDocument();
       expect(screen.queryByText(lie)).toBeAbsent();
     });
 
@@ -217,8 +240,12 @@ describe("a route whose query cannot answer", () => {
 
       mount(render());
 
-      expect(await screen.findByText("No se han podido cargar los datos")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Volver a intentarlo" })).toBeInTheDocument();
+      expect(
+        await screen.findByText("No se han podido cargar los datos"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Volver a intentarlo" }),
+      ).toBeInTheDocument();
       expect(screen.queryByText(lie)).toBeAbsent();
     });
   }
@@ -238,11 +265,16 @@ describe("a receipt that really is not there", () => {
     // And says it as a page, not a stray paragraph: a heading, why, and the
     // way back. It was a bare `<p>` with no h1 and no link — a dead end.
     expect(
-      screen.getByRole("heading", { level: 1, name: "Este ticket ya no existe" }),
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Este ticket ya no existe",
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText(/Vuelve a tus tickets/)).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Volver a tickets" }).getAttribute("href"),
+      screen
+        .getByRole("link", { name: "Volver a tickets" })
+        .getAttribute("href"),
     ).toBe("/receipts");
     expect(screen.queryByRole("button", { name: "Reintentar" })).toBeAbsent();
   });
@@ -259,7 +291,9 @@ describe("a route that used to hand-roll its states", () => {
 
       mount(render());
 
-      expect(screen.getByText("Todavía no tienes un hogar")).toBeInTheDocument();
+      expect(
+        screen.getByText("Todavía no tienes un hogar"),
+      ).toBeInTheDocument();
     });
 
     it(`${name} keeps its way back while it has no answer`, () => {

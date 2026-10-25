@@ -23,7 +23,10 @@ import { createCredentialUser } from "@/lib/auth/credentials";
 import { endSessions, endTwoFactorChallenges } from "@/lib/auth/end-sessions";
 import { liveSessionsOf } from "@/lib/auth/session-list";
 import { changeOwnPassword } from "@/lib/auth/password-change";
-import { MISSING_SESSION_ID_MESSAGE, confirmCurrentPassword } from "@/lib/auth/reauth";
+import {
+  MISSING_SESSION_ID_MESSAGE,
+  confirmCurrentPassword,
+} from "@/lib/auth/reauth";
 import { grantStepUp } from "@/lib/auth/step-up";
 import { passkeyRpOrigin } from "@/lib/auth/passkeys";
 import {
@@ -50,7 +53,10 @@ import {
  * shut — not how many accounts exist behind it.
  */
 function registrationClosed(): TRPCError {
-  return new TRPCError({ code: "FORBIDDEN", message: REGISTRATION_CLOSED_MESSAGE });
+  return new TRPCError({
+    code: "FORBIDDEN",
+    message: REGISTRATION_CLOSED_MESSAGE,
+  });
 }
 
 /**
@@ -140,7 +146,10 @@ export const authRouter = createTRPCRouter({
       // After the limiter, so a closed-after-first-user instance cannot be
       // made to count its accounts on demand. A fast answer for the common
       // refusal; the decision that counts is the one inside the transaction.
-      if (mode === "first-user" && !registrationAllows(mode, await ctx.db.user.count())) {
+      if (
+        mode === "first-user" &&
+        !registrationAllows(mode, await ctx.db.user.count())
+      ) {
         throw registrationClosed();
       }
 
@@ -179,7 +188,10 @@ export const authRouter = createTRPCRouter({
         // bound `bigint`, so Postgres resolves the one-argument overload.
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(${REGISTRATION_LOCK_KEY})`;
 
-        if (mode === "first-user" && !registrationAllows(mode, await tx.user.count())) {
+        if (
+          mode === "first-user" &&
+          !registrationAllows(mode, await tx.user.count())
+        ) {
           throw registrationClosed();
         }
 
@@ -226,44 +238,43 @@ export const authRouter = createTRPCRouter({
    * than returning null when the row is gone: a session for a deleted account
    * is not a missing resource, it is a session that should end.
    */
-  me: protectedProcedure
-    .query(async ({ ctx }) => {
-      const userId = ctx.session.user.id;
+  me: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
 
-      const user = await ctx.db.user.findUnique({
-        where: { id: userId },
-        include: {
-          household: true,
-        },
+    const user = await ctx.db.user.findUnique({
+      where: { id: userId },
+      include: {
+        household: true,
+      },
+    });
+
+    if (!user) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "User not found",
       });
+    }
 
-      if (!user) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "User not found",
-        });
-      }
-
-      return {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        locale: user.locale,
-        snackbarDuration: user.snackbarDuration,
-        role: user.role,
-        household: user.household,
-        // For `/settings/security`, which says whether it is on. Read from
-        // the row like the rest, so turning it on in another tab shows here
-        // on the next read.
-        twoFactorEnabled: user.twoFactorEnabled,
-        // The one origin a passkey works at (D151), or null when this install
-        // cannot have them (`src/lib/auth/passkeys.ts`). The security screen
-        // compares it with the page's own, so somebody at a second listed
-        // address is told where to go rather than shown a button that fails.
-        // Configuration, not a secret: it is the first `STOKY_URLS` entry.
-        passkeyOrigin: passkeyRpOrigin(),
-      };
-    }),
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      locale: user.locale,
+      snackbarDuration: user.snackbarDuration,
+      role: user.role,
+      household: user.household,
+      // For `/settings/security`, which says whether it is on. Read from
+      // the row like the rest, so turning it on in another tab shows here
+      // on the next read.
+      twoFactorEnabled: user.twoFactorEnabled,
+      // The one origin a passkey works at (D151), or null when this install
+      // cannot have them (`src/lib/auth/passkeys.ts`). The security screen
+      // compares it with the page's own, so somebody at a second listed
+      // address is told where to go rather than shown a button that fails.
+      // Configuration, not a secret: it is the first `STOKY_URLS` entry.
+      passkeyOrigin: passkeyRpOrigin(),
+    };
+  }),
 
   /**
    * This session's expiry, moved forward when activity is worth it — the
@@ -303,7 +314,9 @@ export const authRouter = createTRPCRouter({
       select: { expiresAt: true, authenticatedAt: true, persistent: true },
     });
     if (!row || row.expiresAt <= now) return null;
-    const answer = (expiresAt: Date): { expires: string; kind: DeadlineKind } => ({
+    const answer = (
+      expiresAt: Date,
+    ): { expires: string; kind: DeadlineKind } => ({
       expires: expiresAt.toISOString(),
       kind: deadlineKind({
         expiresAt,
@@ -311,7 +324,8 @@ export const authRouter = createTRPCRouter({
         capS: capFor(row.persistent),
       }),
     });
-    if (row.persistent || !shouldSlide(row.expiresAt, now)) return answer(row.expiresAt);
+    if (row.persistent || !shouldSlide(row.expiresAt, now))
+      return answer(row.expiresAt);
 
     const expires = nextExpiry({ authenticatedAt: row.authenticatedAt, now });
     const { count } = await ctx.db.session.updateMany({
@@ -418,7 +432,10 @@ export const authRouter = createTRPCRouter({
       const ended = await endSessions(ctx.db, where);
 
       if (input.scope === "one" && ended === 0) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found",
+        });
       }
 
       logSecurityEvent("auth.session.ended", {
@@ -432,7 +449,8 @@ export const authRouter = createTRPCRouter({
       return {
         ended,
         includedCurrent:
-          input.scope === "all" || (input.scope === "one" && input.sessionId === current),
+          input.scope === "all" ||
+          (input.scope === "one" && input.sessionId === current),
       };
     }),
 
@@ -482,11 +500,18 @@ export const authRouter = createTRPCRouter({
       // Better Auth finds the session in the request's headers; a context
       // without them cannot reach it. Refused before anything is spent.
       if (!headers) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: MISSING_SESSION_ID_MESSAGE });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: MISSING_SESSION_ID_MESSAGE,
+        });
       }
       const address = clientAddress(headers);
 
-      await confirmCurrentPassword(ctx, input.currentPassword, "password-change");
+      await confirmCurrentPassword(
+        ctx,
+        input.currentPassword,
+        "password-change",
+      );
 
       const account = await ctx.db.user.findUnique({
         where: { id: userId },
@@ -598,9 +623,7 @@ export const authRouter = createTRPCRouter({
    * `z.object({})` would not, because a `FormData` is an object and passes.
    * `src/__tests__/unit/procedure-inputs.test.ts` holds every mutation to it.
    */
-  logout: protectedProcedure
-    .input(z.void())
-    .mutation(async () => {
-      return { success: true };
-    }),
+  logout: protectedProcedure.input(z.void()).mutation(async () => {
+    return { success: true };
+  }),
 });

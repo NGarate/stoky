@@ -15,7 +15,7 @@ import es from "../../../messages/es.json";
  * second was now possible. Once every line is reviewed the first decides
  * nothing a person can see, so the one button does both, in that order, and
  * the summary at /applied is where it lands.
- */const pushes: string[] = [];
+ */ const pushes: string[] = [];
 const invalidated: string[] = [];
 const confirmAllCalls: unknown[] = [];
 let applyCalls = 0;
@@ -56,7 +56,11 @@ const receipt = {
 
 mock.module("next/navigation", () => ({
   useParams: () => ({ id: "r1" }),
-  useRouter: () => ({ push: (href: string) => pushes.push(href), replace: () => {}, refresh: () => {} }),
+  useRouter: () => ({
+    push: (href: string) => pushes.push(href),
+    replace: () => {},
+    refresh: () => {},
+  }),
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => "/receipts/r1/review",
   redirect: () => {},
@@ -148,7 +152,8 @@ mock.module("@/lib/trpc/client", () => ({
 }));
 
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
-const ReviewPage = (await import("@/app/(dashboard)/receipts/[id]/review/page")).default;
+const ReviewPage = (await import("@/app/(dashboard)/receipts/[id]/review/page"))
+  .default;
 
 const render = () =>
   renderWithIntl(

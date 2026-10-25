@@ -28,7 +28,8 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
-const { default: ProductsPage } = await import("@/app/(dashboard)/products/page");
+const { default: ProductsPage } =
+  await import("@/app/(dashboard)/products/page");
 
 beforeEach(() => {
   listStub = {
@@ -135,7 +136,9 @@ describe("when the catalogue does not fit", () => {
     // The screen asked for a hundred and drew what it was given. A household
     // with more than that had a catalogue that simply ended — no page two, no
     // count, and nothing to say a product that exists is not on the screen.
-    expect(screen.getByText(/Se muestra el primer producto/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Se muestra el primer producto/),
+    ).toBeInTheDocument();
   });
 
   it("says nothing when everything is on the screen", () => {

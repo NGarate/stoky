@@ -136,7 +136,7 @@ export function PageHeader({
       {isPageBack(back) ? (
         <BackLink href={back.href}>{back.label}</BackLink>
       ) : (
-        back ?? null
+        (back ?? null)
       )}
       <div
         className={cn(
@@ -146,9 +146,7 @@ export function PageHeader({
       >
         <div className="min-w-0">
           <h1 className={titleVariants({ density })}>{title}</h1>
-          {intro ? (
-            <p className="mt-2 text-muted-foreground">{intro}</p>
-          ) : null}
+          {intro ? <p className="mt-2 text-muted-foreground">{intro}</p> : null}
         </div>
         {actions ? (
           // Each button takes an equal share of the phone's row and wraps to

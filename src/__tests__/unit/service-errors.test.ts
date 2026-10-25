@@ -8,7 +8,11 @@ import {
 import { translateServiceError } from "@/server/trpc/service-errors";
 import { classifyMutationError } from "@/lib/offline/classify";
 import { TRPCClientError } from "@trpc/client";
-import { createTRPCRouter, createTRPCContext, publicProcedure } from "@/server/trpc/trpc";
+import {
+  createTRPCRouter,
+  createTRPCContext,
+  publicProcedure,
+} from "@/server/trpc/trpc";
 
 /**
  * ISSUES.md DEBT-6 — a service's failure, in a code the client can act on.
@@ -22,14 +26,18 @@ import { createTRPCRouter, createTRPCContext, publicProcedure } from "@/server/t
 
 describe("what each kind becomes", () => {
   it("turns a missing row into NOT_FOUND", () => {
-    const translated = translateServiceError(new NotFoundError("Receipt not found"));
+    const translated = translateServiceError(
+      new NotFoundError("Receipt not found"),
+    );
 
     expect(translated?.code).toBe("NOT_FOUND");
   });
 
   it("turns unusable input into BAD_REQUEST", () => {
     // Not NOT_FOUND: the row is there and the caller can do something about it.
-    const translated = translateServiceError(new InvalidInputError("Empty image file"));
+    const translated = translateServiceError(
+      new InvalidInputError("Empty image file"),
+    );
 
     expect(translated?.code).toBe("BAD_REQUEST");
   });
@@ -38,7 +46,9 @@ describe("what each kind becomes", () => {
     // Nothing here is broken, and saying INTERNAL_SERVER_ERROR when Open Food
     // Facts is having a bad minute sends the operator looking in the wrong
     // place.
-    const translated = translateServiceError(new UpstreamError("OFF answered 503", 503));
+    const translated = translateServiceError(
+      new UpstreamError("OFF answered 503", 503),
+    );
 
     expect(translated?.code).toBe("BAD_GATEWAY");
   });
@@ -56,13 +66,17 @@ describe("what it leaves alone", () => {
   it("does not touch an ordinary error", () => {
     // A bug is a 500 and should stay one. Translating everything would hide
     // the failures that need fixing behind statuses that read as expected.
-    expect(translateServiceError(new Error("undefined is not a function"))).toBeNull();
+    expect(
+      translateServiceError(new Error("undefined is not a function")),
+    ).toBeNull();
     expect(translateServiceError(new TypeError("no"))).toBeNull();
   });
 
   it("does not touch a resolver's own refusal", () => {
     expect(
-      translateServiceError(new TRPCError({ code: "FORBIDDEN", message: "no" })),
+      translateServiceError(
+        new TRPCError({ code: "FORBIDDEN", message: "no" }),
+      ),
     ).toBeNull();
   });
 });
@@ -92,7 +106,9 @@ describe("the middleware that applies it", () => {
   });
 
   const call = async (procedure: "missing" | "upstream" | "broken") => {
-    const caller = router.createCaller(await createTRPCContext({ session: null }));
+    const caller = router.createCaller(
+      await createTRPCContext({ session: null }),
+    );
     try {
       await caller[procedure]();
     } catch (error) {
@@ -130,9 +146,9 @@ describe("what the write queue does with the result", () => {
     // The behaviour before this change: no translation, so tRPC reports 500,
     // so the queue treats a permanent failure as worth retrying. This is the
     // assertion that makes the paragraph above checkable rather than a claim.
-    expect(classifyMutationError(errorWithStatus(500), "receipt.parseReceipt")).toBe(
-      "transient",
-    );
+    expect(
+      classifyMutationError(errorWithStatus(500), "receipt.parseReceipt"),
+    ).toBe("transient");
   });
 
   it("keeps retrying when an outside system is at fault", () => {

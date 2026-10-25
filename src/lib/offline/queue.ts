@@ -139,8 +139,7 @@ export interface EnqueueInput {
 }
 
 export type EnqueueResult =
-  | { ok: true; id: string }
-  | { ok: false; reason: "full" };
+  { ok: true; id: string } | { ok: false; reason: "full" };
 
 /** Sends one operation. Rejects with whatever the transport produced. */
 export type SendOperation = (op: QueuedOp) => Promise<unknown>;
@@ -525,9 +524,7 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
 
     cancel(id) {
       if (id === inFlightId) return false;
-      const present = store
-        .getState()
-        .pending.some((entry) => entry.id === id);
+      const present = store.getState().pending.some((entry) => entry.id === id);
       if (!present) return false;
 
       commit((state) => ({

@@ -38,7 +38,11 @@ function Harness(): React.JSX.Element {
 describe("FormErrorSummary", () => {
   it("renders nothing when there is nothing to say", () => {
     render(
-      <FormErrorSummary focusSignal={0} messages={[]} title="No se ha podido guardar" />,
+      <FormErrorSummary
+        focusSignal={0}
+        messages={[]}
+        title="No se ha podido guardar"
+      />,
     );
 
     expect(screen.queryByRole("alert")).toBeAbsent();

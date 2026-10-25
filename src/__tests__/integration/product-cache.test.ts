@@ -1,4 +1,12 @@
-import { describe, it, expect, afterAll, afterEach, beforeEach, spyOn } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  afterAll,
+  afterEach,
+  beforeEach,
+  spyOn,
+} from "bun:test";
 import Redis from "ioredis";
 import { closeValkey } from "@/lib/valkey";
 import {
@@ -17,10 +25,13 @@ import { OpenFoodFactsClient } from "@/server/services/openFoodFacts";
  * defect a mock cannot show you.
  */
 
-const inspector = new Redis(process.env.VALKEY_URL ?? "redis://localhost:6379", {
-  maxRetriesPerRequest: 1,
-  connectTimeout: 2000,
-});
+const inspector = new Redis(
+  process.env.VALKEY_URL ?? "redis://localhost:6379",
+  {
+    maxRetriesPerRequest: 1,
+    connectTimeout: 2000,
+  },
+);
 
 beforeEach(async () => {
   await valkeyProductCache.clear();
@@ -209,13 +220,21 @@ describe("a barcode Open Food Facts does not know", () => {
     upstream(
       () =>
         new Response(
-          JSON.stringify({ code: unknown, status: 0, status_verbose: "product not found" }),
+          JSON.stringify({
+            code: unknown,
+            status: 0,
+            status_verbose: "product not found",
+          }),
           { status: 404, headers: { "Content-Type": "application/json" } },
         ),
     );
 
-    expect(await new OpenFoodFactsClient().getProductByBarcode(unknown)).toBeNull();
-    expect(await new OpenFoodFactsClient().getProductByBarcode(unknown)).toBeNull();
+    expect(
+      await new OpenFoodFactsClient().getProductByBarcode(unknown),
+    ).toBeNull();
+    expect(
+      await new OpenFoodFactsClient().getProductByBarcode(unknown),
+    ).toBeNull();
 
     expect(fetches).toBe(1);
     // For a day, and only as a miss — never as a product.
@@ -229,7 +248,11 @@ describe("a barcode Open Food Facts does not know", () => {
     upstream(
       () =>
         new Response(
-          JSON.stringify({ code: unknown, status: 0, status_verbose: "product not found" }),
+          JSON.stringify({
+            code: unknown,
+            status: 0,
+            status_verbose: "product not found",
+          }),
           { status: 404, headers: { "Content-Type": "application/json" } },
         ),
     );

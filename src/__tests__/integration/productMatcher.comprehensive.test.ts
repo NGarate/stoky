@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { prisma } from "@/lib/prisma";
-import { matchReceiptItems, getItemCandidates } from "@/server/services/productMatcher";
-import { parseReceiptText, saveParsedItems } from "@/server/services/receiptParser";
+import {
+  matchReceiptItems,
+  getItemCandidates,
+} from "@/server/services/productMatcher";
+import {
+  parseReceiptText,
+  saveParsedItems,
+} from "@/server/services/receiptParser";
 import { ReceiptStatus } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, rm } from "node:fs/promises";
@@ -178,10 +184,18 @@ leche semi desnatada 1,25
 
     it("does not auto-match a one-word product to every line containing the word", async () => {
       await prisma.product.create({
-        data: { name: "Leche", householdId: testHouseholdId, defaultUnit: "litro" },
+        data: {
+          name: "Leche",
+          householdId: testHouseholdId,
+          defaultUnit: "litro",
+        },
       });
       await prisma.product.create({
-        data: { name: "Pan", householdId: testHouseholdId, defaultUnit: "unidad" },
+        data: {
+          name: "Pan",
+          householdId: testHouseholdId,
+          defaultUnit: "unidad",
+        },
       });
 
       const { matches, status } = await matchReceipt(
@@ -196,7 +210,11 @@ leche semi desnatada 1,25
 
     it("auto-matches a receipt's unaccented name to an accented product", async () => {
       const product = await prisma.product.create({
-        data: { name: "Jamón", householdId: testHouseholdId, defaultUnit: "unidad" },
+        data: {
+          name: "Jamón",
+          householdId: testHouseholdId,
+          defaultUnit: "unidad",
+        },
       });
 
       const [match] = await matchLines("JAMON 4,50");
@@ -242,8 +260,7 @@ yogur desnatado natural 1,80
 
       const hasMatch = matches.some(
         (m) =>
-          m.autoMatch !== null ||
-          m.candidates.some((c) => c.similarity >= 0.3)
+          m.autoMatch !== null || m.candidates.some((c) => c.similarity >= 0.3),
       );
       expect(hasMatch).toBe(true);
     });
@@ -347,7 +364,12 @@ leche entera 1,25
       // Note: The current implementation doesn't use barcode matching
       // This test documents expected behavior
       const product = await prisma.product.findUnique({
-        where: { barcode_householdId: { barcode: "1234567890123", householdId: testHouseholdId } },
+        where: {
+          barcode_householdId: {
+            barcode: "1234567890123",
+            householdId: testHouseholdId,
+          },
+        },
       });
 
       expect(product).toBeDefined();
@@ -421,7 +443,7 @@ chocolat con leche 2,50
       const hasSimilarMatch = matches.some(
         (m) =>
           m.autoMatch !== null ||
-          m.candidates.some((c) => c.name.includes("chocolate"))
+          m.candidates.some((c) => c.name.includes("chocolate")),
       );
       expect(hasSimilarMatch).toBe(true);
     });
@@ -464,7 +486,7 @@ cafe descafeinado 3,50
       const hasMatch = matches.some(
         (m) =>
           m.autoMatch !== null ||
-          m.candidates.some((c) => c.name.includes("caf"))
+          m.candidates.some((c) => c.name.includes("caf")),
       );
       expect(hasMatch).toBe(true);
     });
@@ -546,7 +568,7 @@ aceite oliva virgen extra 5,50
       const hasMatch = matches.some(
         (m) =>
           m.autoMatch !== null ||
-          m.candidates.some((c) => c.name.includes("aceite"))
+          m.candidates.some((c) => c.name.includes("aceite")),
       );
       expect(hasMatch).toBe(true);
     });
@@ -589,8 +611,8 @@ pan de molde integral 1,50
       const matches = await matchReceiptItems(receipt.id);
 
       const hasHighSimilarityMatch = matches.some(
-        (m) => m.autoMatch !== null ||
-        m.candidates.some((c) => c.similarity >= 0.5)
+        (m) =>
+          m.autoMatch !== null || m.candidates.some((c) => c.similarity >= 0.5),
       );
       expect(hasHighSimilarityMatch).toBe(true);
     });
@@ -633,7 +655,7 @@ leche entera 1,25
       const hasMatch = matches.some(
         (m) =>
           m.autoMatch !== null ||
-          m.candidates.some((c) => c.name.includes("leche"))
+          m.candidates.some((c) => c.name.includes("leche")),
       );
       expect(hasMatch).toBe(true);
     });
@@ -677,7 +699,7 @@ coca cola 1,80
       const hasMatch = matches.some(
         (m) =>
           m.autoMatch !== null ||
-          m.candidates.some((c) => c.name.includes("coca"))
+          m.candidates.some((c) => c.name.includes("coca")),
       );
       expect(hasMatch).toBe(true);
     });
@@ -783,9 +805,21 @@ producto desconocido xyz 5,00
     it("should return candidates for a specific item", async () => {
       await prisma.product.createMany({
         data: [
-          { name: "leche entera", householdId: testHouseholdId, defaultUnit: "litro" },
-          { name: "leche semi", householdId: testHouseholdId, defaultUnit: "litro" },
-          { name: "leche desnatada", householdId: testHouseholdId, defaultUnit: "litro" },
+          {
+            name: "leche entera",
+            householdId: testHouseholdId,
+            defaultUnit: "litro",
+          },
+          {
+            name: "leche semi",
+            householdId: testHouseholdId,
+            defaultUnit: "litro",
+          },
+          {
+            name: "leche desnatada",
+            householdId: testHouseholdId,
+            defaultUnit: "litro",
+          },
         ],
       });
 

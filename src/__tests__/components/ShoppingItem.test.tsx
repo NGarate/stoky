@@ -63,7 +63,6 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-
 /** The queued change this component asked for. */
 function lastEnqueued(): Record<string, unknown> {
   return enqueue.mock.calls[0]?.[0] as Record<string, unknown>;
@@ -101,7 +100,9 @@ describe("an addition that has not been sent", () => {
   it("is taken back by cancelling the addition, not by removing a row", async () => {
     render(<ShoppingItem canWrite stores={STORES} item={queuedItem} />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Quitar «Leche entera» de la lista" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Quitar «Leche entera» de la lista" }),
+    );
 
     expect(cancel).toHaveBeenCalledWith("op-add");
     expect(enqueue).not.toHaveBeenCalled();
@@ -113,10 +114,14 @@ describe("an addition that has not been sent", () => {
     cancel.mockImplementationOnce(() => false);
     render(<ShoppingItem canWrite stores={STORES} item={queuedItem} />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Quitar «Leche entera» de la lista" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Quitar «Leche entera» de la lista" }),
+    );
 
     expect(
-      await screen.findByText("«Leche entera» se está enviando; podrás quitarlo en un momento"),
+      await screen.findByText(
+        "«Leche entera» se está enviando; podrás quitarlo en un momento",
+      ),
     ).toBeInTheDocument();
     expect(enqueue).not.toHaveBeenCalled();
   });
@@ -179,7 +184,11 @@ describe("ShoppingItem", () => {
 
   it("reflects the checked state in the checkbox", () => {
     render(
-      <ShoppingItem canWrite stores={STORES} item={{ ...baseItem, isChecked: true }} />,
+      <ShoppingItem
+        canWrite
+        stores={STORES}
+        item={{ ...baseItem, isChecked: true }}
+      />,
     );
 
     expect(screen.getByRole("checkbox")).toBeChecked();
@@ -187,7 +196,11 @@ describe("ShoppingItem", () => {
 
   it("strikes through the name once checked", () => {
     render(
-      <ShoppingItem canWrite stores={STORES} item={{ ...baseItem, isChecked: true }} />,
+      <ShoppingItem
+        canWrite
+        stores={STORES}
+        item={{ ...baseItem, isChecked: true }}
+      />,
     );
 
     expect(screen.getByText("Leche entera")).toHaveClass("line-through");
@@ -209,7 +222,11 @@ describe("ShoppingItem", () => {
 
   it("toggles a checked item back to unchecked", async () => {
     render(
-      <ShoppingItem canWrite stores={STORES} item={{ ...baseItem, isChecked: true }} />,
+      <ShoppingItem
+        canWrite
+        stores={STORES}
+        item={{ ...baseItem, isChecked: true }}
+      />,
     );
 
     await userEvent.click(screen.getByRole("checkbox"));
@@ -265,7 +282,9 @@ describe("ShoppingItem", () => {
       render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
 
       await userEvent.click(
-        screen.getByRole("button", { name: "Quitar «Leche entera» de la lista" }),
+        screen.getByRole("button", {
+          name: "Quitar «Leche entera» de la lista",
+        }),
       );
 
       expect(lastEnqueued()).toMatchObject({ holdMs: 30_000 });
@@ -296,7 +315,9 @@ describe("ShoppingItem", () => {
     fireEvent.change(box, { target: { value: "5" } });
     fireEvent.blur(box);
 
-    expect(await screen.findAllByText("Cambiaste «Leche entera»")).not.toHaveLength(0);
+    expect(
+      await screen.findAllByText("Cambiaste «Leche entera»"),
+    ).not.toHaveLength(0);
   });
 
   it("says the shop changed too", async () => {
@@ -306,7 +327,9 @@ describe("ShoppingItem", () => {
       target: { value: "s1" },
     });
 
-    expect(await screen.findAllByText("Cambiaste «Leche entera»")).not.toHaveLength(0);
+    expect(
+      await screen.findAllByText("Cambiaste «Leche entera»"),
+    ).not.toHaveLength(0);
   });
 
   it("offers a reader none of the controls the server refuses them", () => {
@@ -317,7 +340,11 @@ describe("ShoppingItem", () => {
     // `writeProcedure` refuses, found out by pressing one. D88 widened that
     // role by exactly two capabilities and neither is this.
     expect(screen.queryByRole("checkbox")).toBeAbsent();
-    expect(screen.queryByRole("button", { name: "Quitar «Leche entera» de la lista" })).toBeAbsent();
+    expect(
+      screen.queryByRole("button", {
+        name: "Quitar «Leche entera» de la lista",
+      }),
+    ).toBeAbsent();
   });
 
   it("still tells a reader whether it has been bought", () => {
@@ -362,7 +389,9 @@ describe("ShoppingItem", () => {
     // round trip between two items.
     render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
 
-    const remove = screen.getByRole("button", { name: "Quitar «Leche entera» de la lista" });
+    const remove = screen.getByRole("button", {
+      name: "Quitar «Leche entera» de la lista",
+    });
     expect(remove).not.toBeDisabled();
 
     await userEvent.click(remove);
@@ -491,7 +520,9 @@ describe("ShoppingItem", () => {
 
     // What makes choosing a shop above an informed decision rather than a
     // guess: the answer is one tap away, where the question is asked.
-    const link = screen.getByRole("link", { name: /Ver precios de «Leche entera»/ });
+    const link = screen.getByRole("link", {
+      name: /Ver precios de «Leche entera»/,
+    });
     expect(link.getAttribute("href")).toBe("/prices/product-1");
   });
 

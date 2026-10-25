@@ -256,7 +256,8 @@ async function fieldFindings(page: Page): Promise<FieldFindings> {
       if (ariaLabel) return ariaLabel;
 
       const forLabel = el.id
-        ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`)?.textContent
+        ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`)
+            ?.textContent
         : null;
       if (forLabel?.trim()) return forLabel.trim();
 
@@ -297,7 +298,9 @@ async function fieldFindings(page: Page): Promise<FieldFindings> {
       // is source code. Applied to names and to help text alike: adding five
       // hints that all rendered as their own keys is what put this here.
       if (isKey(name)) {
-        unnamed.push(`${describe(el)} — untranslated key as its name, "${name}"`);
+        unnamed.push(
+          `${describe(el)} — untranslated key as its name, "${name}"`,
+        );
         continue;
       }
 
@@ -401,10 +404,12 @@ async function assertPresentationAndLinks(page: Page, route: string) {
 
   const presentation = [
     ...tooWide.map(
-      (b) => `  [width] ${b.charsPerLine} chars — ${b.selector}\n      "${b.text}…"`,
+      (b) =>
+        `  [width] ${b.charsPerLine} chars — ${b.selector}\n      "${b.text}…"`,
     ),
     ...tooTight.map(
-      (b) => `  [leading] ${b.lineHeightRatio} — ${b.selector}\n      "${b.text}…"`,
+      (b) =>
+        `  [leading] ${b.lineHeightRatio} — ${b.selector}\n      "${b.text}…"`,
     ),
     ...justified.map((b) => `  [justified] ${b.selector}`),
   ];
@@ -412,7 +417,8 @@ async function assertPresentationAndLinks(page: Page, route: string) {
 
   const vague = await nonDescriptiveLinks(page);
   const linkFindings = vague.map(
-    (l) => `  "${l.name || "(no accessible name)"}" → ${l.href}\n      ${l.selector}`,
+    (l) =>
+      `  "${l.name || "(no accessible name)"}" → ${l.href}\n      ${l.selector}`,
   );
   expect(linkFindings, report(route, "2.4.9", linkFindings)).toEqual([]);
 

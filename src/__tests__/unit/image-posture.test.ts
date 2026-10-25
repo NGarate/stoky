@@ -51,19 +51,27 @@ describe("the production image drops privilege", () => {
 describe("the application images use only the Bun runtime", () => {
   it("derives all stages from the pinned Bun image", () => {
     const dockerfile = readFileSync(join(ROOT, "Dockerfile"), "utf8");
-    const bases = [...dockerfile.matchAll(/^FROM (\S+)/gm)].map((match) => match[1]);
+    const bases = [...dockerfile.matchAll(/^FROM (\S+)/gm)].map(
+      (match) => match[1],
+    );
     // By version tag *and* index digest: a tag can be re-pushed, so the tag
     // alone lets the release build a different base with no change here.
-    expect(bases[0]).toMatch(/^oven\/bun:\d+\.\d+\.\d+-alpine@sha256:[0-9a-f]{64}$/);
+    expect(bases[0]).toMatch(
+      /^oven\/bun:\d+\.\d+\.\d+-alpine@sha256:[0-9a-f]{64}$/,
+    );
     expect(bases.slice(1)).toEqual(["bun", "bun", "bun", "bun"]);
     const instructions = dockerfile.replace(/^#.*$/gm, "");
-    expect(instructions).not.toMatch(/npm (?:install|init)\b|apk add[^\n]*nodejs/);
+    expect(instructions).not.toMatch(
+      /npm (?:install|init)\b|apk add[^\n]*nodejs/,
+    );
   });
 
   it("runs migrations explicitly with Bun and uses the locked CLI", () => {
     const stage = productionStage();
     expect(stage).toContain("COPY --from=builder /opt/prisma/ /opt/prisma/");
-    expect(stage).toContain("bun /opt/prisma/node_modules/prisma/build/index.js migrate deploy");
+    expect(stage).toContain(
+      "bun /opt/prisma/node_modules/prisma/build/index.js migrate deploy",
+    );
     expect(stage).toContain("&& exec bun server.js");
   });
 });
@@ -88,10 +96,22 @@ describe("the Prisma engines are verified against pinned checksums", () => {
   // which are what the production stage copies.
   const ENGINE = "linux-musl-openssl-3.0.x";
   const shipped = [
-    ["SCHEMA", `/opt/prisma/node_modules/prisma/node_modules/@prisma/engines/schema-engine-${ENGINE}`],
-    ["QUERY", `/opt/prisma/node_modules/prisma/node_modules/@prisma/engines/libquery_engine-${ENGINE}.so.node`],
-    ["QUERY", `/opt/prisma/node_modules/prisma/libquery_engine-${ENGINE}.so.node`],
-    ["QUERY", `/app/.next/standalone/node_modules/.prisma/client/libquery_engine-${ENGINE}.so.node`],
+    [
+      "SCHEMA",
+      `/opt/prisma/node_modules/prisma/node_modules/@prisma/engines/schema-engine-${ENGINE}`,
+    ],
+    [
+      "QUERY",
+      `/opt/prisma/node_modules/prisma/node_modules/@prisma/engines/libquery_engine-${ENGINE}.so.node`,
+    ],
+    [
+      "QUERY",
+      `/opt/prisma/node_modules/prisma/libquery_engine-${ENGINE}.so.node`,
+    ],
+    [
+      "QUERY",
+      `/app/.next/standalone/node_modules/.prisma/client/libquery_engine-${ENGINE}.so.node`,
+    ],
   ];
 
   function checkInstruction(): string {
@@ -112,10 +132,9 @@ describe("the Prisma engines are verified against pinned checksums", () => {
 
   it("checks every shipped copy against its pin with sha256sum -c", () => {
     const run = checkInstruction();
-    const pairs = [...run.matchAll(/"\$\{PRISMA_(\w+)_ENGINE_SHA256\}" (\S+)/g)].map(([, kind, path]) => [
-      kind,
-      path,
-    ]);
+    const pairs = [
+      ...run.matchAll(/"\$\{PRISMA_(\w+)_ENGINE_SHA256\}" (\S+)/g),
+    ].map(([, kind, path]) => [kind, path]);
     expect(pairs).toEqual(shipped);
     expect(run).toContain("| sha256sum -c -");
   });
@@ -124,7 +143,9 @@ describe("the Prisma engines are verified against pinned checksums", () => {
     // The text check cannot see a fifth copy (a new binaryTarget, a second
     // generator output). The count in the same RUN can.
     const run = checkInstruction();
-    const count = run.match(/find \/opt\/prisma \/app\/\.next\/standalone .*\| wc -l\)" = (\d+)$/m);
+    const count = run.match(
+      /find \/opt\/prisma \/app\/\.next\/standalone .*\| wc -l\)" = (\d+)$/m,
+    );
     expect(count?.[1]).toBe(String(shipped.length));
   });
 
@@ -132,7 +153,9 @@ describe("the Prisma engines are verified against pinned checksums", () => {
     const stage = builderStage();
     const check = stage.indexOf(checkInstruction());
     expect(check).toBeGreaterThan(stage.indexOf("RUN bun run build"));
-    expect(check).toBeGreaterThan(stage.indexOf("stage-runtime-deps.ts prisma /opt/prisma/node_modules"));
+    expect(check).toBeGreaterThan(
+      stage.indexOf("stage-runtime-deps.ts prisma /opt/prisma/node_modules"),
+    );
   });
 });
 
@@ -158,17 +181,21 @@ describe("the production image does not depend on the build host's umask", () =>
 
   it("covers every path production copies out of the builder", () => {
     const paths = normalised();
-    const sources = [...productionStage().matchAll(/^COPY --from=builder (\S+) /gm)].map(
-      ([, source]) => source.replace(/\/$/, ""),
-    );
+    const sources = [
+      ...productionStage().matchAll(/^COPY --from=builder (\S+) /gm),
+    ].map(([, source]) => source.replace(/\/$/, ""));
     expect(sources.length).toBeGreaterThan(0);
     for (const source of sources) {
-      expect(paths.some((path) => source === path || source.startsWith(`${path}/`))).toBe(true);
+      expect(
+        paths.some((path) => source === path || source.startsWith(`${path}/`)),
+      ).toBe(true);
     }
   });
 
   it("runs after everything else the builder writes", () => {
-    const runs = [...builderStage().matchAll(/^RUN .*/gm)].map(([line]) => line);
+    const runs = [...builderStage().matchAll(/^RUN .*/gm)].map(
+      ([line]) => line,
+    );
     expect(runs.at(-1)).toMatch(/^RUN chmod -R a\+rX,go-w /);
   });
 });
@@ -179,10 +206,9 @@ describe("the production image ships no demo seed", () => {
     // publishes. A whole-directory COPY is how it got into the image, and any
     // new file in prisma/ would follow it the same way.
     const prismaCopy = /^COPY --from=builder \/app\/prisma(\S*) (\S+)$/gm;
-    const copies = [...productionStage().matchAll(prismaCopy)].map(([, source, target]) => [
-      source,
-      target,
-    ]);
+    const copies = [...productionStage().matchAll(prismaCopy)].map(
+      ([, source, target]) => [source, target],
+    );
     expect(copies).toEqual([
       ["/schema.prisma", "./prisma/schema.prisma"],
       ["/migrations", "./prisma/migrations"],
@@ -196,7 +222,9 @@ describe("the production image ships no demo seed", () => {
     // flattened into prisma/.
     const stage = productionStage();
     expect(stage).toContain("test ! -e /app/prisma/seed.ts");
-    expect(stage).toContain("test -f /app/prisma/migrations/migration_lock.toml");
+    expect(stage).toContain(
+      "test -f /app/prisma/migrations/migration_lock.toml",
+    );
   });
 });
 
@@ -241,7 +269,10 @@ describe("the production compose runs read-only", () => {
     expect(Object.keys(override).sort()).toEqual(["name", "services"]);
     expect(override.name).not.toBe("stoky-release");
     expect(Object.keys(override.services)).toEqual(["app"]);
-    expect(Object.keys(override.services.app).sort()).toEqual(["build", "pull_policy"]);
+    expect(Object.keys(override.services.app).sort()).toEqual([
+      "build",
+      "pull_policy",
+    ]);
   });
 });
 
@@ -267,12 +298,23 @@ describe("the build context leaves out local secrets and state", () => {
   it("re-includes only the documented example, after the rule it relaxes", () => {
     // Later rules win, so a negation placed before `**/.env*` would be inert,
     // and any other negation is a hole someone has to justify.
-    expect(rules.filter((rule) => rule.startsWith("!"))).toEqual(["!.env.example"]);
-    expect(rules.indexOf("!.env.example")).toBeGreaterThan(rules.indexOf("**/.env*"));
+    expect(rules.filter((rule) => rule.startsWith("!"))).toEqual([
+      "!.env.example",
+    ]);
+    expect(rules.indexOf("!.env.example")).toBeGreaterThan(
+      rules.indexOf("**/.env*"),
+    );
   });
 
   it("excludes agent and tool state, OCR models and incremental build info", () => {
-    const local = [".claude", ".codex", ".opencode", ".playwright", "*.traineddata", "*.tsbuildinfo"];
+    const local = [
+      ".claude",
+      ".codex",
+      ".opencode",
+      ".playwright",
+      "*.traineddata",
+      "*.tsbuildinfo",
+    ];
     for (const rule of local) expect(rules).toContain(rule);
   });
 });

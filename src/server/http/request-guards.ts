@@ -39,9 +39,13 @@ const OWN_FETCH_SITES = new Set(["same-origin", "none"]);
  * `basePath` is cut from the logged path, so the line names the procedure or
  * the auth endpoint rather than the route.
  */
-export function refuseCrossSite(req: Request, basePath: string): Response | null {
+export function refuseCrossSite(
+  req: Request,
+  basePath: string,
+): Response | null {
   const site = req.headers.get("sec-fetch-site");
-  if (site === null || OWN_FETCH_SITES.has(site.trim().toLowerCase())) return null;
+  if (site === null || OWN_FETCH_SITES.has(site.trim().toLowerCase()))
+    return null;
 
   const pathname = new URL(req.url).pathname;
   const path = pathname.startsWith(basePath)

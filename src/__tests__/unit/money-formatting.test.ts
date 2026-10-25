@@ -34,7 +34,9 @@ describe("money has one formatter", () => {
   it("formats currency only in src/lib/money.ts", () => {
     const offenders = sourceFiles(SRC)
       .filter((path) => path !== OWNER)
-      .filter((path) => /style:\s*["']currency["']/.test(readFileSync(path, "utf8")))
+      .filter((path) =>
+        /style:\s*["']currency["']/.test(readFileSync(path, "utf8")),
+      )
       .map((path) => relative(SRC, path));
 
     // Use `formatMoney` / `formatUnitPrice`, with `DEFAULT_CURRENCY` when the

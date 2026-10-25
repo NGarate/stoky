@@ -68,7 +68,10 @@ export function StockHistoryChart({
           />
           <Tooltip
             {...CHART_TOOLTIP}
-            formatter={(value) => [units.quantity(Number(value), unit), t("totalHeader")]}
+            formatter={(value) => [
+              units.quantity(Number(value), unit),
+              t("totalHeader"),
+            ]}
             labelFormatter={(label) => label}
           />
           <Line

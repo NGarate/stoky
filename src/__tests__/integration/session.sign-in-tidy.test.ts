@@ -22,7 +22,11 @@ let bea: { id: string; email: string };
 beforeAll(async () => {
   for (const name of ["ana", "bea"] as const) {
     const email = generateTestEmail(`${MARKER}-${name}`);
-    const user = await createTestUser({ email, name: `Tidy ${MARKER} ${name}`, password: PASSWORD });
+    const user = await createTestUser({
+      email,
+      name: `Tidy ${MARKER} ${name}`,
+      password: PASSWORD,
+    });
     if (name === "ana") ana = { id: user.id, email };
     else bea = { id: user.id, email };
   }
@@ -33,18 +37,24 @@ afterAll(async () => {
 });
 
 async function clearSessions(): Promise<void> {
-  await prisma.session.deleteMany({ where: { userId: { in: [ana.id, bea.id] } } });
+  await prisma.session.deleteMany({
+    where: { userId: { in: [ana.id, bea.id] } },
+  });
 }
 
 /** Signs `who` in, sending `jar` as the browser's cookies, and returns the new jar. */
 async function signIn(who: { email: string }, jar?: string): Promise<string> {
-  const answer = await signInWith({ email: who.email, password: PASSWORD }, { cookie: jar });
+  const answer = await signInWith(
+    { email: who.email, password: PASSWORD },
+    { cookie: jar },
+  );
   expect(answer.status).toBe(200);
   return answer.cookieHeader;
 }
 
 const works = async (jar: string) =>
-  (await readSession(new Headers({ cookie: jar }), { refresh: false })) !== null;
+  (await readSession(new Headers({ cookie: jar }), { refresh: false })) !==
+  null;
 const rows = (userId: string) => prisma.session.findMany({ where: { userId } });
 
 /** The security events written while `run` ran, parsed: every value a string, as the log writes it. */
@@ -92,9 +102,16 @@ describe("signing in again in the same browser", () => {
     // The new session counts its day from this sign-in, not the replaced one's.
     expect(Date.now() - left[0].authenticatedAt.getTime()).toBeLessThan(60_000);
 
-    const ended = events.filter((event) => event.event === "auth.session.ended");
+    const ended = events.filter(
+      (event) => event.event === "auth.session.ended",
+    );
     expect(ended).toEqual([
-      expect.objectContaining({ reason: "replaced", userId: ana.id, targetUserId: ana.id, count: "1" }),
+      expect.objectContaining({
+        reason: "replaced",
+        userId: ana.id,
+        targetUserId: ana.id,
+        count: "1",
+      }),
     ]);
   });
 
@@ -107,8 +124,15 @@ describe("signing in again in the same browser", () => {
     expect(await rows(ana.id)).toHaveLength(0);
     expect(await works(anas)).toBe(false);
     expect(await rows(bea.id)).toHaveLength(1);
-    expect(events.filter((event) => event.event === "auth.session.ended")).toEqual([
-      expect.objectContaining({ reason: "replaced", userId: bea.id, targetUserId: ana.id, count: "1" }),
+    expect(
+      events.filter((event) => event.event === "auth.session.ended"),
+    ).toEqual([
+      expect.objectContaining({
+        reason: "replaced",
+        userId: bea.id,
+        targetUserId: ana.id,
+        count: "1",
+      }),
     ]);
   });
 
@@ -116,7 +140,10 @@ describe("signing in again in the same browser", () => {
     await clearSessions();
     const anas = await signIn(ana);
 
-    const refused = await signInWith({ email: bea.email, password: "not the password" }, { cookie: anas });
+    const refused = await signInWith(
+      { email: bea.email, password: "not the password" },
+      { cookie: anas },
+    );
 
     expect(refused.status).toBe(401);
     expect(await works(anas)).toBe(true);
@@ -133,7 +160,9 @@ describe("signing in from another browser", () => {
     expect(await rows(ana.id)).toHaveLength(2);
     expect(await works(laptop)).toBe(true);
     // Nothing was replaced, so nothing is said.
-    expect(events.filter((event) => event.event === "auth.session.ended")).toEqual([]);
+    expect(
+      events.filter((event) => event.event === "auth.session.ended"),
+    ).toEqual([]);
   });
 
   it("leaves another account's sessions alone", async () => {
@@ -151,7 +180,9 @@ describe("expired rows", () => {
     await clearSessions();
     await signIn(ana);
     const live = await signIn(ana);
-    const [stale] = (await rows(ana.id)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    const [stale] = (await rows(ana.id)).sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+    );
     // A browser that was closed: its cookie is never sent again, so Better
     // Auth never reads the row to delete it.
     await prisma.session.update({

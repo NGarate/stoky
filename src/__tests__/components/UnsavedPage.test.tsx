@@ -18,9 +18,7 @@ import type { FailedOp, FailureReason } from "@/lib/offline/queue";
  */
 
 const retry = mock((_id: string) => {});
-const discard = mock(
-  (id: string) => failed.find((op) => op.id === id) ?? null,
-);
+const discard = mock((id: string) => failed.find((op) => op.id === id) ?? null);
 const restore = mock((_op: FailedOp) => {});
 
 let failed: FailedOp[] = [];
@@ -62,9 +60,8 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
-const { default: UnsavedPage } = await import(
-  "@/app/(dashboard)/settings/unsaved/page"
-);
+const { default: UnsavedPage } =
+  await import("@/app/(dashboard)/settings/unsaved/page");
 
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
 
@@ -80,10 +77,16 @@ const renderWithIntl = (
 function failure(reason: FailureReason, id = "op-1"): FailedOp {
   return {
     id,
-    path: reason === "needs-reconciliation" ? "inventory.consumeStock" : "shopping.updateItem",
+    path:
+      reason === "needs-reconciliation"
+        ? "inventory.consumeStock"
+        : "shopping.updateItem",
     input: { productId: "p1", quantity: 1, unit: "L", id: "item-1" },
     householdId: "h1",
-    label: { key: "offline.usedUp", values: { quantity: 1, unit: "L", name: "Leche entera" } },
+    label: {
+      key: "offline.usedUp",
+      values: { quantity: 1, unit: "L", name: "Leche entera" },
+    },
     createdAt: new Date("2026-08-11T09:30:00.000Z"),
     attempts: 0,
     reason,
@@ -116,15 +119,17 @@ describe("what each change says", () => {
   it("names what the change was", () => {
     renderWithIntl(<UnsavedPage />);
 
-    expect(screen.getByText(/Usaste 1 L de «Leche entera»/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Usaste 1 L de «Leche entera»/),
+    ).toBeInTheDocument();
   });
 
   it("draws letting it go as the destructive action it is", () => {
     renderWithIntl(<UnsavedPage />);
 
-    expect(screen.getByRole("button", { name: /^Descartar: / }).className).toContain(
-      "bg-destructive",
-    );
+    expect(
+      screen.getByRole("button", { name: /^Descartar: / }).className,
+    ).toContain("bg-destructive");
   });
 
   it("names a change whose label lives outside the offline catalogue", () => {
@@ -133,7 +138,10 @@ describe("what each change says", () => {
     failed = [
       {
         ...failure("refused"),
-        label: { key: "shopping.itemUpdated", values: { name: "Leche entera" } },
+        label: {
+          key: "shopping.itemUpdated",
+          values: { name: "Leche entera" },
+        },
       },
     ];
     renderWithIntl(<UnsavedPage />);
@@ -199,7 +207,9 @@ describe("what can be done about it", () => {
     failed = [failure("refused")];
     renderWithIntl(<UnsavedPage />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Volver a intentarlo" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Volver a intentarlo" }),
+    );
 
     expect(retry).toHaveBeenCalledWith("op-1");
   });
@@ -219,7 +229,9 @@ describe("what can be done about it", () => {
 
     // Retrying would be refused again for the same reason. The question is
     // for a person.
-    expect(screen.queryByRole("button", { name: "Volver a intentarlo" })).toBeAbsent();
+    expect(
+      screen.queryByRole("button", { name: "Volver a intentarlo" }),
+    ).toBeAbsent();
 
     await userEvent.click(screen.getByRole("button", { name: "Revisar" }));
 
@@ -277,8 +289,11 @@ describe("taking a discard back", () => {
     await userEvent.click(screen.getByRole("button", { name: /^Descartar: / }));
 
     expect(
-      (await screen.findAllByText("Cambio descartado: Usaste 1 L de «Leche entera»"))
-        .length,
+      (
+        await screen.findAllByText(
+          "Cambio descartado: Usaste 1 L de «Leche entera»",
+        )
+      ).length,
     ).toBeGreaterThan(0);
     await userEvent.click(screen.getByRole("button", { name: "Deshacer" }));
     expect(restore).toHaveBeenCalledWith(change);

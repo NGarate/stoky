@@ -44,7 +44,9 @@ function daysFromNow(days: number): Date {
   return date;
 }
 
-async function removeExistingDemoData(tx: Prisma.TransactionClient): Promise<void> {
+async function removeExistingDemoData(
+  tx: Prisma.TransactionClient,
+): Promise<void> {
   // Through the demo account, not the household name. The name is free text,
   // so `findFirst({ where: { name } })` would pick any household a registrant
   // called "Hogar Demo" and delete it with its members. The email is unique and
@@ -99,7 +101,10 @@ async function removeExistingDemoData(tx: Prisma.TransactionClient): Promise<voi
  * Removes the previous demo data and writes it again, inside the caller's
  * transaction. Returns how many catalogue products it created, for the summary.
  */
-async function seedDemoData(tx: Prisma.TransactionClient, passwordHash: string): Promise<number> {
+async function seedDemoData(
+  tx: Prisma.TransactionClient,
+  passwordHash: string,
+): Promise<number> {
   await removeExistingDemoData(tx);
 
   const household = await tx.household.create({
@@ -167,7 +172,10 @@ async function seedDemoData(tx: Prisma.TransactionClient, passwordHash: string):
       minStock: 6,
       location: fridge.id,
       // 2 L against a minimum of 6 → low stock.
-      stock: [{ quantity: 6, days: -20 }, { quantity: -4, days: -3 }],
+      stock: [
+        { quantity: 6, days: -20 },
+        { quantity: -4, days: -3 },
+      ],
       expiration: daysFromNow(5),
       prices: [
         { store: mercadona.id, price: 0.89, days: -60 },
@@ -202,7 +210,10 @@ async function seedDemoData(tx: Prisma.TransactionClient, passwordHash: string):
       minStock: 2,
       location: pantry.id,
       // 1 L against a minimum of 2 → low stock.
-      stock: [{ quantity: 3, days: -90 }, { quantity: -2, days: -15 }],
+      stock: [
+        { quantity: 3, days: -90 },
+        { quantity: -2, days: -15 },
+      ],
       expiration: daysFromNow(300),
       prices: [
         { store: mercadona.id, price: 8.45, days: -90 },
@@ -251,7 +262,10 @@ async function seedDemoData(tx: Prisma.TransactionClient, passwordHash: string):
       minStock: 2,
       location: pantry.id,
       // Fully consumed → low stock at zero.
-      stock: [{ quantity: 2, days: -50 }, { quantity: -2, days: -8 }],
+      stock: [
+        { quantity: 2, days: -50 },
+        { quantity: -2, days: -8 },
+      ],
       expiration: daysFromNow(180),
       prices: [
         { store: mercadona.id, price: 2.79, days: -50 },
@@ -332,7 +346,9 @@ async function seedDemoData(tx: Prisma.TransactionClient, passwordHash: string):
   const milk = createdProducts.find((p) => p.name === "Leche entera");
   const coffee = createdProducts.find((p) => p.name === "Café molido natural");
   if (!milk || !coffee) {
-    throw new Error("Seed catalogue is missing a product the shopping list needs");
+    throw new Error(
+      "Seed catalogue is missing a product the shopping list needs",
+    );
   }
 
   await tx.shoppingItem.createMany({
@@ -390,7 +406,10 @@ async function seedDemoData(tx: Prisma.TransactionClient, passwordHash: string):
     ["Huevos frescos", eggs],
     ["Arroz redondo", rice],
   ] as const) {
-    if (!product) throw new Error(`Seed: no product named "${label}" to match a receipt line against.`);
+    if (!product)
+      throw new Error(
+        `Seed: no product named "${label}" to match a receipt line against.`,
+      );
   }
 
   const needsReview = await tx.receipt.create({
@@ -520,20 +539,31 @@ async function main(): Promise<void> {
   // half-deleted. Prisma's default 5s timeout is sized for request handlers;
   // this is several dozen sequential statements on a loaded developer machine
   // or CI runner, so it gets more room.
-  const productCount = await prisma.$transaction((tx) => seedDemoData(tx, passwordHash), {
-    maxWait: 10_000,
-    timeout: 60_000,
-  });
+  const productCount = await prisma.$transaction(
+    (tx) => seedDemoData(tx, passwordHash),
+    {
+      maxWait: 10_000,
+      timeout: 60_000,
+    },
+  );
 
-  const lowStock = ["Leche entera", "Aceite de oliva virgen extra", "Café molido natural"];
+  const lowStock = [
+    "Leche entera",
+    "Aceite de oliva virgen extra",
+    "Café molido natural",
+  ];
 
   console.log("Seed complete.");
   console.log(`  Household : ${HOUSEHOLD_NAME}`);
   console.log(`  Login     : ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
-  console.log(`  Products  : ${productCount} (${lowStock.length} below minimum)`);
+  console.log(
+    `  Products  : ${productCount} (${lowStock.length} below minimum)`,
+  );
   console.log(`  Low stock : ${lowStock.join(", ")}`);
   console.log("  Stores    : Mercadona, Carrefour, Lidl");
-  console.log("  Receipts  : 2 (one needing review, one confirmed and ready to apply)");
+  console.log(
+    "  Receipts  : 2 (one needing review, one confirmed and ready to apply)",
+  );
 }
 
 main()

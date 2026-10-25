@@ -40,7 +40,9 @@ mock.module("@/lib/trpc/client", () => ({
       product: {
         getById: { invalidate: async () => void invalidated.push("getById") },
         list: { invalidate: async () => void invalidated.push("list") },
-        getByBarcode: { invalidate: async () => void invalidated.push("getByBarcode") },
+        getByBarcode: {
+          invalidate: async () => void invalidated.push("getByBarcode"),
+        },
       },
     }),
     product: {
@@ -68,9 +70,8 @@ mock.module("@/lib/trpc/client", () => ({
 }));
 
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
-const { ProductDetailsForm } = await import(
-  "@/components/products/ProductDetailsForm"
-);
+const { ProductDetailsForm } =
+  await import("@/components/products/ProductDetailsForm");
 
 const product = {
   id: "p1",
@@ -96,7 +97,9 @@ const render = (canEdit = true) =>
   );
 
 const startEditing = async (): Promise<void> => {
-  await userEvent.click(screen.getByRole("button", { name: "Editar los datos" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Editar los datos" }),
+  );
 };
 
 beforeEach(() => {
@@ -132,9 +135,13 @@ describe("the product's details", () => {
     render();
     await startEditing();
 
-    expect(screen.getByLabelText(/Nombre del producto/)).toHaveValue("Leche entera");
+    expect(screen.getByLabelText(/Nombre del producto/)).toHaveValue(
+      "Leche entera",
+    );
     expect(screen.getByLabelText(/Marca/)).toHaveValue("Pascual");
-    expect(screen.getByLabelText(/Código de barras/)).toHaveValue("8480000123456");
+    expect(screen.getByLabelText(/Código de barras/)).toHaveValue(
+      "8480000123456",
+    );
     expect(screen.getByLabelText(/Stock mínimo/)).toHaveValue(2);
   });
 
@@ -142,7 +149,9 @@ describe("the product's details", () => {
     render();
     await startEditing();
 
-    fireEvent.change(screen.getByLabelText(/Marca/), { target: { value: "Otra" } });
+    fireEvent.change(screen.getByLabelText(/Marca/), {
+      target: { value: "Otra" },
+    });
     await userEvent.click(screen.getByRole("button", { name: "Descartar" }));
 
     expect(updateCalls).toEqual([]);
@@ -181,9 +190,9 @@ describe("the product's details", () => {
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     expect(updateCalls).toEqual([]);
-    expect(
-      screen.getByTestId("form-error-summary").textContent,
-    ).toContain("Escribe el nombre del producto.");
+    expect(screen.getByTestId("form-error-summary").textContent).toContain(
+      "Escribe el nombre del producto.",
+    );
   });
 
   it("refuses a barcode another product already holds", async () => {
@@ -215,7 +224,9 @@ describe("the product's details", () => {
     render();
     await startEditing();
 
-    fireEvent.change(screen.getByLabelText(/Marca/), { target: { value: "Otra" } });
+    fireEvent.change(screen.getByLabelText(/Marca/), {
+      target: { value: "Otra" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => {
@@ -224,7 +235,9 @@ describe("the product's details", () => {
       ).not.toHaveLength(0);
     });
 
-    await userEvent.click(await screen.findByRole("button", { name: "Deshacer" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Deshacer" }),
+    );
 
     // An exact inverse exists here and nowhere near stock: the row's previous
     // values are still in hand, so undo restores them rather than writing a
@@ -265,7 +278,9 @@ describe("the product's details", () => {
       );
 
       await userEvent.click(
-        screen.getByRole("button", { name: locale === "es" ? "Editar los datos" : "Edit the details" }),
+        screen.getByRole("button", {
+          name: locale === "es" ? "Editar los datos" : "Edit the details",
+        }),
       );
 
       expect(container.textContent).not.toContain("products.");
@@ -278,7 +293,9 @@ describe("undoing a save", () => {
     render();
     await startEditing();
 
-    fireEvent.change(screen.getByLabelText(/Marca/), { target: { value: "Otra" } });
+    fireEvent.change(screen.getByLabelText(/Marca/), {
+      target: { value: "Otra" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await userEvent.click(
@@ -290,7 +307,9 @@ describe("undoing a save", () => {
     // — and by then the previous values had been refetched to the ones just
     // restored, so pressing it did nothing at all.
     await waitFor(() => {
-      expect(screen.getAllByText(/ha vuelto a como estaba/).length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText(/ha vuelto a como estaba/).length,
+      ).toBeGreaterThan(0);
     });
     expect(screen.queryByRole("button", { name: "Deshacer" })).toBeAbsent();
   });
@@ -299,7 +318,9 @@ describe("undoing a save", () => {
     render();
     await startEditing();
 
-    fireEvent.change(screen.getByLabelText(/Marca/), { target: { value: "Otra" } });
+    fireEvent.change(screen.getByLabelText(/Marca/), {
+      target: { value: "Otra" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     const undo = await screen.findByRole("button", { name: "Deshacer" });
@@ -309,7 +330,9 @@ describe("undoing a save", () => {
     // It wrote its message into the form `onDone()` had already closed, where
     // nobody could read it.
     await waitFor(() => {
-      expect(screen.getAllByText(/No se ha podido deshacer/).length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText(/No se ha podido deshacer/).length,
+      ).toBeGreaterThan(0);
     });
   });
 });

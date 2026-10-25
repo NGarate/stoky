@@ -1,0 +1,14 @@
+# Read by `bun fmt` (bunfig.toml [fmt]).
+
+# Markdown is hand-wrapped prose, and its tables are read by tests and by
+# people in a terminal. Prettier's Markdown pass rewrites *emphasis* as
+# _emphasis_ across hundreds of lines and moves list continuations, and buys
+# nothing a reader of the source would notice. It also covers CLAUDE.md, whose
+# Next.js block `next dev` rewrites, and docs/releases/, whose files must match
+# the release notes already published on GitHub byte for byte.
+*.md
+
+# Other tools' files, in the formats those tools write.
+.codex/
+.opencode/
+.claude/

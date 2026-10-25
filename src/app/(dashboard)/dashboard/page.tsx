@@ -130,131 +130,139 @@ export default function DashboardPage(): JSX.Element {
     <PageShell width="screen">
       <PageHeader intro={t("intro")} title={t("title")} />
       <div className="space-y-8">
+        <section aria-labelledby="dashboard-quick">
+          <h2 id="dashboard-quick" className="sr-only">
+            {t("quickTitle")}
+          </h2>
+          <ul className="grid gap-3 md:grid-cols-3">
+            <QuickLink
+              href="/inventory/add"
+              label={t("quickAddStock")}
+              primary
+            />
+            <QuickLink
+              href="/inventory/consume"
+              label={t("quickConsumeStock")}
+            />
+            <QuickLink
+              href="/receipts/upload"
+              label={t("quickUploadReceipt")}
+            />
+          </ul>
+        </section>
 
-      <section aria-labelledby="dashboard-quick">
-        <h2 id="dashboard-quick" className="sr-only">
-          {t("quickTitle")}
-        </h2>
-        <ul className="grid gap-3 md:grid-cols-3">
-          <QuickLink href="/inventory/add" label={t("quickAddStock")} primary />
-          <QuickLink href="/inventory/consume" label={t("quickConsumeStock")} />
-          <QuickLink href="/receipts/upload" label={t("quickUploadReceipt")} />
-        </ul>
-      </section>
-
-      <Section
-        aside={
-          <Button asChild variant="link">
-            <Link href="/shopping">{t("restockListLink")}</Link>
-          </Button>
-        }
-        title={t("restockTitle")}
-      >
-        {restock.length === 0 ? (
-          <p className="text-muted-foreground">{t("restockEmpty")}</p>
-        ) : (
-          <>
-            {/* A list, not a card: rows separate with dividers, and the box
+        <Section
+          aside={
+            <Button asChild variant="link">
+              <Link href="/shopping">{t("restockListLink")}</Link>
+            </Button>
+          }
+          title={t("restockTitle")}
+        >
+          {restock.length === 0 ? (
+            <p className="text-muted-foreground">{t("restockEmpty")}</p>
+          ) : (
+            <>
+              {/* A list, not a card: rows separate with dividers, and the box
                 that used to frame them is gone (Noel's rule, 2026-08-19 —
                 cards only where a card is justified). */}
-            <ul>
-              {restock.slice(0, MAX_ROWS).map((product) => (
-                <ItemRow
-                  density="compact"
-                  href={`/products/${product.id}`}
-                  key={product.id}
-                  // How much is left is a detail, so it is meta; the state is
-                  // StockStatus's word, the same one the inventory wears. This
-                  // derived its own — "Quedan 1 paquete (mínimo 2)" in a warn
-                  // badge here, "Stock bajo" there — which is ISSUES UI-11
-                  // arriving on a fifth screen.
-                  meta={
-                    product.totalStock > 0
-                      ? [
-                          {
-                            label: t("restockAmountLabel"),
-                            value: t("restockLow", {
-                              quantity: product.totalStock,
-                              minimum: product.minStock ?? 0,
-                              unit: units.unit(
-                                product.defaultUnit,
-                                product.totalStock,
-                              ),
-                            }),
-                          },
-                        ]
-                      : undefined
-                  }
-                  status={
-                    <StockStatus
-                      isLowStock={product.isLowStock}
-                      totalStock={product.totalStock}
-                    />
-                  }
-                  title={product.name}
-                  variant="plain"
-                />
-              ))}
-            </ul>
-            {restock.length > MAX_ROWS ? (
-              // The overflow is a door, not a shrug: when the panel cannot
-              // show everything, this is the way to the full set, asked of
-              // the server with the same `needsRestock` question (Phase 8
-              // item 2 — the alert row that used to be this door is gone).
-              <Button asChild className="mt-2" variant="link">
-                <Link href="/inventory?filter=restock">
-                  {t("restockMore", { count: restock.length - MAX_ROWS })}
-                </Link>
-              </Button>
-            ) : null}
-          </>
-        )}
-      </Section>
+              <ul>
+                {restock.slice(0, MAX_ROWS).map((product) => (
+                  <ItemRow
+                    density="compact"
+                    href={`/products/${product.id}`}
+                    key={product.id}
+                    // How much is left is a detail, so it is meta; the state is
+                    // StockStatus's word, the same one the inventory wears. This
+                    // derived its own — "Quedan 1 paquete (mínimo 2)" in a warn
+                    // badge here, "Stock bajo" there — which is ISSUES UI-11
+                    // arriving on a fifth screen.
+                    meta={
+                      product.totalStock > 0
+                        ? [
+                            {
+                              label: t("restockAmountLabel"),
+                              value: t("restockLow", {
+                                quantity: product.totalStock,
+                                minimum: product.minStock ?? 0,
+                                unit: units.unit(
+                                  product.defaultUnit,
+                                  product.totalStock,
+                                ),
+                              }),
+                            },
+                          ]
+                        : undefined
+                    }
+                    status={
+                      <StockStatus
+                        isLowStock={product.isLowStock}
+                        totalStock={product.totalStock}
+                      />
+                    }
+                    title={product.name}
+                    variant="plain"
+                  />
+                ))}
+              </ul>
+              {restock.length > MAX_ROWS ? (
+                // The overflow is a door, not a shrug: when the panel cannot
+                // show everything, this is the way to the full set, asked of
+                // the server with the same `needsRestock` question (Phase 8
+                // item 2 — the alert row that used to be this door is gone).
+                <Button asChild className="mt-2" variant="link">
+                  <Link href="/inventory?filter=restock">
+                    {t("restockMore", { count: restock.length - MAX_ROWS })}
+                  </Link>
+                </Button>
+              ) : null}
+            </>
+          )}
+        </Section>
 
-      <Section
-        aside={
-          <Button asChild variant="link">
-            <Link href="/inventory">{t("expiryInventoryLink")}</Link>
-          </Button>
-        }
-        title={t("expiryTitle", { days: EXPIRY_WINDOW_DAYS })}
-      >
-
-        {expiryUnanswered !== null ? (
-          <SectionState
-            error={expiryUnanswered.error}
-            fetchStatus={expiryUnanswered.fetchStatus}
-            onRetry={() => void expiryUnanswered.refetch()}
-          />
-        ) : atRisk === 0 ? (
-          <p className="text-muted-foreground">{t("expiryEmpty")}</p>
-        ) : (
-          <>
-            <ul className="divide-y divide-border">
-              {expiredItems.slice(0, MAX_ROWS).map((item) => (
-                <ExpiryRow
-                  batch={item}
-                  daysUntilExpiry={-item.daysExpired}
-                  key={item.id}
-                />
-              ))}
-              {expiringItems.slice(0, MAX_ROWS).map((item) => (
-                <ExpiryRow
-                  batch={item}
-                  daysUntilExpiry={item.daysUntilExpiry}
-                  key={item.id}
-                />
-              ))}
-            </ul>
-            {expiredItems.length > MAX_ROWS ||
-            expiringItems.length > MAX_ROWS ? (
-              <p className="mt-2 text-sm text-muted-foreground">
-                {t("expiryMore")}
-              </p>
-            ) : null}
-          </>
-        )}
-      </Section>
+        <Section
+          aside={
+            <Button asChild variant="link">
+              <Link href="/inventory">{t("expiryInventoryLink")}</Link>
+            </Button>
+          }
+          title={t("expiryTitle", { days: EXPIRY_WINDOW_DAYS })}
+        >
+          {expiryUnanswered !== null ? (
+            <SectionState
+              error={expiryUnanswered.error}
+              fetchStatus={expiryUnanswered.fetchStatus}
+              onRetry={() => void expiryUnanswered.refetch()}
+            />
+          ) : atRisk === 0 ? (
+            <p className="text-muted-foreground">{t("expiryEmpty")}</p>
+          ) : (
+            <>
+              <ul className="divide-y divide-border">
+                {expiredItems.slice(0, MAX_ROWS).map((item) => (
+                  <ExpiryRow
+                    batch={item}
+                    daysUntilExpiry={-item.daysExpired}
+                    key={item.id}
+                  />
+                ))}
+                {expiringItems.slice(0, MAX_ROWS).map((item) => (
+                  <ExpiryRow
+                    batch={item}
+                    daysUntilExpiry={item.daysUntilExpiry}
+                    key={item.id}
+                  />
+                ))}
+              </ul>
+              {expiredItems.length > MAX_ROWS ||
+              expiringItems.length > MAX_ROWS ? (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {t("expiryMore")}
+                </p>
+              ) : null}
+            </>
+          )}
+        </Section>
       </div>
     </PageShell>
   );
@@ -277,9 +285,7 @@ function QuickLink({
         className="w-full"
         variant={primary ? "default" : "outline"}
       >
-        <Link href={href}>
-          {label}
-        </Link>
+        <Link href={href}>{label}</Link>
       </Button>
     </li>
   );

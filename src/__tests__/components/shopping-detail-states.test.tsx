@@ -90,9 +90,8 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
-const { ShoppingListView } = await import(
-  "@/app/(dashboard)/shopping/[id]/page"
-);
+const { ShoppingListView } =
+  await import("@/app/(dashboard)/shopping/[id]/page");
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
 
 function trpcError(code: string, httpStatus: number): TRPCClientError<never> {
@@ -176,13 +175,22 @@ describe("the shopping list someone is holding", () => {
     // from a link that used to work, by somebody whose household deleted
     // the list under them.
     expect(
-      screen.getByRole("heading", { level: 1, name: "Esta lista ya no existe" }),
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Esta lista ya no existe",
+      }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Vuelve a tus listas para elegir otra/)).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Volver a tus listas" }).getAttribute("href"),
+      screen.getByText(/Vuelve a tus listas para elegir otra/),
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("link", { name: "Volver a tus listas" })
+        .getAttribute("href"),
     ).toBe("/shopping/lists");
-    expect(screen.queryByText("Aquí todavía no hay nada guardado")).toBeAbsent();
+    expect(
+      screen.queryByText("Aquí todavía no hay nada guardado"),
+    ).toBeAbsent();
   });
 
   it("offers a retry for any other failure", () => {
@@ -235,7 +243,9 @@ describe("the shopping list someone is holding", () => {
     };
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: "Añadir un producto" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Añadir un producto" }),
+    );
 
     expect(
       screen.getByRole("button", { name: "Añadir a la lista" }),
@@ -271,7 +281,9 @@ describe("the shopping list someone is holding", () => {
     // The list is still true. Only the refresh failed, and replacing a working
     // shopping list with a failure panel mid-shop is the worse answer.
     expect(screen.getByText("Leche entera")).toBeInTheDocument();
-    expect(screen.queryByText("No se han podido cargar los datos")).toBeAbsent();
+    expect(
+      screen.queryByText("No se han podido cargar los datos"),
+    ).toBeAbsent();
     expect(screen.queryByText("Esta lista ya no existe")).toBeAbsent();
   });
 });

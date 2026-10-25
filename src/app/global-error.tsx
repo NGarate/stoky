@@ -92,7 +92,13 @@ export default function GlobalError({
           </button>
 
           {error.digest ? (
-            <p style={{ marginTop: "1.5rem", fontSize: "0.875rem", color: "#4a4a4a" }}>
+            <p
+              style={{
+                marginTop: "1.5rem",
+                fontSize: "0.875rem",
+                color: "#4a4a4a",
+              }}
+            >
               {`Referencia · reference: ${error.digest}`}
             </p>
           ) : null}

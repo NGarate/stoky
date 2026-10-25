@@ -57,7 +57,12 @@ export interface RatingBreakdown {
 }
 
 export type Rating =
-  | { kind: "rated"; score: number; word: RatingWord; breakdown: RatingBreakdown }
+  | {
+      kind: "rated";
+      score: number;
+      word: RatingWord;
+      breakdown: RatingBreakdown;
+    }
   | { kind: "noData" }
   | { kind: "notApplicable" };
 
@@ -82,18 +87,42 @@ export type Rating =
  * absence from this table is absence of a verdict, not a verdict of safety.
  */
 const ADDITIVE_RISK: Record<string, AdditiveRisk> = {
-  e102: "high", e104: "high", e110: "high", e122: "high", e124: "high",
-  e129: "high", e171: "high", e249: "high", e250: "high", e251: "high",
+  e102: "high",
+  e104: "high",
+  e110: "high",
+  e122: "high",
+  e124: "high",
+  e129: "high",
+  e171: "high",
+  e249: "high",
+  e250: "high",
+  e251: "high",
   e252: "high",
-  e150d: "moderate", e320: "moderate", e321: "moderate", e407: "moderate",
-  e621: "moderate", e951: "moderate",
-  e300: "none", e306: "none", e307: "none", e308: "none", e322: "none",
-  e330: "none", e410: "none", e412: "none", e415: "none", e440: "none",
+  e150d: "moderate",
+  e320: "moderate",
+  e321: "moderate",
+  e407: "moderate",
+  e621: "moderate",
+  e951: "moderate",
+  e300: "none",
+  e306: "none",
+  e307: "none",
+  e308: "none",
+  e322: "none",
+  e330: "none",
+  e410: "none",
+  e412: "none",
+  e415: "none",
+  e440: "none",
 };
 
 /** 60% of the score, linearly across the five grades. */
 const NUTRISCORE_POINTS: Record<string, number> = {
-  a: 60, b: 45, c: 30, d: 15, e: 0,
+  a: 60,
+  b: 45,
+  c: 30,
+  d: 15,
+  e: 0,
 };
 
 /**
@@ -101,7 +130,10 @@ const NUTRISCORE_POINTS: Record<string, number> = {
  * colourant is not diluted by ten harmless gums beside it.
  */
 const ADDITIVE_POINTS: Record<AdditiveRisk, number> = {
-  none: 25, limited: 20, moderate: 10, high: 0,
+  none: 25,
+  limited: 20,
+  moderate: 10,
+  high: 0,
 };
 
 const RISK_ORDER: AdditiveRisk[] = ["none", "limited", "moderate", "high"];
@@ -187,7 +219,13 @@ export function computeRating(input: RatingInput): Rating {
 
   // The word leads; colour follows it in the interface (§6).
   const word: RatingWord =
-    score >= 75 ? "excellent" : score >= 50 ? "good" : score >= 25 ? "poor" : "bad";
+    score >= 75
+      ? "excellent"
+      : score >= 50
+        ? "good"
+        : score >= 25
+          ? "poor"
+          : "bad";
 
   return {
     kind: "rated",

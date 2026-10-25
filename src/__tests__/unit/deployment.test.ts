@@ -18,7 +18,9 @@ interface Service {
   cap_drop: string[];
   security_opt: string[];
   restart: string;
-  deploy: { resources: { limits: { memory: string; pids?: number; cpus?: unknown } } };
+  deploy: {
+    resources: { limits: { memory: string; pids?: number; cpus?: unknown } };
+  };
   command?: string[];
   configs?: { source: string; target: string }[];
   healthcheck?: { test: string[] };
@@ -56,7 +58,9 @@ describe("the downloadable installation", () => {
   it("requires fresh operator credentials and derives both database connections from one password", () => {
     const database = compose.services.db.environment!;
     const app = compose.services.app.environment!;
-    expect(database.POSTGRES_PASSWORD).toMatch(/^\$\{POSTGRES_PASSWORD:\?.+\}$/);
+    expect(database.POSTGRES_PASSWORD).toMatch(
+      /^\$\{POSTGRES_PASSWORD:\?.+\}$/,
+    );
     expect(app.DATABASE_URL).toBe(
       `postgresql://${database.POSTGRES_USER}:${database.POSTGRES_PASSWORD}@db:5432/${database.POSTGRES_DB}?schema=public`,
     );
@@ -68,12 +72,16 @@ describe("the downloadable installation", () => {
     expect(app.NEXTAUTH_SECRET).toBe("${NEXTAUTH_SECRET:-}");
     // The version comes from .env alone. A `:-` default is a hand-kept copy that
     // goes stale on the next release and is what an .env without the line pulls.
-    expect(compose.services.app.image).toMatch(/^ghcr\.io\/ngarate\/stoky:\$\{STOKY_VERSION:\?.+\}$/);
+    expect(compose.services.app.image).toMatch(
+      /^ghcr\.io\/ngarate\/stoky:\$\{STOKY_VERSION:\?.+\}$/,
+    );
     expect(template).toMatch(/^STOKY_VERSION=v\S+$/m);
     expect(template).toMatch(/^POSTGRES_PASSWORD=$/m);
     expect(template).toMatch(/^STOKY_SECRET=$/m);
     expect(template).not.toMatch(/NEXTAUTH_SECRET/);
-    expect(template).not.toMatch(/^(DATABASE_URL|VALKEY_URL|STOKY_URLS|NEXTAUTH_URL)=/m);
+    expect(template).not.toMatch(
+      /^(DATABASE_URL|VALKEY_URL|STOKY_URLS|NEXTAUTH_URL)=/m,
+    );
   });
 
   it("names every service image by exact version and digest", () => {
@@ -82,12 +90,20 @@ describe("the downloadable installation", () => {
     // builds under the same release. The tag must still be an exact version
     // (16.15, not 16): it is what a reader and an update tool compare. The app
     // is named by STOKY_VERSION, checked above.
-    const services = Object.entries(compose.services).filter(([name]) => name !== "app");
-    expect(services.map(([name]) => name).sort()).toEqual(["cache", "db", "traefik"]);
+    const services = Object.entries(compose.services).filter(
+      ([name]) => name !== "app",
+    );
+    expect(services.map(([name]) => name).sort()).toEqual([
+      "cache",
+      "db",
+      "traefik",
+    ]);
     for (const [name, service] of services) {
       expect({ name, image: service.image }).toEqual({
         name,
-        image: expect.stringMatching(/^[a-z0-9./-]+:v?\d+\.\d+[\w.-]*@sha256:[0-9a-f]{64}$/),
+        image: expect.stringMatching(
+          /^[a-z0-9./-]+:v?\d+\.\d+[\w.-]*@sha256:[0-9a-f]{64}$/,
+        ),
       });
     }
   });
@@ -113,7 +129,9 @@ describe("the downloadable installation", () => {
   it("reports the database healthy only once it accepts TCP connections", () => {
     // The image's init server listens on the unix socket only; a socket probe
     // passes during init and releases the app into a refused connection.
-    expect(compose.services.db.healthcheck?.test.join(" ")).toContain("pg_isready -h 127.0.0.1 ");
+    expect(compose.services.db.healthcheck?.test.join(" ")).toContain(
+      "pg_isready -h 127.0.0.1 ",
+    );
   });
 
   it("keeps the app and stateful services behind Traefik", () => {
@@ -124,7 +142,9 @@ describe("the downloadable installation", () => {
     expect(compose.networks.stoky?.internal).toBe(true);
     expect(compose.services.db.networks).toEqual(["stoky"]);
     expect(compose.services.cache.networks).toEqual(["stoky"]);
-    expect(compose.services.app.environment?.VALKEY_URL).toBe("redis://cache:6379");
+    expect(compose.services.app.environment?.VALKEY_URL).toBe(
+      "redis://cache:6379",
+    );
   });
 
   it("preserves the read-only application and service resource limits", () => {
@@ -159,8 +179,16 @@ describe("the downloadable installation", () => {
       return Number(match![1]) * unit!;
     };
     // Valkey's "mb" is 2^20 bytes and its "m" is 10^6; Compose's "m" is 2^20.
-    const bound = mebibytes(cache.command![2]!, { mb: 1, gb: 1024, m: 1e6 / 2 ** 20, g: 1e9 / 2 ** 20 });
-    const limit = mebibytes(cache.deploy.resources.limits.memory, { m: 1, g: 1024 });
+    const bound = mebibytes(cache.command![2]!, {
+      mb: 1,
+      gb: 1024,
+      m: 1e6 / 2 ** 20,
+      g: 1e9 / 2 ** 20,
+    });
+    const limit = mebibytes(cache.deploy.resources.limits.memory, {
+      m: 1,
+      g: 1024,
+    });
     // Headroom for the copy-on-write of a background save, which the cgroup
     // counts and maxmemory does not.
     expect(bound).toBeLessThanOrEqual(limit * 0.75);
@@ -171,11 +199,18 @@ describe("the downloadable installation", () => {
     // instead of exhausting the host's process table. Ceilings, not sizing:
     // five to ten times the peak measured under load.
     const limits = Object.fromEntries(
-      Object.entries(compose.services).map(([name, service]) => [name, service.deploy.resources.limits]),
+      Object.entries(compose.services).map(([name, service]) => [
+        name,
+        service.deploy.resources.limits,
+      ]),
     );
     // Strict: toEqual ignores an undefined value, so a new service without a
     // pids entry would pass it.
-    expect(Object.fromEntries(Object.entries(limits).map(([name, limit]) => [name, limit.pids]))).toStrictEqual({
+    expect(
+      Object.fromEntries(
+        Object.entries(limits).map(([name, limit]) => [name, limit.pids]),
+      ),
+    ).toStrictEqual({
       db: 256,
       cache: 128,
       app: 512,
@@ -191,38 +226,66 @@ describe("the downloadable installation", () => {
   it("rotates every service's logs instead of letting them fill the disk", () => {
     // Docker's json-file default keeps everything, and an unauthenticated
     // client can add security-log lines; the cap is what bounds the disk.
-    expect(Object.keys(compose.services).sort()).toEqual(["app", "cache", "db", "traefik"]);
+    expect(Object.keys(compose.services).sort()).toEqual([
+      "app",
+      "cache",
+      "db",
+      "traefik",
+    ]);
     for (const [name, service] of Object.entries(compose.services)) {
       // The driver is named beside its options: under a daemon-wide default
       // such as journald, a bare max-size stops the container from starting.
       expect({ name, logging: service.logging }).toEqual({
         name,
-        logging: { driver: "json-file", options: { "max-size": "10m", "max-file": "5" } },
+        logging: {
+          driver: "json-file",
+          options: { "max-size": "10m", "max-file": "5" },
+        },
       });
     }
   });
 
   it("routes HTTPS to the application without Docker discovery privileges", () => {
     const traefik = compose.services.traefik;
-    expect(traefik.command).toContain("--providers.file.filename=/etc/traefik/dynamic.yml");
-    expect(traefik.command?.some((flag) => flag.startsWith("--providers.docker"))).toBe(false);
+    expect(traefik.command).toContain(
+      "--providers.file.filename=/etc/traefik/dynamic.yml",
+    );
+    expect(
+      traefik.command?.some((flag) => flag.startsWith("--providers.docker")),
+    ).toBe(false);
     expect(traefik.configs).toContainEqual({
       source: "traefik_dynamic",
       target: "/etc/traefik/dynamic.yml",
     });
     const dynamic = Bun.YAML.parse(
-      readFileSync(join(root, "deploy", compose.configs.traefik_dynamic.file), "utf8"),
+      readFileSync(
+        join(root, "deploy", compose.configs.traefik_dynamic.file),
+        "utf8",
+      ),
     ) as {
       http: {
-        routers: Record<string, { rule: string; service: string; entryPoints: string[]; tls: { certResolver: string } }>;
-        services: Record<string, { loadBalancer: { servers: { url: string }[] } }>;
+        routers: Record<
+          string,
+          {
+            rule: string;
+            service: string;
+            entryPoints: string[];
+            tls: { certResolver: string };
+          }
+        >;
+        services: Record<
+          string,
+          { loadBalancer: { servers: { url: string }[] } }
+        >;
       };
     };
     const router = dynamic.http.routers.stoky;
     const host = traefik.environment!.DOMAIN;
     // One address, because Traefik routes only DOMAIN (D138): a second entry
     // would be trusted for sign-in and never reach this instance.
-    expect(compose.services.app.environment!.STOKY_URLS).toBe(`https://${host}`);
+    expect(compose.services.app.environment!.STOKY_URLS).toBe(
+      `https://${host}`,
+    );
     expect(compose.services.app.environment!.NEXTAUTH_URL).toBeUndefined();
     expect(router.rule).toBe('Host(`{{ env "DOMAIN" }}`)');
     expect(router.entryPoints).toEqual(["websecure"]);
@@ -265,7 +328,10 @@ describe("the downloadable installation", () => {
 
   it("accepts TLS 1.2 or later, and only forward-secret AEAD suites at 1.2", () => {
     const dynamic = Bun.YAML.parse(
-      readFileSync(join(root, "deploy", compose.configs.traefik_dynamic.file), "utf8"),
+      readFileSync(
+        join(root, "deploy", compose.configs.traefik_dynamic.file),
+        "utf8",
+      ),
     ) as { tls?: { options?: Record<string, unknown> } };
     // The whole object, so neither sniStrict (a handshake failure for every
     // client until ACME issues) nor curvePreferences (drops Go's post-quantum
@@ -311,7 +377,10 @@ interface StsHeaders {
  */
 describe("HSTS", () => {
   const dynamic = Bun.YAML.parse(
-    readFileSync(join(root, "deploy", compose.configs.traefik_dynamic.file), "utf8"),
+    readFileSync(
+      join(root, "deploy", compose.configs.traefik_dynamic.file),
+      "utf8",
+    ),
   ) as { http: { middlewares: Record<string, { headers?: StsHeaders }> } };
   const traefik = dynamic.http.middlewares["stoky-security"].headers!;
 
@@ -326,7 +395,9 @@ describe("HSTS", () => {
   async function appValue(): Promise<string | undefined> {
     const rules = (await nextConfig.headers?.()) ?? [];
     const all = rules.find((rule) => rule.source === "/:path*");
-    return all?.headers.find((header) => header.key === "Strict-Transport-Security")?.value;
+    return all?.headers.find(
+      (header) => header.key === "Strict-Transport-Security",
+    )?.value;
   }
 
   it("does not ask for preloading at the bundled proxy", () => {

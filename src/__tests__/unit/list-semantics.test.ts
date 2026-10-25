@@ -79,7 +79,11 @@ function rowComponents(): Set<string> {
       // `as="div"` opts the row out of list semantics, and so does its wrapper.
       // A component that draws its rows inside its own `<ul>` is a list, not
       // a row — `DeviceList` is one — and it is checked as a drawer below.
-      if (rendersRow && !file.text.includes('as="div"') && !/<ul[\s>]/.test(file.text)) {
+      if (
+        rendersRow &&
+        !file.text.includes('as="div"') &&
+        !/<ul[\s>]/.test(file.text)
+      ) {
         rows.add(file.name);
       }
     }
@@ -115,7 +119,8 @@ describe("rows that are list items live in lists", () => {
         // A screen that opts every row out needs no list.
         const rows = [...ROWS].reduce(
           (count, row) =>
-            count + (file.text.match(new RegExp(`<${row}[\\s>]`, "g")) ?? []).length,
+            count +
+            (file.text.match(new RegExp(`<${row}[\\s>]`, "g")) ?? []).length,
           0,
         );
         const optedOut = (file.text.match(/as="div"/g) ?? []).length;
