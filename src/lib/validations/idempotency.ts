@@ -25,8 +25,9 @@ export const replayable = z.object({
   idempotencyKey: z.string().uuid(),
   /**
    * The account the change was composed under. Compared, never trusted.
-   * `.cuid()` alone did not bound it — Zod 3's pattern is `c` and eight or
-   * more of anything — so the length is stated as well.
+   * `.cuid()` alone does not bound it — Zod 4's pattern is `c` and six or
+   * more lowercase letters and digits, with no maximum — so the length is
+   * stated as well.
    */
   composedByUserId: z.string().max(MAX_ID_LENGTH).cuid(),
 });

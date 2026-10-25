@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import type { AnyProcedure } from "@trpc/server";
-import { z, ZodFirstPartyTypeKind, type ZodTypeAny } from "zod";
+import { z } from "zod";
 import { appRouter } from "@/server/trpc/router";
 import {
   MAX_ID_LENGTH,
@@ -32,8 +32,9 @@ import {
  * `tenant-scoped-ids.test.ts` documents finding twice.
  *
  * What counts as bounded: a string with `.max()` or `.length()`, or a
- * `.uuid()` — a fixed-length pattern. **Not `.cuid()`**: Zod 3's cuid pattern
- * is `c` followed by eight or more of anything, and accepted a megabyte. Not
+ * `.uuid()` — a fixed-length pattern. **Not `.cuid()`**: Zod 4's cuid pattern
+ * is `c` followed by six or more lowercase letters and digits, and accepts a
+ * megabyte of them (Zod 3's took eight or more of anything). Not
  * `.regex()` either, which this walk cannot read the length out of; a regex
  * that does bound the length states the bound as well.
  *
@@ -41,103 +42,107 @@ import {
  * `replayable.test.ts`), which is why this is a unit test.
  */
 
-type Def = Record<string, unknown> & { typeName: ZodFirstPartyTypeKind };
+/** What every Zod 4 schema keeps under `_zod.def`, as far as this walk reads it. */
+type Def = Record<string, unknown> & {
+  type: string;
+  format?: string;
+  checks?: { _zod: { def: { check: string; format?: string } } }[];
+};
 
-function defOf(schema: ZodTypeAny): Def {
-  return schema._def as Def;
+function defOf(schema: z.ZodType): Def {
+  return schema._zod.def as unknown as Def;
+}
+
+/** The kinds of check, on a string or an array, that set a maximum. */
+function hasMaximum(def: Def): boolean {
+  return (def.checks ?? []).some(({ _zod: { def: check } }) =>
+    check.check === "max_length" ||
+    check.check === "length_equals" ||
+    (check.check === "string_format" && check.format === "uuid"),
+  );
 }
 
 /** Types that cannot carry an unbounded amount of caller data. */
-const LEAVES = new Set<ZodFirstPartyTypeKind>([
-  ZodFirstPartyTypeKind.ZodNumber,
-  ZodFirstPartyTypeKind.ZodBoolean,
-  ZodFirstPartyTypeKind.ZodDate,
-  ZodFirstPartyTypeKind.ZodEnum,
-  ZodFirstPartyTypeKind.ZodNativeEnum,
-  ZodFirstPartyTypeKind.ZodLiteral,
-  ZodFirstPartyTypeKind.ZodVoid,
-  ZodFirstPartyTypeKind.ZodUndefined,
-  ZodFirstPartyTypeKind.ZodNull,
-]);
+const LEAVES = new Set(["number", "boolean", "date", "enum", "literal", "void", "undefined", "null"]);
 
 /** The paths under `schema` that accept an unbounded string or array. */
-function unboundedPaths(schema: ZodTypeAny, path: string): string[] {
+function unboundedPaths(schema: z.ZodType, path: string): string[] {
   const def = defOf(schema);
 
-  if (LEAVES.has(def.typeName)) return [];
+  if (LEAVES.has(def.type)) return [];
 
-  switch (def.typeName) {
-    case ZodFirstPartyTypeKind.ZodString: {
-      const checks = def.checks as { kind: string }[];
-      const bounded = checks.some(
-        (check) => check.kind === "max" || check.kind === "length" || check.kind === "uuid",
-      );
-      return bounded ? [] : [path];
+  switch (def.type) {
+    case "string":
+      // `z.uuid()` is a string whose own format is the bound; `.max()` and
+      // `.uuid()` on a `z.string()` are checks attached to it.
+      return def.format === "uuid" || hasMaximum(def) ? [] : [path];
+
+    case "array": {
+      const own = hasMaximum(def) ? [] : [path];
+      return [...own, ...unboundedPaths(def.element as z.ZodType, `${path}[]`)];
     }
 
-    case ZodFirstPartyTypeKind.ZodArray: {
-      const own = def.maxLength || def.exactLength ? [] : [path];
-      return [...own, ...unboundedPaths(def.type as ZodTypeAny, `${path}[]`)];
-    }
-
-    case ZodFirstPartyTypeKind.ZodObject: {
-      const shape = (def.shape as () => Record<string, ZodTypeAny>)();
+    case "object": {
+      const shape = def.shape as Record<string, z.ZodType>;
       const fields = Object.entries(shape).flatMap(([key, value]) =>
         unboundedPaths(value, path ? `${path}.${key}` : key),
       );
-      // `.passthrough()` keeps keys nobody declared, and a `.catchall()`
-      // takes them under its own schema: either is a way round every bound
-      // above it.
-      const catchall = def.catchall as ZodTypeAny;
+      // `.passthrough()` keeps keys nobody declared (Zod 4 spells it as a
+      // catchall of `unknown`), and any other `.catchall()` takes them under
+      // its own schema: either is a way round every bound above it. No
+      // catchall strips them, and `never` refuses them.
+      const catchall = def.catchall as z.ZodType | undefined;
+      const catchallType = catchall ? defOf(catchall).type : "never";
       const extra =
-        def.unknownKeys === "passthrough"
+        catchallType === "unknown" || catchallType === "any"
           ? [`${path || "(root)"}.* (passthrough)`]
-          : defOf(catchall).typeName === ZodFirstPartyTypeKind.ZodNever
+          : catchallType === "never"
             ? []
-            : unboundedPaths(catchall, `${path || "(root)"}.*`);
+            : unboundedPaths(catchall as z.ZodType, `${path || "(root)"}.*`);
       return [...fields, ...extra];
     }
 
-    case ZodFirstPartyTypeKind.ZodEffects:
-      return unboundedPaths(def.schema as ZodTypeAny, path);
+    case "optional":
+    case "nullable":
+    case "nonoptional":
+    case "default":
+    case "prefault":
+    case "catch":
+    case "readonly":
+      return unboundedPaths(def.innerType as z.ZodType, path);
 
-    case ZodFirstPartyTypeKind.ZodOptional:
-    case ZodFirstPartyTypeKind.ZodNullable:
-    case ZodFirstPartyTypeKind.ZodDefault:
-    case ZodFirstPartyTypeKind.ZodCatch:
-    case ZodFirstPartyTypeKind.ZodReadonly:
-      return unboundedPaths(def.innerType as ZodTypeAny, path);
+    // A `.transform()` is a pipe into one of these: it is handed what the
+    // schema before it already accepted, never the caller's input.
+    case "transform":
+      return [];
 
-    case ZodFirstPartyTypeKind.ZodBranded:
-      return unboundedPaths(def.type as ZodTypeAny, path);
-
-    case ZodFirstPartyTypeKind.ZodPipeline:
+    case "pipe":
       return [
-        ...unboundedPaths(def.in as ZodTypeAny, path),
-        ...unboundedPaths(def.out as ZodTypeAny, path),
+        ...unboundedPaths(def.in as z.ZodType, path),
+        ...unboundedPaths(def.out as z.ZodType, path),
       ];
 
-    case ZodFirstPartyTypeKind.ZodIntersection:
+    case "intersection":
       return [
-        ...unboundedPaths(def.left as ZodTypeAny, path),
-        ...unboundedPaths(def.right as ZodTypeAny, path),
+        ...unboundedPaths(def.left as z.ZodType, path),
+        ...unboundedPaths(def.right as z.ZodType, path),
       ];
 
-    case ZodFirstPartyTypeKind.ZodUnion:
-    case ZodFirstPartyTypeKind.ZodDiscriminatedUnion:
-      return (def.options as ZodTypeAny[]).flatMap((option) => unboundedPaths(option, path));
+    // A discriminated union is a union with a discriminator in Zod 4.
+    case "union":
+      return (def.options as z.ZodType[]).flatMap((option) => unboundedPaths(option, path));
 
     default:
-      return [`${path || "(root)"} (${def.typeName}: not understood by this walk)`];
+      return [`${path || "(root)"} (${def.type}: not understood by this walk)`];
   }
 }
 
 const procedures = appRouter._def.procedures as unknown as Record<string, AnyProcedure>;
 
-function inputsOf(path: string): ZodTypeAny[] {
+function inputsOf(path: string): z.ZodType[] {
   const procedure = procedures[path];
   expect(procedure, `${path} is not a procedure`).toBeDefined();
-  return (procedure as unknown as { _def: { inputs: ZodTypeAny[] } })._def.inputs;
+  return (procedure as unknown as { _def: { inputs: z.ZodType[] } })._def.inputs;
 }
 
 describe("every procedure's input is bounded", () => {
@@ -183,8 +188,8 @@ describe("the walk itself", () => {
   });
 
   it("refuses to pass a type it does not understand", () => {
-    expect(unboundedPaths(z.object({ blob: z.record(z.string().max(1)) }), "")).toEqual([
-      "blob (ZodRecord: not understood by this walk)",
+    expect(unboundedPaths(z.object({ blob: z.record(z.string(), z.string().max(1)) }), "")).toEqual([
+      "blob (record: not understood by this walk)",
     ]);
   });
 });
@@ -193,7 +198,7 @@ describe("the bounds on inputs declared beside their procedure", () => {
   // The walk proves a maximum exists; these pin what it is, for the fields
   // no shared schema owns.
   const accepts = (path: string, value: unknown) =>
-    (inputsOf(path)[0] as ZodTypeAny).safeParse(value).success;
+    inputsOf(path)[0].safeParse(value).success;
 
   const transfer = {
     productId: "p",

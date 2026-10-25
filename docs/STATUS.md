@@ -397,7 +397,7 @@ On 2026-10-22 `scripts/scan-bundle-images.sh` found `v3.7.14`, then on
 `master`, red with five, and `traefik:v3.7.16` and the rebuilt
 `postgres:16.15-alpine` clean; `master` names those two since.
 
-`bun audit --audit-level moderate` reports no vulnerabilities across 598 packages (2026-10-22, after moving Next.js to 16.4.2; with 16.4.0 it reported two critical advisories and a high one, published that day).
+`bun audit --audit-level moderate` reports no vulnerabilities across 598 packages (2026-10-25, after taking happy-dom 21.0.4, fast-uri 3.1.9 and zod 4; before them it reported two high advisories and two moderate ones, three of them published on 2026-10-23, and zod's had no 3.x fix).
 Trivy 0.69.3 (the CI version), with a fresh 2026-09-25 database, scans the Bun-only
 production image with zero fixable HIGH/CRITICAL findings. The image was exported
 and scanned read-only, without exposing the Docker socket to the scanner.
@@ -526,7 +526,7 @@ binary you happen to be holding.
 | Migration | `bunx --bun prisma migrate deploy` | ✅ all committed migrations on fresh databases; production image also starts against a restored backup (2026-09-25) |
 | Seed | `bun run db:seed` | ✅ idempotent across re-runs |
 | E2E | `bun run test:e2e` | ✅ 194 pass / 0 fail in 3.0 minutes (2026-10-12, security branch head; on the Better Auth branch 202 pass in 3.6 minutes at its 27th commit, and its finished head, with `two-factor.spec.ts` and the `passkeys` project, is measured by the run before its push — *Gate status* above), in `mcr.microsoft.com/playwright:v1.62.1-noble` with Bun 1.4.3 (`scripts/e2e-in-image.sh`) — Chromium, Firefox, WebKit and Mobile Safari from the image, nothing installed on the host. On 2026-10-09 a host `bunx --bun playwright test` reported 21 failures, 20 of them `Executable doesn't exist` |
-| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 598 packages (2026-10-16, Better Auth branch head; 563 at the security branch head, 2026-10-12) |
+| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 598 packages (2026-10-25, after the zod 4 migration; 563 at the security branch head, 2026-10-12) |
 
 **Nothing enforces the installer version any more.** corepack left with pnpm,
 and `setup-bun` pins only the copy CI runs, so on a developer's own machine the
@@ -1288,7 +1288,7 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 | uqr | 0.1.3 — exact; MIT, no dependencies, published 2026-04-03. Draws the two-step verification QR code in the browser (D148); `bun audit` clean with it (575 packages, 2026-10-15) |
 | next-intl | 4.14.0 |
 | tailwindcss | 4.3.3 |
-| zod | 3.25.76 |
+| zod | 4.6.7 — from 3.25.76 on 2026-10-25, for GHSA-mrhx-c7xc-m3w5 (high, memory exhaustion validating a large array), which has no 3.x fix. Zod 4 fills a `.default()` in through `.partial()`, so an update schema restates each defaulted field as plain `.optional()` (`update-schemas.test.ts`) |
 | bun | 1.4.3 — `.bun-version` and the Dockerfile pin (tag and index digest `sha256:629e1741…`); all application image stages use Bun. Released 2026-10-10, taken on 2026-10-12 for its TLS and HTTP fixes |
 | node | No separate runtime installed in application images; upstream compatibility command resolves to Bun (2026-09-25) |
 | sharp | 0.35.5, **devDependency only** — not shipped, not loaded at runtime |
