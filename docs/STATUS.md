@@ -253,6 +253,16 @@ algorithm each turned it red (1 fail, 18 pass across it and
 Bun 1.4.3 with `node` resolving to `/usr/local/bin/bun` and no npm; the full
 production image builds from the tracked files and reports the same, as `bun`.
 
+**2026-10-25 Bun 1.4.4:** `.bun-version` and the Dockerfile's base move
+together from 1.4.3 to 1.4.4 (`oven/bun:1.4.4-alpine`, index digest
+`sha256:4cf82f56…`, released 2026-10-22), for the security fixes its release
+notes list (TLS, HTTP, WebSocket, `bun install`) and for `bun fmt`, its Prettier
+port. A plain `bun install` under 1.4.4 reports "no changes" and leaves
+`bun.lock` at lockfileVersion 2. In the rebuilt development image the unit
+suite passes (1854); on a 1.4.4 host the component (1066) and integration (852)
+suites pass; the production image reports Bun 1.4.4, `node` resolving to
+`/usr/local/bin/bun`, and no npm.
+
 **2026-10-12 Bun 1.4.3:** `.bun-version` and the Dockerfile's base move
 together from 1.4.0 to 1.4.3 (`oven/bun:1.4.3-alpine`, index digest
 `sha256:629e1741…`, built 2026-10-10), for the security section of its release
@@ -782,8 +792,8 @@ cooldown (four medium findings, exit 13) and an unparseable workflow (exit 1,
 which without `--strict-collection` was a skipped file and exit 0). The
 `auditor` persona is not the gate; what it adds is in SECURITY.md, Known gaps.
 
-**Bun is pinned** in `.bun-version` (**1.4.3** since 2026-10-12; 1.4.0 from
-2026-08-26, 1.3.14 before), read by CI through `bun-version-file` where `setup-bun` still runs.
+**Bun is pinned** in `.bun-version` (**1.4.4** since 2026-10-25; 1.4.3 from
+2026-10-12, 1.4.0 from 2026-08-26, 1.3.14 before), read by CI through `bun-version-file` where `setup-bun` still runs.
 The Dockerfile names the same version by tag and by index digest (since
 2026-10-12), so moving the version moves the digest too.
 Unpinned, `setup-bun` resolved to whatever had shipped most recently, so a Bun
@@ -1297,7 +1307,7 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 | next-intl | 4.14.0 |
 | tailwindcss | 4.3.3 |
 | zod | 4.6.7 — from 3.25.76 on 2026-10-25, for GHSA-mrhx-c7xc-m3w5 (high, memory exhaustion validating a large array), which has no 3.x fix. Zod 4 fills a `.default()` in through `.partial()`, so an update schema restates each defaulted field as plain `.optional()` (`update-schemas.test.ts`) |
-| bun | 1.4.3 — `.bun-version` and the Dockerfile pin (tag and index digest `sha256:629e1741…`); all application image stages use Bun. Released 2026-10-10, taken on 2026-10-12 for its TLS and HTTP fixes |
+| bun | 1.4.4 — `.bun-version` and the Dockerfile pin (tag and index digest `sha256:4cf82f56…`); all application image stages use Bun. Released 2026-10-22, taken on 2026-10-25, the first day the three-day `minimumReleaseAge` allows, for its security fixes and `bun fmt` |
 | node | No separate runtime installed in application images; upstream compatibility command resolves to Bun (2026-09-25) |
 | sharp | 0.35.5, **devDependency only** — not shipped, not loaded at runtime |
 | traefik | v3.7.16 — `deploy/docker-compose.yml`, the release bundle's proxy; what `traefik:v3` named on 2026-10-22, and clean under `scripts/scan-bundle-images.sh` that day where v3.7.14 had five HIGH |
