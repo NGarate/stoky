@@ -96,7 +96,7 @@
     "happy-dom": "^21.0.4",
     "oxlint": "^0.16.12",
     "playwright": "^1.62.1",
-    "postcss": "^8.5.25",
+    "postcss": "^8.5.31",
     "react-doctor": "0.9.17",
     "sharp": "^0.35.5",
     "tailwindcss": "^4.3.3",
