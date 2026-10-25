@@ -117,7 +117,6 @@ describe("the dependency overrides", () => {
       "defu",
       "effect",
       "fast-uri",
-      "lodash",
       "nanoid",
     ]);
   });

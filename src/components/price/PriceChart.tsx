@@ -156,7 +156,7 @@ export function PriceChart({
                 />
                 <Tooltip
                   {...CHART_TOOLTIP}
-                  formatter={(value: number, name: string) => [money(value), name]}
+                  formatter={(value, name) => [money(Number(value)), String(name)]}
                   labelFormatter={(label) => label}
                 />
                 {storeNames.map((storeName, index) => (
