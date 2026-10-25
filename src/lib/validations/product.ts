@@ -32,9 +32,13 @@ export const productSchema = z.object({
  * `[barcode, householdId]` unique index: storing an empty string would let the
  * first product without a code claim it and every later one collide, which is
  * the same reasoning the create form applies before submitting.
+ *
+ * `defaultUnit` is restated without its default: Zod 4 fills a default in
+ * through `.partial()`, so every rename would otherwise reset the unit.
  */
 export const updateProductSchema = productSchema.partial().extend({
   id: z.string().max(MAX_ID_LENGTH),
+  defaultUnit: z.string().trim().min(1).max(MAX_UNIT_LENGTH).optional(),
   barcode: z.string().min(1).max(MAX_BARCODE_LENGTH).nullish(),
   brand: z.string().min(1).max(MAX_NAME_LENGTH).nullish(),
   category: z.string().min(1).max(MAX_NAME_LENGTH).nullish(),

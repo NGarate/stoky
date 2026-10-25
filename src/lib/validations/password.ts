@@ -186,7 +186,7 @@ export function isWrongCurrentPasswordRefusal(message: string | undefined): bool
  * (security review, 2026-10-12).
  *
  * Object-level, and the issue is attached to `password` so a form reads it as
- * that field's. Zod 3 still runs an object refinement when a field was only
+ * that field's. Zod 4 still runs an object refinement when a field was only
  * *dirty* (too short, too easy), so a short password that also contains the
  * name reports both at once; it is skipped only when a field is missing or
  * the wrong type, and then there is no name to compare against anyway.
@@ -198,12 +198,8 @@ export function isWrongCurrentPasswordRefusal(message: string | undefined): bool
  * way.
  */
 export function withIdentityRule<
-  T extends z.ZodType<
-    { email: string; name: string; password: string },
-    z.ZodTypeDef,
-    unknown
-  >,
->(schema: T): z.ZodEffects<T> {
+  T extends z.ZodType<{ email: string; name: string; password: string }>,
+>(schema: T): T {
   return schema.superRefine((value, ctx) => {
     const problems = passwordProblems(value.password, {
       email: value.email,
@@ -211,7 +207,7 @@ export function withIdentityRule<
     });
     if (problems.includes("containsIdentity")) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["password"],
         message: PASSWORD_CONTAINS_IDENTITY_MESSAGE,
       });

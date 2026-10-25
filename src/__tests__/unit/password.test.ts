@@ -226,7 +226,7 @@ describe("the identity rule, where a password is set", () => {
       });
 
       it("reports the identity alongside a length problem, not instead of it", () => {
-        // An object refinement in Zod 3 still runs when a field is only
+        // An object refinement in Zod 4 still runs when a field is only
         // dirty, so a short password built from the name says both at once.
         const attempt = parse({
           email: "noel@example.com",
