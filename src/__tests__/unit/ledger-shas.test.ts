@@ -146,13 +146,15 @@ describe("the shas the documents cite", () => {
     }
 
     // `--all` rather than `HEAD`: a sha on any branch or tag survives a clone,
-    // and one that is only in this machine's reflog does not.
-    const reachable = new Set(
-      git(["log", "--format=%h", "--all"]).split("\n").filter(Boolean),
-    );
+    // and one that is only in this machine's reflog does not. Full hashes,
+    // matched by prefix: `%h` grows past the seven characters the documents
+    // cite once the repository is big enough, and then matched none of them.
+    const reachable = git(["log", "--format=%H", "--all"])
+      .split("\n")
+      .filter(Boolean);
 
     const dangling = cited.filter(
-      (sha) => !reachable.has(sha) && !ALLOWED[sha],
+      (sha) => !ALLOWED[sha] && !reachable.some((full) => full.startsWith(sha)),
     );
 
     expect(dangling).toEqual([]);
