@@ -1,21 +1,10 @@
-import {
-  SECRET_VARIABLE,
-  readRenamed,
-  type RenamedValue,
-} from "@/lib/env-names";
-
 /**
  * Refusing to start with a signing key anybody can read.
  *
  * `STOKY_SECRET` signs the session cookie and keys the account tags in the
- * security log. An installation from before the rename may still call it
- * `NEXTAUTH_SECRET`, which is read when `STOKY_SECRET` is not set and warned
- * about once at start-up (`src/lib/env-names.ts`, PROGRESS D137); every
- * message here names the variable the value actually came from, so the
- * operator edits the line that is there. Every reader — this guard,
- * `/api/health`, the account tag and the instance — goes through
- * `configuredSecret`, so they cannot disagree about which name won, nor about
- * what it says: the value comes back trimmed, once, there.
+ * security log. Every reader — this guard, `/api/health`, the account tag and
+ * the instance — goes through `configuredSecret`, so they cannot disagree
+ * about what it says: the value comes back trimmed, once, there.
  *
  * `src/lib/auth/instance.ts` hands the key to Better Auth as both
  * `secret` and the single entry of `secrets`, because left to itself Better
@@ -39,6 +28,9 @@ import {
  * random key per process and says so.
  */
 
+/** The variable that holds the key, as messages name it. */
+export const SECRET_ENV = "STOKY_SECRET";
+
 /** The placeholder in `.env.example`. Kept in one place so both can be checked. */
 export const PLACEHOLDER_SECRET = "your-secret-key-here-change-in-production";
 
@@ -53,8 +45,7 @@ export const PLACEHOLDER_SECRET = "your-secret-key-here-change-in-production";
 export const MIN_SECRET_LENGTH = 32;
 
 /**
- * The signing key as configured, and the variable it came from:
- * `STOKY_SECRET`, else the deprecated `NEXTAUTH_SECRET`. Read at call time.
+ * The signing key as configured in `STOKY_SECRET`. Read at call time.
  *
  * **Trimmed, here and nowhere else.** The instance signs with the trimmed
  * value, because a line in `.env` or a Compose file easily carries a stray
@@ -67,9 +58,8 @@ export const MIN_SECRET_LENGTH = 32;
  */
 export function configuredSecret(
   env: Record<string, string | undefined> = process.env,
-): RenamedValue {
-  const read = readRenamed(env, SECRET_VARIABLE);
-  return { ...read, value: normaliseSecret(read.value) };
+): string | undefined {
+  return normaliseSecret(env[SECRET_ENV]);
 }
 
 /** The one rule for what a configured key says: surrounding whitespace is not part of it. */
@@ -88,7 +78,6 @@ function normaliseSecret(secret: string | undefined): string | undefined {
 export function secretProblem(
   secret: string | undefined,
   nodeEnv: string | undefined,
-  name: string = SECRET_VARIABLE.current,
 ): string | null {
   if (nodeEnv !== "production") return null;
 
@@ -96,15 +85,15 @@ export function secretProblem(
   secret = normaliseSecret(secret);
 
   if (!secret) {
-    return `${name} is not set. Generate one with \`openssl rand -base64 32\` and put it in .env.`;
+    return `${SECRET_ENV} is not set. Generate one with \`openssl rand -base64 32\` and put it in .env.`;
   }
 
   if (secret === PLACEHOLDER_SECRET) {
-    return `${name} is still the example value from .env.example, which is published in this repository — anyone could forge a session. Generate one with \`openssl rand -base64 32\`.`;
+    return `${SECRET_ENV} is still the example value from .env.example, which is published in this repository — anyone could forge a session. Generate one with \`openssl rand -base64 32\`.`;
   }
 
   if (secret.length < MIN_SECRET_LENGTH) {
-    return `${name} is ${secret.length} characters; it needs at least ${MIN_SECRET_LENGTH}. Generate one with \`openssl rand -base64 32\`.`;
+    return `${SECRET_ENV} is ${secret.length} characters; it needs at least ${MIN_SECRET_LENGTH}. Generate one with \`openssl rand -base64 32\`.`;
   }
 
   return null;
@@ -118,10 +107,9 @@ export function secretProblem(
  * key is a problem nobody finds until it is used.
  */
 export function assertUsableSecret(
-  secret: string | undefined = configuredSecret().value,
+  secret: string | undefined = configuredSecret(),
   nodeEnv: string | undefined = process.env.NODE_ENV,
   phase: string | undefined = process.env.NEXT_PHASE,
-  name: string = configuredSecret().name,
 ): void {
   // Not while building. `next build` sets NODE_ENV=production and evaluates
   // every route module to collect page data, so without this the guard fires
@@ -134,6 +122,6 @@ export function assertUsableSecret(
   // which is a worse outage than the one it prevents.
   if (phase === "phase-production-build") return;
 
-  const problem = secretProblem(secret, nodeEnv, name);
+  const problem = secretProblem(secret, nodeEnv);
   if (problem) throw new Error(`[auth] refusing to start: ${problem}`);
 }

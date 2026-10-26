@@ -78,7 +78,7 @@ describe("when a dependency is gone", () => {
     // "healthy" while every route that reads a session failed.
     // Without the read-only `NODE_ENV` of the Next typings.
     const env = process.env as Record<string, string | undefined>;
-    const keys = ["NODE_ENV", "STOKY_SECRET", "NEXTAUTH_SECRET"];
+    const keys = ["NODE_ENV", "STOKY_SECRET"];
     const saved = Object.fromEntries(keys.map((key) => [key, env[key]]));
     const logged = spyOn(console, "error").mockImplementation(() => {});
     /** The variable the logged refusal named, so a case cannot pass on another check. */
@@ -90,24 +90,12 @@ describe("when a dependency is gone", () => {
     try {
       env.NODE_ENV = "production";
       env.STOKY_SECRET = PLACEHOLDER_SECRET;
-      env.NEXTAUTH_SECRET = "";
       let response = await GET();
       expect(response.status).toBe(503);
       // Still nothing about which check failed, in the body.
       expect(await response.json()).toEqual({ status: "degraded" });
       expect(refusal()).toContain("STOKY_SECRET is still the example value");
 
-      // An installation not yet renamed (D137) is judged by the same rule:
-      // the deprecated name is the key it signs with, so it is the key
-      // checked here.
-      logged.mockClear();
-      env.STOKY_SECRET = "";
-      env.NEXTAUTH_SECRET = PLACEHOLDER_SECRET;
-      response = await GET();
-      expect(response.status).toBe(503);
-      expect(refusal()).toContain("NEXTAUTH_SECRET is still the example value");
-
-      // And the new name wins when both are set, as it does at start-up.
       logged.mockClear();
       env.STOKY_SECRET = "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=";
       response = await GET();

@@ -33,12 +33,9 @@ import { publicUrlProblems } from "@/lib/auth/public-url";
  * The variables an option already overrides are **ignored, and said to be**:
  * `BETTER_AUTH_SECRET`, `BETTER_AUTH_SECRETS` and `AUTH_SECRET` (the instance
  * names both `secret` and `secrets`), `BETTER_AUTH_URL` (it names `baseURL`),
- * and next-auth's `AUTH_URL`, which next-auth read ahead of `NEXTAUTH_URL` and
- * nothing reads now. An operator who set one of them believes it does
- * something; a line in the start-up log says it does not. `NEXTAUTH_SECRET`
- * and `NEXTAUTH_URL` are not among them: they are the deprecated names of
- * `STOKY_SECRET` and `STOKY_URLS`, still read when those are unset, and
- * warned about by `src/lib/env-names.ts` (D137, D138).
+ * and next-auth's `AUTH_URL`, which nothing reads now. An operator who set one
+ * of them believes it does something; a line in the start-up log says it does
+ * not.
  *
  * Refused twice, deliberately: at start-up, where the process exits with the
  * reason as its last line (`src/lib/auth/startup.ts`), and again when the

@@ -89,7 +89,6 @@ services:
       VALKEY_URL: redis://cache:6379
       STOKY_URLS: "https://${DOMAIN:?Define DOMAIN en .env sin https ni ruta}"
       STOKY_SECRET: "${STOKY_SECRET:-}"
-      NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:-}" # legacy name, read only when STOKY_SECRET is empty
       STOKY_REGISTRATION: "${STOKY_REGISTRATION:-first-user}"
     volumes:
       - uploads:/app/uploads

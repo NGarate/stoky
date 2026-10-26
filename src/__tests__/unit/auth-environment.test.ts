@@ -194,9 +194,7 @@ describe("at start-up", () => {
       "NODE_ENV",
       "NEXT_RUNTIME",
       "STOKY_SECRET",
-      "NEXTAUTH_SECRET",
       "STOKY_URLS",
-      "NEXTAUTH_URL",
       ...cleared,
       ...Object.keys(overrides),
     ];
@@ -215,9 +213,7 @@ describe("at start-up", () => {
       env.NODE_ENV = "production";
       env.NEXT_RUNTIME = "nodejs";
       env.STOKY_SECRET = REAL;
-      delete env.NEXTAUTH_SECRET;
       env.STOKY_URLS = "https://stoky.example.com";
-      delete env.NEXTAUTH_URL;
       for (const key of cleared) delete env[key];
       Object.assign(env, overrides);
 
@@ -258,12 +254,12 @@ describe("at start-up", () => {
     expect(await start({})).toEqual({ exited: null, errors: [], warnings: [] });
   });
 
-  it("stops production with neither STOKY_URLS nor NEXTAUTH_URL, naming STOKY_URLS", async () => {
+  it("stops production without STOKY_URLS, even with the name it had before the rename", async () => {
     // Before D136, `/api/health` said such an instance was healthy while
     // every sign-in failed.
     const { exited, errors } = await start({
       STOKY_URLS: "",
-      NEXTAUTH_URL: "",
+      NEXTAUTH_URL: "https://stoky.example.com",
     });
     expect(exited).toBe("exit 1");
     expect(errors).toEqual([
@@ -293,18 +289,6 @@ describe("at start-up", () => {
         STOKY_URLS: "https://stoky.example.com, http://localhost:3000",
       }),
     ).toEqual({ exited: null, errors: [], warnings: [] });
-  });
-
-  it("starts on NEXTAUTH_URL alone, and says to rename it exactly once", async () => {
-    const { exited, errors, warnings } = await start({
-      STOKY_URLS: "",
-      NEXTAUTH_URL: "https://stoky.example.com",
-    });
-    expect(exited).toBeNull();
-    expect(errors).toEqual([]);
-    expect(warnings).toEqual([
-      "[config] NEXTAUTH_URL is deprecated; rename it to STOKY_URLS. It is still read for now.",
-    ]);
   });
 
   it("stops when BETTER_AUTH_TRUSTED_ORIGINS is set", async () => {
@@ -346,23 +330,16 @@ describe("at start-up", () => {
   });
 });
 
-describe("the signing key's old name, at start-up", () => {
-  // D137: NEXTAUTH_SECRET is now STOKY_SECRET. An installation that has not
-  // renamed the line keeps its key — a new one would sign everybody out — and
-  // is told so once, by the hook that runs once.
+describe("the signing key, at start-up", () => {
   const env = process.env as Record<string, string | undefined>;
   const REAL = "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=";
 
-  async function startWith(secrets: {
-    STOKY_SECRET?: string;
-    NEXTAUTH_SECRET?: string;
-  }) {
+  async function startWith(secrets: Record<string, string>) {
     const keys = [
       "NODE_ENV",
       "NEXT_RUNTIME",
       "NEXT_PHASE",
       "STOKY_URLS",
-      "NEXTAUTH_URL",
       "STOKY_REGISTRATION",
       "STOKY_SECRET",
       "NEXTAUTH_SECRET",
@@ -383,7 +360,6 @@ describe("the signing key's old name, at start-up", () => {
       env.STOKY_URLS = "https://stoky.example.com";
       for (const key of [
         "NEXT_PHASE",
-        "NEXTAUTH_URL",
         "STOKY_REGISTRATION",
         "STOKY_SECRET",
         "NEXTAUTH_SECRET",
@@ -420,22 +396,17 @@ describe("the signing key's old name, at start-up", () => {
     }
   }
 
-  it("starts on a valid NEXTAUTH_SECRET alone, and says to rename it exactly once", async () => {
-    const { exited, errors, warnings } = await startWith({
-      NEXTAUTH_SECRET: REAL,
+  it("starts on a valid STOKY_SECRET, saying nothing", async () => {
+    expect(await startWith({ STOKY_SECRET: REAL })).toEqual({
+      exited: null,
+      errors: [],
+      warnings: [],
     });
-    expect(exited).toBeNull();
-    expect(errors).toEqual([]);
-    expect(warnings).toEqual([
-      "[config] NEXTAUTH_SECRET is deprecated; rename it to STOKY_SECRET. It is still read for now.",
-    ]);
   });
 
-  it("refuses the example value in STOKY_SECRET, naming STOKY_SECRET", async () => {
+  it("refuses the example value, naming STOKY_SECRET", async () => {
     const { exited, errors } = await startWith({
       STOKY_SECRET: PLACEHOLDER_SECRET,
-      // A good key under the old name does not rescue it: the new name wins.
-      NEXTAUTH_SECRET: REAL,
     });
     expect(exited).toBe("exit 1");
     expect(errors).toEqual([
@@ -445,38 +416,13 @@ describe("the signing key's old name, at start-up", () => {
     ]);
   });
 
-  it("refuses the example value left under the old name, naming the old name", async () => {
-    // The operator edits the line that is there, so the message names it.
-    const { exited, errors } = await startWith({
-      STOKY_SECRET: "",
-      NEXTAUTH_SECRET: PLACEHOLDER_SECRET,
-    });
-    expect(exited).toBe("exit 1");
-    expect(errors).toEqual([
-      expect.stringMatching(
-        /^\[auth\] refusing to start: NEXTAUTH_SECRET is still the example value/,
-      ),
-    ]);
-  });
-
-  it("refuses with neither set, naming the new name", async () => {
-    const { exited, errors } = await startWith({});
+  it("refuses without STOKY_SECRET, whatever the name it had before the rename holds", async () => {
+    const { exited, errors } = await startWith({ NEXTAUTH_SECRET: REAL });
     expect(exited).toBe("exit 1");
     expect(errors).toEqual([
       expect.stringMatching(
         /^\[auth\] refusing to start: STOKY_SECRET is not set/,
       ),
-    ]);
-  });
-
-  it("says the old name is ignored when both are set", async () => {
-    const { exited, warnings } = await startWith({
-      STOKY_SECRET: REAL,
-      NEXTAUTH_SECRET: "an-older-key",
-    });
-    expect(exited).toBeNull();
-    expect(warnings).toEqual([
-      "[config] STOKY_SECRET and NEXTAUTH_SECRET are both set; STOKY_SECRET is used and NEXTAUTH_SECRET is ignored. Remove it.",
     ]);
   });
 });

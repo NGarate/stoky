@@ -723,8 +723,6 @@ describe("a passkey belongs to the first STOKY_URLS address", () => {
       cwd: join(import.meta.dir, "../../.."),
       env: {
         ...base,
-        // Empty rather than absent: Bun loads `.env` for a key that is absent.
-        NEXTAUTH_URL: "",
         DEV_ALLOWED_ORIGIN: "",
         STOKY_URLS: `${testOrigin()}, ${second}`,
         AUTHENTICATOR_UNDER_TEST: JSON.stringify(authenticator.toJSON()),

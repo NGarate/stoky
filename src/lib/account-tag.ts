@@ -34,10 +34,7 @@ import { configuredSecret } from "@/lib/auth/secret";
  * **Rotating `STOKY_SECRET` changes every tag**, so lines written before a
  * rotation no longer match lines written after it. That is the price of a key
  * the operator already has to keep secret; rotation also signs everybody out,
- * so it is not something that happens quietly. Renaming it is not rotating
- * it: an installation still on the deprecated `NEXTAUTH_SECRET` is keyed with
- * that value until the line is renamed, and with the same value after, which
- * is why `deploy/install.sh` renames the key and never generates a new one.
+ * so it is not something that happens quietly.
  */
 
 /** Separates this HMAC from any other use of the same key. */
@@ -47,15 +44,14 @@ export const ACCOUNT_TAG_CONTEXT = "stoky-log-account:";
 export const ACCOUNT_TAG_LENGTH = 16;
 
 /**
- * `secret` defaults to `STOKY_SECRET` (or the deprecated `NEXTAUTH_SECRET`;
- * `configuredSecret`), read at call time. Production refuses
+ * `secret` defaults to `STOKY_SECRET` (`configuredSecret`), read at call time. Production refuses
  * to start without one (`@/lib/auth/secret`); in development and the suites it
  * may be unset, and the tag is then keyed with the empty string — still not
  * the address, just not a secret worth the name.
  */
 export function accountTag(
   email: string,
-  secret: string = configuredSecret().value ?? "",
+  secret: string = configuredSecret() ?? "",
 ): string {
   const normalised = email.trim().toLowerCase();
   return createHmac("sha256", secret)

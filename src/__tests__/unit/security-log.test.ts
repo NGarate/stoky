@@ -162,31 +162,15 @@ describe("the address a sign-in tried", () => {
     expect(accountTag(ADDRESS, other)).not.toBe(accountTag(ADDRESS, SECRET));
   });
 
-  it("is keyed with STOKY_SECRET when no secret is passed, and with the legacy name until it is renamed", () => {
-    // The tag is how an operator greps for one person across a rename, so an
-    // installation still on NEXTAUTH_SECRET must tag with the same value it
-    // will carry once install.sh renames the line (D137).
+  it("is keyed with STOKY_SECRET when no secret is passed", () => {
     const env = process.env as Record<string, string | undefined>;
-    const other =
-      "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
-    const saved = { current: env.STOKY_SECRET, legacy: env.NEXTAUTH_SECRET };
+    const saved = env.STOKY_SECRET;
     try {
       env.STOKY_SECRET = SECRET;
-      env.NEXTAUTH_SECRET = other;
-      expect(accountTag(ADDRESS)).toBe(accountTag(ADDRESS, SECRET));
-
-      // Empty, as Compose passes an unset `${STOKY_SECRET:-}`.
-      env.STOKY_SECRET = "";
-      env.NEXTAUTH_SECRET = SECRET;
       expect(accountTag(ADDRESS)).toBe(accountTag(ADDRESS, SECRET));
     } finally {
-      for (const [key, value] of [
-        ["STOKY_SECRET", saved.current],
-        ["NEXTAUTH_SECRET", saved.legacy],
-      ] as const) {
-        if (value === undefined) delete env[key];
-        else env[key] = value;
-      }
+      if (saved === undefined) delete env.STOKY_SECRET;
+      else env.STOKY_SECRET = saved;
     }
   });
 });

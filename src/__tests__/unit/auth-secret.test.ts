@@ -14,8 +14,7 @@ import { join } from "node:path";
 /**
  * The signing key, and refusing to start without a real one.
  *
- * `STOKY_SECRET` (formerly `NEXTAUTH_SECRET`, still read when it is the only
- * one set; D137) signs the session cookie. Better Auth only warns about a
+ * `STOKY_SECRET` signs the session cookie. Better Auth only warns about a
  * weak one, so until this nothing in the application had ever looked at what
  * it was — while
  * `.env.example` ships a placeholder that is published in this repository. An
@@ -84,44 +83,29 @@ describe("in production", () => {
 });
 
 describe("which variable it names", () => {
-  it("names STOKY_SECRET by default, and the variable the value came from when told", () => {
-    // An installation still on NEXTAUTH_SECRET (D137) must be told to edit
-    // the line it has, not one it does not.
+  it("names STOKY_SECRET, the line the operator edits", () => {
     for (const value of [undefined, PLACEHOLDER_SECRET, "short"]) {
       expect(secretProblem(value, "production")).toStartWith("STOKY_SECRET ");
-      expect(secretProblem(value, "production", "NEXTAUTH_SECRET")).toStartWith(
-        "NEXTAUTH_SECRET ",
-      );
     }
   });
 });
 
 describe("the value every reader is given", () => {
-  it("is trimmed once, whichever name it came from", () => {
+  it("is trimmed once", () => {
     // The guard, `/api/health`, the account tag and the signer all take it
     // from here, so trimming here is what makes them judge one string.
-    expect(configuredSecret({ STOKY_SECRET: `  ${REAL}\n` })).toEqual({
-      value: REAL,
-      name: "STOKY_SECRET",
-      from: "current",
-    });
-    expect(
-      configuredSecret({ STOKY_SECRET: "", NEXTAUTH_SECRET: `\t${REAL} ` }),
-    ).toEqual({
-      value: REAL,
-      name: "NEXTAUTH_SECRET",
-      from: "legacy",
-    });
+    expect(configuredSecret({ STOKY_SECRET: `  ${REAL}\n` })).toBe(REAL);
+    expect(configuredSecret({ STOKY_SECRET: " \t" })).toBeUndefined();
+  });
+
+  it("is not read from the name it had before the STOKY_ rename", () => {
+    expect(configuredSecret({ NEXTAUTH_SECRET: REAL })).toBeUndefined();
   });
 
   it("keys the account tag with the key the sessions are signed with", () => {
     const env = process.env as Record<string, string | undefined>;
-    const saved = {
-      STOKY_SECRET: env.STOKY_SECRET,
-      NEXTAUTH_SECRET: env.NEXTAUTH_SECRET,
-    };
+    const saved = { STOKY_SECRET: env.STOKY_SECRET };
     try {
-      delete env.NEXTAUTH_SECRET;
       env.STOKY_SECRET = `  ${REAL}\n`;
       expect(accountTag("ana@example.com")).toBe(
         accountTag("ana@example.com", REAL),
@@ -171,9 +155,7 @@ describe("when it refuses", () => {
     const keys = [
       "NODE_ENV",
       "STOKY_SECRET",
-      "NEXTAUTH_SECRET",
       "STOKY_URLS",
-      "NEXTAUTH_URL",
       "NEXT_PHASE",
       "NEXT_RUNTIME",
     ];
@@ -183,9 +165,7 @@ describe("when it refuses", () => {
     // Production refuses to start without one (D136); set, so the secret is
     // the only thing these cases change.
     env.STOKY_URLS = "https://stoky.example.com";
-    delete env.NEXTAUTH_URL;
     delete env.NEXT_PHASE;
-    delete env.NEXTAUTH_SECRET;
     if (secret === undefined) delete env.STOKY_SECRET;
     else env.STOKY_SECRET = secret;
     try {
@@ -272,7 +252,7 @@ describe("the key that actually signs sessions", () => {
   function resolvedSecret(env: Record<string, string>) {
     const base: Record<string, string | undefined> = { ...process.env };
     for (const key of Object.keys(base)) {
-      if (/^(STOKY_SECRET|NEXTAUTH_SECRET|AUTH_SECRET|BETTER_AUTH_)/.test(key))
+      if (/^(STOKY_SECRET|AUTH_SECRET|BETTER_AUTH_)/.test(key))
         delete base[key];
     }
     delete base.NEXT_PHASE;
@@ -286,8 +266,6 @@ describe("the key that actually signs sessions", () => {
         ...base,
         NEXT_RUNTIME: "nodejs",
         STOKY_URLS: "https://stoky.example.com",
-        // Empty rather than absent: Bun loads `.env` for a key that is absent.
-        NEXTAUTH_URL: "",
         ...env,
       },
     });
@@ -308,7 +286,6 @@ describe("the key that actually signs sessions", () => {
       resolvedSecret({
         NODE_ENV: "production",
         STOKY_SECRET: REAL,
-        NEXTAUTH_SECRET: "",
         BETTER_AUTH_SECRETS: "1:changeme-changeme-changeme-changeme",
         BETTER_AUTH_SECRET: "changeme",
         AUTH_SECRET: "changeme",
@@ -323,35 +300,10 @@ describe("the key that actually signs sessions", () => {
     ).toBe(REAL);
   });
 
-  it("is STOKY_SECRET when the old name is set beside it, and the old name when it is alone", () => {
-    // D137: the new name wins. An installation not yet renamed signs with the
-    // key it always had, so nobody is signed out by the upgrade.
-    const OTHER = "an-older-key-0123456789abcdef0123456789ab";
-    expect(
-      resolvedSecret({
-        NODE_ENV: "production",
-        STOKY_SECRET: REAL,
-        NEXTAUTH_SECRET: OTHER,
-      }).secret,
-    ).toBe(REAL);
-    // Empty, as Compose passes an unset `${STOKY_SECRET:-}`.
-    expect(
-      resolvedSecret({
-        NODE_ENV: "production",
-        STOKY_SECRET: "",
-        NEXTAUTH_SECRET: OTHER,
-      }).secret,
-    ).toBe(OTHER);
-  });
-
   it("is a key of this process's own outside production, when none is set", () => {
     // Empty rather than absent: Bun fills an absent variable from `.env`, and
     // an empty one is what Compose passes for an unset `${X:-}`.
-    const none = {
-      NODE_ENV: "development",
-      STOKY_SECRET: "",
-      NEXTAUTH_SECRET: "",
-    };
+    const none = { NODE_ENV: "development", STOKY_SECRET: "" };
     const first = resolvedSecret(none);
     const second = resolvedSecret(none);
 

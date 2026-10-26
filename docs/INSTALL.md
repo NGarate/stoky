@@ -181,16 +181,14 @@ Use hex for the database password: it is inserted into a connection URL without
 percent-encoding. Do not reuse the development `.env.example`. Rotating the
 session secret signs everybody out, changes every account tag in the
 security log and makes every authenticator app unreadable (see
-[Rotating `STOKY_SECRET`](#rotating-stoky_secret)). An `.env` from an earlier
-release may still call it `NEXTAUTH_SECRET`. That name is read while
-`STOKY_SECRET` is unset, with a `[config]` warning at start-up, until a later
-release stops reading it: rename the key and keep its value.
+[Rotating `STOKY_SECRET`](#rotating-stoky_secret)). An `.env` from
+v0.1.0-alpha.3 or earlier may still call it `NEXTAUTH_SECRET`, which is no
+longer read: rename the key to `STOKY_SECRET` and keep its value.
 
 The bundle derives `DATABASE_URL`, `VALKEY_URL` and the instance's address
 itself, so you do not edit them; the address is `https://` and `DOMAIN`, the
 one host Traefik routes. Outside the bundle — a source install, or one behind
-your own proxy — set `STOKY_URLS` (formerly
-`NEXTAUTH_URL`) to every address people type, comma-separated, the
+your own proxy — set `STOKY_URLS` to every address people type, comma-separated, the
 canonical one first, for example
 `STOKY_URLS="http://stoky.lan:3000,http://192.168.1.10:3000"`. List only
 addresses that reach this instance: every one is trusted to sign a browser in.
@@ -788,8 +786,7 @@ everybody signing in again, or a migration after which the previous release
 can no longer start against the upgraded database, so that returning to it
 needs the pre-upgrade backup. Those depend on the version you come from, so
 this guide, which describes one release, does not repeat them. The new
-release's `install.sh` adds every missing setting to `.env`, and renames an
-old `NEXTAUTH_SECRET` to `STOKY_SECRET` keeping its value, but only once `example.env` and
+release's `install.sh` adds every missing setting to `.env`, but only once `example.env` and
 `SHA256SUMS` have been replaced along with the Compose and Traefik files:
 against the previous release's copies it stops before it reaches `.env`.
 
@@ -898,7 +895,6 @@ migration again.
 | TLS error / certificate not issued | DNS A/AAAA records, inbound TCP 443, port conflicts and Traefik logs; an incorrect AAAA record can also break issuance |
 | Sign-in unavailable | Valkey must be healthy; authentication rate limiting fails closed |
 | App exits with `[auth] refusing to start:` | The line names the setting to fix — `STOKY_SECRET` unset, the example value or too short; `STOKY_URLS` unset, an entry that is not a bare address, or an https first entry beside plain-HTTP network addresses; `BETTER_AUTH_TRUSTED_ORIGINS` set, or `BETTER_AUTH_TELEMETRY` on. See step 2 |
-| Log says `[config] NEXTAUTH_SECRET is deprecated` or `[config] NEXTAUTH_URL is deprecated` | The `.env` comes from an earlier release: rename the key to `STOKY_SECRET` or `STOKY_URLS`, keeping the value, then `docker compose up -d --wait` |
 | Sign-in refused with 403 `INVALID_ORIGIN` or `MISSING_OR_NULL_ORIGIN` (the form says the service is unavailable; the app's log says `Invalid origin`) | The browser is at an address `STOKY_URLS` does not list, or a proxy strips `Origin`. Add the address people use to `STOKY_URLS` — only one that reaches this instance — or sign in at a listed one. The bundle lists only `https://` and `DOMAIN`, the one host Traefik routes. In development, `DEV_ALLOWED_ORIGIN` hosts are trusted too |
 | People on IPv6, often on mobile data, are told to wait at sign-in | IPv6 clients share the Docker gateway's budget; see [Clients on IPv6](#clients-on-ipv6) |
 | The right password is told to wait for minutes, again and again | The account's shared attempts are being spent; see [Somebody keeps being told to wait](#somebody-keeps-being-told-to-wait) |
