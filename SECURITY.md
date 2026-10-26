@@ -1520,10 +1520,9 @@ Verified against the files named in each row.
   empty. Dependabot's seven-day cooldown is longer than the gate, so a version
   it proposes is already old enough to clear it. `package-overrides.test.ts`
   holds the value, the empty exclusion list and that ordering.
-- **Four packages may run install scripts**: `argon2`, `prisma`,
-  `@prisma/engines` and `@prisma/client` (`trustedDependencies` in
-  `package.json`, which replaces Bun's default allow-list rather than extending
-  it). A trusted script runs at install time with network access and, on a
+- **Three packages may run install scripts**: `argon2`, `prisma` and
+  `@prisma/engines` (`trustedDependencies` in `package.json`, which replaces
+  Bun's default allow-list rather than extending it). A trusted script runs at install time with network access and, on a
   developer machine, the repository's `.env` in its environment: Bun exports
   it to lifecycle scripts, and neither `--no-env-file` nor bunfig `env = false`
   stops that (a probe dependency's `postinstall` printed a value set only in

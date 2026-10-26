@@ -183,8 +183,8 @@ jobs:
           persist-credentials: false
       # The three suites inside the development image, for the reason the
       # quality job states. This is the job where it matters most: these
-      # suites import `@prisma/client`, decode images through `Bun.Image` and
-      # load the native modules the deployed process loads.
+      # suites import the generated Prisma client, decode images through
+      # `Bun.Image` and load the native modules the deployed process loads.
       #
       # Migrations run inside it too, against the empty service database.
       # Applying them to an empty database is itself a test: a migration that
