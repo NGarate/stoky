@@ -37,7 +37,7 @@ describe("routers that hold a replayable procedure", () => {
     });
 
     it(`${file} reaches the database only through ctx.db`, () => {
-      // `@prisma/client` type imports are fine — they carry no client.
+      // Type imports from the generated client are fine — they carry no client.
       const bareUsage = source(file).match(/(?<![.\w])prisma\.\w/g) ?? [];
       expect(bareUsage).toEqual([]);
     });

@@ -1,6 +1,6 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@/generated/prisma/client";
 import { deviceLabel, type DeviceLabel } from "@/lib/auth/device-label";
-import type { LandingScreen } from "@prisma/client";
+import type { LandingScreen } from "@/generated/prisma/client";
 
 /**
  * One account's live sessions, as a screen may show them — what a person

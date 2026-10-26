@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it, spyOn } from "bun:test";
 import { TRPCError } from "@trpc/server";
 import { symmetricDecrypt } from "better-auth/crypto";
-import type { HouseholdRole } from "@prisma/client";
+import type { HouseholdRole } from "@/generated/prisma/client";
 import { POST } from "@/app/api/auth/[...all]/route";
 import { readSession } from "@/lib/auth";
 import { getAuth } from "@/lib/auth/instance";

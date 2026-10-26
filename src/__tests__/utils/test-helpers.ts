@@ -8,7 +8,7 @@ import type {
   Product,
   StockEntry,
   StorageLocation,
-} from "@prisma/client";
+} from "@/generated/prisma/client";
 import type { AppSession } from "@/lib/auth/session";
 
 /**

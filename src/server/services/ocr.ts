@@ -1,6 +1,6 @@
 import { createWorker, type Worker } from "tesseract.js";
 import { prisma } from "@/lib/prisma";
-import { ReceiptStatus } from "@prisma/client";
+import { ReceiptStatus } from "@/generated/prisma/client";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { InvalidInputError, NotFoundError } from "./errors";

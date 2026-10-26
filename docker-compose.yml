@@ -49,6 +49,9 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+      # The Prisma client the image generated, kept over the mounted checkout
+      # as node_modules is (src/__tests__/unit/prisma-client-output.test.ts).
+      - /app/src/generated
       - uploads:/app/uploads
     # Loopback only, like the services in docker-compose.dev.yml. Reaching the
     # dev server from a phone goes through `tailscale serve` (see

@@ -1,7 +1,7 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach } from "bun:test";
 import { screen, cleanup, within } from "@testing-library/react";
-import { ReceiptStatus } from "@prisma/client";
+import { ReceiptStatus } from "@/generated/prisma/client";
 import { renderWithIntl } from "../utils/render";
 import {
   ReceiptStatusBadge,

@@ -8,8 +8,12 @@ import {
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
-import type { PrismaClient, Prisma } from "@prisma/client";
-import { ReceiptStatus, MatchStatus, StockOperation } from "@prisma/client";
+import type { PrismaClient, Prisma } from "@/generated/prisma/client";
+import {
+  ReceiptStatus,
+  MatchStatus,
+  StockOperation,
+} from "@/generated/prisma/client";
 import { randomUUID } from "node:crypto";
 import { processReceiptOcr } from "@/server/services/ocr";
 import {

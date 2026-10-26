@@ -1,5 +1,5 @@
 import { describe, it, expect, spyOn } from "bun:test";
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@/generated/prisma/client";
 import * as recovery from "@/server/services/receipt-recovery";
 
 /**

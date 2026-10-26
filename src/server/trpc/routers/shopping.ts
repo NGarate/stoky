@@ -1,6 +1,6 @@
 import { canonicalCount, unitConversion } from "@/lib/inventory/units";
 import { TRPCError } from "@trpc/server";
-import { type PrismaClient } from "@prisma/client";
+import { type PrismaClient } from "@/generated/prisma/client";
 import { needsMoreOnList } from "@/lib/stock/low-stock";
 import { z } from "zod";
 import { MAX_ID_LENGTH } from "@/lib/validations/bounds";

@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { MAX_ID_LENGTH } from "@/lib/validations/bounds";
 import { createTRPCRouter, adminProcedure, householdProcedure } from "../trpc";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
 import { drawnParents } from "@/lib/inventory/location-tree";
 import {
   storageLocationSchema,

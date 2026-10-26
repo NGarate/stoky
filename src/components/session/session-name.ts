@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import type { LandingScreen } from "@prisma/client";
+import type { LandingScreen } from "@/generated/prisma/browser";
 
 /** What a listed session carries that names it. */
 export interface NamedSession {

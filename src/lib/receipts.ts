@@ -1,4 +1,4 @@
-import { MatchStatus } from "@prisma/client";
+import { MatchStatus } from "@/generated/prisma/browser";
 
 /**
  * Has the reviewer dealt with this line?

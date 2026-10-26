@@ -9,7 +9,7 @@ import {
   NotHouseholdData,
   writeProcedure,
 } from "../trpc";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
 import {
   openFoodFacts,
   type OpenFoodFactsProduct,

@@ -1,4 +1,4 @@
-import type { HouseholdRole, LandingScreen } from "@prisma/client";
+import type { HouseholdRole, LandingScreen } from "@/generated/prisma/browser";
 
 /**
  * Where a person lands, and who decides it (`REDESIGN_PLAN.md` §5.1,

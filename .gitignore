@@ -60,6 +60,9 @@ Thumbs.db
 prisma/migrations/*/migration_lock.toml
 prisma/*.db
 prisma/*.db-journal
+# The Prisma client, written by `prisma generate` (schema.prisma's generator
+# output). Generated per checkout and per image build, never committed.
+src/generated/
 
 # Database
 *.sqlite

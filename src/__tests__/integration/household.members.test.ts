@@ -14,7 +14,7 @@ import { TRPCError } from "@trpc/server";
 import * as argon2 from "argon2";
 import { hashPassword } from "@/lib/auth/password-hash";
 import { createCredentialUser } from "@/lib/auth/credentials";
-import type { HouseholdRole } from "@prisma/client";
+import type { HouseholdRole } from "@/generated/prisma/client";
 import type { AppSession } from "@/lib/auth/session";
 import { isPasswordIdentityRefusal } from "@/lib/validations/password";
 import { retryAfterSeconds } from "@/server/trpc/throttle";

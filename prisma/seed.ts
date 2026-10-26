@@ -19,7 +19,7 @@
  * `NODE_ENV=production` (see `seed-guard.ts`), because the password below is
  * published in the README.
  */
-import type { Prisma, StockOperation } from "@prisma/client";
+import type { Prisma, StockOperation } from "../src/generated/prisma/client";
 import { createPrismaClient } from "../src/lib/prisma";
 import { hashPassword } from "../src/lib/auth/password-hash";
 import { createCredentialUser } from "../src/lib/auth/credentials";

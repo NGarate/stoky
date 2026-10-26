@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { ReceiptStatus, MatchStatus } from "@prisma/client";
+import { ReceiptStatus, MatchStatus } from "@/generated/prisma/client";
 import { NotFoundError } from "./errors";
 
 interface ParsedItem {

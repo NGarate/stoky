@@ -1,4 +1,4 @@
-import { type PrismaClient, ReceiptStatus } from "@prisma/client";
+import { type PrismaClient, ReceiptStatus } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { describeError } from "@/server/log-error";
 

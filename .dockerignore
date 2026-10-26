@@ -13,6 +13,9 @@ pnpm-workspace.yaml
 **/.next
 out
 *.tsbuildinfo
+# The Prisma client: each image stage runs `prisma generate` itself, so a copy
+# generated on the host would only be stale or for another schema.
+src/generated
 
 # Version control
 .git

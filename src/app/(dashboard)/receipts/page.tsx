@@ -11,7 +11,7 @@ import { ItemRow } from "@/components/ui/item-row";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 
-import type { ReceiptStatus } from "@prisma/client";
+import type { ReceiptStatus } from "@/generated/prisma/browser";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
 

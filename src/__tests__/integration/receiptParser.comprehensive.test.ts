@@ -4,7 +4,7 @@ import {
   parseReceiptText,
   saveParsedItems,
 } from "@/server/services/receiptParser";
-import { ReceiptStatus, MatchStatus } from "@prisma/client";
+import { ReceiptStatus, MatchStatus } from "@/generated/prisma/client";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";

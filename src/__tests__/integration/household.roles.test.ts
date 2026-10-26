@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll } from "bun:test";
 import { TRPCError } from "@trpc/server";
-import type { HouseholdRole } from "@prisma/client";
+import type { HouseholdRole } from "@/generated/prisma/client";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";

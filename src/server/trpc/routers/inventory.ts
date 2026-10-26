@@ -35,7 +35,11 @@ import type {
   StockSort,
 } from "@/lib/validations/inventory";
 // The value namespace, not only the type: `Prisma.sql` is a function.
-import { Prisma, type PrismaClient, type StockOperation } from "@prisma/client";
+import {
+  Prisma,
+  type PrismaClient,
+  type StockOperation,
+} from "@/generated/prisma/client";
 
 /** Half-open bounds on an expiry date, in the shape Prisma words them. */
 interface ExpiryWindow {

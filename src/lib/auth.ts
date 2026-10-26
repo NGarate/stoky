@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { headers } from "next/headers";
 import { connection } from "next/server";
-import type { HouseholdRole } from "@prisma/client";
+import type { HouseholdRole } from "@/generated/prisma/browser";
 import { assertUsableSecret } from "@/lib/auth/secret";
 import { getAuth } from "@/lib/auth/instance";
 import type { AppSession } from "@/lib/auth/session";

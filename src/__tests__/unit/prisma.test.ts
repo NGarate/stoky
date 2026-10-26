@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { $Enums } from "@prisma/client";
+import { $Enums } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 describe("Prisma Client", () => {

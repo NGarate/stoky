@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { TRPCError } from "@trpc/server";
-import { Prisma, type PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 
 /**
  * Applying a queued mutation once, however many times it arrives.

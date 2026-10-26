@@ -1,4 +1,9 @@
-import type { HouseholdRole, Prisma, PrismaClient, User } from "@prisma/client";
+import type {
+  HouseholdRole,
+  Prisma,
+  PrismaClient,
+  User,
+} from "@/generated/prisma/client";
 import { endSessions } from "./end-sessions";
 
 /**
