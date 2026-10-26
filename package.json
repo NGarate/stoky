@@ -75,12 +75,12 @@
     "tailwind-merge": "^3.6.0",
     "tesseract.js": "^6.0.1",
     "uqr": "0.1.3",
-    "zod": "^3.25.76",
+    "zod": "^4.6.7",
     "zustand": "5.0.14"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
-    "@happy-dom/global-registrator": "^20.11.1",
+    "@happy-dom/global-registrator": "^21.0.4",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/dom": "^10.4.1",
@@ -93,7 +93,7 @@
     "@types/react-dom": "^19.2.4",
     "axe-core": "^4.13.0",
     "babel-plugin-react-compiler": "1.0.0",
-    "happy-dom": "^20.11.1",
+    "happy-dom": "^21.0.4",
     "oxlint": "^0.16.12",
     "playwright": "^1.62.1",
     "postcss": "^8.5.25",

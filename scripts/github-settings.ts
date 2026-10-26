@@ -82,7 +82,7 @@ function dependabotBranches(): string[] {
 
 const MERGE_SETTINGS = {
   allow_merge_commit: false,
-  allow_rebase_merge: false,
+  allow_rebase_merge: true,
   allow_squash_merge: true,
   delete_branch_on_merge: true,
   squash_merge_commit_title: "PR_TITLE",
@@ -457,7 +457,7 @@ const SETTINGS: Setting[] = [
       gh.write("PUT", "actions/permissions/fork-pr-contributor-approval", { approval_policy: "all_external_contributors" }),
   },
   {
-    name: "Squash-only merges",
+    name: "Squash or rebase merges",
     drift: (gh) => {
       const repo = repository(gh);
       return (Object.keys(MERGE_SETTINGS) as (keyof typeof MERGE_SETTINGS)[]).flatMap((key) =>

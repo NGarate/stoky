@@ -4,10 +4,12 @@
  * Not product rules — nobody's flour is checked against these — but the line
  * past which a number is a mistake or an attack rather than an amount:
  *
- * - **Infinity.** Zod 3's `z.number()` accepts it — `.positive()` too — and
+ * - **Infinity.** Zod 3's `z.number()` accepted it — `.positive()` too — and
  *   superjson carries it across the wire intact, so `quantity: Infinity`
  *   passed validation, and a `double precision` column will store it. One
- *   such row and every sum over the ledger is Infinity.
+ *   such row and every sum over the ledger is Infinity. Zod 4's `z.number()`
+ *   refuses it; the schemas still say `.finite()`, which costs nothing and
+ *   does not depend on a library default.
  * - **Unbounded page sizes.** `product.searchByName` interpolates its `limit`
  *   into `LIMIT ${…}`: `-1` was a Postgres error that surfaced as a 500, and a
  *   billion asked the database for every row it had.
@@ -25,8 +27,9 @@
  *   in the 2026-10-12 review, with the repository's own schemas.
  * - **Unbounded ids**, for the same reason one level down: an id is a string a
  *   caller chooses, it is looked up, logged and — in the replay table — stored.
- *   `.cuid()` is not a bound: Zod 3's pattern is `c` and then eight or more of
- *   anything, so a megabyte that starts with `c` is a cuid.
+ *   `.cuid()` is not a bound: Zod 4's pattern is `c` and then six or more
+ *   lowercase letters and digits (Zod 3's took eight or more of anything), so
+ *   a megabyte of them that starts with `c` is a cuid.
  *
  * The numbers are generous on purpose. A tonne in grams is a quantity nobody
  * stocks, and a price of a million is one nobody pays at a supermarket; a

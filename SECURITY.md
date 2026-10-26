@@ -1569,10 +1569,10 @@ Verified against the files named in each row.
   vulnerability reporting, immutable releases, secret scanning and push
   protection, Dependabot alerts and security updates, CodeQL's default setup,
   the Actions allow-list (`.github/selected-actions.json`) with SHA pinning
-  enforced, approval for every external contributor's fork run, squash-only
-  merges, the two `v*` tag rulesets (`.github/rulesets/`) and Dependabot's
-  branches left outside the branch ruleset live on GitHub, where a checkout
-  cannot see them. `bun scripts/github-settings.ts check`
+  enforced, approval for every external contributor's fork run, squash or
+  rebase merges and never a merge commit, the two `v*` tag rulesets
+  (`.github/rulesets/`) and Dependabot's branches left outside the branch
+  ruleset live on GitHub, where a checkout cannot see them. `bun scripts/github-settings.ts check`
   compares each with what it should be, with GET requests only, and exits 1 on
   any difference; `apply` writes what differs. It needs an administrator's `gh`,
   so the owner runs it; CI cannot. Its first run, on 2026-10-12, found 11 of
