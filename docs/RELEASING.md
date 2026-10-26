@@ -1,9 +1,47 @@
 # Publishing a Stoky release
 
-Releases come from `master`; do not create release branches. Work reaches
-`master` by the workflow in `CLAUDE.md` (Git Workflow), including the pull
-requests unattended or semi-attended agent work opens; a release is cut only
-from what has landed there.
+Releases are tagged on `master`. Work reaches `master` by the workflow in
+`CLAUDE.md` (Git Workflow), including the pull requests unattended or
+semi-attended agent work opens; a release is cut only from what has landed
+there. The one branch a release makes is `release/vVERSION`, which carries
+the preparation commit as a pull request for the owner to read and is gone
+once it is merged; no release is maintained on a branch.
+
+## The release, in commands
+
+Every step is started by the owner; none of them runs on its own, and an
+agent never runs `release:prepare`, `release:tag` or `release:publish`. Each
+script stops, changing nothing, at the first precondition that does not
+hold, and says what to do. What each one checks, and why, is the rest of this
+document.
+
+```bash
+bun run release:refresh-images --check       # optional: newer PostgreSQL/Valkey/Traefik of the same major, scanned
+bun run release:prepare prerelease           # or prepatch|preminor|premajor|patch|minor|major|release|vX.Y.Z[-alpha.N]
+#   → opens the pull request "chore: prepare vVERSION" from release/vVERSION;
+#     add --refresh-images to take the newer service images in the same PR
+#   read it, then merge it with a fast-forward (not a squash, below) and push master
+bun run release:tag                          # after master's CI, image included, is green: signed tag, pushed
+#   → the tag's CI run builds, scans, smokes, promotes and drafts the release
+bun run release:verify vVERSION              # the draft's fourteen checks; nothing is published
+bun run release:publish vVERSION             # verifies again, publishes, checks the notes, dispatches rescan.yml
+```
+
+`bun run release:version <bump>` prints the tag a bump would give, without
+changing anything.
+
+**The release pull request is merged with a fast-forward**, from a checkout
+of `master`: `git merge --ff-only origin/release/vVERSION` and a push of
+`master`. A squash would replace every commit the notes' change list links by
+SHA with one new commit, and `release:tag` refuses a `(#N)` squash subject for
+that reason. The repository's squash-only setting governs the merge button,
+not a push.
+
+**Signing.** `release:tag` signs the tag with the owner's SSH key
+(`gpg.format ssh`, `user.signingkey`, `tag.gpgSign` in this checkout's
+`.git/config`; the key is on the account as a signing key), checks it with
+`git verify-tag`, and refuses to tag without it. Run it where that key is
+loaded.
 The first release is `v0.1.0-alpha.1`. Alpha releases are GitHub **prereleases**,
 not stable releases. The repository and the GHCR package are public; the
 attestation and anonymous-pull steps below depend on that (see
@@ -59,7 +97,10 @@ attestation and anonymous-pull steps below depend on that (see
    Valkey and Traefik by exact version and index digest, and between releases
    only a merged Dependabot pull request moves them ([Dependency
    updates](#dependency-updates)), a week behind upstream at best, so a release
-   that skips this can ship stale builds. For each, take the newest release of the same major, which is what
+   that skips this can ship stale builds. `bun run release:refresh-images`
+   does all of this, scan included, and writes nothing if any candidate is
+   red; `release:prepare --refresh-images` commits its result on the release
+   branch. By hand: for each, take the newest release of the same major, which is what
    the floating tag (`postgres:16-alpine`, `valkey/valkey:8-alpine`, `traefik:v3`)
    names that day, and the digest of its multi-platform index, not one
    platform's manifest:
@@ -143,8 +184,14 @@ chosen by `TARGETARCH`.
 
 ## Tag, inspect, publish
 
+`bun run release:tag` does this, after checking that `origin/master`'s head is
+the merged `chore: prepare vVERSION`, that `package.json` there names that
+version, that no such tag exists here or on GitHub, and that master's CI run
+of that commit succeeded with its `Publish image` job. By hand it is:
+
 ```bash
-git tag -a vVERSION -m 'Stoky vVERSION'
+git tag -s vVERSION -m 'Stoky vVERSION'
+git verify-tag vVERSION
 git push origin vVERSION
 ```
 
@@ -199,7 +246,23 @@ does. Verify its provenance with the `gh attestation verify` command in
 this tag's run attested, and the release must not be published. Test the
 published image before treating it as an installation result.
 
-Publish an alpha only after these checks:
+`bun run release:verify vVERSION` runs every check above on the draft and
+prints one line each: the five assets and nothing else, `sha256sum -c`, the
+attestation of each file, one attestation check that must fail (the previous
+tag's `--source-ref`), the Compose file against the tagged source, the image
+digest against the registry, the image's provenance, an anonymous pull, a
+fresh install with the release's own `install.sh`, and the images Compose
+resolves. Every check runs even after one fails; exit 0 is all ok. The one
+exception is the install: `install.sh` is never run unless its own
+attestation verified, because a tampered draft can carry a `SHA256SUMS` that
+agrees with it.
+`--published` re-verifies a release already published.
+
+Publish an alpha only after these checks. `bun run release:publish vVERSION`
+runs `release:verify` first and stops on anything but a clean pass; then it
+sets `--prerelease` for a tag with a suffix and `--latest` only for the
+highest stable version, publishes, runs
+`scripts/check-published-notes.sh`, and dispatches `rescan.yml`. By hand:
 
 ```bash
 gh release edit vVERSION --draft=false --prerelease --latest=false

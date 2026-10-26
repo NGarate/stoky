@@ -29,7 +29,11 @@
 #   bash scripts/scan-bundle-images.sh IMAGE...   # these instead, e.g. candidates before a pin moves
 #
 # Exit status: 0 clean, 1 a fixable CRITICAL or HIGH finding in some image
-# (every image is still scanned), 2 nothing to scan.
+# (every image is still scanned), 2 nothing to scan, or the scanner did not
+# finish (Trivy failed, its database could not be fetched, the image could
+# not be read): then nothing is vouched for, and it is not called a finding.
+# Trivy exits 1 on its own errors, so findings are asked to exit 3 instead;
+# on 2026-10-23 a 404 fetching Trivy's database read as a vulnerability.
 
 set -euo pipefail
 
@@ -69,7 +73,8 @@ for image in "${IMAGES[@]}"; do
 done
 
 # Runs inside the Trivy image, under its BusyBox sh, once per image given as
-# an argument. A red image does not stop the others.
+# an argument. A red image does not stop the others; a scanner failure on any
+# image outranks a finding on another, since it leaves that image unknown.
 # shellcheck disable=SC2016
 SCAN='
 status=0
@@ -78,18 +83,34 @@ for image do
   case "${image%%@*}" in
     postgres:* | */postgres:*)
       trivy image --quiet --image-src remote --severity CRITICAL,HIGH --ignore-unfixed \
-        --exit-code 1 --skip-files usr/local/bin/gosu "$image" || status=1 ;;
+        --exit-code 3 --skip-files usr/local/bin/gosu "$image" ;;
     *)
       trivy image --quiet --image-src remote --severity CRITICAL,HIGH --ignore-unfixed \
-        --exit-code 1 "$image" || status=1 ;;
+        --exit-code 3 "$image" ;;
   esac
+  code=$?
+  if [ "$code" -eq 3 ]; then
+    [ "$status" -eq 2 ] || status=1
+  elif [ "$code" -ne 0 ]; then
+    echo "trivy did not finish scanning $image (exit $code)" >&2
+    status=2
+  fi
 done
 exit "$status"
 '
 
-if docker run --rm --entrypoint /bin/sh "$TRIVY_IMAGE" -c "$SCAN" scan "${IMAGES[@]}"; then
-  echo "Clean: no fixable CRITICAL or HIGH finding in ${#IMAGES[@]} image(s)."
-else
-  echo "Error: a fixable CRITICAL or HIGH finding (above). A release with this bundle would be refused." >&2
-  exit 1
-fi
+set +e
+docker run --rm --entrypoint /bin/sh "$TRIVY_IMAGE" -c "$SCAN" scan "${IMAGES[@]}"
+status=$?
+set -e
+case "$status" in
+  0) echo "Clean: no fixable CRITICAL or HIGH finding in ${#IMAGES[@]} image(s)." ;;
+  1)
+    echo "Error: a fixable CRITICAL or HIGH finding (above). A release with this bundle would be refused." >&2
+    exit 1
+    ;;
+  *)
+    echo "Error: the scanner did not finish (exit $status, above), so nothing is vouched for. Run it again; this is not a finding." >&2
+    exit 2
+    ;;
+esac
