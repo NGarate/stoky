@@ -196,6 +196,14 @@ the limit lets Dependabot's pull requests through (GitHub's documentation does
 not say), which the first Monday run after this answers. Releases published
 before immutable releases was on (v0.1.0-alpha.1 to .4) stay mutable.
 
+**Rebase merges allowed, 2026-10-26.** The owner allowed rebase merges beside
+squash merges, with merge commits still off, so that a branch whose commits
+each stand alone (one dependency version per commit) reaches `master` as those
+commits; `CLAUDE.md` (Git Workflow) says which merge a branch takes. `bun
+scripts/github-settings.ts apply` changed `allow_rebase_merge` and nothing
+else. A `check` straight after it still counted one drift; the next printed
+`NGarate/stoky: in sync.`
+
 **Signed tags, 2026-10-23.** The owner added `~/.ssh/id_ed25519.pub` to the
 GitHub account as an SSH signing key ("stoky tags"), and this working copy's
 `.git/config` signs every annotated tag with it (`gpg.format ssh`,

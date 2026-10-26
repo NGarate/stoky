@@ -200,18 +200,23 @@ lands (a fan-out of subagents, a review-and-fix sweep, a session the owner
 checks only at the end), it works on a branch cut from `master` named
 `<type>/<topic>-<YYYY-MM-DD>` (e.g. `fix/project-review-2026-10-05`), pushes
 it, and opens a pull request. The branch is a review buffer, not a place for
-work to live: it is closed, or **squash-merged into `master` once the owner
-has reviewed and approved it**, and never used for a second, unrelated task.
-On the branch itself a merge commit is fine — bringing `master` or the
-branch a stacked PR sits on into it is a merge, not a rebase and a force
-push over what the owner may already be reading. `master` stays linear
-because the squash is what lands there. If the owner asks for a branch
-explicitly, that settles it.
+work to live: it is closed, or **merged into `master` once the owner has
+reviewed and approved it**, and never used for a second, unrelated task. The
+merge is a **squash** by default. It is a **rebase** when every commit on the
+branch is already a change that stands on its own — one dependency version
+each, say — so that `master` keeps each one revertible alone; a branch
+carrying fix-ups of its own earlier commits is squashed. On a branch that
+will be squashed a merge commit is fine — bringing `master` or the branch a
+stacked PR sits on into it is a merge, not a rebase and a force push over
+what the owner may already be reading. A branch that will be rebased cannot
+carry one, so it takes its base by a rebase instead. `master` stays linear
+because a squash or a rebase is what lands there, never a merge commit. If
+the owner asks for a branch explicitly, that settles it.
 
 Either way, the commit is the reviewable unit — on a branch, the unit the
-owner reviews; on `master`, the squash — and `git revert` is the only undo
-once it reaches `master`. That is what makes the rules below hard, on a
-branch as much as on the trunk:
+owner reviews; on `master`, the squash or each rebased commit — and `git
+revert` is the only undo once it reaches `master`. That is what makes the
+rules below hard, on a branch as much as on the trunk:
 
 - **One commit, one change.** If the subject line needs "and", split it.
 - **It stands on its own.** Checked out in isolation it builds and its gates

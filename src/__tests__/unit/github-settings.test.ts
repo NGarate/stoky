@@ -104,7 +104,7 @@ function inSync(): State {
       status: 200,
       body: {
         allow_merge_commit: false,
-        allow_rebase_merge: false,
+        allow_rebase_merge: true,
         allow_squash_merge: true,
         delete_branch_on_merge: true,
         squash_merge_commit_title: "PR_TITLE",
@@ -383,7 +383,7 @@ describe("scripts/github-settings.ts check", () => {
       "CodeQL default setup",
       "Actions allow-list and SHA pinning",
       "Fork pull request approval",
-      "Squash-only merges",
+      "Squash or rebase merges",
       'Ruleset "Release tags are immutable"',
       'Ruleset "Release tags are created by an admin"',
       "Dependabot can push its branches",
@@ -440,9 +440,9 @@ describe("scripts/github-settings.ts check", () => {
       (s) => (s["actions/permissions/fork-pr-contributor-approval"].body = { approval_policy: "first_time_contributors" }),
     ],
     [
-      "Squash-only merges",
-      "allow_rebase_merge is true",
-      (s) => ((s[""].body as Record<string, unknown>).allow_rebase_merge = true),
+      "Squash or rebase merges",
+      "allow_merge_commit is true",
+      (s) => ((s[""].body as Record<string, unknown>).allow_merge_commit = true),
     ],
     [
       'Ruleset "Release tags are immutable"',
@@ -687,7 +687,7 @@ describe("scripts/github-settings.ts apply", () => {
     });
     expect(body(5)).toEqual({ enabled: true, allowed_actions: "selected", sha_pinning_required: true });
     expect(body(6)).toEqual(selectedActions);
-    expect(body(8)).toMatchObject({ allow_merge_commit: false, allow_rebase_merge: false, delete_branch_on_merge: true });
+    expect(body(8)).toMatchObject({ allow_merge_commit: false, allow_rebase_merge: true, delete_branch_on_merge: true });
     expect(body(9)).toEqual(immutable);
     expect(body(10)).toEqual(creation);
     // Only the conditions, so the owner's rules and bypass stay as they are.

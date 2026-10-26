@@ -246,8 +246,8 @@ never an issue. What follows is how the project itself works.
 Trunk-based: work done with someone reading each change as it lands goes
 directly to `master`, in small focused commits, with no feature branch and no
 pull request. Unattended and semi-attended agent work is the exception: it goes
-on a `<type>/<topic>-<YYYY-MM-DD>` branch with a pull request, squash-merged once
-the owner has reviewed it. [`CLAUDE.md`](CLAUDE.md) (Git Workflow) owns the rule.
+on a `<type>/<topic>-<YYYY-MM-DD>` branch with a pull request, squash- or
+rebase-merged once the owner has reviewed it. [`CLAUDE.md`](CLAUDE.md) (Git Workflow) owns the rule.
 Either way `master` must be green at every commit — check each commit before
 making it, and the whole branch before pushing it.
 
