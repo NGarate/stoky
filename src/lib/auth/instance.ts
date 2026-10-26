@@ -12,7 +12,7 @@ import { assertAuthEnvironment } from "@/lib/auth/environment";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
 import { deviceIdFromHeaders } from "@/lib/auth/known-devices";
 import { canonicalUrl, trustedAuthOrigins } from "@/lib/auth/public-url";
-import { configuredSecret } from "@/lib/auth/secret";
+import { SECRET_ENV, configuredSecret } from "@/lib/auth/secret";
 import { stokyPolicy } from "@/lib/auth/policy-plugin";
 import { passkeyRpHost, passkeyRpOrigin } from "@/lib/auth/passkeys";
 import { generateBackupCodes, storeBackupCodes } from "@/lib/auth/backup-codes";
@@ -71,9 +71,8 @@ import {
 let generatedSecret: string | undefined;
 
 /**
- * The key that signs session cookies: `STOKY_SECRET`, or the deprecated
- * `NEXTAUTH_SECRET` when only that is set (`configuredSecret`, D137) — the
- * same value the start-up guard checked, read through the same rule.
+ * The key that signs session cookies: `STOKY_SECRET` (`configuredSecret`) —
+ * the same value the start-up guard checked, read through the same rule.
  *
  * Outside production, with none set, a random 32-byte key for the life of this
  * process, said once in the log: a restart then signs everybody out, which is
@@ -89,15 +88,15 @@ export function resolveSecret(
   env: Record<string, string | undefined> = process.env,
 ): string {
   // Already trimmed, by the same rule the guard judged it under.
-  const { value, name } = configuredSecret(env);
+  const value = configuredSecret(env);
   if (value) return value;
   if (env.NODE_ENV === "production") {
-    throw new Error(`[auth] unavailable: ${name} is not set.`);
+    throw new Error(`[auth] unavailable: ${SECRET_ENV} is not set.`);
   }
   if (!generatedSecret) {
     generatedSecret = randomBytes(32).toString("base64");
     console.warn(
-      `[auth] warning: ${name} is not set; sessions are signed with a key that lasts until this process stops.`,
+      `[auth] warning: ${SECRET_ENV} is not set; sessions are signed with a key that lasts until this process stops.`,
     );
   }
   return generatedSecret;

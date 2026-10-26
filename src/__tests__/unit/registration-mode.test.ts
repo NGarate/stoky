@@ -202,9 +202,7 @@ describe("refusing to start", () => {
     const keys = [
       "NODE_ENV",
       "STOKY_SECRET",
-      "NEXTAUTH_SECRET",
       "STOKY_URLS",
-      "NEXTAUTH_URL",
       "NEXT_PHASE",
       "NEXT_RUNTIME",
       REGISTRATION_ENV,
@@ -221,11 +219,9 @@ describe("refusing to start", () => {
       env.NEXT_RUNTIME = "nodejs";
       delete env.NEXT_PHASE;
       env.STOKY_SECRET = "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=";
-      delete env.NEXTAUTH_SECRET;
       // Production refuses to start without one (D136), which would be a
       // third line below.
       env.STOKY_URLS = "https://stoky.example.com";
-      delete env.NEXTAUTH_URL;
 
       env[REGISTRATION_ENV] = "Open";
       await expect(register()).rejects.toThrow("exit 1");

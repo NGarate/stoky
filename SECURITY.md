@@ -1185,8 +1185,8 @@ Verified against the files named in each row.
   entry that is not a bare `http(s)` origin — a path, a query, a fragment or
   credentials (PROGRESS D136, `src/lib/auth/environment.ts`). Messages name
   an entry by its position and print only its origin, never the text as
-  written, which may carry a password. The deprecated `NEXTAUTH_URL` is read,
-  as a list of one, when `STOKY_URLS` is unset (D137). An `http://` address for
+  written, which may carry a password. `NEXTAUTH_URL`, its name before the
+  `STOKY_` rename, is not read (D152). An `http://` address for
   another machine — where an operator ends up after publishing the app port
   on a LAN — is allowed, and `src/lib/auth/public-url.ts` logs one
   `[auth] warning:` line at start-up for each. It
@@ -2059,10 +2059,7 @@ written only once the sign-in has completed.
 
   Type the address in lowercase. The command reads the secret as `install.sh`
   writes it, without quotes; a value quoted by hand in `.env` gives a tag that
-  matches nothing. On an installation whose `.env` still says
-  `NEXTAUTH_SECRET` (PROGRESS D137), read that line instead: it is the key in
-  use until it is renamed, and renaming it, value kept, leaves every tag as it
-  was. **Rotating `STOKY_SECRET` changes every
+  matches nothing. **Rotating `STOKY_SECRET` changes every
   tag**, so lines from before a rotation do not match lines from after it.
   Lines written before this change keep the address they were written with
   until the log holding them is removed.
@@ -2152,14 +2149,10 @@ reading it is looking at a container that will not start.
   says so once, so a restart signs everybody out.
 - **Its name is ours.** Until D137 it was `NEXTAUTH_SECRET`, a name a library
   reads on its own, as `AUTH_*` and `BETTER_AUTH_*` are; that is how
-  `AUTH_SECRET` came to win above. An installation not yet renamed keeps
-  working: with `STOKY_SECRET` unset the old name is read, and the start-up
-  log says once `[config] NEXTAUTH_SECRET is deprecated`; with both set
-  `STOKY_SECRET` wins and the log says the other is ignored. An empty value is
-  unset, as Compose passes it. Every refusal names the variable the value came
-  from. `deploy/install.sh` renames the line and keeps the value — a new key
-  would sign everybody out and change every account tag — and the bundle's
-  Compose file passes both names through, so the application, not Compose,
+  `AUTH_SECRET` came to win above. The old name is not read (D152): an
+  `.env` that still has it refuses to start with `STOKY_SECRET is not set`.
+  An empty value is unset, as Compose passes it, and the bundle's Compose
+  file passes `STOKY_SECRET` through, so the application, not Compose,
   refuses an empty one.
 - **Rotating it signs everybody out** and changes every account tag in the
   security log. Better Auth's versioned keys are not used beyond that single
@@ -2759,18 +2752,16 @@ An operator who runs the image any other way should set
 
 ### Secrets
 
-`.env` holds `POSTGRES_PASSWORD` and `STOKY_SECRET` (`NEXTAUTH_SECRET` in an
-`.env` not yet renamed; D137). `STOKY_SECRET` signs sessions, keys the
+`.env` holds `POSTGRES_PASSWORD` and `STOKY_SECRET`. `STOKY_SECRET` signs sessions, keys the
 security log's account tags and encrypts each authenticator's TOTP secret
 (D148). Backup codes are hashes, not encrypted, so it does not reach them
 (D149). Both reach the containers as environment variables:
 
 - the database password in `db`'s environment and inside the app's
   `DATABASE_URL`;
-- `STOKY_SECRET` in the app's environment, beside an empty `NEXTAUTH_SECRET`
-  unless the `.env` still uses the old name. The Compose file passes both
-  through without requiring either; the application refuses to start without
-  a usable one and names the variable.
+- `STOKY_SECRET` in the app's environment. The Compose file passes it
+  through without requiring it; the application refuses to start without a
+  usable one and names the variable.
 
 Measured, `docker inspect` of a container prints its environment. Plain
 `docker compose config` printed both secrets of a filled-in `.env`, while

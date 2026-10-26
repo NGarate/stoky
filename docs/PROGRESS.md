@@ -3501,3 +3501,17 @@ page's offer (the one after) are what make them usable.
   manage passkeys in settings", which also grants `publickey-credentials-get`
   as `(self)` and shows the list, adding, renaming and removal, with the
   reason wherever adding cannot work).
+
+**D152 — The names from before the `STOKY_` rename are no longer read
+(the owner's decision of 2026-10-25: a 0.x release keeps no compatibility).**
+`NEXTAUTH_SECRET` and `NEXTAUTH_URL` (D137, D138) were read when their new
+names were unset, with a `[config]` warning, and `deploy/install.sh` renamed
+the secret's line in place. All of that is gone: `src/lib/env-names.ts`,
+the warnings, the rename in `install.sh`, and the `NEXTAUTH_SECRET` line in
+the bundle's Compose file. An `.env` that still has only the old name refuses
+to start with `STOKY_SECRET is not set` (or `STOKY_URLS is not set` outside
+the bundle), which names the line to write; renaming the key and keeping its
+value keeps every session and account tag. v0.1.0-alpha.4's `install.sh`
+already renamed it, so an installation upgraded through that release has
+nothing to do. The next release's notes must say so under *Cómo actualizar*
+(`docs/RELEASING.md`), since the commit is marked `!`.

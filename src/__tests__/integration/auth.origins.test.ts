@@ -74,9 +74,6 @@ function signInFrom(origins: string[], env: Record<string, string>): Answer[] {
     cwd: join(import.meta.dir, "../../.."),
     env: {
       ...base,
-      // Empty rather than absent: Bun loads `.env` for a key that is absent.
-      NEXTAUTH_URL: "",
-      NEXTAUTH_SECRET: "",
       STOKY_SECRET: CHILD_SECRET,
       DEV_ALLOWED_ORIGIN: "",
       ...env,

@@ -1,13 +1,9 @@
-import { URLS_VARIABLE, readRenamed } from "@/lib/env-names";
-
 /**
  * The addresses this instance is reached at, what they decide, and saying so
  * at start-up when they are missing, malformed or plain HTTP (PROGRESS D138).
  *
  * `STOKY_URLS` is a comma-separated list of the URLs people type to reach this
- * instance. `NEXTAUTH_URL`, its name before the `STOKY_` rename, is still read
- * when it is unset, as a list of one (`src/lib/env-names.ts`, D137). Better
- * Auth is built from the list once, when the instance is built
+ * instance. Better Auth is built from the list once, when the instance is built
  * (`src/lib/auth/instance.ts`) — never from a request's `Host` or
  * `X-Forwarded-Proto`:
  *
@@ -80,16 +76,8 @@ export type PublicUrlEntry =
   /** http to anywhere else: cleartext on the network. */
   | { kind: "insecure-http"; origin: string };
 
-/** The list as configured, and the variable it was read from. */
-export interface PublicUrls {
-  /**
-   * `STOKY_URLS`, or `NEXTAUTH_URL` when only that is set — the line an
-   * operator should edit. `STOKY_URLS` when neither is.
-   */
-  variable: string;
-  /** Each comma-separated entry, trimmed. None when the variable is unset. */
-  entries: string[];
-}
+/** The variable that lists the addresses, as messages name it. */
+export const URLS_ENV = "STOKY_URLS";
 
 /**
  * Where Better Auth is told it lives when nothing says otherwise: `bun run
@@ -113,14 +101,11 @@ function isLoopbackHostname(hostname: string): boolean {
   );
 }
 
-/** The entries of `STOKY_URLS`, or of `NEXTAUTH_URL` when only that is set. */
-export function parsePublicUrls(env: Env): PublicUrls {
-  const { value, name } = readRenamed(env, URLS_VARIABLE);
-  if (value === undefined) return { variable: name, entries: [] };
-  return {
-    variable: name,
-    entries: value.split(",").map((entry) => entry.trim()),
-  };
+/** Each comma-separated entry of `STOKY_URLS`, trimmed. None when it is unset or blank. */
+export function parsePublicUrls(env: Env): string[] {
+  const value = env[URLS_ENV];
+  if (value === undefined || value.trim() === "") return [];
+  return value.split(",").map((entry) => entry.trim());
 }
 
 /** What one entry is. */
@@ -156,7 +141,7 @@ export function classifyUrl(raw: string): PublicUrlEntry {
 
 /** What each entry is, in order. Empty when the variable is unset. */
 export function classifyPublicUrls(env: Env): PublicUrlEntry[] {
-  return parsePublicUrls(env).entries.map(classifyUrl);
+  return parsePublicUrls(env).map(classifyUrl);
 }
 
 /** The entry's origin, when it has one worth comparing. */
@@ -211,8 +196,8 @@ export interface PublicUrlProblem {
 }
 
 /** How a message names an entry: the variable alone when it holds one. */
-function entryName(variable: string, index: number, count: number): string {
-  return count === 1 ? variable : `${variable} entry ${index + 1}`;
+function entryName(index: number, count: number): string {
+  return count === 1 ? URLS_ENV : `${URLS_ENV} entry ${index + 1}`;
 }
 
 /**
@@ -220,12 +205,12 @@ function entryName(variable: string, index: number, count: number): string {
  * prefix. "Not set" only in production, where nothing is guessed.
  */
 export function publicUrlProblems(env: Env): PublicUrlProblem[] {
-  const { variable, entries } = parsePublicUrls(env);
+  const entries = parsePublicUrls(env);
   if (entries.length === 0) {
     return env.NODE_ENV === "production"
       ? [
           {
-            message: `${variable} is not set. Set it to the https address people use — or every address, comma-separated, the canonical one first. Sign-in is accepted only from those origins, and the session cookie is marked Secure only when the first is https.`,
+            message: `${URLS_ENV} is not set. Set it to the https address people use — or every address, comma-separated, the canonical one first. Sign-in is accepted only from those origins, and the session cookie is marked Secure only when the first is https.`,
             everywhere: false,
           },
         ]
@@ -235,7 +220,7 @@ export function publicUrlProblems(env: Env): PublicUrlProblem[] {
   const problems: PublicUrlProblem[] = [];
   const classified = entries.map(classifyUrl);
   classified.forEach((entry, index) => {
-    const name = entryName(variable, index, entries.length);
+    const name = entryName(index, entries.length);
     const everywhere = index === 0;
     switch (entry.kind) {
       case "empty":
@@ -269,7 +254,7 @@ export function publicUrlProblems(env: Env): PublicUrlProblem[] {
     for (const entry of classified) {
       if (entry.kind !== "insecure-http") continue;
       problems.push({
-        message: `${variable} starts with an https address but also lists ${entry.origin}, plain HTTP to another machine. The session cookie is marked Secure because of the first entry, and a browser drops a Secure cookie over plain HTTP, so signing in there would loop back to the login page. Serve that address over https too, or remove it.`,
+        message: `${URLS_ENV} starts with an https address but also lists ${entry.origin}, plain HTTP to another machine. The session cookie is marked Secure because of the first entry, and a browser drops a Secure cookie over plain HTTP, so signing in there would loop back to the login page. Serve that address over https too, or remove it.`,
         everywhere: false,
       });
     }
@@ -278,8 +263,7 @@ export function publicUrlProblems(env: Env): PublicUrlProblem[] {
 }
 
 /** Where to go instead, shared by the warnings about transport. */
-const TLS_ROUTE = (variable: string) =>
-  `Put TLS in front — the release bundle, your own proxy setting X-Forwarded-For, or \`tailscale serve\` — and list that https address in ${variable}.`;
+const TLS_ROUTE = `Put TLS in front — the release bundle, your own proxy setting X-Forwarded-For, or \`tailscale serve\` — and list that https address in ${URLS_ENV}.`;
 
 /**
  * The warnings for this configuration, in words an operator can act on, one
@@ -293,14 +277,14 @@ const TLS_ROUTE = (variable: string) =>
 export function publicUrlWarnings(env: Env): string[] {
   if (env.NODE_ENV !== "production") return [];
 
-  const { variable, entries } = parsePublicUrls(env);
+  const entries = parsePublicUrls(env);
   const classified = entries.map(classifyUrl);
   const warnings: string[] = [];
   classified.forEach((entry, index) => {
     if (entry.kind !== "insecure-http") return;
-    const name = entryName(variable, index, entries.length);
+    const name = entryName(index, entries.length);
     warnings.push(
-      `[auth] warning: ${name} is ${entry.origin}, plain HTTP to an address that is not this machine. The session cookie is not marked Secure, and everyone who signs in at that address sends their password and session cookie across the network in cleartext. Browsers also treat a page there as insecure, so the barcode camera and offline support are unavailable. ${TLS_ROUTE(variable)}`,
+      `[auth] warning: ${name} is ${entry.origin}, plain HTTP to an address that is not this machine. The session cookie is not marked Secure, and everyone who signs in at that address sends their password and session cookie across the network in cleartext. Browsers also treat a page there as insecure, so the barcode camera and offline support are unavailable. ${TLS_ROUTE}`,
     );
   });
 
@@ -310,7 +294,7 @@ export function publicUrlWarnings(env: Env): string[] {
     for (const entry of classified.slice(1)) {
       if (entry.kind !== "https") continue;
       warnings.push(
-        `[auth] warning: ${variable} lists ${entry.origin}, but its first entry is not https, and only the first decides whether the session cookie is marked Secure: it is not, at that address either. List the https address first, and only https addresses beside it.`,
+        `[auth] warning: ${URLS_ENV} lists ${entry.origin}, but its first entry is not https, and only the first decides whether the session cookie is marked Secure: it is not, at that address either. List the https address first, and only https addresses beside it.`,
       );
     }
   }

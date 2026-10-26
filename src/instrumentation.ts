@@ -33,10 +33,7 @@
  * and does not stop it: plain-http LAN installs work on purpose (D84), but
  * nobody running one should learn from a packet capture that passwords cross
  * their network in cleartext (`src/lib/auth/public-url.ts`). Nor does a
- * variable that is set and ignored, which is named in a warning of its own,
- * nor one still set under its name from before the `STOKY_` rename — the
- * deprecated `NEXTAUTH_SECRET` and `NEXTAUTH_URL` are read, and said to be,
- * once, here (`src/lib/env-names.ts`, D137, D138).
+ * variable that is set and ignored, which is named in a warning of its own.
  *
  * It also fails the receipts a previous process left half-read, in
  * development as well as production; see

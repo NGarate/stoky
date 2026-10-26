@@ -1531,8 +1531,8 @@ None blocks the merge.
   gone): the line passes the value through so the legacy name and its
   warning work, and the app refuses an empty secret at start-up instead.
   Acceptable?
-- **Which release stops reading `NEXTAUTH_SECRET` and `NEXTAUTH_URL`.** The
-  documents say "a later release", without a date.
+- **Which release stops reading `NEXTAUTH_SECRET` and `NEXTAUTH_URL`.**
+  Answered 2026-10-25: the one after v0.1.0-alpha.4 (PROGRESS D152).
 - **Should removing a member's two-step verification also remove their
   passkeys?** It does not (D150, D151): they are another way in, with their
   own removal.

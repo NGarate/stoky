@@ -297,10 +297,9 @@ These are the steps the browser suite runs (`playwright.config.ts`,
 `"next start" does not work with "output: standalone"` and serves `.next/`
 rather than the bundle the image ships, so it can hide a tracing defect.
 `STOKY_SECRET` must not be the example value, because production refuses to
-start on it. An `.env` copied before the rename still says `NEXTAUTH_SECRET`;
-that is read, with a `[config] … is deprecated` line at start-up, until the key
-is renamed (PROGRESS D137); so does `NEXTAUTH_URL`, read as the only
-`STOKY_URLS` entry (D138). Served through row 2, with the LAN address listed in
+start on it. An `.env` copied before the rename still says `NEXTAUTH_SECRET`
+and `NEXTAUTH_URL`; neither is read any more (PROGRESS D152), so rename them to
+`STOKY_SECRET` and `STOKY_URLS`. Served through row 2, with the LAN address listed in
 `STOKY_URLS`, it starts with an `[auth] warning:` line saying that address is
 plain HTTP to another machine; that is the truth about row 2, not a fault
 (`SECURITY.md`, *Authentication*).

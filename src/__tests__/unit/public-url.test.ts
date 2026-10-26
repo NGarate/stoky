@@ -10,7 +10,6 @@ import {
   trustedAuthOrigins,
 } from "@/lib/auth/public-url";
 import { warnAboutRiskyConfiguration } from "@/lib/auth/startup";
-import { renamedVariableWarnings } from "@/lib/env-names";
 
 /**
  * The addresses the instance is reached at (PROGRESS D138), and saying so at
@@ -115,10 +114,7 @@ describe("the list", () => {
       parsePublicUrls({
         STOKY_URLS: "  https://a.example ,http://b.lan:3000  ",
       }),
-    ).toEqual({
-      variable: "STOKY_URLS",
-      entries: ["https://a.example", "http://b.lan:3000"],
-    });
+    ).toEqual(["https://a.example", "http://b.lan:3000"]);
   });
 
   it("names the empty entry a trailing comma leaves", () => {
@@ -130,33 +126,16 @@ describe("the list", () => {
     ]);
   });
 
-  it("reads NEXTAUTH_URL alone as a list of one, and says to rename it", () => {
-    const env = { NEXTAUTH_URL: "https://legacy.example" };
-    expect(parsePublicUrls(env)).toEqual({
-      variable: "NEXTAUTH_URL",
-      entries: ["https://legacy.example"],
-    });
-    expect(canonicalUrl(env)).toBe("https://legacy.example");
-    expect(renamedVariableWarnings(env)).toEqual([
-      "[config] NEXTAUTH_URL is deprecated; rename it to STOKY_URLS. It is still read for now.",
-    ]);
+  it("is not read from the name it had before the STOKY_ rename", () => {
+    expect(parsePublicUrls({ NEXTAUTH_URL: "https://old.example" })).toEqual(
+      [],
+    );
+    expect(
+      canonicalUrl(production({ NEXTAUTH_URL: "https://old.example" })),
+    ).toBeNull();
   });
 
-  it("prefers STOKY_URLS when both are set", () => {
-    const env = {
-      STOKY_URLS: "https://new.example",
-      NEXTAUTH_URL: "https://old.example",
-    };
-    expect(canonicalUrl(env)).toBe("https://new.example");
-    expect(trustedAuthOrigins(production(env))).toEqual([
-      "https://new.example",
-    ]);
-    expect(renamedVariableWarnings(env)).toEqual([
-      "[config] STOKY_URLS and NEXTAUTH_URL are both set; STOKY_URLS is used and NEXTAUTH_URL is ignored. Remove it.",
-    ]);
-  });
-
-  it("reads nothing but its own two names", () => {
+  it("reads nothing but its own name", () => {
     // next-auth read `AUTH_URL ?? NEXTAUTH_URL`, Better Auth reads
     // BETTER_AUTH_URL. Neither may decide the cookie or the origins.
     const env = {
@@ -260,13 +239,13 @@ describe("what production refuses", () => {
     ).toEqual([]);
   });
 
-  it("names the variable the list came from", () => {
+  it("names the variable to edit", () => {
     expect(messages(production({}))).toEqual([
       expect.stringMatching(/^STOKY_URLS is not set/),
     ]);
-    expect(messages(production({ NEXTAUTH_URL: "stoky.example.com" }))).toEqual(
-      [expect.stringMatching(/^NEXTAUTH_URL is not a URL/)],
-    );
+    expect(messages(production({ STOKY_URLS: "stoky.example.com" }))).toEqual([
+      expect.stringMatching(/^STOKY_URLS is not a URL/),
+    ]);
     expect(
       messages(production({ STOKY_URLS: "https://a.example/path" })),
     ).toEqual([
@@ -413,8 +392,6 @@ describe("the session cookie", () => {
         NODE_ENV: "production",
         STOKY_SECRET: "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=",
         STOKY_URLS: url,
-        // Empty rather than absent: Bun loads `.env` for a key that is absent.
-        NEXTAUTH_URL: "",
       },
     });
     if (child.exitCode !== 0) throw new Error(child.stderr.toString());
@@ -514,9 +491,7 @@ describe("at start-up", () => {
       "NEXT_RUNTIME",
       "NEXT_PHASE",
       "STOKY_SECRET",
-      "NEXTAUTH_SECRET",
       "STOKY_URLS",
-      "NEXTAUTH_URL",
       "AUTH_URL",
       "STOKY_REGISTRATION",
     ];
@@ -530,9 +505,7 @@ describe("at start-up", () => {
       env.NODE_ENV = "production";
       env.NEXT_RUNTIME = "nodejs";
       env.STOKY_SECRET = "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=";
-      delete env.NEXTAUTH_SECRET;
       env.STOKY_URLS = "http://192.168.1.10:3000";
-      delete env.NEXTAUTH_URL;
       delete env.NEXT_PHASE;
       delete env.AUTH_URL;
       delete env.STOKY_REGISTRATION;

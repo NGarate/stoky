@@ -218,53 +218,15 @@ describe("deploy/install.sh", () => {
     expect(fixture.env().match(/^POSTGRES_PASSWORD=/gm)).toHaveLength(1);
   });
 
-  it("renames an earlier release's NEXTAUTH_SECRET to STOKY_SECRET, keeping its value", () => {
-    // A new secret would sign everybody out and change every account tag in
-    // the security log, so the key is renamed and nothing is generated (D137).
+  it("generates STOKY_SECRET beside the name it had before the rename, and leaves that line alone", () => {
     const fixture = setup();
     writeFileSync(
       join(fixture.install, ".env"),
-      `STOKY_VERSION=${version}\nDOMAIN=stoky.example.com\nPOSTGRES_PASSWORD=pg\nNEXTAUTH_SECRET="kept"\n`,
+      `STOKY_VERSION=${version}\nPOSTGRES_PASSWORD=pg\nNEXTAUTH_SECRET=old-one\n`,
     );
     const result = fixture.run();
     expect(result.exitCode).toBe(0);
-    expect(fixture.value("STOKY_SECRET")).toBe('"kept"');
-    expect(fixture.env()).not.toMatch(/^NEXTAUTH_SECRET=/m);
-    expect(fixture.env().match(/^STOKY_SECRET=/gm)).toHaveLength(1);
-    expect(result.stdout).toContain(
-      "renombrado NEXTAUTH_SECRET → STOKY_SECRET",
-    );
-    expect(result.stdout).not.toContain("generado   STOKY_SECRET");
-    // Idempotent: a second run has nothing left to rename.
-    const renamed = fixture.env();
-    expect(fixture.run().exitCode).toBe(0);
-    expect(fixture.env()).toBe(renamed);
-  });
-
-  it("takes the old secret's place when STOKY_SECRET is there but empty", () => {
-    // What an operator who copied the new example.env's lines in by hand has.
-    const fixture = setup();
-    writeFileSync(
-      join(fixture.install, ".env"),
-      `STOKY_VERSION=${version}\nPOSTGRES_PASSWORD=pg\nSTOKY_SECRET=\nNEXTAUTH_SECRET=kept\n`,
-    );
-    expect(fixture.run().exitCode).toBe(0);
-    expect(fixture.value("STOKY_SECRET")).toBe("kept");
-    expect(fixture.env().match(/^STOKY_SECRET=/gm)).toHaveLength(1);
-    expect(fixture.env()).not.toMatch(/^NEXTAUTH_SECRET=/m);
-  });
-
-  it("leaves both lines alone when both are already set", () => {
-    // Which one is in use is the application's rule (STOKY_SECRET wins, with a
-    // warning); the script does not choose for the operator.
-    const fixture = setup();
-    writeFileSync(
-      join(fixture.install, ".env"),
-      `STOKY_VERSION=${version}\nPOSTGRES_PASSWORD=pg\nSTOKY_SECRET=new-one\nNEXTAUTH_SECRET=old-one\n`,
-    );
-    const result = fixture.run();
-    expect(result.exitCode).toBe(0);
-    expect(fixture.value("STOKY_SECRET")).toBe("new-one");
+    expect(fixture.value("STOKY_SECRET")).toMatch(/^[0-9a-f]{64}$/);
     expect(fixture.value("NEXTAUTH_SECRET")).toBe("old-one");
     expect(result.stdout).not.toContain("renombrado");
   });

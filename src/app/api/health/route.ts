@@ -72,10 +72,10 @@ async function signingKey(): Promise<void> {
   // `assertUsableSecret` makes, for the same reason.
   if (process.env.NEXT_PHASE === "phase-production-build") return;
 
-  // Through the same rename rule as the start-up guard, so a deprecated
-  // `NEXTAUTH_SECRET` is judged here exactly as it is there.
-  const { value, name } = configuredSecret(process.env);
-  const problem = secretProblem(value, process.env.NODE_ENV, name);
+  const problem = secretProblem(
+    configuredSecret(process.env),
+    process.env.NODE_ENV,
+  );
   if (problem) throw new Error(`[auth] ${problem}`);
 }
 

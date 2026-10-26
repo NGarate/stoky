@@ -7,8 +7,7 @@
 # Downloads one release's installation files into the current directory,
 # verifies them against that release's SHA256SUMS, and creates whatever
 # configuration is missing: `.env` from `example.env`, with the two secrets
-# generated. It changes no value that is already set (an earlier release's
-# NEXTAUTH_SECRET is renamed STOKY_SECRET, value kept), and it never starts,
+# generated. It changes no value that is already set, and it never starts,
 # pulls or stops anything — reviewing `.env` and starting Stoky is the
 # operator's step, by design. Running it again is safe.
 #
@@ -117,15 +116,6 @@ fi
 chmod 600 .env
 
 CHANGED=false
-# NEXTAUTH_SECRET is called STOKY_SECRET from this release on. The key is
-# renamed in place and its value kept: a new secret beside the old one would
-# sign everybody out and change every account tag in the security log. An
-# .env that already has a non-empty STOKY_SECRET is left as it is.
-if [ -n "$(env_value NEXTAUTH_SECRET)" ] && [ -z "$(env_value STOKY_SECRET)" ]; then
-  sed -i -e '/^STOKY_SECRET=/d' -e 's/^NEXTAUTH_SECRET=/STOKY_SECRET=/' .env
-  echo "    renombrado NEXTAUTH_SECRET → STOKY_SECRET"
-  CHANGED=true
-fi
 
 # Every setting example.env declares, added if missing; the two secrets
 # generated if missing or empty. A value already set is never changed.
