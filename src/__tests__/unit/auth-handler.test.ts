@@ -7,7 +7,7 @@ import {
   mock,
   spyOn,
 } from "bun:test";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { DEVICE_ID_COOKIE, mintDeviceId } from "@/lib/device";
 import {
   RateLimitUnavailableError,

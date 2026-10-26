@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { describeError } from "@/server/log-error";
 
 /**

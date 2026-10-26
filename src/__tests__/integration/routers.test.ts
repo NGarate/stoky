@@ -15,7 +15,7 @@ import type { AppSession } from "@/lib/auth/session";
 import { TRPCError } from "@trpc/server";
 import { signInWith, freshTestAddress } from "../utils/authorize";
 import { loginRateLimit } from "@/lib/rate-limit";
-import type { HouseholdRole } from "@prisma/client";
+import type { HouseholdRole } from "@/generated/prisma/client";
 
 // Test data tracking for cleanup
 const testData = {

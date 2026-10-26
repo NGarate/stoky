@@ -1,4 +1,4 @@
-import type { HouseholdRole } from "@prisma/client";
+import type { HouseholdRole } from "@/generated/prisma/client";
 import type { DeadlineKind } from "@/lib/auth/session-policy";
 
 /**

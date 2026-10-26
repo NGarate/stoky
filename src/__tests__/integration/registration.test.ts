@@ -7,7 +7,7 @@ import {
   expect,
   it,
 } from "bun:test";
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@/generated/prisma/client";
 import { TRPCError } from "@trpc/server";
 import { join } from "node:path";
 import { createPrismaClient, prisma } from "@/lib/prisma";

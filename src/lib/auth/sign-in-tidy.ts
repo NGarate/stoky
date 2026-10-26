@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { logSecurityEvent } from "@/lib/security-log";
 import { endSessions, type SessionDb } from "@/lib/auth/end-sessions";
 import { MAX_SESSIONS_PER_ACCOUNT } from "@/lib/auth/session-policy";

@@ -15,7 +15,11 @@ import {
   PASSWORD_CONTAINS_IDENTITY_MESSAGE,
   passwordProblems,
 } from "@/lib/validations/password";
-import type { HouseholdRole, PrismaClient, Prisma } from "@prisma/client";
+import type {
+  HouseholdRole,
+  PrismaClient,
+  Prisma,
+} from "@/generated/prisma/client";
 import {
   addMemberSchema,
   endHouseholdSessionsSchema,

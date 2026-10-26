@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { join } from "node:path";
 import { TRPCError } from "@trpc/server";
-import type { HouseholdRole } from "@prisma/client";
+import type { HouseholdRole } from "@/generated/prisma/client";
 import { GET, POST } from "@/app/api/auth/[...all]/route";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";

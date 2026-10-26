@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { Button } from "@/components/ui/button";
 import { chooseScreen } from "@/lib/landing/choose";
-import type { LandingScreen } from "@prisma/client";
+import type { LandingScreen } from "@/generated/prisma/browser";
 import type { JSX } from "react";
 
 /**

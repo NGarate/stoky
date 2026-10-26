@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 // The URL is not here: Prisma 7 reads it for Migrate from prisma.config.ts,

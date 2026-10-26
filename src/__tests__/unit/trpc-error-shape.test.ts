@@ -1,7 +1,7 @@
 import { describe, it, expect, spyOn, afterEach } from "bun:test";
 import { TRPCError } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import {
   INTERNAL_ERROR_MESSAGE,
   createTRPCContext,

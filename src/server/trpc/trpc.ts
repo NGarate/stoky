@@ -2,7 +2,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { cache } from "react";
 import superjson from "superjson";
 import type { AppSession } from "@/lib/auth/session";
-import type { HouseholdRole, PrismaClient } from "@prisma/client";
+import type { HouseholdRole, PrismaClient } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { translatePrismaError, underlying } from "./prisma-errors";
 import { translateServiceError } from "./service-errors";

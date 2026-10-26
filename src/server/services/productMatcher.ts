@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { MatchStatus, ReceiptStatus } from "@prisma/client";
+import { MatchStatus, ReceiptStatus } from "@/generated/prisma/client";
 import { NotFoundError } from "./errors";
 
 interface ProductMatch {

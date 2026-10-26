@@ -23,7 +23,7 @@ import { MemberSessionsDialog } from "@/components/household/MemberSessionsDialo
 import { RemoveMemberTwoFactorDialog } from "@/components/household/RemoveMemberTwoFactorDialog";
 import { EndHouseholdSessions } from "@/components/household/EndHouseholdSessions";
 import { Section } from "@/components/ui/section";
-import type { HouseholdRole } from "@prisma/client";
+import type { HouseholdRole } from "@/generated/prisma/browser";
 import type { FormEvent, JSX } from "react";
 
 /**

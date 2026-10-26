@@ -11,6 +11,9 @@
 # The checkout is mounted over the image's copy of it, and `node_modules` is
 # not: an anonymous volume keeps the image's own tree, which is the point —
 # those are the native modules production loads, built for this platform.
+# `src/generated` is kept the same way: the Prisma client the image's own
+# `prisma generate` wrote, which a CI checkout does not have (it is ignored)
+# and which generating here would write into the checkout as root.
 #
 # The mount is not a convenience. `.dockerignore` excludes `.git` and
 # `.gitignore`, so inside the bare image oxlint has no ignore file to honour
@@ -99,6 +102,7 @@ docker run --rm \
   --network "$CI_NETWORK" \
   --volume "$PWD:/app" \
   --volume /app/node_modules \
+  --volume /app/src/generated \
   --env "DATABASE_URL=${DATABASE_URL:-}" \
   --env "VALKEY_URL=${VALKEY_URL:-}" \
   --env "CHANGED_BASE=${CHANGED_BASE:-}" \

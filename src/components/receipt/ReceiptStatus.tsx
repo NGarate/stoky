@@ -1,6 +1,6 @@
 "use client";
 
-import { ReceiptStatus } from "@prisma/client";
+import { ReceiptStatus } from "@/generated/prisma/browser";
 import { useTranslations } from "next-intl";
 import { Loader2, CheckCircle, AlertCircle, Check } from "lucide-react";
 
