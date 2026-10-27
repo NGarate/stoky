@@ -51,11 +51,25 @@ function isOwnCache(name) {
 const SHELL_ROUTES = new Set([
   "/",
   "/dashboard",
+  "/kitchen",
   "/inventory",
   "/shopping",
   "/products",
   "/offline",
 ]);
+
+/**
+ * Where `/` sends a device that has no signal, in order.
+ *
+ * `/` is where the installed app starts (`manifest.ts`), and it only ever
+ * redirects to the screen this device chose — and a redirect is never kept.
+ * So `/` always missed, and the app opened on `/offline` with the screens'
+ * reads sitting in the cache. The kitchen first: a KITCHEN account lands
+ * there, and that wall tablet is the device most likely to reload in an
+ * outage. A redirect rather than that screen's document served as `/`: the
+ * client router would read the wrong route from the address bar.
+ */
+const LANDING_FALLBACKS = ["/kitchen", "/shopping", "/dashboard"];
 
 /** How long to wait for the network on a navigation before serving the shell. */
 const NAVIGATION_TIMEOUT_MS = 2500;
@@ -152,6 +166,17 @@ async function navigateWithFallback(request, cacheName) {
 
   const cached = await self.caches.match(request);
   if (cached) return cached;
+
+  if (new URL(request.url).pathname === "/") {
+    for (const landing of LANDING_FALLBACKS) {
+      if (await self.caches.match(landing)) {
+        return self.Response.redirect(
+          new URL(landing, self.location.origin).href,
+          302,
+        );
+      }
+    }
+  }
 
   const offline = await self.caches.match(OFFLINE_URL);
   if (offline) return offline;

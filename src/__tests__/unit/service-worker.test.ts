@@ -285,6 +285,41 @@ describe("giving up on the network", () => {
     expect(await response.text()).toBe("no connection");
   });
 
+  it("sends the app's start, which only ever redirects, to a screen it kept", async () => {
+    const harness = load({
+      fetchNeverSettles: true,
+      cache: {
+        "/dashboard": "the dashboard",
+        "/kitchen": "the kitchen",
+        "/offline": "no connection",
+      },
+    });
+
+    const response = await navigate(harness, "/");
+
+    // The kitchen tablet, reloaded in an outage, opened on /offline with its
+    // reads sitting in the cache.
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://stoky.example/kitchen",
+    );
+  });
+
+  it("keeps the kitchen when it is opened", () => {
+    expect(SOURCE).toMatch(/SHELL_ROUTES = new Set\(\[[^\]]*"\/kitchen"/);
+  });
+
+  it("still says it is offline when it kept no screen to start on", async () => {
+    const harness = load({
+      fetchNeverSettles: true,
+      cache: { "/offline": "no connection" },
+    });
+
+    const response = await navigate(harness, "/");
+
+    expect(await response.text()).toBe("no connection");
+  });
+
   it("does not wait at all when the network answers", async () => {
     // The other half: a timeout that fires early would serve stale pages to
     // somebody with a perfectly good connection.
