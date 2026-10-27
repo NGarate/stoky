@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { useSnackbar } from "@/components/ui/snackbar";
-import { api } from "@/components/providers/TRPCProvider";
+import { api } from "@/lib/trpc/client";
 import type { JSX } from "react";
 
 /**

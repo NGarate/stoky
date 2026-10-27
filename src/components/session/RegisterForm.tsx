@@ -7,7 +7,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
-import { api } from "@/components/providers/TRPCProvider";
+import { api } from "@/lib/trpc/client";
 import { signInWithPassword } from "@/lib/auth/client";
 import { getAuthErrorKey } from "@/lib/auth/error-messages";
 import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";

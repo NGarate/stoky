@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { RouteTitle } from "@/components/ui/route-title";
-import { TRPCProvider } from "@/components/providers/TRPCProvider";
+import { TRPCProvider } from "@/lib/trpc/client";
 import { ServiceWorkerProvider } from "@/components/providers/ServiceWorkerProvider";
 import { THEME_NO_FLASH_SCRIPT } from "@/lib/theme";
 import "./globals.css";

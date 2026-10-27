@@ -112,10 +112,9 @@ mock.module("next/navigation", () => ({
 /**
  * A **complete** mock, both exports, per D50: `mock.module` is process-global,
  * and a partial one turns the missing exports into `undefined` for every other
- * file in the run. Safe to replace here only because nothing else in the suite
- * imports this module — checked, not assumed.
+ * file in the run.
  */
-mock.module("@/components/providers/TRPCProvider", () => ({
+mock.module("@/lib/trpc/client", () => ({
   api: {
     auth: {
       register: {
