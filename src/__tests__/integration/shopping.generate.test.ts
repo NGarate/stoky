@@ -110,13 +110,18 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-async function writeOnManualList(quantity: number, isChecked = false) {
+async function writeOnManualList(
+  quantity: number,
+  isChecked = false,
+  unit?: string,
+) {
   await prisma.shoppingItem.create({
     data: {
       shoppingListId: A.manualListId,
       productId: A.productId,
       quantity,
       isChecked,
+      unit,
     },
   });
 }
@@ -141,6 +146,43 @@ describe("generateFromLowStock", () => {
     // The defect: the product was on somebody's own list, this looked only at
     // its own, and the household was told to buy three litres of milk twice.
     expect(await autoRows()).toHaveLength(0);
+  });
+
+  it("does not count an amount in another unit as covering the minimum", async () => {
+    // Milk is counted in litres; 500 millilitres written down is not 500 L.
+    await writeOnManualList(500, false, "ml");
+
+    const api = await caller();
+    await api.shopping.generateFromLowStock();
+
+    const rows = await autoRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.quantity).toBe(3);
+  });
+
+  it("stores an item added in a convertible unit in the product's", async () => {
+    const product = await prisma.product.create({
+      data: {
+        name: "Huevos",
+        defaultUnit: "unidad",
+        householdId: A.householdId,
+      },
+    });
+    const api = await caller();
+
+    const item = await api.shopping.addItem({
+      idempotencyKey: crypto.randomUUID(),
+      composedByUserId: A.userId,
+      shoppingListId: A.manualListId,
+      productId: product.id,
+      quantity: 3,
+      unit: "uds",
+    });
+
+    // "uds" is the product's unit by another name; stored as typed, it would
+    // not count towards what the lists cover.
+    expect(item.unit).toBe("unidad");
+    expect(item.quantity).toBe(3);
   });
 
   it("counts a ticked row as bought, not as covered", async () => {

@@ -452,6 +452,25 @@ describe("what the household's lists already cover", () => {
     await prisma.shoppingItem.deleteMany({ where: { productId } });
   });
 
+  it("leaves out an amount in a unit the product is not counted in", async () => {
+    const api = await caller();
+    const productId = ids.get("Leche entera")!;
+    await prisma.shoppingItem.createMany({
+      data: [
+        { shoppingListId: listId, productId, quantity: 2, unit: "unidad" },
+        { shoppingListId: listId, productId, quantity: 500, unit: "g" },
+      ],
+    });
+
+    const { products } = await api.inventory.getStockOverview({ limit: 100 });
+    const row = products.find((p) => p.name === "Leche entera");
+
+    // Summed raw, the 500 g read as 500 more of something counted in units.
+    expect(row?.onListQuantity).toBe(2);
+
+    await prisma.shoppingItem.deleteMany({ where: { productId } });
+  });
+
   it("ignores what has already been ticked off", async () => {
     const api = await caller();
     const productId = ids.get("Leche entera")!;

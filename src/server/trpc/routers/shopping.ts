@@ -1,4 +1,8 @@
-import { canonicalCount, unitConversion } from "@/lib/inventory/units";
+import {
+  canonicalCount,
+  isProductUnit,
+  unitConversion,
+} from "@/lib/inventory/units";
 import { TRPCError } from "@trpc/server";
 import { type PrismaClient } from "@/generated/prisma/client";
 import { needsMoreOnList } from "@/lib/stock/low-stock";
@@ -305,6 +309,23 @@ export const shoppingRouter = createTRPCRouter({
       // nothing for the compiler to catch.
       const { idempotencyKey, composedByUserId, ...fields } = input;
 
+      // In the product's unit when it converts, so the item counts towards
+      // what the lists cover (`isProductUnit`); as typed when it does not.
+      const factor =
+        fields.unit === undefined
+          ? undefined
+          : unitConversion(fields.unit, product.defaultUnit);
+      const data =
+        fields.unit === undefined
+          ? fields
+          : factor === undefined
+            ? canonicalCount({ ...fields, unit: fields.unit })
+            : {
+                ...fields,
+                quantity: fields.quantity * factor,
+                unit: product.defaultUnit,
+              };
+
       return withReplay(ctx, {
         key: idempotencyKey,
         composedByUserId,
@@ -312,9 +333,7 @@ export const shoppingRouter = createTRPCRouter({
         input,
         apply: (tx) =>
           tx.shoppingItem.create({
-            data: fields.unit
-              ? canonicalCount({ ...fields, unit: fields.unit })
-              : fields,
+            data,
             include: { product: true },
           }),
         ids: (item) => [item.id],
@@ -505,10 +524,11 @@ export const shoppingRouter = createTRPCRouter({
        * the kitchen's and `getStockOverview`'s — which is exactly what
        * `low-stock.ts` was extracted to stop.
        *
-       * Unticked only: a row already bought covers nothing.
+       * Unticked only: a row already bought covers nothing. In the product's
+       * unit only: "500 g" of a product counted in kg is not 500 of it.
        */
       const onList = await ctx.db.shoppingItem.groupBy({
-        by: ["productId"],
+        by: ["productId", "unit"],
         where: {
           isChecked: false,
           shoppingList: { householdId: ctx.householdId },
@@ -516,9 +536,16 @@ export const shoppingRouter = createTRPCRouter({
         _sum: { quantity: true },
       });
 
-      const alreadyOnList = new Map(
-        onList.map((row) => [row.productId, row._sum.quantity ?? 0]),
-      );
+      const unitOf = new Map(products.map((p) => [p.id, p.defaultUnit]));
+      const alreadyOnList = new Map<string, number>();
+      for (const row of onList) {
+        const unit = unitOf.get(row.productId);
+        if (unit === undefined || !isProductUnit(row.unit, unit)) continue;
+        alreadyOnList.set(
+          row.productId,
+          (alreadyOnList.get(row.productId) ?? 0) + (row._sum.quantity ?? 0),
+        );
+      }
 
       // The same question the kitchen asks before it offers its button, and the
       // same function. It used to write its own `currentStock < (minStock || 0)`,

@@ -54,3 +54,23 @@ export function canonicalProduct<
       }
     : input;
 }
+
+/**
+ * Whether a shopping item's amount is in its product's unit, and so adds to
+ * what the household's lists already cover. No unit means the product's.
+ *
+ * Exact rather than through `unitConversion`, because the stock overview asks
+ * the same question in SQL (`inventory.ts`, `"onList"`) and the two must not
+ * disagree; `shopping.addItem` stores a convertible amount in the product's
+ * unit, so only an unconvertible one — "500 g" of rice counted in kg — is
+ * left out, rather than read as 500 kg.
+ */
+export function isProductUnit(
+  unit: string | null,
+  productUnit: string,
+): boolean {
+  return (
+    unit === null ||
+    unit.trim().toLowerCase() === productUnit.trim().toLowerCase()
+  );
+}

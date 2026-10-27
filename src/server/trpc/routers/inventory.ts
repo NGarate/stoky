@@ -262,9 +262,13 @@ function matchingProducts(
         SUM(item.quantity)::float8 AS quantity
       FROM "ShoppingItem" item
       JOIN "ShoppingList" list ON list.id = item."shoppingListId"
+      JOIN "Product" listed ON listed.id = item."productId"
       WHERE list."householdId" = ${householdId}
         AND item."isChecked" = false
         AND item."productId" IS NOT NULL
+        -- In the product's unit only, as isProductUnit (units.ts) says.
+        AND (item.unit IS NULL
+          OR lower(trim(item.unit)) = lower(trim(listed."defaultUnit")))
       GROUP BY item."productId"
     )
     SELECT
