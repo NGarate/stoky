@@ -3,11 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useComposer } from "./Composer";
-import {
-  forgetPersistedReads,
-  persistOptions,
-  restoreThenRefresh,
-} from "@/lib/offline/persist";
+import { persistOptions, restoreThenRefresh } from "@/lib/offline/persist";
 import type { JSX } from "react";
 
 /**
@@ -59,5 +55,3 @@ export function ReadCache(): JSX.Element | null {
 
   return null;
 }
-
-export { forgetPersistedReads };
