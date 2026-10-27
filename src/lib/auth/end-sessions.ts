@@ -86,6 +86,11 @@ export interface EndSessionsOptions {
  * any `user` condition beside it — whether or not it had a session left. A
  * challenge has no session: Better Auth deletes the one the password step
  * made, so "end Ana's sessions" would otherwise leave Ana's challenge alone.
+ *
+ * Not when the filter names one session by id, though. "End this session"
+ * that finds it already gone ended nothing, and is answered NOT_FOUND; it
+ * must not cancel the account's sign-in in progress on another device as a
+ * side effect.
  */
 async function accountsNamed(
   db: SessionDb,
@@ -94,6 +99,7 @@ async function accountsNamed(
 ): Promise<string[]> {
   const found = new Set<string>();
   for (const { userId } of sessions) found.add(userId);
+  if (typeof where.id === "string") return [...found];
 
   const user: Prisma.UserWhereInput = {};
   if (typeof where.userId === "string") user.id = where.userId;

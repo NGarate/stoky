@@ -116,6 +116,30 @@ describe("endSessions", () => {
         call as { where: { identifier: { in: string[] } } }
       ).where.identifier.in.sort();
 
+    it("leaves the challenges alone when the one session it names was already gone", async () => {
+      // An admin ends a member's session that has just expired: NOT_FOUND,
+      // and the member's half-finished sign-in elsewhere must survive it.
+      const { db, verificationFindMany } = fakeDb(0, {
+        members: ["user-1"],
+        challenges: { "2fa-abc": "user-1" },
+      });
+
+      await endSessions(db, { userId: "user-1", id: "s-gone" });
+
+      expect(verificationFindMany).not.toHaveBeenCalled();
+    });
+
+    it("still ends the challenges with the one session it names", async () => {
+      const { db, verificationFindMany } = fakeDb(1, {
+        owners: ["user-1"],
+        challenges: { "2fa-abc": "user-1" },
+      });
+
+      await endSessions(db, { userId: "user-1", id: "s-1" });
+
+      expect(verificationFindMany).toHaveBeenCalledTimes(1);
+    });
+
     it("deletes the challenges of the account it names, and their attempt counters", async () => {
       const { db, verificationFindMany, verificationDeleteMany } = fakeDb(0, {
         members: ["user-1"],
