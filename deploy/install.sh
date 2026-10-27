@@ -90,10 +90,19 @@ env_has() {
   grep -q "^$1=" .env
 }
 if { [ "$ENV_EXISTS" = false ] || [ -z "$(env_value POSTGRES_PASSWORD)" ]; } \
-   && command -v docker > /dev/null && docker volume inspect "$DATABASE_VOLUME" > /dev/null 2>&1; then
+   && command -v docker > /dev/null; then
   # PostgreSQL keeps the password it was created with. A new one in .env would
   # not reach the database; it would only lock the application out of it.
-  fail "falta POSTGRES_PASSWORD en .env, pero el volumen de la base de datos $DATABASE_VOLUME ya existe. Recupera la contraseña con la que se creó. No se ha cambiado nada."
+  #
+  # Only "no such volume" means there is none. Any other failure — most often
+  # permission denied on Docker's socket, for a user outside the docker group —
+  # says nothing about the volume, and reading it as "absent" wrote a fresh
+  # password over the one the database still holds.
+  if inspect_error=$(docker volume inspect "$DATABASE_VOLUME" 2>&1 > /dev/null); then
+    fail "falta POSTGRES_PASSWORD en .env, pero el volumen de la base de datos $DATABASE_VOLUME ya existe. Recupera la contraseña con la que se creó. No se ha cambiado nada."
+  elif ! printf '%s' "$inspect_error" | grep -qi "no such volume"; then
+    fail "no se puede preguntar a Docker si existe el volumen $DATABASE_VOLUME ($inspect_error). Ejecuta el script con un usuario que pueda usar Docker. No se ha cambiado nada."
+  fi
 fi
 
 for file in "${FILES[@]}" SHA256SUMS; do

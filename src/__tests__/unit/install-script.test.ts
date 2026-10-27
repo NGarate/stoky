@@ -34,7 +34,9 @@ function sha256(path: string) {
 
 // A release served from a directory, built from the repository's own bundle,
 // and an empty installation directory beside it.
-function setup(options: { volumeExists?: boolean } = {}) {
+function setup(
+  options: { volumeExists?: boolean; dockerDenied?: boolean } = {},
+) {
   const fixture = mkdtempSync(join(tmpdir(), "stoky-install-"));
   fixtures.push(fixture);
   const release = join(fixture, "release", version);
@@ -77,7 +79,21 @@ cp "$source" "$output"
   writeFileSync(calls, "");
   writeFileSync(
     join(bin, "docker"),
-    `#!/bin/bash\necho "$*" >> "${calls}"\n[ "$1 $2" = "volume inspect" ] && exit ${options.volumeExists ? 0 : 1}\nexit 0\n`,
+    // Answers `volume inspect` as Docker does: the volume, "no such volume",
+    // or the socket refusing a user outside the docker group.
+    `#!/bin/bash
+echo "$*" >> "${calls}"
+if [ "$1 $2" = "volume inspect" ]; then
+  ${
+    options.dockerDenied
+      ? `echo "permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock" >&2; exit 1`
+      : options.volumeExists
+        ? "echo '[{}]'; exit 0"
+        : `echo "Error response from daemon: get $3: no such volume" >&2; exit 1`
+  }
+fi
+exit 0
+`,
     { mode: 0o755 },
   );
   return {
@@ -276,6 +292,16 @@ describe("deploy/install.sh", () => {
     const result = fixture.run();
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("ya existe");
+    expect(readdirSync(fixture.install)).toEqual([]);
+  });
+
+  it("stops, rather than guessing, when Docker will not say whether the volume exists", () => {
+    // Read as "no volume", a fresh password went into .env over the one the
+    // database was created with, and the application could not connect.
+    const fixture = setup({ dockerDenied: true });
+    const result = fixture.run();
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("no se puede preguntar a Docker");
     expect(readdirSync(fixture.install)).toEqual([]);
   });
 

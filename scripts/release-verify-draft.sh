@@ -48,9 +48,11 @@
 # check FAILed, 2 it could not start (bad arguments, a missing tool, no such
 # release, or a published release without --published).
 #
-# install.sh runs with a `docker` on its PATH that answers nothing: it refuses
+# install.sh runs with a `docker` on its PATH that knows no volume: it refuses
 # to generate a database password when this host already has Stoky's database
 # volume, which is right for an operator and says nothing about the release.
+# It says "no such volume" as Docker does, because install.sh stops on any
+# other failure rather than guess.
 #
 # The tests (src/__tests__/unit/release-verify-draft.test.ts) replace gh,
 # docker and curl with stubs on PATH.
@@ -356,7 +358,8 @@ check_install() {
   for file in "${INSTALL_FILES[@]}"; do
     cp "$DL/$file" "$WORK/base/$TAG/$file"
   done
-  printf '#!/bin/sh\nexit 1\n' > "$WORK/no-docker/docker"
+  printf '#!/bin/sh\necho "Error response from daemon: no such volume" >&2\nexit 1\n' \
+    > "$WORK/no-docker/docker"
   chmod 755 "$WORK/no-docker/docker"
   # No version argument: the release's own DEFAULT_VERSION must name it.
   if ! (cd "$INSTALL_DIR" && PATH="$WORK/no-docker:$PATH" \
