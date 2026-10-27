@@ -92,6 +92,7 @@ async function makeHousehold(label: string, target: typeof A): Promise<void> {
     data: {
       productId: product.id,
       quantity: 6,
+      remaining: 6,
       unit: "L",
       operationType: "PURCHASE",
       locationId: location.id,

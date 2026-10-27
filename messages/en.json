@@ -260,8 +260,7 @@
       "deleteFailed": "It could not be deleted. Try again.",
       "deletedBody": "“{name}” is no longer in the catalogue.",
       "editFields": "Edit the details",
-      "discardChanges": "Discard",
-      "quantityUnknown": "Quantity unconfirmed"
+      "discardChanges": "Discard"
     },
     "scan": {
       "title": "Scan barcode",
@@ -519,8 +518,7 @@
       "quantityValue": "{quantity} {unit}",
       "locationLabel": "Where it is",
       "noLocation": "No location",
-      "more": "{count, plural, one {And # more…} other {And # more…}}",
-      "quantityUnknown": "Quantity unconfirmed"
+      "more": "{count, plural, one {And # more…} other {And # more…}}"
     },
     "expiryStatus": {
       "upcoming": "{days, plural, =0 {Expires today} =1 {Expires tomorrow} other {Expires in # days}}",
@@ -1057,7 +1055,6 @@
     "listCreateFailed": "The list cannot be created right now. Try again when the connection is back.",
     "onList": "Already on the list: {quantity} {unit}",
     "leftLabel": "Left",
-    "quantityUnknown": "Quantity unconfirmed",
     "batchLeft": "{quantity} {unit} left",
     "useOneUnit": "I used 1 {unit}"
   },

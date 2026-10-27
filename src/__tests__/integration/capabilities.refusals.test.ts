@@ -200,6 +200,7 @@ beforeAll(async () => {
       productId,
       locationId: stockedLocationId,
       quantity: 10,
+      remaining: 10,
       unit: "L",
       operationType: StockOperation.PURCHASE,
       createdBy: kitchenUserId,

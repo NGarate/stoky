@@ -346,10 +346,12 @@ export const productRouter = createTRPCRouter({
             });
           }
           for (const row of entries) {
+            const factor = unitConversion(row.unit, target)!;
             await tx.stockEntry.update({
               where: { id: row.id },
               data: {
-                quantity: row.quantity.times(unitConversion(row.unit, target)!),
+                quantity: row.quantity.times(factor),
+                remaining: row.remaining?.times(factor),
                 unit: target,
               },
             });

@@ -55,6 +55,7 @@ beforeAll(async () => {
     data: [0.1, 0.1, 0.1].map((quantity) => ({
       productId: product.id,
       quantity,
+      remaining: quantity,
       unit: "kg",
       operationType: "PURCHASE" as const,
       createdBy: user.id,

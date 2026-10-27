@@ -148,6 +148,7 @@ CREATE TABLE "StockEntry" (
     "id" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
     "quantity" DECIMAL(12,3) NOT NULL,
+    "remaining" DECIMAL(12,3),
     "unit" TEXT NOT NULL,
     "expirationDate" TIMESTAMP(3),
     "locationId" TEXT,
@@ -444,3 +445,13 @@ ALTER TABLE "ShoppingItem" ADD CONSTRAINT "ShoppingItem_storeId_fkey" FOREIGN KE
 -- rule. Prisma's diff does not see expression indexes, so the drift check
 -- cannot vouch for it: auth.flow.test.ts does.
 CREATE UNIQUE INDEX "User_email_lower_key" ON "User" (lower(email));
+
+-- A batch's balance, and the shape that keeps it one (schema.prisma,
+-- `StockEntry`). A row that brings stock in carries what is left of it,
+-- between nothing and all of it; a withdrawal names the batch it drew from
+-- and carries no balance. A row of zero is not a movement.
+ALTER TABLE "StockEntry" ADD CONSTRAINT "StockEntry_batch_balance" CHECK (
+  (quantity > 0 AND remaining IS NOT NULL AND remaining >= 0
+    AND remaining <= quantity AND "batchId" IS NULL)
+  OR (quantity < 0 AND remaining IS NULL AND "batchId" IS NOT NULL)
+);

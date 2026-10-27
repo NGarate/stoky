@@ -147,14 +147,14 @@ describe("Journey 2 — a kitchen account is refused a write by the server", () 
   it("lets a kitchen account use something up", async () => {
     // The one write the matrix grants it. If this ever starts failing, the
     // tablet has become a picture frame.
-    const entry = await kitchen.inventory.consumeStock({
+    const [entry] = await kitchen.inventory.consumeStock({
       ...envelope(kitchenUserId),
       productId,
       quantity: 1,
       unit: "L",
     });
 
-    expect(num(entry.quantity)).toBe(-1);
+    expect(num(entry?.quantity)).toBe(-1);
   });
 
   it("lets a kitchen account write down what is needed (D88)", async () => {

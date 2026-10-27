@@ -75,6 +75,7 @@ async function giveStock(quantity: number) {
     data: {
       productId: A.productId,
       quantity,
+      remaining: quantity,
       unit: "L",
       operationType: "PURCHASE",
       locationId: A.locationId,

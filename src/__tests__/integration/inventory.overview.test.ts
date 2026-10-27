@@ -101,17 +101,30 @@ beforeAll(async () => {
       },
     });
     ids.set(fixture.name, product.id);
+    // A withdrawal comes out of the purchase before it, as consumeStock
+    // records one.
+    let batchId = "";
     for (const quantity of fixture.stock) {
-      await prisma.stockEntry.create({
+      const bought = quantity > 0;
+      if (!bought) {
+        await prisma.stockEntry.update({
+          where: { id: batchId },
+          data: { remaining: { decrement: -quantity } },
+        });
+      }
+      const entry = await prisma.stockEntry.create({
         data: {
           productId: product.id,
           quantity,
+          remaining: bought ? quantity : null,
+          batchId: bought ? null : batchId,
           unit: "unidad",
           locationId: shelf.id,
-          operationType: quantity >= 0 ? "PURCHASE" : "CONSUME",
+          operationType: bought ? "PURCHASE" : "CONSUME",
           createdBy: user.id,
         },
       });
+      if (bought) batchId = entry.id;
     }
   }
 });

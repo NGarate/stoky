@@ -149,6 +149,8 @@ export async function createTestStockEntry(
     data: {
       productId: data.productId,
       quantity: data.quantity,
+      // A batch, whole: the helper writes purchases, which need no source.
+      remaining: data.quantity,
       unit: data.unit || "unit",
       locationId: data.locationId,
       expirationDate: data.expirationDate,

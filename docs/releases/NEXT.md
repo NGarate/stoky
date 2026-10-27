@@ -4,6 +4,7 @@
 
 * Marca, categoría y unidad te sugieren lo que ya usas
 * Al subir un ticket, elige la tienda o escribe una nueva
+* Siempre sabes cuánto queda de cada lote
 
 ### Marca, categoría y unidad te sugieren lo que ya usas
 
@@ -22,6 +23,14 @@ que la añadirá y la crea al subir el ticket. No hace falta pasar antes por
 solo quien administra el hogar. Si el nombre ya existe con otras mayúsculas,
 el ticket se guarda en esa tienda en vez de crear otra.
 
+### Siempre sabes cuánto queda de cada lote
+
+Cuando usas algo sin decir de qué paquete, Stoky lo descuenta del que caduca
+antes, en el sitio que elegiste o en cualquiera si no elegiste ninguno. Lo
+mismo al corregir el recuento a la baja y al mover cosas de sitio. Así cada
+lote sabe lo que le queda, y la cocina y la ficha del producto ya no muestran
+«Cantidad sin confirmar».
+
 ## English
 
 ### Brand, category and unit suggest what you already use
@@ -38,3 +47,11 @@ you type. If the store is not there, type its name: Stoky says it will add
 it, and creates it when the receipt is uploaded. Anyone who can upload
 receipts can do this, not only the household's administrators. A name that
 already exists in other capitals files the receipt under that store.
+
+### Always know what is left of each batch
+
+Use something up without saying which pack, and Stoky takes it from the one
+that expires first, on the shelf you chose or anywhere if you chose none.
+Recounting down and moving things work the same way. Every batch knows what
+it has left, so the kitchen and the product page no longer say "Quantity
+unconfirmed".

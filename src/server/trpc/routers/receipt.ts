@@ -827,6 +827,7 @@ export const receiptRouter = createTRPCRouter({
           data: appliable.map((item) => ({
             productId: item.matchedProductId,
             quantity: item.parsedQuantity ?? 1,
+            remaining: item.parsedQuantity ?? 1,
             unit: item.matchedProduct?.defaultUnit || "unit",
             operationType: StockOperation.PURCHASE,
             receiptItemId: item.id,

@@ -416,7 +416,7 @@ describe("the expiry views report what is left", () => {
     expect(expiring[0]?.product.name).toBe("Leche entera");
   });
 
-  it("leaves quantities unknown when the consumed batch was not recorded", async () => {
+  it("takes a consumption that names no batch from the soonest to expire", async () => {
     const api = await caller();
 
     await api.inventory.addStock({
@@ -442,16 +442,11 @@ describe("the expiry views report what is left", () => {
       unit: "L",
     });
 
-    const expiring = await api.inventory.getExpiringItems({ days: 7 });
-
-    // The ledger does not identify which carton was used. Neither expiry
-    // date proves which one remains.
-    expect(expiring).toHaveLength(1);
-    expect(expiring[0]?.quantity).toBeNull();
-
+    // Recorded against the carton dated in two days, so that one is gone
+    // and the later one is whole.
+    expect(await api.inventory.getExpiringItems({ days: 7 })).toHaveLength(0);
     const monthAhead = await api.inventory.getExpiringItems({ days: 30 });
-    expect(monthAhead).toHaveLength(2);
-    expect(monthAhead.every((batch) => batch.quantity === null)).toBe(true);
+    expect(monthAhead.map((batch) => num(batch.quantity))).toEqual([6]);
   });
 
   it("does not list an expired batch that was finished before it turned", async () => {
@@ -475,9 +470,9 @@ describe("the expiry views report what is left", () => {
     expect(await api.inventory.getExpiredItems({})).toHaveLength(0);
   });
 
-  it("does not read the ledger of a product that has run out", async () => {
-    // Every product that ever had a dated batch used to be read with its
-    // whole history on each visit; one at zero cannot have a batch to list.
+  it("reads no product's history to list what has expired", async () => {
+    // Each batch's balance is stored, so the views ask for batches. They used
+    // to read every dated product with its whole history on each visit.
     await (
       await caller()
     ).inventory.addStock({
@@ -486,14 +481,6 @@ describe("the expiry views report what is left", () => {
       quantity: 2,
       unit: "L",
       expirationDate: inDays(-4),
-    });
-    await (
-      await caller()
-    ).inventory.consumeStock({
-      ...envelope(OWNER.userId),
-      productId,
-      quantity: 2,
-      unit: "L",
     });
     const ledgersRead: unknown[] = [];
     const watched = prisma.$extends({
@@ -509,7 +496,7 @@ describe("the expiry views report what is left", () => {
 
     const api = await caller(watched);
 
-    expect(await api.inventory.getExpiredItems({})).toHaveLength(0);
+    expect(await api.inventory.getExpiredItems({})).toHaveLength(1);
     expect(ledgersRead).toEqual([]);
   });
 
@@ -837,7 +824,7 @@ describe("stock integrity after an adjustment and kitchen taps", () => {
     expect(await netStock()).toBe(3);
   });
 
-  it("does not invent a source for an ambiguous adjustment", async () => {
+  it("takes a recount that names no shelf from the soonest to expire", async () => {
     const api = await caller();
     await api.inventory.addStock({
       ...envelope(OWNER.userId),
@@ -855,23 +842,23 @@ describe("stock integrity after an adjustment and kitchen taps", () => {
       expirationDate: inDays(2),
       locationId: cupboardId,
     });
-    const adjusted = await api.inventory.adjustStock({
+    const [adjusted, ...more] = await api.inventory.adjustStock({
       productId,
       quantity: -1,
       expectedStock: 4,
       unit: "L",
       reason: "Recuento",
     });
-    expect(adjusted.locationId).toBeNull();
-    expect(adjusted.expirationDate).toBeNull();
+    // Recorded against the shelf's batch, due tomorrow, and at its shelf.
+    expect(more).toHaveLength(0);
+    expect(adjusted?.locationId).toBe(shelfId);
     const batches = await api.inventory.getExpiringItems({ days: 7 });
-    expect(batches).toHaveLength(2);
-    expect(batches.map((batch) => batch.quantity)).toEqual([null, null]);
-    const filtered = await api.inventory.getExpiringItems({
-      days: 7,
-      locationId: shelfId,
-    });
-    expect(filtered[0]?.quantity).toBeNull();
+    expect(
+      batches.map((batch) => [batch.locationId, num(batch.quantity)]),
+    ).toEqual([
+      [shelfId, 1],
+      [cupboardId, 2],
+    ]);
     expect(await netStock()).toBe(3);
   });
 
@@ -905,15 +892,17 @@ describe("stock integrity after an adjustment and kitchen taps", () => {
   it("records an explicitly provided adjustment expiry", async () => {
     const api = await caller();
     const date = inDays(5);
-    const adjusted = await api.inventory.adjustStock({
+    const [adjusted] = await api.inventory.adjustStock({
       productId,
       quantity: 3,
       unit: "L",
       reason: "Recuento",
       expirationDate: date,
     });
-    expect(adjusted.expirationDate).toEqual(date);
-    expect(adjusted.locationId).toBeNull();
+    expect(adjusted?.expirationDate).toEqual(date);
+    expect(adjusted?.locationId).toBeNull();
+    // More found than recorded is a batch of its own, whole.
+    expect(num(adjusted?.remaining)).toBe(3);
   });
 
   it("three dozen eggs are 36 units, and two uses leave 34", async () => {
@@ -957,6 +946,7 @@ describe("stock integrity after an adjustment and kitchen taps", () => {
       data: {
         productId,
         quantity: 3,
+        remaining: 2,
         unit: "docena",
         operationType: "PURCHASE",
         createdBy: OWNER.userId,
@@ -974,6 +964,8 @@ describe("stock integrity after an adjustment and kitchen taps", () => {
       where: { id: batch.id },
     });
     expect(num(saved.quantity)).toBe(36);
+    // The balance is in the unit too, or two dozen left would read as two eggs.
+    expect(num(saved.remaining)).toBe(24);
     expect(saved.unit).toBe("unidad");
     expect(saved.locationId).toBe(shelfId);
     expect(saved.expirationDate).toEqual(date);
@@ -1056,7 +1048,7 @@ describe("stock integrity after an adjustment and kitchen taps", () => {
  * to two decimals and shows 0.1, so the guard must ask the same rounded
  * question — or the last tenth on the shelf can never be used or moved.
  */
-describe("the guards round the ledger the way the screens do", () => {
+describe("the guards count exactly", () => {
   it("lets the last 0.1 L be consumed after 1 L − 0.9 L", async () => {
     const api = await caller();
     await api.inventory.addStock({
@@ -1139,7 +1131,7 @@ describe("an adjustment cannot take stock below zero", () => {
     expect(await netStock()).toBe(2);
   });
 
-  it("still allows a correction down to exactly zero, float residue included", async () => {
+  it("still allows a correction down to exactly zero", async () => {
     const api = await caller();
     await api.inventory.addStock({
       ...envelope(OWNER.userId),
@@ -1255,7 +1247,7 @@ describe("a movement is stored in the product's unit", () => {
       unit: "docena",
     });
     // Case is not a different unit.
-    const lower = await api.inventory.consumeStock({
+    const [lower] = await api.inventory.consumeStock({
       ...envelope(OWNER.userId),
       productId,
       quantity: 3,
@@ -1264,7 +1256,7 @@ describe("a movement is stored in the product's unit", () => {
 
     expect(num(entry.quantity)).toBe(24);
     expect(entry.unit).toBe("unidad");
-    expect(lower.unit).toBe("unidad");
+    expect(lower?.unit).toBe("unidad");
     expect(await netStock()).toBe(21);
   });
 });

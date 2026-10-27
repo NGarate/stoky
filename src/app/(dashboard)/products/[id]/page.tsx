@@ -20,11 +20,7 @@ import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { undoHoldMs } from "@/lib/snackbar-duration";
 import { projectStockTotals } from "@/lib/offline/project";
-import {
-  daysUntilExpiry,
-  remainingByBatch,
-  startOfToday,
-} from "@/lib/inventory/batches";
+import { daysUntilExpiry, startOfToday } from "@/lib/inventory/batches";
 import { Decimal } from "@prisma/client-runtime-utils";
 import type { JSX } from "react";
 import { formatDate } from "@/lib/dates";
@@ -38,13 +34,13 @@ interface LocationTotal {
   key: string;
   /** `null` for entries saved without a location. */
   name: string | null;
-  quantity: Decimal | null;
+  quantity: Decimal;
 }
 
 /** One stock entry that carries an expiry date, narrowed so the date is real. */
 interface Batch {
   id: string;
-  quantity: Decimal | null;
+  quantity: Decimal;
   unit: string;
   expiresAt: Date;
   locationName: string | null;
@@ -133,36 +129,29 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
     },
   });
 
-  /** Sum the surviving batches; unknown withdrawals never become a fake shelf balance. */
+  /** What is left on each shelf: the balances of the batches there. */
   const stockByLocation = useMemo<LocationTotal[]>(() => {
     if (!product) return [];
 
     const totals = new Map<string, LocationTotal>();
-    const remaining = remainingByBatch(product.stockEntries);
-
     for (const entry of product.stockEntries) {
-      if (entry.quantity.lessThanOrEqualTo(0)) continue;
-      const quantity = remaining.get(entry.id) ?? null;
+      if (!entry.remaining?.greaterThan(0)) continue;
       const key = entry.locationId ?? "";
       const current = totals.get(key);
-
       if (current) {
-        current.quantity =
-          current.quantity === null || quantity === null
-            ? null
-            : current.quantity.plus(quantity);
+        current.quantity = current.quantity.plus(entry.remaining);
       } else {
         totals.set(key, {
           key,
           name: entry.location?.name ?? null,
-          quantity,
+          quantity: entry.remaining,
         });
       }
     }
 
-    return [...totals.values()]
-      .filter((total) => total.quantity?.isZero() !== true)
-      .sort((a, b) => new Decimal(b.quantity ?? 0).comparedTo(a.quantity ?? 0));
+    return [...totals.values()].sort((a, b) =>
+      b.quantity.comparedTo(a.quantity),
+    );
   }, [product]);
 
   /**
@@ -178,16 +167,13 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
   const batches = useMemo<Batch[]>(() => {
     if (!product) return [];
 
-    const remaining = remainingByBatch(product.stockEntries);
     return product.stockEntries
       .flatMap((entry) =>
-        entry.expirationDate &&
-        entry.quantity.greaterThan(0) &&
-        remaining.get(entry.id)?.isZero() !== true
+        entry.expirationDate && entry.remaining?.greaterThan(0)
           ? [
               {
                 id: entry.id,
-                quantity: remaining.get(entry.id) ?? null,
+                quantity: entry.remaining,
                 unit: entry.unit,
                 expiresAt: entry.expirationDate,
                 locationName: entry.location?.name ?? null,
@@ -377,9 +363,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                   {total.name ?? t("locationNone")}
                 </span>
                 <span className="font-medium text-foreground">
-                  {total.quantity === null
-                    ? t("quantityUnknown")
-                    : units.quantity(total.quantity, product.defaultUnit)}
+                  {units.quantity(total.quantity, product.defaultUnit)}
                 </span>
               </li>
             ))}
@@ -416,10 +400,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {t("expiryBatch", {
-                    amount:
-                      batch.quantity === null
-                        ? t("quantityUnknown")
-                        : units.quantity(batch.quantity, batch.unit),
+                    amount: units.quantity(batch.quantity, batch.unit),
                     location: batch.locationName ?? t("locationNone"),
                   })}
                 </p>

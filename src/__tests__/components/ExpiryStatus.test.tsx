@@ -7,6 +7,7 @@ import {
   ExpiryStatus,
   expiryTone,
 } from "@/components/inventory/ExpiryStatus";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * One answer to "when does it go off".
@@ -81,14 +82,14 @@ describe("ExpiryStatus", () => {
 });
 
 describe("ExpiryRow", () => {
-  it("says an unknown quantity without a unit hanging off it", () => {
+  it("says what is left of the batch, with its unit", () => {
     renderWithIntl(
       <ul>
         <ExpiryRow
           batch={{
             product: { id: "p1", name: "Leche" },
             location: null,
-            quantity: null,
+            quantity: new Decimal("1.5"),
             unit: "L",
           }}
           daysUntilExpiry={1}
@@ -97,9 +98,7 @@ describe("ExpiryRow", () => {
       { locale: "es" },
     );
 
-    // It used to interpolate the fallback into "{quantity} {unit}", which
-    // read "Cantidad sin confirmar L".
-    expect(screen.getByText("Cantidad sin confirmar")).toBeInTheDocument();
+    expect(screen.getByText("1.5 L")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Leche" })).toHaveAttribute(
       "href",
       "/products/p1",

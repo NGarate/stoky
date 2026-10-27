@@ -86,6 +86,7 @@ describe("deleting a product that has been used", () => {
       data: {
         productId: product.id,
         quantity: 1,
+        remaining: 1,
         unit: "L",
         operationType: "PURCHASE",
         createdBy: userId,
@@ -107,6 +108,7 @@ describe("deleting a product that has been used", () => {
       data: [1, 2].map(() => ({
         productId: product.id,
         quantity: 1,
+        remaining: 1,
         unit: "g",
         operationType: "PURCHASE" as const,
         createdBy: userId,
@@ -134,6 +136,7 @@ describe("deleting a product that has been used", () => {
       data: {
         productId: product.id,
         quantity: 1,
+        remaining: 1,
         unit: "L",
         operationType: "PURCHASE",
         createdBy: userId,

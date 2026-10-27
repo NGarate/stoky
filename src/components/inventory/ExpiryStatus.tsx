@@ -85,7 +85,7 @@ export function ExpiryRow({
   batch: {
     product: { id: string; name: string };
     location: { name: string } | null;
-    quantity: Decimal | null;
+    quantity: Decimal;
     unit: string;
   };
   daysUntilExpiry: number;
@@ -100,13 +100,10 @@ export function ExpiryRow({
       meta={[
         {
           label: t("quantityLabel"),
-          value:
-            batch.quantity === null
-              ? t("quantityUnknown")
-              : t("quantityValue", {
-                  quantity: batch.quantity.toNumber(),
-                  unit: units.unit(batch.unit, batch.quantity),
-                }),
+          value: t("quantityValue", {
+            quantity: batch.quantity.toNumber(),
+            unit: units.unit(batch.unit, batch.quantity),
+          }),
         },
         {
           label: t("locationLabel"),

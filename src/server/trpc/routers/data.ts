@@ -93,6 +93,8 @@ export const dataRouter = createTRPCRouter({
                 // it the ledger's sum survives, but not what each batch has
                 // left, so no expiry can be read back from the file.
                 batchId: true,
+                // What is left of a batch, as the ledger kept it.
+                remaining: true,
                 operationType: true,
                 note: true,
                 createdAt: true,

@@ -87,6 +87,7 @@ beforeAll(async () => {
     data: {
       productId: product.id,
       quantity: 3,
+      remaining: 3,
       unit: "L",
       operationType: "PURCHASE",
       createdBy: A.userId,

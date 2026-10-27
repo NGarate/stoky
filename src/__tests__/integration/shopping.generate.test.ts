@@ -219,6 +219,7 @@ describe("generateFromLowStock", () => {
       data: {
         productId: A.productId,
         quantity: 1,
+        remaining: 1,
         unit: "L",
         operationType: "PURCHASE",
         createdBy: A.userId,

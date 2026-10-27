@@ -291,21 +291,32 @@ async function seedDemoData(
     });
     createdProducts.push({ id: product.id, name: product.name });
 
+    // Each withdrawal comes out of the purchase before it, and lowers that
+    // batch's balance, as `consumeStock` does.
+    let batchId = "";
     for (const entry of item.stock) {
-      await tx.stockEntry.create({
+      const bought = entry.quantity > 0;
+      if (!bought) {
+        await tx.stockEntry.update({
+          where: { id: batchId },
+          data: { remaining: { decrement: -entry.quantity } },
+        });
+      }
+      const row = await tx.stockEntry.create({
         data: {
           productId: product.id,
           quantity: entry.quantity,
+          remaining: bought ? entry.quantity : null,
+          batchId: bought ? null : batchId,
           unit: item.defaultUnit,
-          expirationDate: entry.quantity > 0 ? item.expiration : null,
+          expirationDate: bought ? item.expiration : null,
           locationId: item.location,
-          operationType: (entry.quantity > 0
-            ? "PURCHASE"
-            : "CONSUME") as StockOperation,
+          operationType: (bought ? "PURCHASE" : "CONSUME") as StockOperation,
           createdBy: user.id,
           createdAt: daysFromNow(entry.days),
         },
       });
+      if (bought) batchId = row.id;
     }
 
     for (const price of item.prices) {

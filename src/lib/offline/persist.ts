@@ -43,7 +43,9 @@ import type { Persister } from "@tanstack/react-query-persist-client";
 // can be unknown. Old persisted query results cannot describe this schema.
 // 5 when quantities and money became `Decimal`: a cache from before holds
 // plain numbers, and a component calling `.toNumber()` on one throws.
-export const CACHE_VERSION = "5";
+// 6 when a batch's remainder became a stored figure: `quantity` on an
+// expiring batch is never null now, and a cached null would draw as nothing.
+export const CACHE_VERSION = "6";
 
 /**
  * The queries worth keeping between visits.

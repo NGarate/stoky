@@ -234,8 +234,7 @@ export default function KitchenPage(): JSX.Element {
     );
   }
 
-  function batchLeft(batch: (typeof batches)[number]): number | null {
-    if (batch.quantity === null) return null;
+  function batchLeft(batch: (typeof batches)[number]): number {
     const used = queue.pending.reduce((sum, op) => {
       const input = op.input as { batchId?: string; quantity?: number };
       return op.path === "inventory.consumeStock" && input.batchId === batch.id
@@ -247,7 +246,7 @@ export default function KitchenPage(): JSX.Element {
 
   function useOne(batch: (typeof batches)[number]): void {
     const left = batchLeft(batch);
-    if (left === null || left < 1) return;
+    if (left < 1) return;
     const label = {
       key: "offline.usedUp",
       values: { quantity: 1, unit: batch.unit, name: batch.product.name },
@@ -314,17 +313,13 @@ export default function KitchenPage(): JSX.Element {
                   </p>
 
                   <p className="mt-1 text-xl text-warn-foreground">
-                    {batchLeft(batch) === null
-                      ? t("quantityUnknown")
-                      : t("batchLeft", {
-                          quantity: batchLeft(batch) ?? 0,
-                          unit: units.unit(batch.unit, batchLeft(batch) ?? 0),
-                        })}
+                    {t("batchLeft", {
+                      quantity: batchLeft(batch),
+                      unit: units.unit(batch.unit, batchLeft(batch)),
+                    })}
                   </p>
                   <Button
-                    disabled={
-                      batchLeft(batch) === null || (batchLeft(batch) ?? 0) < 1
-                    }
+                    disabled={batchLeft(batch) < 1}
                     className="mt-4 w-full text-xl"
                     onClick={() => useOne(batch)}
                     size="lg"

@@ -806,15 +806,15 @@ describe("tRPC Router Integration Tests", () => {
       testData.stockEntries.push(addResult.id);
 
       // Then consume
-      const consumeResult = await caller.inventory.consumeStock({
+      const [consumeResult] = await caller.inventory.consumeStock({
         ...envelope(),
         productId: product.id,
         quantity: 5,
         unit: "unit",
       });
 
-      expect(num(consumeResult.quantity)).toBe(-5);
-      testData.stockEntries.push(consumeResult.id);
+      expect(num(consumeResult?.quantity)).toBe(-5);
+      testData.stockEntries.push(consumeResult!.id);
     });
 
     it("should reject consuming more stock than available", async () => {
@@ -857,7 +857,7 @@ describe("tRPC Router Integration Tests", () => {
       const product = await createTestProduct(householdId);
       const { caller } = await createTestContext(user.id, householdId);
 
-      const result = await caller.inventory.adjustStock({
+      const [result] = await caller.inventory.adjustStock({
         productId: product.id,
         quantity: 25,
         unit: "unit",
@@ -865,9 +865,9 @@ describe("tRPC Router Integration Tests", () => {
         reason: "Inventory correction",
       });
 
-      expect(num(result.quantity)).toBe(25);
-      expect(result.operationType).toBe("ADJUST");
-      testData.stockEntries.push(result.id);
+      expect(num(result?.quantity)).toBe(25);
+      expect(result?.operationType).toBe("ADJUST");
+      testData.stockEntries.push(result!.id);
     });
 
     it("should get inventory summary", async () => {

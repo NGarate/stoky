@@ -10,14 +10,12 @@ import {
   stockOverviewSchema,
 } from "@/lib/validations/inventory";
 import {
-  allocateFefo,
   daysUntilExpiry,
   endOfDayAfter,
   EXPIRING_SOON_DAYS,
-  netStock,
-  remainingByBatch,
   startOfToday,
 } from "@/lib/inventory/batches";
+import { allocate, withdraw } from "@/lib/stock/withdraw";
 import { replayable } from "@/lib/validations/idempotency";
 import {
   MAX_DAYS,
@@ -28,7 +26,6 @@ import {
 } from "@/lib/validations/bounds";
 import { withReplay } from "../replay";
 import { folded } from "@/server/fold";
-import { stockTotals } from "@/lib/stock/totals";
 import type {
   StockDirection,
   StockOverviewInput,
@@ -54,28 +51,13 @@ interface ExpiryWindow {
 }
 
 /**
- * Dated batches with something still in them, whose date falls in `window`.
+ * Dated batches with something still in them, whose date falls in `window`,
+ * soonest first — one query on the stored balances.
  *
- * Both expiry views used to ask the database for stock entries with
- * `quantity: { gt: 0 }` and report each row's own quantity. Consumption is a
- * separate negative entry with no expiry date, so it was filtered out and
- * never subtracted: the figure returned was the size of the original purchase,
- * and a batch drunk weeks ago still appeared as about to spoil (ISSUES.md
- * INV-1).
- *
- * The query is therefore per *product* rather than per entry — a batch's
- * remaining quantity cannot be known without the rest of that product's
- * ledger — and `remainingByBatch` states the drawdown rule.
- *
- * **Only the ledgers that can produce a row are loaded.** Reading every
- * product that ever had a dated batch, with its whole history, on every
- * dashboard visit grew with each week of use, and `remainingByBatch` weighs
- * each consumption against each batch. Two questions the database answers
- * first, neither of which changes the result: does the product have a dated
- * batch in the window (in the location asked about) — only those are listed —
- * and is its stock above zero — at zero `remainingByBatch` empties every
- * batch. What a product that passes both costs is still its whole ledger;
- * making that smaller needs a batch's remainder stored, not derived.
+ * Each row reports what is **left** of its batch, not what was bought: six
+ * litres bought and four drunk is two expiring (ISSUES.md INV-1, where the
+ * purchase's own quantity was reported). The field keeps the name `quantity`
+ * because that is what every caller already means by it.
  */
 async function datedBatchesInWindow(
   db: Prisma.TransactionClient,
@@ -83,82 +65,35 @@ async function datedBatchesInWindow(
   locationId: string | undefined,
   window: ExpiryWindow,
 ) {
-  const dated = await db.product.findMany({
+  const batches = await db.stockEntry.findMany({
     where: {
-      householdId,
-      stockEntries: {
-        some: {
-          quantity: { gt: 0 },
-          expirationDate: { not: null, ...window },
-          ...(locationId && { locationId }),
-        },
-      },
+      product: { householdId },
+      remaining: { gt: 0 },
+      expirationDate: { not: null, ...window },
+      ...(locationId && { locationId }),
     },
-    select: { id: true },
-  });
-  const stockOf = await stockTotals(
-    db,
-    dated.map(({ id }) => id),
-  );
-  const live = dated.flatMap(({ id }) =>
-    stockOf.get(id)?.isZero() === false ? [id] : [],
-  );
-  if (live.length === 0) return [];
-
-  const products = await db.product.findMany({
-    where: { id: { in: live } },
-    include: {
-      stockEntries: {
-        // Read the full ledger before filtering locations: an unlocated
-        // withdrawal can make a dated batch's quantity unknown.
-        include: { location: true },
-      },
-    },
+    include: { location: true, product: true },
+    orderBy: [{ expirationDate: "asc" }, { createdAt: "asc" }],
   });
 
-  const batches = [];
-
-  for (const { stockEntries, ...product } of products) {
-    const remaining = remainingByBatch(stockEntries);
-
-    for (const entry of stockEntries) {
-      if (locationId && entry.locationId !== locationId) continue;
-      const expirationDate = entry.expirationDate;
-      if (expirationDate === null) continue;
-
-      const left = remaining.get(entry.id);
-      if (left === undefined || left?.isZero()) continue;
-
-      if (window.gte && expirationDate < window.gte) continue;
-      if (window.lte && expirationDate > window.lte) continue;
-      if (window.lt && expirationDate >= window.lt) continue;
-
-      batches.push({
-        ...entry,
-        // What is left of this batch, not what was bought. The field keeps its
-        // name because that is what every caller already means by it.
-        quantity: left,
-        expirationDate,
-        product,
-      });
-    }
-  }
-
-  return batches.sort(
-    (a, b) => a.expirationDate.getTime() - b.expirationDate.getTime(),
-  );
+  return batches.map(({ remaining, expirationDate, ...batch }) => ({
+    ...batch,
+    // Both narrowed by the `where` above.
+    quantity: remaining!,
+    expirationDate: expirationDate!,
+  }));
 }
 
 /**
  * Stock: what is in the house, what goes in, what comes out.
  *
- * **Stock is a ledger, not a number.** There is no "current quantity" column
- * anywhere; a `StockEntry` is one movement, positive for a purchase and
- * negative for a consumption, and what is on the shelf is their sum. Every
- * surprise in this file follows from that — why an availability check has to
- * read a product's whole history, why `consumeStock` writes a negative row
- * rather than editing a positive one, and why INV-1 was possible at all
- * (both guards summed only the positive rows and so measured gross purchases).
+ * **Stock is a ledger, with a balance per batch.** A `StockEntry` is one
+ * movement, positive for a batch coming in and negative for one going out, and
+ * what is on the shelf is their sum. Rows are never edited, except a batch's
+ * `remaining`, which every withdrawal lowers in the same transaction that
+ * writes it. So every withdrawal names its batch: one the caller chose, or the
+ * soonest to expire (`allocate`), and the guards ask the balances rather than
+ * replaying a product's history.
  *
  * **Two of these are replayable** — `addStock` and `consumeStock`, the two a
  * shop composes — because Phase 4's offline queue may send the same write twice — see `src/server/trpc/replay.ts`. Those carry an
@@ -524,6 +459,7 @@ export const inventoryRouter = createTRPCRouter({
             data: {
               productId: input.productId,
               quantity: movement.quantity,
+              remaining: movement.quantity,
               unit: movement.unit,
               expirationDate: input.expirationDate,
               locationId: input.locationId,
@@ -570,15 +506,16 @@ export const inventoryRouter = createTRPCRouter({
     }),
 
   /**
-   * Records something used up, as a negative entry.
+   * Records something used up, as a negative entry per batch it came out of.
    *
    * `householdProcedure`, not `writeProcedure`, and that is the capability
    * matrix rather than an oversight: a KITCHEN account may look, use one up
    * and write down what is needed — nothing else (REDESIGN_PLAN §5.2, amended
    * by the owner's pass; D88). This was the first of its three writes.
    *
-   * Refuses to take stock below zero — CONFLICT, checked against *net* stock
-   * inside a transaction with the product row held (`SELECT … FOR UPDATE`), so
+   * Refuses to take more than the batches hold — CONFLICT, checked against
+   * their balances inside a transaction with the product row held
+   * (`SELECT … FOR UPDATE`), so
    * two people consuming the last unit at once cannot both succeed. The offline
    * queue treats that CONFLICT as reconcilable rather than as a failure: it
    * asks the person what is actually on the shelf, because the alternative is
@@ -652,17 +589,6 @@ export const inventoryRouter = createTRPCRouter({
               id: input.productId,
               householdId: ctx.householdId,
             },
-            include: {
-              stockEntries: {
-                // Every entry, not just the positive ones. Consumption is
-                // recorded as a *separate* row with a negative quantity, so
-                // `gt: 0` here measured gross purchases and ignored everything
-                // ever used: six litres bought and four drunk read as six
-                // available, and the server would accept a consumption of five
-                // and drive stock to minus two (ISSUES.md INV-1).
-                orderBy: { createdAt: "asc" },
-              },
-            },
           });
 
           if (!product) {
@@ -674,80 +600,62 @@ export const inventoryRouter = createTRPCRouter({
 
           const movement = inProductUnit(input, product.defaultUnit);
           const locationId = input.consumeFromLocationId || input.locationId;
-          const batch = input.batchId
-            ? product.stockEntries.find(
-                (entry) =>
-                  entry.id === input.batchId && entry.quantity.greaterThan(0),
-              )
-            : undefined;
-          if (input.batchId && !batch) {
-            throw new TRPCError({
-              code: "NOT_FOUND",
-              message: "Batch not found",
+          if (input.batchId) {
+            const batch = await tx.stockEntry.findFirst({
+              where: {
+                id: input.batchId,
+                productId: product.id,
+                quantity: { gt: 0 },
+              },
             });
-          }
-          if (
-            batch &&
-            (unitConversion(batch.unit, movement.unit) !== 1 ||
-              (locationId && locationId !== batch.locationId))
-          ) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Batch unit or location does not match",
-            });
-          }
-          const scopedEntries = product.stockEntries.filter(
-            (entry) => !locationId || entry.locationId === locationId,
-          );
-          const totalAvailable = netStock(scopedEntries);
-          if (batch) {
-            const left = remainingByBatch(product.stockEntries).get(batch.id);
-            if (left == null || movement.quantity.greaterThan(left)) {
+            if (!batch) {
               throw new TRPCError({
-                code: "CONFLICT",
-                message: "Batch quantity needs confirmation",
+                code: "NOT_FOUND",
+                message: "Batch not found",
+              });
+            }
+            if (
+              unitConversion(batch.unit, movement.unit) !== 1 ||
+              (locationId && locationId !== batch.locationId)
+            ) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "Batch unit or location does not match",
               });
             }
           }
 
-          if (movement.quantity.greaterThan(totalAvailable)) {
+          // The batch asked for, or the soonest to expire on the shelf asked
+          // for — anywhere, when none was.
+          const parts = await allocate(tx, product.id, movement.quantity, {
+            batchId: input.batchId,
+            locationId,
+          });
+          if (!parts) {
             throw new TRPCError({
               code: "CONFLICT",
-              message: "Not enough stock available",
+              message: input.batchId
+                ? "Batch quantity needs confirmation"
+                : "Not enough stock available",
             });
           }
 
-          return tx.stockEntry.create({
-            data: {
-              productId: input.productId,
-              quantity: movement.quantity.negated(),
-              unit: movement.unit,
-              batchId: batch?.id,
-              locationId: batch ? batch.locationId : locationId,
-              operationType: "CONSUME" as StockOperation,
-              note: input.note,
-              createdBy: userId,
-            },
-            include: {
-              product: true,
-              location: true,
-            },
+          return withdraw(tx, parts, {
+            productId: product.id,
+            unit: movement.unit,
+            operationType: "CONSUME",
+            note: input.note,
+            createdBy: userId,
           });
         },
-        ids: (entry) => [entry.id],
-        reread: async (db, ids) => {
-          const entry = await db.stockEntry.findUnique({
-            where: { id: ids[0] ?? "" },
+        ids: (entries) => entries.map((entry) => entry.id),
+        // In the order they were written, which is FEFO's.
+        reread: (db, ids) =>
+          db.stockEntry.findMany({
+            where: { id: { in: ids } },
             include: { product: true, location: true },
-          });
-          if (!entry) {
-            throw new TRPCError({
-              code: "NOT_FOUND",
-              message: "Stock entry not found",
-            });
-          }
-          return entry;
-        },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          }),
       });
     }),
 
@@ -801,32 +709,48 @@ export const inventoryRouter = createTRPCRouter({
             });
           }
         }
-        // The floor `consumeStock` has. `expectedStock` is optional, so without
-        // this a correction larger than the ledger drove the product negative.
-        if (current.plus(movement.quantity).lessThan(0)) {
+        if (movement.quantity.greaterThan(0)) {
+          // More on the shelf than the ledger knew: a batch of its own.
+          return [
+            await tx.stockEntry.create({
+              data: {
+                productId: input.productId,
+                quantity: movement.quantity,
+                remaining: movement.quantity,
+                unit: movement.unit,
+                expirationDate: input.expirationDate,
+                locationId: input.locationId,
+                operationType: "ADJUST" as StockOperation,
+                note: input.reason,
+                createdBy: userId,
+              },
+              include: { product: true, location: true },
+            }),
+          ];
+        }
+
+        // Less: taken from the batches like a consumption, soonest to expire
+        // first, which is also the floor — a correction larger than what the
+        // batches hold would take the product below zero.
+        const parts = await allocate(
+          tx,
+          input.productId,
+          movement.quantity.negated(),
+          { locationId: input.locationId },
+        );
+        if (!parts) {
           throw new TRPCError({
             code: "CONFLICT",
             message: "Adjustment would take stock below zero",
           });
         }
-        const stockEntry = await tx.stockEntry.create({
-          data: {
-            productId: input.productId,
-            quantity: movement.quantity,
-            unit: movement.unit,
-            expirationDate: input.expirationDate,
-            locationId: input.locationId,
-            operationType: "ADJUST" as StockOperation,
-            note: input.reason,
-            createdBy: userId,
-          },
-          include: {
-            product: true,
-            location: true,
-          },
+        return withdraw(tx, parts, {
+          productId: input.productId,
+          unit: movement.unit,
+          operationType: "ADJUST",
+          note: input.reason,
+          createdBy: userId,
         });
-
-        return stockEntry;
       });
     }),
 
@@ -888,12 +812,6 @@ export const inventoryRouter = createTRPCRouter({
               id: input.productId,
               householdId: ctx.householdId,
             },
-            include: {
-              // The whole ledger, not only the source shelf: what is left of
-              // each batch there depends on withdrawals recorded anywhere
-              // (`remainingByBatch`).
-              stockEntries: { orderBy: { createdAt: "asc" } },
-            },
           });
 
           if (!product) {
@@ -904,21 +822,6 @@ export const inventoryRouter = createTRPCRouter({
           }
 
           const movement = inProductUnit(input, product.defaultUnit);
-          // Every entry at the source, not only the positive ones: `gt: 0`
-          // counted what arrived and not what left, so a shelf with six in and
-          // four out offered six to move (INV-1).
-          const availableInSource = netStock(
-            product.stockEntries.filter(
-              (entry) => entry.locationId === input.fromLocationId,
-            ),
-          );
-
-          if (movement.quantity.greaterThan(availableInSource)) {
-            throw new TRPCError({
-              code: "CONFLICT",
-              message: "Not enough stock in source location",
-            });
-          }
 
           const locations = await tx.storageLocation.findMany({
             where: {
@@ -937,30 +840,21 @@ export const inventoryRouter = createTRPCRouter({
           /**
            * One pair of rows per batch moved, soonest expiry first.
            *
-           * The pair used to be one undated row each way with no `batchId`,
-           * so the source batch was drawn down (or made unknown) by the move
-           * and what arrived had no date: moved milk vanished from the
-           * expiring and expired screens. The outgoing row now names the
-           * batch it leaves, and the incoming one carries that batch's date.
            * There is no screen that asks which batch to move, so FEFO
-           * (`allocateFefo`) chooses; anything it cannot place in a batch
-           * with a known remainder moves undated, as before.
+           * (`allocate`) chooses. The outgoing row names the batch it leaves;
+           * the incoming one is a batch of its own at the destination, with
+           * the date of the one it came from, so moved milk stays on the
+           * expiring and expired screens.
            */
-          const { parts, unassigned } = allocateFefo(
-            product.stockEntries,
-            input.fromLocationId,
-            movement.quantity,
-          );
-          const moves: Array<{
-            quantity: Prisma.Decimal;
-            batchId?: string;
-            expirationDate?: Date | null;
-          }> = parts.map(({ batch, quantity }) => ({
-            quantity,
-            batchId: batch.id,
-            expirationDate: batch.expirationDate,
-          }));
-          if (unassigned.greaterThan(0)) moves.push({ quantity: unassigned });
+          const parts = await allocate(tx, product.id, movement.quantity, {
+            locationId: input.fromLocationId,
+          });
+          if (!parts) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Not enough stock in source location",
+            });
+          }
 
           const toName = locations.find(
             (l) => l.id === input.toLocationId,
@@ -968,31 +862,23 @@ export const inventoryRouter = createTRPCRouter({
           const fromName = locations.find(
             (l) => l.id === input.fromLocationId,
           )?.name;
-          const fromEntries = [];
+          const fromEntries = await withdraw(tx, parts, {
+            productId: product.id,
+            unit: movement.unit,
+            operationType: "TRANSFER",
+            note: input.note || `Transfer to ${toName}`,
+            createdBy: userId,
+          });
           const toEntries = [];
-          for (const move of moves) {
-            fromEntries.push(
-              await tx.stockEntry.create({
-                data: {
-                  productId: input.productId,
-                  quantity: move.quantity.negated(),
-                  unit: movement.unit,
-                  batchId: move.batchId,
-                  locationId: input.fromLocationId,
-                  operationType: "TRANSFER" as StockOperation,
-                  note: input.note || `Transfer to ${toName}`,
-                  createdBy: userId,
-                },
-                include: { product: true, location: true },
-              }),
-            );
+          for (const { batch, quantity } of parts) {
             toEntries.push(
               await tx.stockEntry.create({
                 data: {
-                  productId: input.productId,
-                  quantity: move.quantity,
+                  productId: product.id,
+                  quantity,
+                  remaining: quantity,
                   unit: movement.unit,
-                  expirationDate: move.expirationDate,
+                  expirationDate: batch.expirationDate,
                   locationId: input.toLocationId,
                   operationType: "TRANSFER" as StockOperation,
                   note: input.note || `Transfer from ${fromName}`,
@@ -1071,11 +957,9 @@ export const inventoryRouter = createTRPCRouter({
    * Batches that will expire within `days`, soonest first.
    *
    * The kitchen screen's whole reason to exist. Reports each batch's
-   * **remaining** quantity, not the quantity it was bought with: consumption is
-   * a separate negative row with no expiry date of its own, so drawing it down
-   * across dated batches is arithmetic this file does rather than something the
-   * database can answer (`remainingByBatch`). Getting that wrong was INV-1 —
-   * six litres bought and four drunk read as six expiring.
+   * **remaining** quantity, its stored balance, not the quantity it was bought
+   * with. Getting that wrong was INV-1 — six litres bought and four drunk read
+   * as six expiring.
    *
    * `isExpiringSoon` at `EXPIRING_SOON_DAYS` is the threshold the kitchen uses to
    * decide what takes space.

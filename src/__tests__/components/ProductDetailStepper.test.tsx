@@ -123,6 +123,7 @@ function fridgeEntry(overrides: Record<string, unknown> = {}) {
   return {
     id: "se-1",
     quantity: new Decimal(2),
+    remaining: new Decimal(2),
     unit: "L",
     locationId: "loc-fridge",
     location: { id: "loc-fridge", name: "Nevera" },
@@ -350,5 +351,29 @@ describe("a batch's expiry is read as a date", () => {
       if (previous === undefined) delete process.env.TZ;
       else process.env.TZ = previous;
     }
+  });
+});
+
+/** What the page lists is each batch's stored balance, not what was bought. */
+describe("the batches and shelves it lists", () => {
+  it("shows what is left of a batch, and leaves out one that is finished", () => {
+    stockEntries = [
+      fridgeEntry({
+        id: "half",
+        expirationDate: new Date("2099-10-08"),
+        remaining: new Decimal("0.5"),
+      }),
+      fridgeEntry({
+        id: "gone",
+        expirationDate: new Date("2099-10-09"),
+        remaining: new Decimal(0),
+      }),
+    ];
+    renderDetail();
+
+    expect(screen.getByText("0.5 L · Nevera")).toBeInTheDocument();
+    expect(screen.queryByText("2 L · Nevera")).toBeAbsent();
+    // The fridge holds half a litre, whatever the two cartons were.
+    expect(screen.getByText("0.5 L", { selector: "span" })).toBeInTheDocument();
   });
 });

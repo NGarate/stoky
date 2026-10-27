@@ -253,10 +253,10 @@ describe("using something up", () => {
     expect(screen.getByRole("button", { name: /He usado 1 L/ })).toBeDisabled();
   });
 
-  it("leaves ambiguous quantities unconfirmed rather than inventing a remainder", () => {
-    expiringStub.data = [batch({ quantity: null })];
+  it("offers no whole unit to use from less than one left", () => {
+    expiringStub.data = [batch({ quantity: 0.5 })];
     renderKitchen();
-    expect(screen.getByText("Cantidad sin confirmar")).toBeInTheDocument();
+    expect(screen.getByText("Quedan 0.5 L")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /He usado 1 L/ })).toBeDisabled();
   });
 

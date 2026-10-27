@@ -260,8 +260,7 @@
       "deleteFailed": "No se ha podido eliminar. Inténtalo otra vez.",
       "deletedBody": "«{name}» ya no está en el catálogo.",
       "editFields": "Editar los datos",
-      "discardChanges": "Descartar",
-      "quantityUnknown": "Cantidad sin confirmar"
+      "discardChanges": "Descartar"
     },
     "scan": {
       "title": "Escanear código de barras",
@@ -519,8 +518,7 @@
       "quantityValue": "{quantity} {unit}",
       "locationLabel": "Dónde está",
       "noLocation": "Sin ubicación",
-      "more": "{count, plural, one {Y # más…} other {Y # más…}}",
-      "quantityUnknown": "Cantidad sin confirmar"
+      "more": "{count, plural, one {Y # más…} other {Y # más…}}"
     },
     "expiryStatus": {
       "upcoming": "{days, plural, =0 {Caduca hoy} =1 {Caduca mañana} other {Caduca en # días}}",
@@ -1057,7 +1055,6 @@
     "listCreateFailed": "Ahora mismo no se puede crear la lista. Prueba cuando vuelva la conexión.",
     "onList": "Ya en la lista: {quantity} {unit}",
     "leftLabel": "Queda",
-    "quantityUnknown": "Cantidad sin confirmar",
     "batchLeft": "Quedan {quantity} {unit}",
     "useOneUnit": "He usado 1 {unit}"
   },
