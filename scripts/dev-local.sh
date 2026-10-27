@@ -123,42 +123,15 @@ if [ ! -f "$COMPOSE_FILE" ]; then
     fail "$COMPOSE_FILE not found in project root"
 fi
 
-docker compose -f "$COMPOSE_FILE" up -d
-ok "Containers started"
-
-# ---------------------------------------------------------------------------
-# Wait for healthy services
-# ---------------------------------------------------------------------------
-header "Waiting for services to be healthy"
-
-elapsed=0
-while [ $elapsed -lt $MAX_WAIT ]; do
-    db_health=$(docker compose -f "$COMPOSE_FILE" ps db --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | head -1 || true)
-    cache_health=$(docker compose -f "$COMPOSE_FILE" ps cache --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | head -1 || true)
-
-    db_ok=false
-    cache_ok=false
-
-    echo "$db_health" | grep -qx '"Health":"healthy"' && db_ok=true
-    echo "$cache_health" | grep -qx '"Health":"healthy"' && cache_ok=true
-
-    if $db_ok && $cache_ok; then
-        ok "PostgreSQL is healthy"
-        ok "Valkey is healthy"
-        break
-    fi
-
-    sleep 2
-    elapsed=$((elapsed + 2))
-    printf "  Waiting... (%ds / %ds)\r" "$elapsed" "$MAX_WAIT"
-done
-
-if [ $elapsed -ge $MAX_WAIT ]; then
-    echo ""
-    warn "Timed out waiting for services. Current status:"
+# `--wait` returns once every service's healthcheck passes, and fails past
+# the timeout, so there is no polling loop of our own to keep in step.
+if ! docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout "$MAX_WAIT"; then
+    warn "Services did not become healthy. Current status:"
     docker compose -f "$COMPOSE_FILE" ps
     fail "Services did not become healthy within ${MAX_WAIT}s"
 fi
+ok "PostgreSQL is healthy"
+ok "Valkey is healthy"
 
 # ---------------------------------------------------------------------------
 # Install dependencies

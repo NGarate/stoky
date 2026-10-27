@@ -20,7 +20,12 @@ afterEach(() => {
   }
 });
 
-function setup(existingModules: boolean, installExit = 0, pnpm = false) {
+function setup(
+  existingModules: boolean,
+  installExit = 0,
+  pnpm = false,
+  upExit = 0,
+) {
   const fixture = mkdtempSync(join(tmpdir(), "stoky-dev-setup-"));
   fixtures.push(fixture);
   mkdirSync(join(fixture, "scripts"));
@@ -45,7 +50,7 @@ function setup(existingModules: boolean, installExit = 0, pnpm = false) {
     "docker",
     `case "$*" in
     --version) echo 'Docker test fixture' ;;
-    *' ps '*) echo '{"Health":"healthy"}' ;;
+    *' up '*) exit "$UP_EXIT" ;;
   esac`,
   );
   command(
@@ -65,6 +70,7 @@ function setup(existingModules: boolean, installExit = 0, pnpm = false) {
       PATH: `${join(fixture, "bin")}:${process.env.PATH}`,
       SETUP_CALLS: callsPath,
       INSTALL_EXIT: String(installExit),
+      UP_EXIT: String(upExit),
     },
   });
   return {
@@ -102,6 +108,14 @@ describe("local bootstrap dependency installation", () => {
       "bunx --bun prisma migrate dev",
     ]);
     expect(result.pnpmMarker).toBe(false);
+  });
+
+  it("stops before installing anything when the services never become healthy", () => {
+    // `up --wait` fails past its timeout; nothing after it may run against a
+    // database that is not there.
+    const result = setup(true, 0, false, 1);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.calls).toEqual([""]);
   });
 
   it("keeps the pnpm marker and stops when conversion fails", () => {

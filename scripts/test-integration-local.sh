@@ -103,34 +103,13 @@ if $ALREADY_RUNNING; then
 else
   echo "Starting local test services from $COMPOSE_FILE..."
 fi
-docker compose -f "$COMPOSE_FILE" up -d db cache
-
-echo "Waiting for services to be healthy..."
-elapsed=0
-while [ $elapsed -lt $MAX_WAIT ]; do
-  db_health=$(docker compose -f "$COMPOSE_FILE" ps db --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | head -1 || true)
-  cache_health=$(docker compose -f "$COMPOSE_FILE" ps cache --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | head -1 || true)
-
-  db_ok=false
-  cache_ok=false
-
-  echo "$db_health" | grep -qx '"Health":"healthy"' && db_ok=true
-  echo "$cache_health" | grep -qx '"Health":"healthy"' && cache_ok=true
-
-  if $db_ok && $cache_ok; then
-    echo "Services are healthy."
-    break
-  fi
-
-  sleep 2
-  elapsed=$((elapsed + 2))
-done
-
-if [ $elapsed -ge $MAX_WAIT ]; then
+# `--wait` returns once both healthchecks pass, and fails past the timeout.
+if ! docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout "$MAX_WAIT" db cache; then
   echo "Error: services did not become healthy within ${MAX_WAIT}s."
   docker compose -f "$COMPOSE_FILE" ps
   exit 1
 fi
+echo "Services are healthy."
 
 echo "Recreating isolated test database: ${TEST_DB_NAME}"
 docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 \
