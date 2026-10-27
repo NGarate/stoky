@@ -87,10 +87,16 @@ case "$SUITE" in
     # on an already-prepared one is a migration that fails on somebody's first
     # install — which is what happened with pg_trgm.
     #
+    # Then the schema against what the migrations built: the tests run on a
+    # client generated from schema.prisma, so an index or a foreign key added
+    # there without a migration passes every one of them and never reaches an
+    # install. `--exit-code` exits 2 on any difference.
+    #
     # `bunx --bun prisma`, because prisma is a binary rather than a script; and
     # `bun run test:*` rather than `bun test:*`, because the bare form would
     # invoke Bun's own runner and sweep every suite at once.
     COMMANDS='bunx --bun prisma migrate deploy \
+      && bunx --bun prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code \
       && bun run test:unit \
       && bun run test:components \
       && bun run test:integration:only'

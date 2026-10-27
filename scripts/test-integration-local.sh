@@ -157,6 +157,11 @@ echo "Applying database migrations..."
 # in package.json, and `bun run prisma` would look for the latter and find none.
 bunx --bun prisma migrate deploy
 
+echo "Checking the schema against what the migrations built..."
+# Exits 2 on any difference: a schema change committed without its migration.
+bunx --bun prisma migrate diff --from-config-datasource \
+  --to-schema prisma/schema.prisma --exit-code
+
 if [ "${1:-}" = "--" ]; then
   shift
 fi
