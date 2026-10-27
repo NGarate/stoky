@@ -218,9 +218,8 @@ function SnackbarViewport(): JSX.Element {
     <Toast.Viewport
       // Clear of the phone's bottom bar, which is `md:hidden` and covers the
       // bottom of the viewport. A popup drawn over a 48px navigation target
-      // is ISSUES UI-6, a defect this project has already shipped once, so
-      // the offset is measured against the bar in `e2e/snackbar.spec.ts`
-      // rather than trusted here.
+      // is ISSUES UI-6, a defect this project has already shipped once. No
+      // test measures the offset against the bar.
       className="fixed inset-x-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-50 m-0 flex list-none flex-col items-center gap-2 px-4 outline-none md:bottom-6"
       // Names the hotkey, so reaching the undo is discoverable rather than
       // folklore. Radix's default is F8 and this must agree with it.

@@ -13,7 +13,7 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1, TEST-9 and TEST-10.** TEST-11 closed on 2026-10-23 (`cb08d9a`): every `bun test` now loads Next's environment baseline first. TEST-7 closed on 2026-09-12 by removing
+**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1 and TEST-9.** TEST-10 closed on 2026-10-27 with its spec deleted (PROGRESS D154). TEST-11 closed on 2026-10-23 (`cb08d9a`): every `bun test` now loads Next's environment baseline first. TEST-7 closed on 2026-09-12 by removing
 two process-wide ProductRating mocks from unrelated component tests.
 TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
@@ -142,7 +142,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | DB-1 | The data model's invariants are held only by application code | 🟡 Open — deferred by the 2026-10-12 security review; needs a data audit first |
 | UPLOAD-1 | Receipt photographs have no per-household storage quota | 🟡 Open — deferred by the 2026-10-12 security review |
 | TEST-9 | Nothing pins that the caller's own row has no reset button, and a self-reset would be reported as "too easy" | 🟡 Open — deferred by the final review of the 2026-10-12 security branch |
-| TEST-10 | The service worker's offline spec failed three full runs on the Better Auth branch | 🟡 Open — cause not found; first step is a traced failing run |
+| TEST-10 | The service worker's offline spec failed three full runs on the Better Auth branch | ✅ Closed 2026-10-27 — the spec was deleted, cause never found |
 | TEST-11 | `trpc-links.test.ts` failed once in CI with Next's "AsyncLocalStorage accessed in runtime where it is not available" | ✅ Resolved `cb08d9a` — the first file to import `next/headers` left Next's request storage broken for the rest of the process |
 
 ---
@@ -1006,9 +1006,8 @@ contraseña es demasiado fácil de adivinar" for every password they tried.
 Nothing would notice. `PeopleRoles.test.tsx` does not render the page: it
 reproduces the row from `ItemRow`, `Badge` and `Button` and tests the dialog
 and `resetRefusalOf` directly, so changing the page's condition cannot turn
-it red (read, not mutated: the page is not imported). The e2e spec
-`member-password-reset.spec.ts` finds the member's row by its button and
-never checks that the owner's own row has none. The server half is pinned
+it red (read, not mutated: the page is not imported). No e2e spec resets a
+member's password since 2026-10-27 (PROGRESS D154). The server half is pinned
 (`household.members.test.ts` expects `RESET_OWN_PASSWORD_MESSAGE`).
 
 **The fix** is two small parts: a component or e2e test that the caller's
@@ -1020,14 +1019,16 @@ never `"tooEasy"`.
 
 ---
 
-### 🟡 TEST-10: The service worker's offline spec failed three full runs on the Better Auth branch
+### ✅ TEST-10: The service worker's offline spec failed three full runs on the Better Auth branch
 
 **File:** `e2e/service-worker.prod.spec.ts` ("signed in › serves a page with
 the network cut off")
 **Severity:** LOW — an intermittent browser test; nothing a person meets has
 been tied to it
-**Status:** OPEN — seen while building the Better Auth branch
-(`feat/better-auth-2026-10-15`), cause not found
+**Status:** CLOSED 2026-10-27 without a cause — the spec was deleted when the
+browser suite became one happy path per process (PROGRESS D154). Seen while
+building the Better Auth branch (`feat/better-auth-2026-10-15`), cause not
+found
 
 With the network cut off, `/inventory` is expected to come from the worker
 with the app's own navigation on it. Three full runs of `bun run test:e2e`
@@ -4260,9 +4261,6 @@ which is short:
   OFFLINE-1 has the most specified fix (a client-side age gate) and SHOP-2 the
   smallest (LOC-1's lock); DB-1 and UPLOAD-1 each need a schema change, and
   DB-1 a data audit before it.
-- **TEST-10** — an intermittent browser test, seen only on the Better Auth
-  branch. Re-run before investigating, and keep the trace of the run that
-  fails: that is the one missing piece of evidence.
 - Everything else that remains is *unbuilt or human-shaped, not a defect*, and
   lives in `docs/REDESIGN_PLAN.md` §10: the three manual passes, T7, and
   Phase 8's done-when — the owner repeating their pass. The Phase 7 review

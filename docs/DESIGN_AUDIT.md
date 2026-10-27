@@ -8,8 +8,8 @@ carried a done marker — and a reader who believed line 3 would have discarded
 all of them. A0 through A4.5 are done and their markers are accurate — A0 and
 A1.4 carried no marker until 2026-08-31, though both had long been the CI
 gates `check:links` and `check:contrast`. A4.6 is half done: its automated
-half is `e2e/screen-reader.spec.ts`, and the human screen-reader pass is
-still owed. In §5, A5.1 and A5.2 are done and were never marked; A5.3 closed
+half was `e2e/screen-reader.spec.ts` until that suite was deleted on
+2026-10-27 (PROGRESS D154), and the human screen-reader pass is still owed. In §5, A5.1 and A5.2 are done and were never marked; A5.3 closed
 2026-08-22 (its entry records the 142 → 13 count and the test that holds it);
 and A5.4 closed 2026-09-01 — the entry point is the person's configurable
 choice among the main screens (D117); A5.5, the page grammar — one header,
@@ -232,9 +232,15 @@ destination.
 
 ## 4. Accessibility to AAA
 
-**Where it stands — now measured.** `e2e/accessibility.spec.ts` runs axe-core
-against every route in both themes with the full AAA rule set. **30 checks, all
-passing** across 15 routes × 2 themes.
+**Where it stands — measured, then unmeasured.** Every browser suite this
+section names (`accessibility`, `a11y-structure`, `a11y-aaa`, `screen-reader`)
+was deleted on 2026-10-27, when the browser suite became one happy path per
+process (PROGRESS D154). The findings and fixes below stand; nothing re-checks
+them in a browser now, but axe still runs at AAA statically, in the component
+suite under happy-dom, on the screens it audited — without layout, so not
+contrast. When it first ran, `e2e/accessibility.spec.ts` ran
+axe-core against every route in both themes with the full AAA rule set: **30
+checks, all passing** across 15 routes × 2 themes.
 
 Getting there found three things in the first run:
 
@@ -321,8 +327,8 @@ below cannot be machine-checked at all.
   are three too many. What does not need a person is whether the information is
   in the tree at all.
 
-  `e2e/screen-reader.spec.ts` covers the second half across the four primary
-  journeys, driving the real controls rather than navigating between steps that
+  `e2e/screen-reader.spec.ts` covered the second half across the four primary
+  journeys until 2026-10-27, driving the real controls rather than navigating between steps that
   have a button. Every interactive node named, no name a raw translation key,
   outcomes announced, tree order against bounding boxes.
 
@@ -346,9 +352,9 @@ below cannot be machine-checked at all.
 ## 5. The manual pass — pa11y and Accessibility Insights
 
 Automated testing decides roughly a third of real accessibility problems. This
-project measures what a machine can (`accessibility`, `a11y-structure`,
-`a11y-aaa`, `screen-reader`, and the reading-level gate on the catalogues), and
-what remains is a human pass that no tool replaces. These two tools do not
+project measured what a machine can until 2026-10-27; of those checks only the
+reading-level gate on the catalogues and `check:contrast` remain, and what
+remains is a human pass that no tool replaces. These two tools do not
 replace it either — they make it repeatable.
 
 ### Why neither is in CI
@@ -400,8 +406,8 @@ it is slower, and its AAA half cannot pass or fail.
 A free Chrome and Edge extension from Microsoft. Two modes, and only the second
 is worth the time here:
 
-- *FastPass* — axe underneath. It finds what `accessibility.spec.ts` already
-  finds on every run; use it only to check a page mid-development.
+- *FastPass* — axe underneath. axe runs here only statically, with no layout,
+  so it is the quickest way to check a rendered page's axe findings.
 - **Assessment** — the one to use. It walks a person through the checks no tool
   makes: keyboard traps, focus order against visual order, whether a live
   region says something *useful* rather than merely something, contrast on
@@ -426,8 +432,8 @@ else. A finding from a manual pass is not a lesser finding.
 ### What still is not covered by either
 
 The screen-reader pass with a real screen reader — NVDA, VoiceOver or Orca —
-driven by someone who uses one. `screen-reader.spec.ts` audits the accessibility
-tree across four journeys and can tell you the tree is well formed. Whether the
+driven by someone who uses one. Nothing audits the accessibility tree
+automatically any more (PROGRESS D154). Whether the
 result *sounds* sensible is the question neither a tool nor an agent can
 answer, and it is the one item of Phase 2b still open.
 
@@ -447,8 +453,9 @@ not enumerate them.
 
 **Actions once it lands**
 
-- ~~**A5.1**~~ **Done.** The runtime audit is `e2e/accessibility.spec.ts`, every
-  route in both themes at three viewport tiers, gating CI.
+- ~~**A5.1**~~ **Done, then undone.** The runtime audit was
+  `e2e/accessibility.spec.ts`, every route in both themes at three viewport
+  tiers, gating CI, until it was deleted on 2026-10-27 (PROGRESS D154).
 - ~~**A5.2**~~ **Done.** `/dashboard` is a real household overview with 35
   translated strings. Verified rather than assumed, which is what this action
   asked for.
@@ -559,9 +566,8 @@ not enumerate them.
   states a width, goes through `PageHeader`, writes no `h1`, and adds no
   gutter), the primitives' component tests, and the state tests in
   `route-query-states.test.tsx` / `route-query-failure.test.tsx` /
-  `empty-states.test.tsx`. Browser: `a11y-structure`, `accessibility`,
-  `a11y-aaa` and `critical-paths` green on chromium; `dynamic-routes` and
-  `location-picker` green on chromium and Mobile Safari.
+  `empty-states.test.tsx`. No browser suite checks it since 2026-10-27
+  (PROGRESS D154).
 
   **Left open, deliberately:**
 

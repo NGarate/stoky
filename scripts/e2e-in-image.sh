@@ -27,9 +27,9 @@
 # suite derives its own database and cache index from them (`e2e/db-url.ts`).
 #
 # Usage:
-#   bun run test:e2e                               # the whole matrix
-#   bun run test:e2e -- e2e/critical-paths.spec.ts # anything playwright takes
-#   bun run test:e2e -- --project=webkit
+#   bun run test:e2e                          # the whole suite
+#   bun run test:e2e -- e2e/products.spec.ts  # anything playwright takes
+#   bun run test:e2e -- --project=passkeys
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

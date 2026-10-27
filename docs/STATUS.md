@@ -538,12 +538,12 @@ binary you happen to be holding.
 | Internal links | `bun run check:links` | ✅ 118 links against 35 routes, none broken (2026-10-12, security branch head) |
 | Contrast | `bun run check:contrast` | ✅ 96 checks over 37 tokens × 2 themes, all AAA (2026-10-12, security branch head) |
 | Unit tests | `bun run test:unit` | ✅ 1,483 pass / 118 files (2026-10-12, security branch head, host Bun 1.4.2: the final verification's 1,481 plus the two `ledger-shas` tests the review's record added) |
-| Component tests | `bun run test:components` | ✅ 931 pass / 77 files (2026-10-12, security branch head, host Bun 1.4.2) |
+| Component tests | `bun run test:components` | ✅ 1,103 pass in 18 s (2026-10-27, with the axe audits of D154) |
 | Integration tests | `bun run test:integration` | ✅ 676 pass / 42 files (2026-10-12, security branch head, host Bun 1.4.2) |
 | Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `bunx --bun prisma migrate deploy` | ✅ all committed migrations on fresh databases; production image also starts against a restored backup (2026-09-25) |
 | Seed | `bun run db:seed` | ✅ idempotent across re-runs |
-| E2E | `bun run test:e2e` | ✅ 194 pass / 0 fail in 3.0 minutes (2026-10-12, security branch head; on the Better Auth branch 202 pass in 3.6 minutes at its 27th commit, and its finished head, with `two-factor.spec.ts` and the `passkeys` project, is measured by the run before its push — *Gate status* above), in `mcr.microsoft.com/playwright:v1.62.1-noble` with Bun 1.4.3 (`scripts/e2e-in-image.sh`) — Chromium, Firefox, WebKit and Mobile Safari from the image, nothing installed on the host. On 2026-10-09 a host `bunx --bun playwright test` reported 21 failures, 20 of them `Executable doesn't exist` |
+| E2E | `bun run test:e2e` | ✅ 12 pass / 0 fail in 46.7 s at four workers, 51 s wall with the build (2026-10-27; 205 tests in 3.3 min before, after the suite became one happy path per process, D154), in Playwright's image with Bun from `.bun-version` (`scripts/e2e-in-image.sh`) — Chromium from the image, nothing installed on the host |
 | Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 598 packages (2026-10-25, after the zod 4 migration; 563 at the security branch head, 2026-10-12) |
 
 **Nothing enforces the installer version any more.** corepack left with pnpm,
@@ -837,50 +837,54 @@ WebKit, so a Safari user on a plain-http LAN install got a rendered page whose
 every tRPC call died. The directive is now keyed on the request's transport
 (D84), and the suite is why anyone knows.
 
-Ten spec files plus `seed` and `setup` projects. **117 tests in 2.9 minutes,
-including the `next build`** — against 108 in 2.7–2.9 driving `next dev`
-before the move: the production server serves faster than dev compiles, which
-paid for the build. It was 96 after the Phase 4/5 audit, 182 in 5.6 before
-that audit. The reductions are not fewer checks: the same checks placed in the
-tier that can answer them, and the browser matrix no longer multiplying two
-independent axes together.
+**One happy path per process since 2026-10-27 (PROGRESS D154).** Ten spec
+files plus the `seed` and `setup` projects: **12 tests in 46.7 seconds at
+four workers**, `fullyParallel`, on chromium alone. Each test registers its
+own account or touches seeded rows no other test reads. Everything the suite
+measured before beyond those paths — the browser accessibility sweeps (axe
+now runs at AAA in the component suite instead), layout at phone
+width, page titles, security headers and the CSP, the request guards, the
+service worker, refusals and edge cases, and the firefox, webkit and Mobile
+Safari projects — was deleted, not moved: no tier checks it in a browser now.
+
+**Before and after, measured 2026-10-27**, sequentially on the same 8-core
+machine, one run each: "before" is `cfd8b4ed` (the commit this change was made
+on) checked out in a worktree, "after" is the change with the component axe
+tests.
+
+| Command | Before | After | Change |
+|---|---|---|---|
+| `bun run test:e2e` | 205 tests in 3.3 min (203 s wall) | 12 tests in 46.7 s (51 s wall) | −94% tests, −75% wall |
+| `bun run verify:ci` | 250 s — 1,970 unit, 1,085 component, 859 integration | 236 s — 1,970 unit, 1,103 component, 859 integration | within run-to-run noise |
+| Both: the gate before a push | 453 s (7.6 min) | 287 s (4.8 min) | −37% |
+
+The e2e wall time includes the production build `webServer` makes, in both
+columns. The 18 new component tests (17 axe audits) did not move the component
+step, 18 s before and after; `verify:ci`'s 14 s difference is the build step
+(25 s against 17 s) and is noise, not this change. CI, at two workers and with
+retries, was not measured.
 
 | Project | Runs | Why |
 |---|---|---|
-| chromium | Everything but `passkeys.spec.ts` | The reference engine |
+| chromium | Everything but `passkeys.spec.ts` | The one engine |
 | passkeys | `passkeys.spec.ts` | Chromium at `localhost`, the only address a passkey can belong to — WebAuthn takes no IP address as a relying party. The server lists `STOKY_URLS=http://localhost:3100,http://127.0.0.1:3100`: `localhost` canonical, 127.0.0.1 still trusted for every other project, both plain http so the cookie is unchanged (D151) |
-| Mobile Safari | `dynamic-routes`, `location-picker` | WebKit at a phone width — the combination where this project's layout defects have actually appeared (UI-5, UI-6) |
-| firefox | `@smoke` — 4 tests | Register, sign in, write, read Spanish |
-| webkit | `@smoke` — 4 tests | As above |
 
-**Mobile Chrome was removed.** It is Blink at 393px, and chromium already
-visits every route at that width: the three a11y specs loop the viewport tiers
-with `setViewportSize`, and `dynamic-routes` checks overflow at all three. It
-was an engine already covered, at a width already tested.
-
-Five picker tests moved down to the component tier, which already asserted the
-same contract — keyboard navigation, Escape, tab order — against the real
-component in milliseconds. The two that stayed are the two happy-dom cannot
-answer: composed target size, and whether a fixed bar is painted over an option.
-
-| Spec | What it proves | Projects |
-|---|---|---|
-| `critical-paths.spec.ts` | The stock journeys, login, i18n | chromium, `@smoke` elsewhere |
-| `accessibility.spec.ts` | axe at WCAG AAA — 16 routes × 2 themes × 3 tiers | chromium |
-| `a11y-structure.spec.ts` | Target size, heading order, landmarks | chromium |
-| `a11y-aaa.spec.ts` | 1.4.8, 2.4.9, 3.3.5 and reduced motion | chromium |
-| `dynamic-routes.spec.ts` | Routes with an id, found by following links | chromium, Mobile Safari |
-| `location-picker.spec.ts` | Composed target size and occlusion | chromium, Mobile Safari |
-| `screen-reader.spec.ts` | The accessibility tree across four journeys | chromium — the tree comes over CDP |
-| `offline-shop.spec.ts` | A shop composed in aeroplane mode, applied once | chromium |
-| `auth.prod.spec.ts` | The deployed artefact signs people in: `trustHost`, and the production CSP breaking nothing | chromium |
-| `service-worker.prod.spec.ts` | A real worker registers, precaches, and serves offline — the one file that opts back into `serviceWorkers` | chromium |
-| `two-factor.spec.ts` | Two-step verification set up in settings from the key the page shows, asked for at the next sign-in, and a code refused the second time | chromium |
+| Spec | The happy path |
+|---|---|
+| `auth.spec.ts` | Register, choose a start screen, sign out, sign back in to the same screen |
+| `products.spec.ts` | Create a product, find it in the catalogue, open it |
+| `inventory.spec.ts` | Add stock to a product, then consume some |
+| `shopping.spec.ts` | Make a list, add an item, tick it off offline, applied on reconnect |
+| `receipts.spec.ts` | Add a reviewed receipt to the inventory |
+| `household.spec.ts` | An admin creates a member's account; the member signs in |
+| `password.spec.ts` | Change the password; the new one signs in |
+| `sessions.spec.ts` | End another device's session from the devices list |
+| `two-factor.spec.ts` | Turn on two-step verification; the next sign-in asks for a code |
+| `passkeys.spec.ts` | Add a passkey; it signs in from the login page |
 
 `globalTimeout` is **5 minutes locally and 9 in CI**, and since 2026-08-17 it
 covers the `next build` too, because the build runs inside Playwright's
-`webServer`. Locally that still fits with room: 117 tests in 2.9 minutes,
-build included.
+`webServer`. Locally that fits with room: 51 seconds, build included.
 
 **The CI ceiling story, which three pushes rewrote.** On 2026-08-12 the job
 spent 84–193s on setup before a dev-served suite of 385–422s, and the 540s
@@ -917,12 +921,6 @@ apt-install it replaced was 57–136s *depending on Ubuntu's mirrors*, so the
 prize was variance off the critical path more than the average; and the
 container briefly looked 100s slower against drifting runners until twin jobs
 on the same commit measured 400s vs 405s (`31583973041`).
-
-The two `test.skip`s that sat in `critical-paths.spec.ts`, scoped to phone
-viewports "because the phone UI is Phase 4", were filed as TEST-6 rather than
-deleted in passing — and closed on 2026-08-27 (`bcd1e74`): run at a phone
-viewport the failures were all locators, nothing the product does, and the
-spec passes 8 of 8 there now.
 
 ### Which tier answers which question
 
@@ -1094,7 +1092,7 @@ unrepresentable. Changes made without a connection go into a `zustand` store
 persisted to `localStorage` through SuperJSON, are folded onto the screen so
 they show as done, and drain one at a time on reconnect. A refused consumption
 is not a failure but a question — see *Reconciliation* below. Proven by
-`e2e/offline-shop.spec.ts`, which is the phase's done-when.
+`e2e/shopping.spec.ts`, which is the phase's done-when.
 
 **Auth — working, on Better Auth 1.7.7 since 2026-10-15 (D135).** Real forms
 post to the auth API through `src/lib/auth/client.ts`, with Argon2id hashing,
@@ -1129,9 +1127,8 @@ missed a dead route three times running, twice from routes linked on every row
 of a table. The five newest pages are Phase 5's: `/kitchen`, `/shopping` as
 Screen A (the list manager moved to `/shopping/lists`), `/settings/people`,
 and `/settings/unsaved`. `/settings/security` (2026-10-15, D143) lists a
-person's sessions and ends them; `e2e/session-revocation.spec.ts` drives it
-with two browsers, and `page-titles`, `a11y-structure`, `accessibility` and
-`a11y-aaa` cover it like every other private route.
+person's sessions and ends them; `e2e/sessions.spec.ts` drives it with two
+browsers.
 
 **Design system — one, and it is in CSS.** 37 tokens under `@theme` in
 `src/app/globals.css` — this line said 26 while line 39 of this same file said
@@ -1145,7 +1142,8 @@ Everything else is Tailwind against the tokens — the earlier plan to install
 
 **Navigation — three renderers by tier.** Bottom bar below `md`, rail from `md`,
 top bar from `lg`, with a focus-trapped sheet for the overflow. Audited by axe
-at all three tiers in both themes.
+at all three tiers in both themes until 2026-10-27, when that sweep was
+deleted (PROGRESS D154).
 
 **i18n — two catalogues that cannot silently diverge.**
 `src/__tests__/unit/messages.test.ts` fails on a key present in one and not the
@@ -1198,16 +1196,16 @@ What is measured, and by what:
 
 | Criterion | Checked by | State |
 |---|---|---|
-| Contrast (1.4.6) | `check:contrast` on the tokens, axe on the rendered page | ✅ both |
-| Target size (2.5.5) | `a11y-structure.spec.ts`, measured in CSS pixels | ✅ floor is 48px, above the required 44 |
-| Headings, landmarks | `a11y-structure.spec.ts` | ✅ |
-| Names and roles | axe, plus the tree walk in `screen-reader.spec.ts` | ✅ zero unnamed interactive nodes |
-| Visual presentation (1.4.8) | `a11y-aaa.spec.ts` | ✅ ≤80 characters, ≥1.5 line spacing |
-| Link purpose (2.4.9) | `a11y-aaa.spec.ts` | ✅ |
-| Help (3.3.5) | `a11y-aaa.spec.ts`, form fields only | ✅ attached, not merely adjacent |
-| Reduced motion (2.3.3) | `a11y-aaa.spec.ts` | ✅ |
-| Reading order | `screen-reader.spec.ts`, tree order vs geometry | ✅ desktop only |
-| Announcements | `screen-reader.spec.ts` | ✅ refusals and saved movements both announced — A11Y-1 closed in Phase 5, and the pinned assertion flipped |
+| Contrast (1.4.6) | `check:contrast` on the tokens | ✅ tokens only; the rendered page is no longer audited |
+| Target size (2.5.5) | `target-size.test.tsx`, by class | ⚠️ not measured in a browser since 2026-10-27 (D154); last measured floor 48px |
+| Headings, landmarks | axe at AAA in the component suite, per screen | ✅ statically, under happy-dom (D154); no browser |
+| Names and roles | axe at AAA in the component suite, per screen | ✅ statically, under happy-dom (D154); no browser |
+| Visual presentation (1.4.8) | nothing | ⚠️ unchecked since 2026-10-27 (D154) |
+| Link purpose (2.4.9) | nothing | ⚠️ unchecked since 2026-10-27 (D154) |
+| Help (3.3.5) | component tests, form by form | ⚠️ no per-route sweep since 2026-10-27 (D154) |
+| Reduced motion (2.3.3) | nothing | ⚠️ unchecked since 2026-10-27 (D154) |
+| Reading order | nothing | ⚠️ unchecked since 2026-10-27 (D154) |
+| Announcements | component tests | ⚠️ no browser tree walk since 2026-10-27 (D154) |
 | Reading level (3.1.5) | `src/__tests__/unit/readability.test.ts` | ✅ es 69.0 "fácil", en 66.3 |
 | Timeouts (2.2.6) | `SessionKeepAlive.test.tsx`, `session.policy.test.ts`, driven in a browser | ✅ slides on activity, warns at T−2min, and says which deadline: inactivity with "Seguir conectado", or the day's limit with no button, because nothing extends it (re-measured 2026-10-15: 12 component, 13 integration, 10 unit cases) |
 
@@ -1431,19 +1429,16 @@ whose value matched the server's own address exactly.
 
 Nothing caught it because `next dev` does not apply the check and every suite
 ran against `next dev`. (Auth.js was replaced by Better Auth on 2026-10-15,
-D135; the spec now asserts Better Auth's `get-session` answers on the
-production build, and that it refuses a foreign origin.) `trustHost: true` is now set, with the trade written
+D135.) `trustHost: true` is now set, with the trade written
 down (Traefik's `Host(...)` rule is what makes trusting the header safe here),
-and `e2e/auth.prod.spec.ts` guards it in the one config that serves the
-standalone artefact. Verified to fail without the fix.
-
-That suite now also **signs in for real** against the production build, and
-asserts no Content-Security-Policy violation reaches the console while it does.
+and the spec that guarded it (deleted 2026-10-27, D154) was verified to fail
+without the fix. Every browser test still signs in against the production
+build, but none asserts the absence of console CSP violations any more.
 The production policy is stricter than any other suite exercises — no
 `unsafe-eval`, no websocket origins, `upgrade-insecure-requests` — and a policy
 that blocks the framework's own scripts renders a login form that does nothing,
-which is the same shape as the defect above. It passes: the policy does not
-break the application.
+which is the same shape as the defect above. The suite passing is the evidence
+that the policy does not break the application.
 
 **Verified end to end on 2026-08-11**, at `2b148a2`, every gate in one sequence:
 
@@ -1503,13 +1498,12 @@ Two things that sequence surfaced, both operational rather than defects:
   442 tests is a judgement call that has not been made.
 
 **Offline, honestly**
-- ~~**The service worker is not exercised by any test.**~~ **Closed.**
-  `pnpm test:e2e:sw` builds and serves the standalone artefact the Docker image
-  runs, then drives a real worker: it registers and claims the page, `install`
-  precaches `/offline`, the static cache holds real hashed chunks, a navigation
-  with the network cut off is served from cache, and an uncached route gets the
-  offline document. Separate from the ordinary suite because a `next build` is a
-  minute the five-minute budget cannot absorb.
+- **The service worker is not exercised in a browser.** It was, from 2026-08
+  to 2026-10-27, when the spec was deleted (PROGRESS D154):
+  it drove a real worker on the standalone artefact: registering and claiming
+  the page, `install` precaching `/offline`, the static cache holding real
+  hashed chunks, a navigation with the network cut off served from cache, and
+  an uncached route getting the offline document.
 - **iOS Safari is unverified.** Playwright's WebKit is not iOS Safari, and §5.4
   defers installability on iOS grounds specifically. The queue, the storage and
   the worker all need a pass on a real device, and that pass must be dated here
@@ -1547,8 +1541,8 @@ Two things that sequence surfaced, both operational rather than defects:
   browser could install the app and nothing went red. `src/app/manifest.ts`,
   `public/icons/` and the iOS `apple-touch-icon` closed it.
   `pwa-manifest.test.ts` checks the install criteria and that the PNG sizes
-  match their declarations. `service-worker.prod.spec.ts` checks that Chromium
-  parses the manifest cleanly and loads every icon. What stays deferred on iOS
+  match their declarations. Nothing checks in a browser that Chromium parses
+  the manifest cleanly and loads every icon (D154). What stays deferred on iOS
   grounds (`REDESIGN_PLAN.md` §5.4) is an install *prompt*, push and background
   sync. Measured trap: CDP's `Page.getInstallabilityErrors` answers `[]` even
   for a manifest with no icons, so it cannot be the assertion.

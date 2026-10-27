@@ -28,9 +28,8 @@ const securityHeaders = [
   // **Not `no-referrer`**, which looks stricter and breaks the Server
   // Actions: under it the Fetch standard sends `Origin: null` on *every* POST,
   // same-origin ones included, and Next aborts an action whose Origin does not
-  // match the host. Measured: with it, the no-JS screen choice
-  // (`e2e/screen-choice.spec.ts`) fails with "does not match `origin` header
-  // with value `null` … Aborting the action". `same-origin` nulls the Origin
+  // match the host. Measured: with it, the no-JS screen choice fails with
+  // "does not match `origin` header with value `null` … Aborting the action". `same-origin` nulls the Origin
   // only on a cross-origin POST, which Stoky's pages never make.
   //
   // The product `<img>` carries its own `no-referrer` as well, for an
@@ -51,8 +50,8 @@ const securityHeaders = [
   // that is gone and left its successor at the default.
   //
   // Only tokens Chromium recognises: an unknown one is ignored, with an
-  // "Unrecognized feature" error on the console of every page, and
-  // `e2e/security-headers.spec.ts` goes red on that. It is why `bluetooth`
+  // "Unrecognized feature" error on the console of every page; nothing in
+  // the browser suite checks for it any more. It is why `bluetooth`
   // is absent: Chromium 151 does not recognise it (measured), and Web
   // Bluetooth asks the person per device anyway.
   //
@@ -123,7 +122,6 @@ const securityHeaders = [
   // because that host sends no CORP. It does answer CORS, so `crossorigin` or
   // `credentialless` would let them through, but only for as long as a host
   // that is not ours keeps doing so, for a capability nothing here needs.
-  // `e2e/security-headers.spec.ts` goes red if this is added.
 ];
 
 const nextConfig: NextConfig = {
@@ -229,8 +227,7 @@ const nextConfig: NextConfig = {
    *
    * The condition that makes this safe is asserted rather than remembered:
    * `src/__tests__/unit/next-image.test.ts` fails if `images.unoptimized` is
-   * not `true`, and `e2e/security-headers.spec.ts` asks the production build
-   * for `/_next/image` and expects the 404.
+   * not `true`.
    */
   outputFileTracingExcludes: {
     "*": ["node_modules/sharp/**", "node_modules/@img/**"],

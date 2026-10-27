@@ -351,8 +351,8 @@ Verified against the files named in each row.
   with a `NotAllowedError` that reads like the person cancelling. Both
   passkey grants are `(self)`, their default, written out so the next edit of
   the list sees them; no frame is granted either. `bluetooth` is left unset
-  because the suite's Chromium (151) does not recognise the token. `e2e/security-headers.spec.ts` pins the value and
-  fails on any token that Chromium does not recognise.
+  because Chromium (151) does not recognise the token. No browser test pins
+  the value since 2026-10-27 (PROGRESS D154).
 - **`Cross-Origin-Opener-Policy: same-origin` and
   `Cross-Origin-Resource-Policy: same-origin`**, on every route, since
   2026-10-12 (`docs/SECURITY_REVIEW.md` §8). A page on another origin that
@@ -375,11 +375,8 @@ Verified against the files named in each row.
   `images.openfoodfacts.org` sends no CORP. That host does answer
   `Access-Control-Allow-Origin: *` (measured 2026-10-12), so `crossorigin` on
   the image or `credentialless` would let them through — for as long as a host
-  that is not ours keeps answering that way. `e2e/security-headers.spec.ts`
-  checks that the opener's handle reads closed, that another origin's image
-  load of a Stoky icon fails with Chromium's CORP error, and that a product
-  page shows its photograph with no embedder policy and is not cross-origin
-  isolated.
+  that is not ours keeps answering that way. No browser test checks either
+  header's effect since 2026-10-27 (PROGRESS D154).
 - **`Referrer-Policy: same-origin`**, since 2026-10-12, and the product
   photograph's `<img>` carries `referrerpolicy="no-referrer"` of its own, for
   an operator whose proxy rewrites the header. A request to another origin
@@ -392,12 +389,10 @@ Verified against the files named in each row.
   travelling with it. Not `no-referrer`: under it the Fetch standard sends
   `Origin: null` on every POST, same-origin ones included, and Next aborts a
   Server Action whose Origin does not match the host — measured, the no-JS
-  screen choice in `e2e/screen-choice.spec.ts` fails under it, and sign-out
-  and the language switch are Server Actions too. `same-origin` nulls the
-  Origin only on a cross-origin POST, which Stoky's pages never make.
-  `e2e/security-headers.spec.ts` pins the header and checks that the
-  photograph's request carries no `Referer` and that the element carries its
-  attribute.
+  screen choice fails under it, and sign-out and the language switch are
+  Server Actions too. `same-origin` nulls the Origin only on a cross-origin
+  POST, which Stoky's pages never make. No browser test pins the header since
+  2026-10-27 (PROGRESS D154).
 - `poweredByHeader: false`, so responses do not advertise the framework version.
 - **Every response from `/api/trpc` carries `Cache-Control: no-store`** —
   data, errors, the 429 and the handler's own 403, 413 and 415 — set once, at
@@ -409,9 +404,7 @@ Verified against the files named in each row.
   shared cache in front of the instance could have served one person's
   answer to the next. Offline reads are unaffected: TanStack Query persists
   them in client storage, and the service worker never caches `/api/`.
-  `src/__tests__/unit/trpc-handler.test.ts` checks each kind of answer;
-  `e2e/security-headers.spec.ts` checks a signed-in streamed query and an
-  anonymous 401 against the production build.
+  `src/__tests__/unit/trpc-handler.test.ts` checks each kind of answer.
 
 ### Request bodies — `src/server/http/body-limit.ts`
 
@@ -546,8 +539,8 @@ Verified against the files named in each row.
   with no cookie — a native client — needs none.
   Better Auth switches this check off when `NODE_ENV` is `test`; the
   configuration sets `disableOriginCheck: false`, so the suites run what
-  production runs, and `integration/auth.surface.test.ts` and
-  `e2e/auth.prod.spec.ts` send a foreign origin and see 403. A sign-in is the
+  production runs, and `integration/auth.surface.test.ts` sends a foreign
+  origin and sees 403. A sign-in is the
   one request that sets a session, which is why this check is here and not on
   tRPC. A plain-HTTP LAN install reached both by name and by address lists
   both; before D138 one URL named one of them, and the other answered 403.
@@ -573,11 +566,8 @@ Verified against the files named in each row.
   these APIs. None exists. Server Actions are outside these routes and carry
   Next's own `Origin` check.
 - `src/__tests__/unit/trpc-handler.test.ts` shows tRPC alone running a
-  mutation sent as a form, then the handler refusing it; `e2e/request-guards.spec.ts`
-  sends a cross-site and a form-encoded `auth.endSessions` — every session,
-  with the right password — with a real session against the production
-  build, shows the session alive afterwards, and then sends the same request
-  as `same-origin` to show it does end it.
+  mutation sent as a form, then the handler refusing it. No browser test
+  sends one against the production build since 2026-10-27 (PROGRESS D154).
 
 ### Authentication — `src/lib/auth/instance.ts`, `src/server/http/auth-handler.ts`, `src/server/trpc/routers/auth.ts`
 

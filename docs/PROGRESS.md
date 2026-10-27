@@ -3527,3 +3527,31 @@ administrators' and its read-only notice still holds. The alternative was
 to offer "new shop" to administrators only; it was refused because a member
 with a receipt from a new shop would then file it with no shop, which
 records no prices (PRICE-1).
+
+**D154 — The browser suite is one happy path per process (the owner's
+decision of 2026-10-27).** Ten specs, each the straight path through one
+process and nothing else: register, choose a start screen, sign out and in
+(`auth`); create a product and find it (`products`); add and consume stock
+(`inventory`); make a list and tick it off offline (`shopping`); apply a
+reviewed receipt (`receipts`); an admin creates a member who signs in
+(`household`); `password`, `sessions`, `two-factor` and `passkeys`. Each
+registers its own account or touches seeded rows no other test reads, so
+`fullyParallel` is on, and they run on chromium alone (plus the `passkeys`
+project at `localhost`): 12 tests with the two setup projects, 46.7
+seconds at four workers, where the suite it replaced ran 205 in 3.3 minutes;
+the whole pre-push gate (`verify:ci` and `test:e2e`) went from 453 to 287
+seconds, measured once each on one machine (`STATUS.md` has the table). Deleted with no replacement, so their coverage is
+gone rather than moved: the browser accessibility sweeps (axe across tiers and themes, target size,
+headings and landmarks, the AAA criteria axe misses, the screen-reader tree
+walk), layout at phone width (`dynamic-routes`, `location-picker`,
+`snackbar`), page titles, security headers and the CSP on the production
+build, the cross-site request guards, the service worker, the
+production-artefact sign-in checks, every refusal and edge case (wrong
+passwords, duplicates, remembered sessions, member resets, revoking a
+member's or the household's sessions, a lost authenticator, a failed
+upload), and the firefox, webkit and Mobile Safari projects. axe itself
+stays, on the owner's follow-up the same day, but only statically: it runs at
+AAA in the component suite under happy-dom (`src/__tests__/utils/axe.ts`),
+one test per screen the browser sweep audited. With no layout it cannot judge
+contrast (`check:contrast` does, on the tokens), target size, or a tier or
+theme.

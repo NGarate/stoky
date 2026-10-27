@@ -198,8 +198,7 @@ export function ChangePasswordForm(): JSX.Element {
           >
             {t("current")}
           </label>
-          {/* Every field carries its help, attached (WCAG 3.3.5, AAA), which
-              `e2e/a11y-aaa.spec.ts` checks on this route. */}
+          {/* Every field carries its help, attached (WCAG 3.3.5, AAA). */}
           <Input
             aria-describedby={`${fieldId}-current-hint`}
             aria-invalid={currentInvalid || undefined}

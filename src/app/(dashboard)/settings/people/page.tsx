@@ -202,7 +202,7 @@ export default function PeoplePage(): JSX.Element {
    * `gcTime: 0`: closing the dialog drops the list, so opening it again reads
    * it again. Kept, it would come back inside the client's 30-second
    * `staleTime` and show the admin the sessions "Cerrar todas" had just ended
-   * (measured in `e2e/session-revocation.spec.ts`).
+   * (measured in a browser).
    */
   const memberSessions = api.household.memberSessions.useQuery(
     { userId: viewing?.id ?? "" },

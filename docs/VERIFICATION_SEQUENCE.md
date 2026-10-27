@@ -122,7 +122,7 @@ bun run test:e2e
 One spec at a time, when diagnosing a failure the whole run found:
 
 ```bash
-bun run test:e2e -- e2e/critical-paths.spec.ts
+bun run test:e2e -- e2e/products.spec.ts
 ```
 
 ## Scoped checks — feedback, not a gate
@@ -249,21 +249,20 @@ full table; if the two disagree, STATUS is the one that gets re-measured.
   five-minute `globalTimeout`
 - `pnpm verify:ci` — 83–92s of its 600s budget
 
-The browser matrix is asymmetric on purpose: chromium runs everything; Mobile
-Safari runs the two layout specs; firefox and webkit run a four-test `@smoke`
-set; the two artefact suites (`auth.prod`, `service-worker.prod`) run on
-chromium only. The suites that sweep viewports and themes internally run on
-chromium alone — running them on five engines asks the same question five
-times. `screen-reader.spec.ts` is chromium-only for a harder reason: it reads
-the accessibility tree over the Chrome DevTools Protocol, which does not exist
-elsewhere.
+Since 2026-10-27 the browser suite is one happy path per process, run fully
+in parallel on chromium alone (plus the `passkeys` project, chromium at
+`localhost`): 12 tests, the two setup projects included, in 46.7 seconds
+at four workers, against 205 in 3.3 minutes before; with `verify:ci` the
+whole pre-push gate went from 453 to 287 seconds (`STATUS.md` has the table). The accessibility, layout, security-header, service-worker
+and cross-engine suites recorded above were deleted, not moved (PROGRESS
+D154).
 
 ## Playwright browsers come from the project
 
 `bun run test:e2e` runs the browser suite inside Playwright's own image,
 `mcr.microsoft.com/playwright:v<version>-noble` — the image CI's `e2e` job runs
 in — with Bun from `.bun-version` layered on (`scripts/e2e-in-image.sh`). The
-image carries Chromium, Firefox and WebKit *and* the system libraries they link
+image carries Chromium (and Firefox and WebKit, unused) *and* the system libraries they link
 against, and its tag is the installed `@playwright/test`, so the browsers always
 match the driver. Nothing is installed on the machine; Docker is the only
 requirement, as it already is for `verify:ci`. Arguments pass through to
@@ -271,8 +270,8 @@ requirement, as it already is for `verify:ci`. Arguments pass through to
 
 ```bash
 bun run test:e2e
-bun run test:e2e -- e2e/critical-paths.spec.ts
-bun run test:e2e -- --project=webkit
+bun run test:e2e -- e2e/products.spec.ts
+bun run test:e2e -- --project=passkeys
 ```
 
 A bare `bunx --bun playwright test` still works where the browsers happen to be

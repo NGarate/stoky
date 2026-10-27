@@ -17,8 +17,7 @@ import { join } from "node:path";
  * and no amount of reading the file tells you whether it is wired to anything.
  *
  * What only a browser can answer — that a real `install` populates a real cache
- * — is `e2e/service-worker.prod.spec.ts`, which runs it under an actual
- * production build.
+ * — is not tested.
  */
 
 const ROOT = join(import.meta.dir, "../../..");

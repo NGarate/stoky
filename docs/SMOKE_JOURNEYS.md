@@ -88,25 +88,23 @@ Receipts and price history keep their meaning but no longer have a journey — s
 authenticated layout reads the session and account preferences; it now declares
 `instant = false` at its own boundary, as the root already does for the nonce
 and locale. Its child pages remain subject to navigation validation.
-`e2e/auth.prod.spec.ts` now checks visible dashboard content and rejects the
-uncached-data console error, in addition to CSP violations. The sign-in test
-passes against the live dev server, where Next enables this validation, and
-fails with the reported error when the authenticated layout is deliberately
+The browser spec that checked visible dashboard content and rejected the
+uncached-data console error, in addition to CSP violations, was deleted on
+2026-10-27 (PROGRESS D154); what follows is what it measured. The sign-in test
+passed against the live dev server, where Next enables this validation, and
+failed with the reported error when the authenticated layout is deliberately
 changed to `instant = true`. A Chromium probe also navigated dashboard →
 inventory → products → dashboard and reloaded the dashboard with no errors.
 Rechecked 2026-09-12: the Instant diagnostic can arrive over HMR after
-`networkidle`, so the login test now observes errors for five seconds after
-the dashboard renders. Setting `instant = true` makes its diagnostic
-assertion fail; the layout is restored after this mutation check.
+`networkidle`, so the login test observed errors for five seconds after
+the dashboard rendered. Setting `instant = true` made its diagnostic
+assertion fail; the layout was restored after that mutation check.
 
 **Passes as of 2026-08-09** (Phase 1, closed by `249fb8d`). It was blocked by
 `ISSUES.md` UI-1 — `/products/new`, `/inventory/add`, `/inventory/consume` and
 `/settings` were linked from the interface and all four 404'd. All of them now
-exist and are driven by `e2e/critical-paths.spec.ts`, whose four `test.fixme`
-tests were removed rather than left as a promise. The two `test.skip`s that
-remained in that file, citing "Phase 4", were filed as TEST-6 and closed on
-2026-08-27 (`bcd1e74`): run at a phone viewport the failures were all
-locators, nothing the product does, and the spec passes 8 of 8 there now.
+exist; `e2e/products.spec.ts` drives `/products/new` and
+`e2e/inventory.spec.ts` drives `/inventory/add` and `/inventory/consume`.
 
 This is the bridge journey. It proves the existing routers are reachable by a
 person before either new screen is built, and it is the journey Phase 1 is
@@ -131,7 +129,9 @@ Proof required:
 - after: Leche entera reads 5 and is still marked as below its minimum; a second
   add of 1 L takes it to 6 and the marking clears
 
-Proven by: `e2e/critical-paths.spec.ts`, 16 tests, green on the standalone production build. The location picker on both
+Proven by: `e2e/inventory.spec.ts`, which adds and consumes stock through both
+forms on the standalone production build. It no longer checks the before and
+after totals or the low-stock marking (PROGRESS D154). The location picker on both
 routes was rebuilt on the way (`ISSUES.md` UI-2, UI-4, UI-6) — until then the
 nested locations five of the six seeded products live in could not be chosen at
 all, so the journey's "where it is stored" half was passing on the roots only.
@@ -201,9 +201,9 @@ every procedure in the router.
 **✅ Passes since Phase 5**, when `/shopping` became Screen A — Scan on top,
 TO BUY with the minimum notch, IN THE TROLLEY folded away, undo as the trolley
 itself rather than a timed toast (D54). Proven by
-`src/__tests__/components/ShopPage.test.tsx` for the layout contract and by
-`e2e/offline-shop.spec.ts` — "ticks something off from the shop screen and
-applies it once" — in a real browser. `getBuyList` returns one flat list with
+`src/__tests__/components/ShopPage.test.tsx` for the layout contract. The
+browser test of ticking off from Screen A was deleted on 2026-10-27 (PROGRESS
+D154); `e2e/shopping.spec.ts` ticks off from the list page instead. `getBuyList` returns one flat list with
 stock and minimum attached (D56).
 
 Trigger:
@@ -248,13 +248,6 @@ Visible outcome:
 
 Evidence:
 
-- `e2e/critical-paths.spec.ts` "Journey 4 — stock changes without a form": a
-  fresh product at zero has minus disabled and "no queda nada" said in words;
-  two plus presses move the number to 2 in place with the URL unmoved, each
-  confirmed by the snackbar sentence with its Deshacer; and after the queue's
-  ten-second hold drains, the history table shows **two `PURCHASE` rows of +1**
-  rather than one write that set the total — the delta is what makes Journey 6
-  possible
 - `src/__tests__/components/ProductDetailStepper.test.tsx`: the deltas' exact
   inputs (a purchase of one with no inferred location or expiry, a consumption
   of one with none), the projection folding unsent presses onto the shown total
@@ -280,7 +273,8 @@ is minted server-side at drain time (`product.resolveScan`, an offline-queue
 op). An unknown barcode scanned offline is queued, and on reconnect either
 resolves silently (OFF knows it, or the household already does) or surfaces as
 a review question — a form prefilled with the barcode — never a dead end.
-Proven by `e2e/offline-shop.spec.ts` "An offline scan, resolved later (T7)".
+Its browser test was deleted on 2026-10-27 (PROGRESS D154); nothing drives an
+offline scan end to end now.
 
 Trigger:
 Tap Scan on the phone screen and read a barcode.
@@ -315,15 +309,12 @@ Proof required:
 ## Journey 6. A whole shop with no signal
 
 **✅ Passes since Phase 4** — it was the phase's done-when, and
-`e2e/offline-shop.spec.ts` proves it end to end: a shop composed in aeroplane
-mode, shown as done, applied exactly once on reconnect, including across a
-lost reply where both attempts carry the same idempotency key, and unsent
-changes surviving a reload. **The last bullet — "a scanned barcode is queued
-and enriched later" — is met as of 2026-09-01**, when T7 landed: the same spec
-scans an unknown barcode offline and watches it become a review question on
-reconnect, and scans a known one and watches it resolve silently. The service
-worker half runs under a real production build in
-`e2e/service-worker.prod.spec.ts`, part of the ordinary suite since 2026-08-17.
+`e2e/shopping.spec.ts` proves the happy path end to end: an item ticked off in
+aeroplane mode, shown as done, and applied on reconnect. **The last bullet — "a
+scanned barcode is queued and enriched later" — is met as of 2026-09-01**, when
+T7 landed. Since 2026-10-27 (PROGRESS D154) no browser test covers a lost
+reply, unsent changes surviving a reload, the offline scan, or the service
+worker under a production build.
 
 Trigger:
 Put the device in aeroplane mode, then do a full shop.
@@ -415,9 +406,8 @@ confirmar” and the kitchen refuses another quick use of such a batch.
 
 The recount page starts with a blank actual count. It records no unprovided
 location or expiry and refuses a stale balance under the product lock. The
-browser regression in `e2e/critical-paths.spec.ts` follows the product list's
-“Ajustar” link and verifies the extra counted egg gets no expiry from the
-previous purchase. Dozens convert exactly to individual units (3 → 36);
+browser regression that followed the product list's “Ajustar” link to check
+the extra counted egg gets no expiry was deleted on 2026-10-27 (PROGRESS D154). Dozens convert exactly to individual units (3 → 36);
 this conversion does not reconstruct physical stock or earlier intent.
 
 ## Journey 8. The screen choice is remembered per person and per device
@@ -438,22 +428,11 @@ Visible outcome:
 
 Evidence:
 
-- `e2e/screen-choice.spec.ts`, four tests. Playwright browser **contexts** are
-  the devices: each has its own cookie jar, so each gets its own device id,
-  which is what production keys on — a truer model of two devices than two tabs
-  and cheaper than two browsers.
-- *Asked once, then not again*: a fresh account at `/` gets `/start`, chooses
-  the kitchen, and every arrival afterwards goes straight to `/kitchen`.
-- *The shared tablet*: account A chooses the kitchen on it, signs out, account B
-  registers on the same context and is **asked** rather than placed in kitchen
-  mode.
-- *The same person's own phone*: a second context signs in as A and is asked
-  again, chooses the shop, and the two devices then keep separate answers.
-- *No JavaScript*: a context with scripting disabled drives `/start` to a
-  choice, because it is three submit buttons and a server action.
-- The pair is pinned by two tests that fail **differently**: keying on the
-  account alone passes the shared-tablet test and fails the tablet-to-phone one.
-  Checked by breaking it.
+- `e2e/auth.spec.ts`: a fresh account is asked at `/start`, chooses the
+  kitchen, signs out, signs back in on the same browser context and goes
+  straight to `/kitchen`.
+- The shared-tablet, second-device, no-JavaScript and settings cases had
+  browser tests until 2026-10-27 (PROGRESS D154); they no longer do.
 - `src/__tests__/unit/landing.test.ts` covers the precedence, including the
   omission that matters — no quiet fallback to the Panel for the unasked.
 
@@ -462,13 +441,13 @@ Evidence:
   only ever asked of someone who later typed `/` — the kitchen tablet signed in
   to the panel, and a new account never met `/start`. Both now replace to `/`;
   `auth-pages.test.tsx` pins it, and every browser sign-in (`session.setup.ts`,
-  `auth.prod.spec.ts`, `critical-paths`) now arrives at `/start`.
+  `account.ts`) now arrives at `/start`.
 - *Changeable from settings*: `/settings/screen` shows which screen is current,
   changes it without walking you out of settings, and announces the new answer
   in a live region — and a second device is unaffected by the change.
 
-**Journey 8 is complete.** All three of its stated outcomes are covered, on the
-tiers that can answer them.
+**Journey 8 is complete.** Its outcomes were covered on the tiers that can
+answer them; since 2026-10-27 only the first-run choice has a browser test.
 
 ## Journey 9. Both languages, everywhere
 
@@ -540,8 +519,7 @@ which is what harmless additives on a grade-e product are worth.
 
 - **Receipts and price history.** The routers and routes exist
   (`receipt.upload` through `applyReceipt`, `/prices/[productId]`), and the
-  pipeline is exercised — the review flow by `screen-reader.spec.ts` and the
-  dynamic-route audits, scanning in the production image verified air-gapped
+  pipeline is exercised — applying a reviewed receipt by `receipts.spec.ts`, scanning in the production image verified air-gapped
   when OCR-2 closed — but neither belongs to the phone screen or the kitchen
   screen as designed, so they keep no journey until they are given a home in
   one of the two doors. (An earlier version of this bullet cited OCR-1 — the

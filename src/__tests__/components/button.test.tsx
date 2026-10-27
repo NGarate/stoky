@@ -65,9 +65,9 @@ describe("Button", () => {
   it("gives every size a 48px target floor", () => {
     // WCAG 2.5.5 (AAA) asks for 44; the phone is the tier where a thumb is
     // expected, so the floor is 48 and it is unprefixed rather than added back
-    // at a breakpoint (DESIGN_AUDIT A4.2). Measured for real in
-    // `e2e/a11y-structure.spec.ts` — happy-dom has no layout engine, so this
-    // can only assert the class that produces it.
+    // at a breakpoint (DESIGN_AUDIT A4.2). Nothing measures it in a browser
+    // any more, and happy-dom has no layout engine, so this can only assert
+    // the class that produces it.
     for (const size of ["default", "sm", "lg", "icon"] as const) {
       cleanup();
       render(<Button size={size}>Guardar</Button>);

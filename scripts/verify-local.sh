@@ -125,7 +125,7 @@ if $WITH_BUILD; then
 fi
 
 if $WITH_E2E; then
-  run_step "Critical-path Playwright smoke" 420 bunx --bun playwright test e2e/critical-paths.spec.ts
+  run_step "Playwright happy paths" 420 bunx --bun playwright test
 fi
 
 report_budget

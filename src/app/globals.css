@@ -343,10 +343,10 @@ body {
    average character the criterion means; 72 leaves headroom for the wider
    glyphs of a proportional face rather than sitting exactly on the limit.
 
-   Scoped to `p` deliberately. `li` and `dd` are held to the same rule by
-   e2e/a11y-aaa.spec.ts, but constraining them here would reshape card grids and
-   navigation lists that are not blocks of text in 1.4.8's sense. If one of them
-   ever does hold prose, the test says so and it gets fixed at that call site. */
+   Scoped to `p` deliberately. `li` and `dd` fall under the same rule, but
+   constraining them here would reshape card grids and navigation lists that are
+   not blocks of text in 1.4.8's sense. If one of them ever does hold prose, it
+   gets fixed at that call site. */
 @layer base {
   p {
     max-width: 72ch;
@@ -372,8 +372,8 @@ body {
 
    Blanket rather than per-component because the failure mode of the per-
    component version is silent: someone adds an animation, forgets the query,
-   and nothing tells them. This is the floor, and e2e/a11y-aaa.spec.ts is what
-   notices when something escapes it.
+   and nothing tells them. This is the floor, and no test notices when
+   something escapes it.
 
    `0.01ms` rather than `none` so that transitionend/animationend listeners
    still fire — the state machines that wait for them would otherwise hang. */

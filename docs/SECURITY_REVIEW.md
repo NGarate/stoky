@@ -591,6 +591,13 @@ binary is in no package database. Re-scanning the image cannot see either.
 
 ## 8. Headers in production
 
+**Since 2026-10-27 none of the browser tests this section cites exists**
+(`security-headers.spec.ts`, `auth.prod.spec.ts`, `screen-choice.spec.ts`):
+the browser suite became one happy path per process (PROGRESS D154). Where
+this section says a spec "pins" or "asserts" something, read it as the record
+of what was verified then; nothing re-checks it against the production build
+now.
+
 **Verified:** the CSP carries a per-request nonce minted in `src/proxy.ts`,
 with `strict-dynamic`, and the production policy has no `unsafe-eval`.
 `e2e/auth.prod.spec.ts` signs in against the standalone artefact and asserts no
@@ -1065,7 +1072,7 @@ in the order they would pay off.
 |---|---|---|
 | ~~Household-scoped ids are looked up~~ | unit | **Built** — `tenant-scoped-ids.test.ts` |
 | ~~Every restricted procedure refuses the wrong role behaviourally~~ | integration | **Built** — `integration/capabilities.refusals.test.ts` |
-| ~~Security headers reach a response~~ | browser | **Built** — `e2e/security-headers.spec.ts` |
+| Security headers reach a response | browser | **Built, then deleted** — `e2e/security-headers.spec.ts` was removed on 2026-10-27 (PROGRESS D154); open again |
 | ~~The registration limiter refuses~~ | integration | **Built** — in `integration/rate-limit.test.ts` |
 | ~~Every limiter call site fails closed~~ | integration | **Built** — in `integration/rate-limit.test.ts` |
 | ~~A successful upload does what it claims~~ | integration | **Built** — `integration/receipt.upload.test.ts` |

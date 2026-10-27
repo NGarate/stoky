@@ -73,9 +73,8 @@ export const viewport: Viewport = {
  * per request; a prerendered shell has one baked into it.
  *
  * So the trade was put to the owner rather than settled here, and the decision
- * was to keep the nonce. `SECURITY.md` documents that posture and
- * `e2e/auth.prod.spec.ts` guards it, and neither is worth trading for a
- * navigation feel. The cost is that the root shell is request-bound; routes
+ * was to keep the nonce. `SECURITY.md` documents that posture, and it is not
+ * worth trading for a navigation feel. The cost is that the root shell is request-bound; routes
  * below still prerender, and nine of them do.
  *
  * `docs/superpowers/plans/2026-08-25-cache-components-and-instant-navigation.md`

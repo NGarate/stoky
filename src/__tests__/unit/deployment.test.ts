@@ -373,8 +373,8 @@ interface StsHeaders {
  * Both layers are asserted because each reaches someone the other does not:
  * Traefik's headers middleware replaces the app's value behind the bundle, and
  * the app's is the only one behind an operator's own proxy.
- * `e2e/security-headers.spec.ts` pins the exact value the production build
- * sends; this pins Traefik's, which nothing serves in a test.
+ * This pins Traefik's, which nothing serves in a test; the app's value is not
+ * checked against a running build.
  */
 describe("HSTS", () => {
   const dynamic = Bun.YAML.parse(

@@ -5,15 +5,11 @@ import { DEMO_EMAIL, DEMO_PASSWORD, SESSION_FILE } from "./session";
  * Signs in once and saves the cookies for every signed-in suite to reuse.
  *
  * This is the only place left that drives the login form for the sake of getting
- * past it. The form itself is still tested end to end — `critical-paths.spec.ts`
- * registers an account and signs in with it, and `screen-reader.spec.ts` walks
- * the whole sign-in journey including a refusal — but those tests are about
- * login, and they run signed out.
+ * past it. The form itself is tested by `auth.spec.ts`, signed out.
  *
  * The session is a browser session — "Mantener la sesión iniciada" is left
  * unticked, as most people will leave it, so the shared session is the
- * representative one (`remember-me.spec.ts` covers the ticked box with an
- * account of its own): its row ends fifteen minutes after it was
+ * representative one: its row ends fifteen minutes after it was
  * last slid, and only the keep-alive's `auth.session` slides it
  * (`src/lib/auth/session-policy.ts`), which a test rarely waits long enough to
  * trigger. So the cookie saved here goes stale about 15 minutes after this

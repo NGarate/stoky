@@ -12,8 +12,7 @@ import { renderWithIntl } from "../utils/render";
  *   that is merely useful. It is a call to action, not a warning.
  * - Its link said "Ver" — a link whose purpose came only from the heading
  *   beside it, which a screen reader's list of links does not read (WCAG
- *   2.4.9, the AAA link-purpose rule `e2e/a11y-aaa.spec.ts` enforces where it
- *   can see one).
+ *   2.4.9, the AAA link-purpose rule).
  */
 mock.module("@/lib/trpc/client", () => ({
   api: {

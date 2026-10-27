@@ -1133,7 +1133,7 @@ describe("where focus goes when the question appears", () => {
  * (PROGRESS D144).
  *
  * The server half is `integration/auth.flow.test.ts` ("Changing your own
- * password"), and the cookie arriving is `e2e/password-change.spec.ts`. What
+ * password"); in a browser, `e2e/password.spec.ts` signs in with the new one. What
  * only the form can get wrong is what it does here: nothing is purged and
  * nobody is signed out — the queue and the saved reads are the same person's,
  * who is still here — and *which* refusal it was is said: a wrong current
@@ -1185,8 +1185,7 @@ describe("changing the password", () => {
   });
 
   it("attaches help to every field", () => {
-    // WCAG 3.3.5 (AAA), which `e2e/a11y-aaa.spec.ts` checks per route; the
-    // first version of this form left two fields without any and it went red.
+    // WCAG 3.3.5 (AAA); the first version of this form left two fields without any and it went red.
     renderWithIntl(<ChangePasswordForm />);
 
     for (const label of [

@@ -21,21 +21,23 @@ answer.** If you cannot name it, the test belongs one tier down. The audit of
 Escape and tab order are DOM facts, and the component suite already asserted
 every one of them against the real component.
 
-### Cross-engine coverage is a separate axis from test coverage
+### One happy path per process, one engine
 
 Running a business flow on five engines does not test five things. A sign-in is
 tRPC, Prisma and Argon2id; none of it is rendered, and none of it changes
-because the engine did. What genuinely varies between engines is layout.
+because the engine did.
 
-So the matrix separates the two axes instead of multiplying them: chromium runs
-everything, Mobile Safari runs the two layout specs, and Firefox and desktop
-WebKit run a four-test `@smoke` set. Tag a test `@smoke` only if an engine
-breaking it means the engine has broken enough that nothing subtler is worth
-measuring.
+So the browser suite is one happy path per process — sign up and in, products,
+stock, shopping offline, receipts, household members, password, sessions,
+two-step verification, passkeys — on chromium alone, every test in parallel.
+Each test registers its own account or works on seeded rows no other test
+reads. Layout, accessibility and security-header sweeps are not part of it
+(PROGRESS D154); axe at AAA runs in the component suite instead
+(`src/__tests__/utils/axe.ts`).
 
 ### The budget is enforced, not aspirational
 
-`globalTimeout` is 5 minutes locally and 9 in CI. The suite runs in 2.9. If a
+`globalTimeout` is 5 minutes locally and 9 in CI. The suite runs in under one. If a
 change pushes it past the ceiling the run fails, which is the point: a suite
 that gets slower quietly is one that stops being run.
 
@@ -147,13 +149,13 @@ KEEP_TEST_SERVICES=true bun run test:integration
 
 ### E2E Tests
 ```bash
-# Run all E2E tests — inside Playwright's own image, which carries Chromium,
-# Firefox, WebKit and their system libraries (scripts/e2e-in-image.sh)
+# Run all E2E tests — inside Playwright's own image, which carries the
+# browsers and their system libraries (scripts/e2e-in-image.sh)
 bun run test:e2e
 
 # Run specific test file, or anything else `playwright test` takes
-bun run test:e2e -- e2e/critical-paths.spec.ts
-bun run test:e2e -- --project=webkit
+bun run test:e2e -- e2e/products.spec.ts
+bun run test:e2e -- --project=passkeys
 ```
 
 `--ui` and `--headed` need a display, which the container does not have. For
@@ -224,9 +226,9 @@ src/__tests__/
 └── utils/
     └── test-helpers.ts
 
-e2e/                           # Playwright — ten spec files
-├── *.spec.ts                  # incl. auth.prod and service-worker.prod, which
-│                              #   audit the deployed artefact specifically
+e2e/                           # Playwright — one happy path per spec file
+├── *.spec.ts
+├── account.ts                 # register, sign in, sign out
 ├── db-url.ts                  # the suite's isolated database/cache URLs
 ├── seed.setup.ts              # migrate + seed the suite's own database
 ├── session.setup.ts           # sign in once; session.ts holds the mechanism

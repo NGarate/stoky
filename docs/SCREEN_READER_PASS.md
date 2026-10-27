@@ -10,12 +10,13 @@ open item of Phase 2b (`REDESIGN_PLAN.md`), and the result of this pass is dated
 in `docs/STATUS.md` when it is done.
 
 **Why this pass exists.** Automated testing decides roughly a third of real
-accessibility problems. Stoky already measures what a machine can:
-`e2e/screen-reader.spec.ts` walks the accessibility *tree* across four journeys
-(sign in, add stock, consume stock, review a receipt) and proves it is
-well-formed — every interactive node has a name, no raw translation keys leak,
-outcomes are announced, and reading order matches geometry on the desktop. What
-it **cannot** tell you is whether the tree *sounds* right to someone using it:
+accessibility problems. Until 2026-10-27 Stoky measured what a machine can: a
+browser suite walked the accessibility *tree* across four journeys (sign in,
+add stock, consume stock, review a receipt) and proved it well-formed — every
+interactive node named, no raw translation keys leaking, outcomes announced,
+reading order matching geometry on the desktop. It was deleted with the rest of
+the browser suite's sweeps (PROGRESS D154), so nothing checks the tree now. What
+a tree check **cannot** tell you is whether the tree *sounds* right to someone using it:
 whether an announcement is useful or merely present, whether the focus lands
 where a person expects, whether an error tells them what to do. That is this
 pass.

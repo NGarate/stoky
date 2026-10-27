@@ -138,9 +138,8 @@ export function Dialog({
         >
           {/* First in the DOM because it is first on the screen. Rendered
               last, it was read after the footer's actions while being drawn
-              a hundred pixels above them — which `e2e/screen-reader.spec.ts`
-              caught as a reading-order finding, and which is the whole class
-              of defect that audit exists for. */}
+              a hundred pixels above them — a reading-order finding the
+              screen-reader audit caught. */}
           <RadixDialog.Close asChild>
             <Button
               aria-label={t("close")}
@@ -154,8 +153,8 @@ export function Dialog({
           </RadixDialog.Close>
 
           <RadixDialog.Title asChild>
-            {/* An h2, never an h1: e2e/a11y-structure.spec.ts wants exactly
-                one h1 per page and the page underneath already has it. */}
+            {/* An h2, never an h1: a page has exactly one h1, and the page
+                underneath already has it. */}
             <h2 className="font-bold text-heading text-xl md:text-2xl">
               {title}
             </h2>

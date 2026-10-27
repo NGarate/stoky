@@ -9,8 +9,8 @@ import { ROUTE_TITLES, documentTitle, titleKeyFor } from "@/lib/route-titles";
  * WCAG 2.4.2: every route has a title of its own.
  *
  * The browser half — that the title is the one the document actually wears,
- * and that it changes on a client navigation — is `e2e/page-titles.spec.ts`.
- * This half is the one a browser cannot answer cheaply: that *no* route was
+ * and that it changes on a client navigation — is not tested. This half is the
+ * one a browser cannot answer cheaply: that *no* route was
  * left out. A page added without a row in the table would otherwise ship
  * wearing the fallback, which reads as a title and names nothing.
  */

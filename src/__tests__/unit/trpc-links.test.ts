@@ -11,8 +11,8 @@ import type { AppRouter } from "@/server/trpc/router";
  * reaches the browser only if the answer's headers are written after the
  * resolver ran (PROGRESS D144). A streamed batch writes them first, so the
  * password change goes by `httpLink` and everything else keeps streaming.
- * `e2e/password-change.spec.ts` is the proof that the cookie arrives; this is
- * the proof of which request carries it, and it needs no server.
+ * Nothing checks in a browser that the cookie arrives; this is the proof of
+ * which request carries it, and it needs no server.
  *
  * Told apart by what each link puts on the wire: the streaming batch link
  * asks for `?batch=1` and says `trpc-accept: application/jsonl`; `httpLink`

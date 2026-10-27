@@ -231,9 +231,8 @@ jobs:
     # Dropping `--with-deps` instead was not open: the tree is not only codecs.
     # `libwoff1`, `libharfbuzz-icu0`, `libhyphen0`, `libgles2` and
     # `libgstreamer-plugins-base1.0-0` are linked by the WebKit binary, and
-    # without them it does not start — and WebKit is not decoration here, it is
-    # the engine `Mobile Safari` runs the layout specs on, which exist because
-    # UI-5 and UI-6 were both WebKit-at-phone-width defects.
+    # without them it does not start. The suite runs chromium alone now, so
+    # this reason has lapsed; the image stays for the steadier setup above.
     #
     # **The container does not slow the suite.** Three early runs suggested it
     # did, and they were wrong: the comparison was against older runs, and

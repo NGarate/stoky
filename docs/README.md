@@ -20,7 +20,7 @@ that answers it, and the others link rather than restate.
 | # | Read | To learn |
 |---|---|---|
 | 1 | [`STATUS.md`](STATUS.md) | What is true right now. Gate results, versions, known gaps, which phase is next |
-| 2 | [`PROGRESS.md`](PROGRESS.md) | What has been done and **why the decisions were made that way**. Every judgement call taken without asking, numbered D1–D153 |
+| 2 | [`PROGRESS.md`](PROGRESS.md) | What has been done and **why the decisions were made that way**. Every judgement call taken without asking, numbered D1–D154 |
 | 3 | [`REDESIGN_PLAN.md`](REDESIGN_PLAN.md) | What is being built, in what order, and what "done" means for each phase |
 
 That is enough to start work. Everything else is reference for a specific task.

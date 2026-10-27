@@ -18,8 +18,6 @@ import nextConfig from "../../../next.config";
  * before it reads a parameter (`next-server.js`, the `unoptimized` branch of
  * the image handler), so that is what is asserted — on the config object Next
  * is given, after the next-intl plugin has wrapped it.
- * `e2e/security-headers.spec.ts` asks the production build for the route and
- * expects the 404.
  *
  * An import of `next/image` is no longer checked for. With the endpoint off it
  * renders the source file as it is, in development and production alike, so

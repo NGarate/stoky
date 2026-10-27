@@ -710,8 +710,8 @@ describe("Authentication Flow Integration Tests", () => {
    * Better Auth finds the session to rotate in those headers, and a mock
    * session has no row to rotate. What `bun test` cannot see is the new
    * cookie reaching the browser (`nextCookies` writes it to Next's store,
-   * which exists only inside a request); `e2e/password-change.spec.ts` is
-   * that proof. Here the new row is opened with a token signed the way the
+   * which exists only inside a request); `e2e/password.spec.ts` signs in
+   * with the new password, but nothing checks the rotated cookie. Here the new row is opened with a token signed the way the
    * cookie is, which is the same claim from the server's side.
    */
   describe("Changing your own password", () => {

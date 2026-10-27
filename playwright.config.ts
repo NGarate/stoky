@@ -65,63 +65,6 @@ const PASSKEYS_TESTABLE = (() => {
 const PASSKEY_SPECS = ["**/passkeys.spec.ts"];
 
 /**
- * The suites that sweep viewports and themes internally.
- *
- * Each of these already loops over three viewport tiers, and `accessibility`
- * over two themes as well — 90 tests from one file. Running them on five
- * browser projects asks the same question five times and multiplies the whole
- * matrix to 775 tests and roughly an hour and three quarters, which is long
- * enough that a healthy run and a hung one look identical from outside.
- *
- * They run on chromium only. The engine-dependent question they would ask a
- * second engine — does the layout hold at this width — is asked instead by
- * `dynamic-routes` and `location-picker` on Mobile Safari, which is one
- * engine's worth of layout coverage rather than four.
- *
- * `screen-reader` is on this list for a harder reason: it reads the tree over
- * the Chrome DevTools Protocol, which does not exist elsewhere.
- */
-const CHROMIUM_ONLY = [
-  "**/accessibility.spec.ts",
-  "**/a11y-aaa.spec.ts",
-  "**/a11y-structure.spec.ts",
-  "**/screen-reader.spec.ts",
-  // The two artefact suites, folded in from the deleted prod config now that
-  // the whole suite serves the standalone build. Checks about the deployed
-  // artefact, not about an engine — one engine's answer is the answer.
-  "**/auth.prod.spec.ts",
-  "**/service-worker.prod.spec.ts",
-  // Whether the server refuses a token it already issued has one engine's
-  // answer, and this one costs two browser contexts and two registrations to
-  // ask. Running it five times would buy nothing.
-  "**/session-revocation.spec.ts",
-  // The same question about a password: whether the server accepts it after a
-  // change has one engine's answer, and each run registers an account.
-  "**/password-change.spec.ts",
-  // And the same about a password an admin set for somebody else.
-  "**/member-password-reset.spec.ts",
-  // How long a server tells a browser to keep its session cookie, which also
-  // registers an account per run.
-  "**/remember-me.spec.ts",
-  // Whether a server takes an authenticator code, and takes it once: one
-  // engine's answer, and three browser contexts and a registration to ask.
-  "**/two-factor.spec.ts",
-];
-
-/**
- * The specs whose subject is layout rather than behaviour.
- *
- * These are the only ones a second engine can answer differently: whether a
- * page overflows sideways, and whether a fixed bar is painted over a control.
- * Everything else in the browser suite is a business flow, and a business flow
- * does not change because the engine did.
- */
-const LAYOUT_SPECS = [
-  "**/dynamic-routes.spec.ts",
-  "**/location-picker.spec.ts",
-];
-
-/**
  * How many browsers the one dev server can feed.
  *
  * Measured, not set to the core count. `next dev` renders on a single Node
@@ -143,25 +86,11 @@ const WORKERS =
 export default defineConfig({
   testDir: "./e2e",
   /**
-   * Whole files in parallel, tests within a file in order.
-   *
-   * The suite writes: `critical-paths` registers accounts, and `screen-reader`
-   * adds a stock movement and confirms a receipt line. What made the old
-   * `workers: 1` necessary was that every signed-in test also *registered*
-   * against the shared database, so any two tests could collide. They no longer
-   * do — they reuse one session (`e2e/session.ts`) — and what is left writes to
-   * rows nothing else counts.
-   *
-   * `fullyParallel` stays off deliberately, because it is a claim about every
-   * file and only five of the seven can make it. The five that read and write
-   * nothing — `accessibility`, `a11y-aaa`, `a11y-structure`, `dynamic-routes`,
-   * `location-picker` — say so for themselves with `describe.configure({ mode:
-   * "parallel" })`, which matters because `accessibility` alone is the longest
-   * thing in the suite and pinning it to one worker makes it the critical path.
-   * The two writers, `critical-paths` and `screen-reader`, stay whole in one
-   * worker: their tests build on each other within the file.
+   * Every test, in parallel. Each is one happy path that brings its own data:
+   * it registers its own account, or works in the seeded household on rows no
+   * other test reads.
    */
-  fullyParallel: false,
+  fullyParallel: true,
   workers: WORKERS,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -175,9 +104,8 @@ export default defineConfig({
    * with no ceiling cannot tell you it is in trouble.
    */
 
-  // Per test. The slowest honest test is an axe audit on a data-driven route,
-  // which is a navigation, a tRPC round trip and the audit itself — well under
-  // 30s. 60 leaves room for a cold Next compile on first hit without letting a
+  // Per test. The slowest is a two-step sign-in in a second browser, well
+  // under 30s. 60 leaves room for a cold first hit without letting a
   // genuinely hung test sit there.
   timeout: 60_000,
 
@@ -189,15 +117,11 @@ export default defineConfig({
   // one that stops being run, so the ceiling is the contract rather than a
   // safety net: the run fails when it regresses past it.
   //
-  // Five minutes locally, where it takes 2.9 at four workers — enough headroom
-  // for a cold Next compile and a slow machine, tight enough that doubling the
-  // suite fails here instead of in review. Nine in CI, which is not a weaker
-  // contract but a different machine: two workers on four cores that are also
-  // running the dev server, and two retries on any failure. Both stay inside
-  // the ten minutes every CI test job is held to.
-  //
-  // It was nine everywhere when the suite ran 182 tests in 5.6 minutes. It runs
-  // 89 in 2.9 now, and a ceiling three times the measurement is not a ceiling.
+  // Five minutes locally, where twelve tests take under one at four workers —
+  // the headroom is the production build, which `webServer` makes inside this
+  // budget. Nine in CI: two workers on four cores that also run the server,
+  // and two retries on any failure, inside the ten minutes every CI test job
+  // is held to.
   globalTimeout: (process.env.CI ? 9 : 5) * 60_000,
 
   use: {
@@ -226,27 +150,8 @@ export default defineConfig({
   },
 
   /**
-   * One engine runs everything; the others run what only they can answer.
-   *
-   * The suite used to run every spec on five projects, which is 182 tests and
-   * 1,098 seconds of processor time for 26 distinct behaviours. Duplicating a
-   * login flow across five engines does not test five things — the flow is
-   * tRPC and Prisma, and neither is rendered. What genuinely varies between
-   * engines is layout, and what varies between projects is viewport, and those
-   * are two axes the old matrix multiplied instead of separating.
-   *
-   * So: chromium is the reference and runs the lot. Mobile Safari runs the
-   * layout specs, because WebKit at a phone width is the combination where
-   * this project's layout defects have actually appeared — UI-5 was a page
-   * 505px wide at 390, UI-6 was a picker painted under the bottom bar. Desktop
-   * Firefox and WebKit run a four-test smoke set: register, sign in, write
-   * something, and read a page in Spanish. If an engine breaks those, it has
-   * broken enough to be worth knowing before anything subtler.
-   *
-   * Mobile Chrome is gone. It is Blink at 393px, and chromium already visits
-   * every route at that width — the three a11y specs loop the tiers with
-   * `setViewportSize`, and `dynamic-routes` checks overflow at all three. It
-   * was an engine we already run at a width we already test.
+   * One engine. Each test is a business flow — tRPC and Prisma behind a form —
+   * and a business flow does not change because the engine did.
    */
   projects: [
     /**
@@ -260,9 +165,9 @@ export default defineConfig({
       testMatch: /seed\.setup\.ts/,
     },
     /**
-     * Signs in once and writes the cookies the signed-in suites reuse. Every
-     * browser project depends on it, so it runs first and its failure stops the
-     * matrix rather than being reported five times as "not signed in".
+     * Signs in once and writes the cookies the signed-in suites reuse. The
+     * signed-in tests depend on it, so its failure is reported once rather than
+     * as each of them "not signed in".
      */
     {
       name: "setup",
@@ -299,27 +204,6 @@ export default defineConfig({
           },
         ]
       : []),
-    {
-      // WebKit at a real phone viewport: the layout specs only.
-      name: "Mobile Safari",
-      use: { ...devices["iPhone 12"] },
-      testMatch: LAYOUT_SPECS,
-      dependencies: ["setup"],
-    },
-    {
-      name: "firefox",
-      use: { ...devices["Desktop Firefox"] },
-      testIgnore: [...CHROMIUM_ONLY, ...PASSKEY_SPECS],
-      grep: /@smoke/,
-      dependencies: ["setup"],
-    },
-    {
-      name: "webkit",
-      use: { ...devices["Desktop Safari"] },
-      testIgnore: [...CHROMIUM_ONLY, ...PASSKEY_SPECS],
-      grep: /@smoke/,
-      dependencies: ["setup"],
-    },
   ],
 
   /**

@@ -537,12 +537,13 @@ both directions.
   fixed once in CSS: Tailwind's `text-sm` and `text-xs` are below the 1.5 line
   spacing 1.4.8 requires, and no prose had a maximum measure. `prefers-reduced-
   motion` was honoured nowhere. Six form fields had help that was written,
-  visible and unattached — so `e2e/a11y-aaa.spec.ts` requires attachment, going
-  beyond the criterion's wording, because a hint only a sighted mouse user
-  receives is not help.
+  visible and unattached — so the browser check (deleted 2026-10-27, PROGRESS
+  D154) required attachment, going beyond the criterion's wording, because a
+  hint only a sighted mouse user receives is not help.
 - **A4.6** — the audit said "not automatable, not optional". Half right. A
   screen reader reads the accessibility tree, and that tree is machine-readable;
-  `e2e/screen-reader.spec.ts` walks four journeys against it. What is still owed
+  a browser suite walked four journeys against it until 2026-10-27 (PROGRESS
+  D154), when it was deleted. What is still owed
   is a person deciding whether the result *sounds* sensible, which is the only
   item of this phase still open.
 
@@ -656,7 +657,7 @@ most serious defect in the repository:
 
 Shopping list, tick off, scan, plus the service worker and write queue.
 *Done when:* a full shop can be done in aeroplane mode and syncs correctly on
-reconnect. **Met**, and proven by `e2e/offline-shop.spec.ts`.
+reconnect. **Met**; `e2e/shopping.spec.ts` proves the happy path.
 
 **Screen A's layout moved to Phase 5.** This phase's title said "phone screen";
 its done-when said "a full shop in aeroplane mode". The second is what was
