@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createPrismaClient, prisma } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
-import { findCredentialByEmail } from "@/lib/auth/credentials";
+import { readPasswordHash } from "@/lib/auth/credentials";
 
 /**
  * `20261015120000_credential_accounts` against a database that has accounts in
@@ -149,15 +149,10 @@ describe("moving the password hashes into credential Account rows", () => {
 
   it("still signs each person in with the password they had before", async () => {
     for (const person of people) {
-      const credential = await findCredentialByEmail(db, person.email);
+      const passwordHash = await readPasswordHash(db, person.id);
 
-      expect(credential?.user.id).toBe(person.id);
-      expect(await verifyPassword(credential?.passwordHash, PASSWORD)).toBe(
-        true,
-      );
-      expect(
-        await verifyPassword(credential?.passwordHash, `${PASSWORD}!`),
-      ).toBe(false);
+      expect(await verifyPassword(passwordHash, PASSWORD)).toBe(true);
+      expect(await verifyPassword(passwordHash, `${PASSWORD}!`)).toBe(false);
     }
   });
 

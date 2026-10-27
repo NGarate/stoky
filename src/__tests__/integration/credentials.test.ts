@@ -4,7 +4,6 @@ import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
 import { openTestSession, storedPasswordHash } from "../utils/test-helpers";
 import {
   createCredentialUser,
-  findCredentialByEmail,
   readPasswordHash,
   setPasswordAndEndSessions,
 } from "@/lib/auth/credentials";
@@ -38,7 +37,7 @@ afterAll(async () => {
 });
 
 describe("an account made through the credentials module", () => {
-  it("is found by its address with a hash its password verifies against", async () => {
+  it("keeps a hash its password verifies against", async () => {
     const email = `${RUN}.signin@example.com`;
     const created = await createCredentialUser(
       prisma,
@@ -46,22 +45,10 @@ describe("an account made through the credentials module", () => {
       await hashPassword(PASSWORD),
     );
 
-    const credential = await findCredentialByEmail(prisma, email);
+    const passwordHash = await readPasswordHash(prisma, created.id);
 
-    expect(credential?.user).toEqual({
-      id: created.id,
-      email,
-      name: "Cocina",
-      householdId,
-      role: "MEMBER",
-    });
-    expect(await verifyPassword(credential?.passwordHash, PASSWORD)).toBe(true);
-    expect(await verifyPassword(credential?.passwordHash, NEW_PASSWORD)).toBe(
-      false,
-    );
-    expect(await readPasswordHash(prisma, created.id)).toBe(
-      credential?.passwordHash ?? "",
-    );
+    expect(await verifyPassword(passwordHash, PASSWORD)).toBe(true);
+    expect(await verifyPassword(passwordHash, NEW_PASSWORD)).toBe(false);
   });
 
   it("keeps the hash in one credential Account row keyed on the user's own id", async () => {
@@ -100,14 +87,10 @@ describe("an account made through the credentials module", () => {
       },
     });
 
-    expect(await findCredentialByEmail(prisma, bare.email)).toBeNull();
     expect(await readPasswordHash(prisma, bare.id)).toBeNull();
   });
 
-  it("answers null for an address with no account, and for an id with none", async () => {
-    expect(
-      await findCredentialByEmail(prisma, `${RUN}.nobody@example.com`),
-    ).toBeNull();
+  it("answers null for an id with no account", async () => {
     expect(await readPasswordHash(prisma, `${RUN}-no-such-id`)).toBeNull();
   });
 });
@@ -169,12 +152,7 @@ describe("setPasswordAndEndSessions", () => {
     expect(await prisma.session.count({ where: { userId: member.id } })).toBe(
       0,
     );
-    const credential = await findCredentialByEmail(
-      prisma,
-      `${RUN}.reset@example.com`,
-    );
-    expect(await verifyPassword(credential?.passwordHash, NEW_PASSWORD)).toBe(
-      true,
-    );
+    const passwordHash = await readPasswordHash(prisma, member.id);
+    expect(await verifyPassword(passwordHash, NEW_PASSWORD)).toBe(true);
   });
 });

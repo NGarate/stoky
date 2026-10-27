@@ -29,7 +29,7 @@ const CREDENTIAL_PROVIDER = "credential";
  * The hash lives in the `credential` Account row (`providerId` "credential",
  * `accountId` the user's id), which is where Better Auth reads it (PROGRESS
  * D134). It moved there from a column on `User` without any caller noticing,
- * because every reader and writer was already behind these four functions. A
+ * because every reader and writer was already behind these functions. A
  * read or write of `Account.password` anywhere else would be a second place
  * that knows.
  *
@@ -93,41 +93,6 @@ const CREDENTIAL_ACCOUNTS = {
   where: { providerId: CREDENTIAL_PROVIDER },
   select: { accountId: true, password: true },
 } as const;
-
-/** The account sign-in needs, and its stored hash; null when there is none. */
-export interface Credential {
-  user: Pick<User, "id" | "email" | "name" | "householdId" | "role">;
-  passwordHash: string;
-}
-
-/**
- * The account registered at `email`, with its stored hash.
- *
- * Null means "no account that signs in with a password" — no user, or a user
- * with no credential row — and the caller must then still run Argon2id
- * (against `DUMMY_PASSWORD_HASH`) so the answer costs the same either way.
- */
-export async function findCredentialByEmail(
-  db: CredentialDb,
-  email: string,
-): Promise<Credential | null> {
-  const row = await db.user.findUnique({
-    where: { email },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      householdId: true,
-      role: true,
-      accounts: CREDENTIAL_ACCOUNTS,
-    },
-  });
-  if (!row) return null;
-
-  const { accounts, ...user } = row;
-  const passwordHash = credentialHash(user.id, accounts);
-  return passwordHash === null ? null : { user, passwordHash };
-}
 
 /**
  * The stored hash of account `userId`; null when the account is gone or has no
