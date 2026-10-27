@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, useDeferredValue, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -79,6 +80,7 @@ function NewProductFallback(): JSX.Element {
 
 function NewProductForm(): JSX.Element {
   const t = useTranslations("products.new");
+  const tSuggestions = useTranslations("products.suggestions");
   const searchParams = useSearchParams();
   const utils = api.useUtils();
   const { discard } = useWriteQueue();
@@ -143,6 +145,11 @@ function NewProductForm(): JSX.Element {
     { enabled: settledBarcode !== "" },
   );
 
+  // What the household has typed into these fields before. A suggestion, not
+  // a rule: while it loads, or offline with nothing cached, the fields are
+  // plain text fields and the form works the same.
+  const suggestions = api.product.suggestions.useQuery();
+
   const takenBy =
     settledBarcode !== "" && settledBarcode === trimmedBarcode
       ? (duplicate.data ?? null)
@@ -198,6 +205,7 @@ function NewProductForm(): JSX.Element {
     onSuccess: async (product) => {
       await utils.product.list.invalidate();
       await utils.product.getByBarcode.invalidate();
+      await utils.product.suggestions.invalidate();
       // A scan queued offline (T7) that could not be resolved sent the person
       // here to name it. Now that it is named, drop the queued scan so the
       // sync indicator's review question clears — the product it was asking
@@ -471,13 +479,13 @@ function NewProductForm(): JSX.Element {
           >
             {t("brandLabel")}
           </label>
-          <Input
+          <Combobox
             id={brandId}
             name="brand"
-            type="text"
-            autoComplete="off"
+            listLabel={tSuggestions("brands")}
+            options={suggestions.data?.brands ?? []}
             value={brand}
-            onChange={(event) => setBrand(event.target.value)}
+            onValueChange={setBrand}
             aria-describedby={brandHintId}
           />
           <p id={brandHintId} className="mt-1 text-sm text-muted-foreground">
@@ -492,13 +500,13 @@ function NewProductForm(): JSX.Element {
           >
             {t("categoryLabel")}
           </label>
-          <Input
+          <Combobox
             id={categoryId}
             name="category"
-            type="text"
-            autoComplete="off"
+            listLabel={tSuggestions("categories")}
+            options={suggestions.data?.categories ?? []}
             value={category}
-            onChange={(event) => setCategory(event.target.value)}
+            onValueChange={setCategory}
             aria-describedby={categoryHintId}
           />
           <p id={categoryHintId} className="mt-1 text-sm text-muted-foreground">
@@ -513,13 +521,14 @@ function NewProductForm(): JSX.Element {
           >
             {t("unitLabel")}
           </label>
-          <Input
+          <Combobox
             id={unitId}
             name="defaultUnit"
-            type="text"
             required
+            listLabel={tSuggestions("units")}
+            options={suggestions.data?.units ?? []}
             value={unit}
-            onChange={(event) => setUnit(event.target.value)}
+            onValueChange={setUnit}
             aria-invalid={fieldErrors.unit ? true : undefined}
             aria-describedby={
               fieldErrors.unit ? `${unitHintId} ${unitErrorId}` : unitHintId

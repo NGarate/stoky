@@ -379,6 +379,11 @@
       "submitting": "Guardando el ajuste…",
       "saved": "Ajustado. «{name}» queda en {stock} {unit}.",
       "errorStockChanged": "La cantidad ha cambiado mientras contabas. Revisa la cantidad nueva y confirma otra vez."
+    },
+    "suggestions": {
+      "brands": "Marcas que ya usas",
+      "categories": "Categorías que ya usas",
+      "units": "Unidades que ya usas"
     }
   },
   "inventory": {

@@ -131,6 +131,8 @@ const EXPECTED: Record<string, Record<string, string>> = {
     count: "householdProcedure",
     getById: "householdProcedure",
     getByBarcode: "householdProcedure",
+    // Read like the catalogue it summarises, so the kitchen may see it too.
+    suggestions: "householdProcedure",
     searchByName: "householdProcedure",
     create: "writeProcedure",
     update: "writeProcedure",

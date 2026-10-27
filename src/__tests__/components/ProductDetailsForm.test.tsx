@@ -18,6 +18,11 @@ const updateCalls: unknown[] = [];
 let updateFails = false;
 const invalidated: string[] = [];
 let barcodeHolder: { id: string; name: string } | null = null;
+const suggestions = {
+  brands: ["Hacendado", "Pascual"],
+  categories: ["Lácteos", "Limpieza"],
+  units: ["unit", "L", "kg"],
+};
 
 mock.module("@/lib/offline/queue-context", () => ({
   WriteQueueContext: createContext(null),
@@ -43,10 +48,14 @@ mock.module("@/lib/trpc/client", () => ({
         getByBarcode: {
           invalidate: async () => void invalidated.push("getByBarcode"),
         },
+        suggestions: {
+          invalidate: async () => void invalidated.push("suggestions"),
+        },
       },
     }),
     product: {
       getByBarcode: { useQuery: () => ({ data: barcodeHolder }) },
+      suggestions: { useQuery: () => ({ data: suggestions }) },
       update: {
         // Two instances now: the save and the restore report differently, so
         // a stub that shares one `opts` would hide which of them ran.
@@ -262,6 +271,28 @@ describe("the product's details", () => {
       expect(invalidated).toContain("getById");
     });
     expect(invalidated).toContain("list");
+    // A brand typed for the first time is a suggestion from now on.
+    expect(invalidated).toContain("suggestions");
+  });
+
+  it("offers what the household already uses, and saves the one chosen", async () => {
+    render();
+    await startEditing();
+
+    await userEvent.click(screen.getByRole("combobox", { name: /Marca/ }));
+    await userEvent.click(screen.getByRole("option", { name: "Hacendado" }));
+    await userEvent.click(screen.getByRole("combobox", { name: /Unidad/ }));
+    // Opened on "L", it still shows every unit, as a select would.
+    expect(
+      screen.getAllByRole("option").map((option) => option.textContent),
+    ).toEqual(["unit", "L", "kg"]);
+    await userEvent.click(screen.getByRole("option", { name: "kg" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    expect(updateCalls[0]).toMatchObject({
+      brand: "Hacendado",
+      defaultUnit: "kg",
+    });
   });
 
   for (const locale of ["es", "en"] as const) {

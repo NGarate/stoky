@@ -379,6 +379,11 @@
       "submitting": "Saving the adjustment…",
       "saved": "Adjusted. “{name}” now stands at {stock} {unit}.",
       "errorStockChanged": "The amount changed while you were counting. Check the new amount and confirm again."
+    },
+    "suggestions": {
+      "brands": "Brands you already use",
+      "categories": "Categories you already use",
+      "units": "Units you already use"
     }
   },
   "inventory": {

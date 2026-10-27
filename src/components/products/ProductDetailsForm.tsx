@@ -4,6 +4,7 @@ import { useDeferredValue, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Input } from "@/components/ui/input";
 import { useSnackbar } from "@/components/ui/snackbar";
@@ -168,8 +169,12 @@ function Fields({
   // against `products.detail`.
   const t = useTranslations("products.edit");
   const tDetail = useTranslations("products.detail");
+  const tSuggestions = useTranslations("products.suggestions");
   const snackbar = useSnackbar();
   const utils = api.useUtils();
+  // What the household has used before, offered in the three fields people
+  // invent values for. The new-product form says why it is only a suggestion.
+  const suggestions = api.product.suggestions.useQuery();
   const [name, setName] = useState(product.name);
   const [brand, setBrand] = useState(product.brand ?? "");
   const [category, setCategory] = useState(product.category ?? "");
@@ -230,6 +235,7 @@ function Fields({
       await utils.product.getById.invalidate({ id: product.id });
       await utils.product.list.invalidate();
       await utils.product.getByBarcode.invalidate();
+      await utils.product.suggestions.invalidate();
 
       snackbar.show({
         kind: "confirm",
@@ -256,6 +262,7 @@ function Fields({
       await utils.product.getById.invalidate({ id: product.id });
       await utils.product.list.invalidate();
       await utils.product.getByBarcode.invalidate();
+      await utils.product.suggestions.invalidate();
 
       snackbar.show({
         kind: "undo-inverse",
@@ -345,16 +352,20 @@ function Fields({
         />
       </Field>
       <Field id={brandId} label={t("brandLabel")}>
-        <Input
+        <Combobox
           id={brandId}
-          onChange={(e) => setBrand(e.target.value)}
+          listLabel={tSuggestions("brands")}
+          onValueChange={setBrand}
+          options={suggestions.data?.brands ?? []}
           value={brand}
         />
       </Field>
       <Field id={categoryId} label={t("categoryLabel")}>
-        <Input
+        <Combobox
           id={categoryId}
-          onChange={(e) => setCategory(e.target.value)}
+          listLabel={tSuggestions("categories")}
+          onValueChange={setCategory}
+          options={suggestions.data?.categories ?? []}
           value={category}
         />
       </Field>
@@ -375,9 +386,11 @@ function Fields({
         </p>
       </Field>
       <Field id={unitId} label={t("unitLabel")}>
-        <Input
+        <Combobox
           id={unitId}
-          onChange={(e) => setUnit(e.target.value)}
+          listLabel={tSuggestions("units")}
+          onValueChange={setUnit}
+          options={suggestions.data?.units ?? []}
           value={unit}
         />
       </Field>

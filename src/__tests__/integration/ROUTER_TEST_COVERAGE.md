@@ -29,6 +29,7 @@ Comprehensive integration test suite for all 8 tRPC routers in the Stoky applica
 | `delete` | ✓ Delete product | ✅ Complete |
 | `list` | ✓ List with pagination | ✅ Complete |
 | `getByBarcode` | ✓ Get by barcode | ✅ Complete |
+| `suggestions` | ✓ Each value once, most used first, no blanks<br>✓ Nothing from another household (`product.suggestions.test.ts`) | ✅ Complete |
 
 ### 3. Inventory Router (7 tests)
 

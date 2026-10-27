@@ -98,6 +98,9 @@ function meterLookup(userId: string): () => Promise<boolean> {
     );
 }
 
+/** Enough distinct values for any household's forms; the field filters them. */
+const MAX_SUGGESTIONS = 200;
+
 /**
  * The catalogue: what this household *can* have, as distinct from what it has.
  *
@@ -271,6 +274,47 @@ export const productRouter = createTRPCRouter({
     return ctx.db.product.count({
       where: { householdId: ctx.householdId },
     });
+  }),
+
+  /**
+   * The brands, categories and units this household has already used, most
+   * used first, for the product forms to suggest.
+   *
+   * Without them each form was a blank field, and the same brand ended up
+   * stored three ways — which the products list then shows as three brands.
+   * Most used first because the field shows only the first few until the
+   * person types, and the common answer should be among them.
+   */
+  suggestions: householdProcedure.query(async ({ ctx }) => {
+    const where = { householdId: ctx.householdId };
+    const [brands, categories, units] = await Promise.all([
+      ctx.db.product.groupBy({
+        by: ["brand"],
+        where: { ...where, brand: { not: null } },
+        orderBy: [{ _count: { brand: "desc" } }, { brand: "asc" }],
+        take: MAX_SUGGESTIONS,
+      }),
+      ctx.db.product.groupBy({
+        by: ["category"],
+        where: { ...where, category: { not: null } },
+        orderBy: [{ _count: { category: "desc" } }, { category: "asc" }],
+        take: MAX_SUGGESTIONS,
+      }),
+      ctx.db.product.groupBy({
+        by: ["defaultUnit"],
+        where,
+        orderBy: [{ _count: { defaultUnit: "desc" } }, { defaultUnit: "asc" }],
+        take: MAX_SUGGESTIONS,
+      }),
+    ]);
+
+    return {
+      brands: brands.flatMap((row) => (row.brand ? [row.brand] : [])),
+      categories: categories.flatMap((row) =>
+        row.category ? [row.category] : [],
+      ),
+      units: units.map((row) => row.defaultUnit),
+    };
   }),
 
   /** Adds a product by hand, for the things that have no barcode. */

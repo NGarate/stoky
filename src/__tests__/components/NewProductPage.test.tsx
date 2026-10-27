@@ -51,10 +51,20 @@ mock.module("@/lib/trpc/client", () => ({
         invalidate: async () => {},
         list: { invalidate: async () => {} },
         getByBarcode: { invalidate: async () => {} },
+        suggestions: { invalidate: async () => {} },
       },
     }),
     product: {
       getByBarcode: { useQuery: () => ({ data: null }) },
+      suggestions: {
+        useQuery: () => ({
+          data: {
+            brands: ["Pascual"],
+            categories: ["Lácteos"],
+            units: ["unit"],
+          },
+        }),
+      },
       scanBarcode: {
         useMutation: (callbacks: {
           onSuccess?: (result: unknown) => Promise<void>;
@@ -64,17 +74,23 @@ mock.module("@/lib/trpc/client", () => ({
         }),
       },
       create: {
-        useMutation: () => ({ mutate: () => {}, isPending: false }),
+        useMutation: () => ({
+          mutate: (input: unknown) => void createCalls.push(input),
+          isPending: false,
+        }),
       },
     },
   },
 }));
+
+const createCalls: unknown[] = [];
 
 const { default: NewProductPage } =
   await import("@/app/(dashboard)/products/new/page");
 
 beforeEach(() => {
   discard.mockClear();
+  createCalls.length = 0;
 });
 
 afterEach(cleanup);
@@ -118,5 +134,34 @@ describe("a queued scan named by looking it up", () => {
     );
 
     expect(discard).not.toHaveBeenCalled();
+  });
+});
+
+describe("brand, category and unit", () => {
+  it("offer what the household already uses, and take a new one as typed", async () => {
+    renderWithIntl(<NewProductPage />);
+
+    await userEvent.type(
+      await screen.findByLabelText(/Nombre del producto/),
+      "Atún claro",
+    );
+    await userEvent.click(screen.getByRole("combobox", { name: /Marca/ }));
+    await userEvent.click(screen.getByRole("option", { name: "Pascual" }));
+    // "Conservas" is not among the suggestions: it is simply the value.
+    await userEvent.type(
+      screen.getByRole("combobox", { name: /Categoría/ }),
+      "Conservas",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Crear producto" }),
+    );
+
+    expect(createCalls).toHaveLength(1);
+    expect(createCalls[0]).toMatchObject({
+      name: "Atún claro",
+      defaultUnit: "unit",
+      brand: "Pascual",
+      category: "Conservas",
+    });
   });
 });
