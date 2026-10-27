@@ -47,6 +47,7 @@ to a broken world.
 |---|---|---|
 | `button.test.tsx` | `ui/Button` | Variants, sizes, `asChild`, disabled, keyboard activation, ref |
 | `input.test.tsx` | `ui/Input` | Typing, `onChange`, disabled, labelling, native form attributes |
+| `Combobox.test.tsx` | `ui/Combobox` | Matching (case, accents, duplicates, cap), suggestions on focus, pointer and Enter selection, free text, Enter still submits, Escape |
 | `LocaleSwitcher.test.tsx` | `ui/LocaleSwitcher` | Options, active locale, cookie persistence + router refresh, unique ids |
 | `ThemeControl.test.tsx` | `ui/ThemeControl` | Three states, group name, stored choice, `data-theme`, shared store, cross-tab |
 | `DashboardNav.test.tsx` | `dashboard/DashboardNav` | Section hrefs, active-route and nested-route highlighting |
