@@ -638,7 +638,10 @@
     "applyFailed": "The receipt could not be added to the inventory. Try again.",
     "itemSkipped": "Won't be added",
     "skipLine": "Don't add this line",
-    "skipLineOf": "Don't add this line: “{name}”"
+    "skipLineOf": "Don't add this line: “{name}”",
+    "uploadStoreList": "Your household's stores",
+    "uploadStorePlaceholder": "Pick a store or type a new one",
+    "uploadStoreNew": "The store “{name}” will be added when the receipt is uploaded."
   },
   "shopping": {
     "title": "Shopping lists",

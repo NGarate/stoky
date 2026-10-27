@@ -3515,3 +3515,15 @@ value keeps every session and account tag. v0.1.0-alpha.4's `install.sh`
 already renamed it, so an installation upgraded through that release has
 nothing to do. The next release's notes must say so under *Cómo actualizar*
 (`docs/RELEASING.md`), since the commit is marked `!`.
+
+**D153 — Whoever may upload a receipt may name a new shop with it (the
+owner's decision of 2026-10-27).** The upload screen's shop field suggests
+the household's shops and takes a new name as typed; `receipt.upload` (a
+`writeProcedure`) then files the receipt under the shop of that name, case
+aside, or creates it in the same transaction as the receipt, after the
+photograph has been accepted. `store.create`, `store.update` and
+`store.delete` stay `adminProcedure`, so Settings → Tiendas is still the
+administrators' and its read-only notice still holds. The alternative was
+to offer "new shop" to administrators only; it was refused because a member
+with a receipt from a new shop would then file it with no shop, which
+records no prices (PRICE-1).

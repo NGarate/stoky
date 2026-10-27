@@ -638,7 +638,10 @@
     "applyFailed": "No se ha podido añadir el ticket al inventario. Vuelve a intentarlo.",
     "itemSkipped": "No se añadirá",
     "skipLine": "No añadir esta línea",
-    "skipLineOf": "No añadir esta línea: «{name}»"
+    "skipLineOf": "No añadir esta línea: «{name}»",
+    "uploadStoreList": "Tiendas de tu hogar",
+    "uploadStorePlaceholder": "Elige una tienda o escribe una nueva",
+    "uploadStoreNew": "Se añadirá la tienda «{name}» al subir el ticket."
   },
   "shopping": {
     "title": "Listas de la compra",

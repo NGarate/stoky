@@ -16,6 +16,8 @@ import { renderWithIntl } from "../utils/render";
 
 let statusData: unknown;
 const noop = (): void => {};
+const uploads: Array<Record<string, unknown>> = [];
+const invalidated: string[] = [];
 
 mock.module("next/navigation", () => ({
   useRouter: () => ({ push: noop, replace: noop, refresh: noop }),
@@ -42,11 +44,29 @@ mock.module("@/lib/offline/queue-context", () => ({
 
 mock.module("@/lib/trpc/client", () => ({
   api: {
-    store: { list: { useQuery: () => ({ data: [], isLoading: false }) } },
+    useUtils: () => ({
+      store: {
+        list: { invalidate: async () => void invalidated.push("store.list") },
+      },
+    }),
+    store: {
+      list: {
+        useQuery: () => ({
+          data: [
+            { id: "s-merc", name: "Mercadona" },
+            { id: "s-dia", name: "Día" },
+          ],
+          isLoading: false,
+        }),
+      },
+    },
     receipt: {
       upload: {
         useMutation: () => ({
-          mutateAsync: async () => ({ id: "r1" }),
+          mutateAsync: async (input: Record<string, unknown>) => {
+            uploads.push(input);
+            return { id: "r1" };
+          },
           isPending: false,
         }),
       },
@@ -88,6 +108,8 @@ function pageStatus(container: HTMLElement): HTMLElement | null {
 
 beforeEach(() => {
   statusData = undefined;
+  uploads.length = 0;
+  invalidated.length = 0;
 });
 
 afterEach(cleanup);
@@ -129,5 +151,66 @@ describe("the result of reading a receipt", () => {
     expect(
       screen.getByRole("button", { name: "Subir otra foto" }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("the receipt's store", () => {
+  it("offers the household's stores and files the receipt under the one picked", async () => {
+    const container = mount();
+
+    await userEvent.click(
+      screen.getByRole("combobox", { name: "Tienda del ticket" }),
+    );
+    await userEvent.click(screen.getByRole("option", { name: "Mercadona" }));
+    await upload(container);
+
+    await waitFor(() => expect(uploads).toHaveLength(1));
+    expect(uploads[0]).toMatchObject({ storeId: "s-merc" });
+    expect(uploads[0]).not.toHaveProperty("storeName");
+  });
+
+  it("matches a typed name to the store already there, as the list does", async () => {
+    const container = mount();
+
+    await userEvent.type(
+      screen.getByRole("combobox", { name: "Tienda del ticket" }),
+      "dia",
+    );
+    // No new store announced: "dia" is the "Día" in the list.
+    expect(screen.queryByText(/Se añadirá la tienda/)).toBeAbsent();
+    await upload(container);
+
+    await waitFor(() => expect(uploads).toHaveLength(1));
+    expect(uploads[0]).toMatchObject({ storeId: "s-dia" });
+  });
+
+  it("names a new store, says so before uploading, and refreshes the list", async () => {
+    const container = mount();
+
+    await userEvent.type(
+      screen.getByRole("combobox", { name: "Tienda del ticket" }),
+      "Frutería Paqui ",
+    );
+    expect(
+      screen.getByText(
+        "Se añadirá la tienda «Frutería Paqui» al subir el ticket.",
+      ),
+    ).toBeInTheDocument();
+    await upload(container);
+
+    await waitFor(() => expect(uploads).toHaveLength(1));
+    expect(uploads[0]).toMatchObject({ storeName: "Frutería Paqui" });
+    expect(uploads[0]).not.toHaveProperty("storeId");
+    await waitFor(() => expect(invalidated).toContain("store.list"));
+  });
+
+  it("sends no store when the field is left empty", async () => {
+    const container = mount();
+
+    await upload(container);
+
+    await waitFor(() => expect(uploads).toHaveLength(1));
+    expect(uploads[0]).not.toHaveProperty("storeId");
+    expect(uploads[0]).not.toHaveProperty("storeName");
   });
 });

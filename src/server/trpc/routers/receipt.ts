@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   MAX_ID_LENGTH,
   MAX_MIME_TYPE_LENGTH,
+  MAX_NAME_LENGTH,
   MAX_PAGE_SIZE,
   MAX_RECEIPT_LINES,
 } from "@/lib/validations/bounds";
@@ -118,6 +119,37 @@ async function assertOwnStore(
 }
 
 /**
+ * The household's store of this name, or a new one by that name.
+ *
+ * What the upload screen sends when the person typed a shop rather than
+ * picking one. Case does not make a second shop: "mercadona" files the
+ * receipt under the "Mercadona" already there, because two rows for one shop
+ * split its prices across two names in every comparison.
+ *
+ * Created here rather than through `store.create`, which is `adminProcedure`:
+ * the owner decided on 2026-10-27 that anyone who may upload a receipt may
+ * name its shop. Renaming and deleting a shop stay with the administrators.
+ */
+async function storeNamed(
+  db: Prisma.TransactionClient,
+  name: string,
+  householdId: string,
+): Promise<string> {
+  const existing = await db.store.findFirst({
+    where: { householdId, name: { equals: name, mode: "insensitive" } },
+    orderBy: { name: "asc" },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+
+  const created = await db.store.create({
+    data: { name, householdId },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+/**
  * Refuse a product that is not this household's.
  *
  * Both confirm procedures take a `productId` straight from the caller and write
@@ -202,19 +234,25 @@ export const receiptRouter = createTRPCRouter({
    */
   upload: writeProcedure
     .input(
-      z.object({
-        // Bounded here as well as after decoding, so an oversized body is
-        // refused by validation rather than by allocating a second copy of it
-        // as a Buffer first. The check below still stands: this bounds the
-        // encoded length, that bounds what the bytes actually came to. The
-        // request as a whole is bounded before either, by the route
-        // (`src/server/http/body-limit.ts`): this field can only be refused
-        // here when it is between the two limits.
-        fileBase64: z.string().max(MAX_RECEIPT_BASE64_LENGTH),
-        mimeType: z.string().max(MAX_MIME_TYPE_LENGTH),
-        storeId: z.string().max(MAX_ID_LENGTH).optional(),
-        purchaseDate: z.date().optional(),
-      }),
+      z
+        .object({
+          // Bounded here as well as after decoding, so an oversized body is
+          // refused by validation rather than by allocating a second copy of it
+          // as a Buffer first. The check below still stands: this bounds the
+          // encoded length, that bounds what the bytes actually came to. The
+          // request as a whole is bounded before either, by the route
+          // (`src/server/http/body-limit.ts`): this field can only be refused
+          // here when it is between the two limits.
+          fileBase64: z.string().max(MAX_RECEIPT_BASE64_LENGTH),
+          mimeType: z.string().max(MAX_MIME_TYPE_LENGTH),
+          storeId: z.string().max(MAX_ID_LENGTH).optional(),
+          // A shop typed rather than picked, found or created by `storeNamed`.
+          storeName: z.string().trim().min(1).max(MAX_NAME_LENGTH).optional(),
+          purchaseDate: z.date().optional(),
+        })
+        .refine((input) => !(input.storeId && input.storeName), {
+          message: "Send a storeId or a storeName, not both",
+        }),
     )
     .mutation(async ({ ctx, input }) => {
       const user = ctx.session.user;
@@ -306,16 +344,24 @@ export const receiptRouter = createTRPCRouter({
       // Save file
       await fs.promises.writeFile(filePath, processedBuffer);
 
-      // Create receipt record
-      const receipt = await ctx.db.receipt.create({
-        data: {
-          imagePath: filePath,
-          householdId,
-          uploadedBy: user.id,
-          storeId: input.storeId,
-          purchaseDate: input.purchaseDate,
-          status: ReceiptStatus.UPLOADING,
-        },
+      // Create receipt record. A typed shop is created only now, once the
+      // photograph has been accepted, and with the receipt or not at all: a
+      // refused upload leaves no shop nobody filed anything under.
+      const receipt = await ctx.db.$transaction(async (tx) => {
+        const storeId = input.storeName
+          ? await storeNamed(tx, input.storeName, householdId)
+          : input.storeId;
+
+        return tx.receipt.create({
+          data: {
+            imagePath: filePath,
+            householdId,
+            uploadedBy: user.id,
+            storeId,
+            purchaseDate: input.purchaseDate,
+            status: ReceiptStatus.UPLOADING,
+          },
+        });
       });
 
       // Trigger async processing

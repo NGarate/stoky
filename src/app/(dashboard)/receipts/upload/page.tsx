@@ -4,10 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { UploadZone } from "@/components/receipt/UploadZone";
-import { StoreSelector } from "@/components/store/StoreSelector";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 import { api } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
+import { Combobox, foldText } from "@/components/ui/combobox";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { useSnackbar } from "@/components/ui/snackbar";
 
@@ -38,10 +38,27 @@ export default function UploadPage() {
   const [uploadedReceiptId, setUploadedReceiptId] = useState<string | null>(
     null,
   );
+  const utils = api.useUtils();
   // "No store means no prices": applyReceipt writes a PriceRecord per line
   // only when the receipt has a store, and until Phase 8 no screen ever sent
   // one — the second half of ISSUES.md PRICE-1.
-  const [storeId, setStoreId] = useState("");
+  //
+  // Typed rather than picked: a shop the household has not used yet is named
+  // here and created with the receipt, instead of sending the person to
+  // Settings first — where, unless they administer the household, they could
+  // not add it anyway.
+  const [storeText, setStoreText] = useState("");
+  const stores = api.store.list.useQuery({ limit: 100 });
+  const typedStore = storeText.trim();
+  // Matched as the suggestions are, so the shop the panel marks as chosen is
+  // the one the receipt is filed under.
+  const pickedStore =
+    typedStore === ""
+      ? undefined
+      : stores.data?.find(
+          (store) => foldText(store.name) === foldText(typedStore),
+        );
+  const newStoreName = typedStore !== "" && !pickedStore ? typedStore : null;
 
   const uploadMutation = api.receipt.upload.useMutation();
   const statusQuery = api.receipt.getStatus.useQuery(
@@ -76,8 +93,13 @@ export default function UploadPage() {
       const result = await uploadMutation.mutateAsync({
         fileBase64: base64,
         mimeType: file.type,
-        ...(storeId !== "" ? { storeId } : {}),
+        ...(pickedStore
+          ? { storeId: pickedStore.id }
+          : newStoreName
+            ? { storeName: newStoreName }
+            : {}),
       });
+      if (newStoreName) await utils.store.list.invalidate();
       setUploadedReceiptId(result.id);
     } catch (error) {
       console.error("Upload failed:", error);
@@ -127,13 +149,30 @@ export default function UploadPage() {
             >
               {t("uploadStoreLabel")}
             </label>
-            <StoreSelector
+            <Combobox
               id="receipt-store"
-              value={storeId}
-              onChange={setStoreId}
+              aria-describedby="receipt-store-hint receipt-store-new"
+              listLabel={t("uploadStoreList")}
+              onValueChange={setStoreText}
+              options={stores.data?.map((store) => store.name) ?? []}
+              placeholder={t("uploadStorePlaceholder")}
+              value={storeText}
             />
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p
+              id="receipt-store-hint"
+              className="mt-1 text-sm text-muted-foreground"
+            >
               {t("uploadStoreHint")}
+            </p>
+            {/* Always mounted, empty until there is something to say, so the
+                sentence is announced when it appears. */}
+            <p
+              id="receipt-store-new"
+              aria-live="polite"
+              className="mt-1 text-sm text-foreground"
+              role="status"
+            >
+              {newStoreName ? t("uploadStoreNew", { name: newStoreName }) : ""}
             </p>
           </div>
 

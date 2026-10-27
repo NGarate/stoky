@@ -11,8 +11,11 @@ const MAX_SHOWN = 50;
 /** Below this much room under the field, the panel opens upward instead. */
 const MIN_ROOM = 160;
 
-/** "Café" finds "cafe", and "LECHE" finds "Leche". */
-function folded(text: string): string {
+/**
+ * "Café" finds "cafe", and "LECHE" finds "Leche". Exported so a caller that
+ * maps the chosen text back to a record matches it the way the panel did.
+ */
+export function foldText(text: string): string {
   return text
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
@@ -25,12 +28,12 @@ export function matchingOptions(
   options: readonly string[],
   typed: string,
 ): string[] {
-  const needle = folded(typed);
+  const needle = foldText(typed);
   const seen = new Set<string>();
   const matches: string[] = [];
 
   for (const option of options) {
-    const key = folded(option);
+    const key = foldText(option);
     // "Hacendado" and "hacendado" are one brand typed twice, not two choices.
     if (key === "" || seen.has(key)) continue;
     seen.add(key);
@@ -231,7 +234,7 @@ const Combobox = React.forwardRef<HTMLInputElement, ComboboxProps>(
                 key={option}
                 id={`${listboxId}-${index}`}
                 role="option"
-                aria-selected={folded(option) === folded(value)}
+                aria-selected={foldText(option) === foldText(value)}
                 onClick={() => choose(option)}
                 // Inset, because the panel scrolls and an outset outline on
                 // the first or last row is clipped by the overflow.

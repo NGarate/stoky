@@ -4,6 +4,7 @@ import {
   expect,
   beforeAll,
   afterAll,
+  afterEach,
   beforeEach,
 } from "bun:test";
 import { TRPCError } from "@trpc/server";
@@ -64,10 +65,11 @@ let productId: string;
 let caller: Caller;
 let outsider: Caller;
 let kitchen: Caller;
+let member: Caller;
 
 async function callerFor(
   household: string,
-  role: "OWNER" | "KITCHEN",
+  role: "OWNER" | "MEMBER" | "KITCHEN",
   db?: PrismaClient,
 ): Promise<{ caller: Caller; userId: string }> {
   const user = await createTestUser({
@@ -206,6 +208,7 @@ beforeAll(async () => {
 
   outsider = (await callerFor(otherHouseholdId, "OWNER")).caller;
   kitchen = (await callerFor(householdId, "KITCHEN")).caller;
+  member = (await callerFor(householdId, "MEMBER")).caller;
 
   const store = await prisma.store.create({
     data: { name: "Receipt Router Store", householdId },
@@ -300,6 +303,37 @@ describe("receipt.upload — what it refuses", () => {
     });
 
     expect(receipt).toBeDefined();
+  });
+
+  it("refuses a storeId and a storeName together", async () => {
+    await expectCode(
+      () =>
+        caller.receipt.upload({
+          fileBase64: ONE_PIXEL_PNG.toString("base64"),
+          mimeType: "image/png",
+          storeId,
+          storeName: "Otra tienda",
+        }),
+      "BAD_REQUEST",
+    );
+  });
+
+  it("creates no shop for a photograph it refuses", async () => {
+    await expectCode(
+      () =>
+        caller.receipt.upload({
+          fileBase64: Buffer.from("not an image").toString("base64"),
+          mimeType: "image/png",
+          storeName: "Tienda de una foto rechazada",
+        }),
+      "BAD_REQUEST",
+    );
+
+    expect(
+      await prisma.store.count({
+        where: { householdId, name: "Tienda de una foto rechazada" },
+      }),
+    ).toBe(0);
   });
 
   it("refuses an image that is small in bytes and enormous in pixels", async () => {
@@ -471,6 +505,64 @@ describe("receipt.upload — what it refuses", () => {
         }),
       "FORBIDDEN",
     );
+  });
+});
+
+/**
+ * A shop typed on the upload screen rather than picked from the list.
+ *
+ * The owner decided on 2026-10-27 that whoever may upload a receipt may name
+ * its shop, so this goes through `receipt.upload` (a `writeProcedure`) rather
+ * than `store.create` (an `adminProcedure`).
+ */
+describe("receipt.upload — a shop named by typing it", () => {
+  afterEach(async () => {
+    await prisma.receipt.deleteMany({ where: { householdId } });
+    await prisma.store.deleteMany({
+      where: { householdId, id: { not: storeId } },
+    });
+  });
+
+  it("creates the shop for a member who is not an administrator", async () => {
+    const receipt = await member.receipt.upload({
+      fileBase64: ONE_PIXEL_PNG.toString("base64"),
+      mimeType: "image/png",
+      storeName: "  Frutería Paqui ",
+    });
+
+    const store = await prisma.store.findUniqueOrThrow({
+      where: { id: receipt.storeId ?? "" },
+    });
+    expect(store).toMatchObject({ name: "Frutería Paqui", householdId });
+  });
+
+  it("files it under the shop already there, whatever the case", async () => {
+    const receipt = await member.receipt.upload({
+      fileBase64: ONE_PIXEL_PNG.toString("base64"),
+      mimeType: "image/png",
+      storeName: "RECEIPT ROUTER STORE",
+    });
+
+    expect(receipt.storeId).toBe(storeId);
+    expect(await prisma.store.count({ where: { householdId } })).toBe(1);
+  });
+
+  it("never files it under another household's shop of that name", async () => {
+    const strangers = await prisma.store.create({
+      data: { name: "Tienda Compartida", householdId: otherHouseholdId },
+    });
+
+    const receipt = await member.receipt.upload({
+      fileBase64: ONE_PIXEL_PNG.toString("base64"),
+      mimeType: "image/png",
+      storeName: "Tienda Compartida",
+    });
+
+    expect(receipt.storeId).not.toBe(strangers.id);
+    const store = await prisma.store.findUniqueOrThrow({
+      where: { id: receipt.storeId ?? "" },
+    });
+    expect(store.householdId).toBe(householdId);
   });
 });
 
