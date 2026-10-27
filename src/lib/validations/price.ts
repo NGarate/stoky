@@ -1,11 +1,6 @@
 import { z } from "zod";
-import {
-  MAX_DAYS,
-  MAX_ID_LENGTH,
-  MAX_PRICE,
-  MAX_QUANTITY,
-  MAX_UNIT_LENGTH,
-} from "./bounds";
+import { MAX_DAYS, MAX_ID_LENGTH, MAX_UNIT_LENGTH } from "./bounds";
+import { priceSchema, quantitySchema } from "./amounts";
 
 /**
  * An ISO 4217 code: three letters. Normalised before it is checked, so a
@@ -22,10 +17,10 @@ export const currencySchema = z
 export const priceRecordSchema = z.object({
   productId: z.string().max(MAX_ID_LENGTH),
   storeId: z.string().max(MAX_ID_LENGTH),
-  price: z.number().positive().finite().max(MAX_PRICE),
+  price: priceSchema,
   currency: currencySchema.default("EUR"),
   unit: z.string().max(MAX_UNIT_LENGTH),
-  quantity: z.number().positive().finite().max(MAX_QUANTITY).default(1),
+  quantity: quantitySchema.prefault(1),
 });
 
 export const priceQuerySchema = z.object({

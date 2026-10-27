@@ -25,6 +25,7 @@ import {
   remainingByBatch,
   startOfToday,
 } from "@/lib/inventory/batches";
+import { Decimal } from "@prisma/client-runtime-utils";
 import type { JSX } from "react";
 import { formatDate } from "@/lib/dates";
 
@@ -37,13 +38,13 @@ interface LocationTotal {
   key: string;
   /** `null` for entries saved without a location. */
   name: string | null;
-  quantity: number | null;
+  quantity: Decimal | null;
 }
 
 /** One stock entry that carries an expiry date, narrowed so the date is real. */
 interface Batch {
   id: string;
-  quantity: number | null;
+  quantity: Decimal | null;
   unit: string;
   expiresAt: Date;
   locationName: string | null;
@@ -140,7 +141,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
     const remaining = remainingByBatch(product.stockEntries);
 
     for (const entry of product.stockEntries) {
-      if (entry.quantity <= 0) continue;
+      if (entry.quantity.lessThanOrEqualTo(0)) continue;
       const quantity = remaining.get(entry.id) ?? null;
       const key = entry.locationId ?? "";
       const current = totals.get(key);
@@ -149,7 +150,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         current.quantity =
           current.quantity === null || quantity === null
             ? null
-            : current.quantity + quantity;
+            : current.quantity.plus(quantity);
       } else {
         totals.set(key, {
           key,
@@ -160,8 +161,8 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
     }
 
     return [...totals.values()]
-      .filter((total) => total.quantity !== 0)
-      .sort((a, b) => (b.quantity ?? 0) - (a.quantity ?? 0));
+      .filter((total) => total.quantity?.isZero() !== true)
+      .sort((a, b) => new Decimal(b.quantity ?? 0).comparedTo(a.quantity ?? 0));
   }, [product]);
 
   /**
@@ -181,8 +182,8 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
     return product.stockEntries
       .flatMap((entry) =>
         entry.expirationDate &&
-        entry.quantity > 0 &&
-        remaining.get(entry.id) !== 0
+        entry.quantity.greaterThan(0) &&
+        remaining.get(entry.id)?.isZero() !== true
           ? [
               {
                 id: entry.id,
@@ -323,7 +324,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
             })}
             onAdd={() => stepStock("add")}
             onRemove={() => stepStock("remove")}
-            removeDisabled={shownStock <= 0}
+            removeDisabled={shownStock.lessThanOrEqualTo(0)}
             removeLabel={t("stepperRemove", {
               unit: units.unit(product.defaultUnit, 1),
               name: product.name,
@@ -337,14 +338,14 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
           {units.quantity(shownStock, product.defaultUnit)}
         </p>
       )}
-      {shownStock <= 0 ? (
+      {shownStock.lessThanOrEqualTo(0) ? (
         <p className="mt-1 font-medium text-danger-foreground">
           {t("stockEmpty")}
         </p>
       ) : isLowStock(shownStock, product.minStock) ? (
         <p className="mt-1 font-medium text-danger-foreground">
           {t("stockLow", {
-            minimum: product.minStock,
+            minimum: product.minStock.toNumber(),
             unit: units.unit(product.defaultUnit, product.minStock ?? 0),
           })}
         </p>

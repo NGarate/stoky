@@ -1,8 +1,8 @@
-import type { PrismaClient } from "@/generated/prisma/client";
+import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 
 /**
- * Net stock per product: the sum of its movements, rounded once to the
- * hundredth, as `getStockOverview`'s SQL and `netStock` round it.
+ * Net stock per product: the sum of its movements, exact, since they are
+ * `numeric`.
  *
  * One grouped query in the database. The readers that used this loaded every
  * movement a product had ever had and summed them in JavaScript — work that
@@ -13,8 +13,10 @@ import type { PrismaClient } from "@/generated/prisma/client";
 export async function stockTotals(
   db: Pick<PrismaClient, "stockEntry">,
   productIds: readonly string[],
-): Promise<Map<string, number>> {
-  const totals = new Map(productIds.map((id) => [id, 0]));
+): Promise<Map<string, Prisma.Decimal>> {
+  const totals = new Map(
+    productIds.map((id) => [id, new Prisma.Decimal(0)] as const),
+  );
   if (productIds.length === 0) return totals;
 
   const rows = await db.stockEntry.groupBy({
@@ -23,7 +25,7 @@ export async function stockTotals(
     _sum: { quantity: true },
   });
   for (const row of rows) {
-    totals.set(row.productId, Math.round((row._sum.quantity ?? 0) * 100) / 100);
+    if (row._sum.quantity) totals.set(row.productId, row._sum.quantity);
   }
   return totals;
 }

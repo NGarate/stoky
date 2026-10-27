@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup, fireEvent } from "@testing-library/react";
 import { renderWithIntl } from "../utils/render";
 import { axeViolations } from "../utils/axe";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * `/inventory?filter=restock` — the Panel's restock card lands here.
@@ -105,10 +106,10 @@ describe("the restock filter", () => {
           name: "Café molido",
           category: "Desayuno",
           defaultUnit: "paquete",
-          minStock: 2,
-          totalStock: 0,
+          minStock: new Decimal(2),
+          totalStock: new Decimal(0),
           isLowStock: true,
-          onListQuantity: 0,
+          onListQuantity: new Decimal(0),
         },
         {
           id: "p2",
@@ -116,9 +117,9 @@ describe("the restock filter", () => {
           category: "Hogar",
           defaultUnit: "unidad",
           minStock: null,
-          totalStock: 0,
+          totalStock: new Decimal(0),
           isLowStock: false,
-          onListQuantity: 0,
+          onListQuantity: new Decimal(0),
         },
       ],
       total: 2,
@@ -179,9 +180,9 @@ describe("finding something in a long inventory", () => {
     id,
     name,
     category: "Despensa",
-    totalStock: 1,
+    totalStock: new Decimal(1),
     defaultUnit: "unidad",
-    minStock: 2,
+    minStock: new Decimal(2),
     isLowStock: true,
   });
 
@@ -304,10 +305,10 @@ it("passes axe at AAA", async () => {
         name: "Café molido",
         category: "Desayuno",
         defaultUnit: "paquete",
-        minStock: 2,
-        totalStock: 0,
+        minStock: new Decimal(2),
+        totalStock: new Decimal(0),
         isLowStock: true,
-        onListQuantity: 0,
+        onListQuantity: new Decimal(0),
       },
     ],
     total: 1,

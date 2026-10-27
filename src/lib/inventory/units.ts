@@ -1,3 +1,5 @@
+import type { Decimal } from "@prisma/client-runtime-utils";
+
 /** Only exact count conversions; a package's size cannot be inferred. */
 export function countUnitSize(unit: string | null): number | undefined {
   switch ((unit ?? "").trim().toLowerCase()) {
@@ -35,22 +37,24 @@ export function unitConversion(
     : undefined;
 }
 
-export function canonicalCount<T extends { quantity: number; unit: string }>(
+export function canonicalCount<T extends { quantity: Decimal; unit: string }>(
   input: T,
 ): T {
   return countUnitSize(input.unit) === 12
-    ? { ...input, quantity: input.quantity * 12, unit: "unidad" }
+    ? { ...input, quantity: input.quantity.times(12), unit: "unidad" }
     : input;
 }
 
 export function canonicalProduct<
-  T extends { defaultUnit?: string; minStock?: number | null },
+  T extends { defaultUnit?: string; minStock?: Decimal | null },
 >(input: T): T {
   return input.defaultUnit && countUnitSize(input.defaultUnit) === 12
     ? {
         ...input,
         defaultUnit: "unidad",
-        ...(input.minStock == null ? {} : { minStock: input.minStock * 12 }),
+        ...(input.minStock == null
+          ? {}
+          : { minStock: input.minStock.times(12) }),
       }
     : input;
 }

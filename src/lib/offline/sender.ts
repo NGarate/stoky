@@ -1,5 +1,5 @@
 import { createTRPCUntypedClient, httpLink } from "@trpc/client";
-import SuperJSON from "superjson";
+import SuperJSON from "@/lib/superjson";
 import type { SendOperation } from "./queue";
 
 /**

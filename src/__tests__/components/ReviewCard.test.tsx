@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach } from "bun:test";
 import { cleanup, screen } from "@testing-library/react";
 import { renderWithIntl } from "../utils/render";
 import { ReviewCard } from "@/components/receipt/ReviewCard";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * One receipt line under review.
@@ -19,8 +20,8 @@ const line = (overrides: Record<string, unknown> = {}) => ({
   id: "i1",
   rawText: "LECHE ENTERA 1L",
   parsedName: "Leche entera",
-  parsedPrice: 1.19,
-  parsedQuantity: 1,
+  parsedPrice: new Decimal(1.19),
+  parsedQuantity: new Decimal(1),
   matchedProductId: "p1",
   matchStatus: "PENDING",
   matchConfidence: null,

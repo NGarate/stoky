@@ -4,11 +4,11 @@ import {
   MAX_ID_LENGTH,
   MAX_NAME_LENGTH,
   MAX_PAGE_SIZE,
-  MAX_QUANTITY,
   MAX_SEARCH_LENGTH,
   MAX_UNIT_LENGTH,
 } from "./bounds";
 import { replayable } from "./idempotency";
+import { minStockSchema } from "./amounts";
 
 export const productSchema = z.object({
   name: z.string().min(1).max(MAX_NAME_LENGTH),
@@ -21,7 +21,7 @@ export const productSchema = z.object({
   // `.min(0)` here as well as on update: a minimum of minus three was
   // accepted on create and refused on edit, so the product could be made but
   // not saved again without changing it.
-  minStock: z.number().finite().min(0).max(MAX_QUANTITY).optional(),
+  minStock: minStockSchema.optional(),
 });
 
 /**
@@ -42,7 +42,7 @@ export const updateProductSchema = productSchema.partial().extend({
   barcode: z.string().min(1).max(MAX_BARCODE_LENGTH).nullish(),
   brand: z.string().min(1).max(MAX_NAME_LENGTH).nullish(),
   category: z.string().min(1).max(MAX_NAME_LENGTH).nullish(),
-  minStock: z.number().finite().min(0).max(MAX_QUANTITY).nullish(),
+  minStock: minStockSchema.nullish(),
 });
 
 export const productSearchSchema = z.object({

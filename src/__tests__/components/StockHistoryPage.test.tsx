@@ -4,6 +4,7 @@ import { TRPCClientError } from "@trpc/client";
 import { screen, cleanup, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { renderWithIntl } from "../utils/render";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * `/products/[id]/history` — Phase 8 item 5's genuinely new screen.
@@ -42,7 +43,7 @@ mock.module("recharts", () => ({
 const entries = [
   {
     id: "e3",
-    quantity: 4,
+    quantity: new Decimal(4),
     unit: "L",
     operationType: "PURCHASE",
     createdAt: new Date("2026-08-15T10:00:00Z"),
@@ -50,7 +51,7 @@ const entries = [
   },
   {
     id: "e2",
-    quantity: -1,
+    quantity: new Decimal(-1),
     unit: "L",
     operationType: "CONSUME",
     createdAt: new Date("2026-08-10T10:00:00Z"),
@@ -58,7 +59,7 @@ const entries = [
   },
   {
     id: "e1",
-    quantity: 2,
+    quantity: new Decimal(2),
     unit: "L",
     operationType: "PURCHASE",
     createdAt: new Date("2026-08-01T10:00:00Z"),
@@ -86,7 +87,12 @@ const { StockHistoryView } =
 beforeEach(() => {
   chartData = [];
   detailStub = {
-    data: { id: "p1", name: "Leche entera", totalStock: 5, defaultUnit: "L" },
+    data: {
+      id: "p1",
+      name: "Leche entera",
+      totalStock: new Decimal(5),
+      defaultUnit: "L",
+    },
     isPending: false,
     error: null,
     refetch: () => {},

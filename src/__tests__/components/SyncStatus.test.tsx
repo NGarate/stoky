@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { renderWithIntl as renderWithIntlOnly } from "../utils/render";
 import type { FailedOp, QueuedOp } from "@/lib/offline/queue";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * What the shell shows about the queue, and where a screen reader hears it.
@@ -35,7 +36,11 @@ let queueState = {
 let role = "OWNER";
 
 let productQuery: unknown = {
-  data: { name: "Leche entera", defaultUnit: "L", stockEntries: [] },
+  data: {
+    name: "Leche entera",
+    defaultUnit: "L",
+    totalStock: new Decimal(0),
+  },
   error: null,
 };
 
@@ -121,7 +126,11 @@ beforeEach(() => {
     hydrated: true,
   };
   productQuery = {
-    data: { name: "Leche entera", defaultUnit: "L", stockEntries: [] },
+    data: {
+      name: "Leche entera",
+      defaultUnit: "L",
+      totalStock: new Decimal(0),
+    },
     error: null,
   };
   role = "OWNER";
@@ -441,7 +450,7 @@ describe("a refused consumption", () => {
       data: {
         name: "Leche entera",
         defaultUnit: "L",
-        stockEntries: [{ quantity: 6 }, { quantity: -5 }],
+        totalStock: new Decimal(1),
       },
       error: null,
     };

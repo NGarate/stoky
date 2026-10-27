@@ -6,6 +6,7 @@ import {
   MAX_QUANTITY,
   MAX_UNIT_LENGTH,
 } from "./bounds";
+import { atScale, QUANTITY_PLACES, quantitySchema } from "./amounts";
 
 export const stockOperationSchema = z.enum([
   "PURCHASE",
@@ -44,13 +45,13 @@ const stockMovement = z.object({
 
 /** Bought or otherwise brought in. A magnitude: adding minus five is not a thing. */
 export const addStockSchema = stockMovement.extend({
-  quantity: z.number().positive().finite().max(MAX_QUANTITY),
+  quantity: quantitySchema,
 });
 
 /** Used up. Also a magnitude — the handler is what makes the row negative. */
 export const consumeStockSchema = stockMovement.extend({
   batchId: z.string().min(1).max(MAX_ID_LENGTH).optional(),
-  quantity: z.number().positive().finite().max(MAX_QUANTITY),
+  quantity: quantitySchema,
 });
 
 /**
@@ -65,13 +66,18 @@ export const consumeStockSchema = stockMovement.extend({
  * no stock and carries a reason for a change that did not happen.
  */
 export const adjustStockSchema = stockMovement.extend({
-  expectedStock: z.number().finite().optional(),
+  expectedStock: z
+    .number()
+    .finite()
+    .transform(atScale(QUANTITY_PLACES))
+    .optional(),
   quantity: z
     .number()
     .finite()
     .min(-MAX_QUANTITY)
     .max(MAX_QUANTITY)
-    .refine((value) => value !== 0, {
+    .transform(atScale(QUANTITY_PLACES))
+    .refine((value) => !value.isZero(), {
       message: "An adjustment of zero changes nothing",
     }),
   reason: z.string().min(1).max(MAX_NOTE_LENGTH),

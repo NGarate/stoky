@@ -13,6 +13,7 @@ import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
 import type { QueuedOp, EnqueueResult } from "@/lib/offline/queue";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * The ± stepper on `/products/[id]` — §3 flow 3, Journey 4: changing stock is
@@ -69,8 +70,8 @@ const product = () => ({
   barcode: null,
   imageUrl: null,
   defaultUnit: "L",
-  minStock,
-  totalStock,
+  minStock: minStock === null ? null : new Decimal(minStock),
+  totalStock: new Decimal(totalStock),
   openFoodFactsData: null,
   createdAt: new Date("2026-08-01T10:00:00Z"),
   stockEntries,
@@ -121,7 +122,7 @@ const renderDetail = () =>
 function fridgeEntry(overrides: Record<string, unknown> = {}) {
   return {
     id: "se-1",
-    quantity: 2,
+    quantity: new Decimal(2),
     unit: "L",
     locationId: "loc-fridge",
     location: { id: "loc-fridge", name: "Nevera" },

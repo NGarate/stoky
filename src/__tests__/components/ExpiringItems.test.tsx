@@ -2,6 +2,7 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, mock } from "bun:test";
 import { cleanup, screen } from "@testing-library/react";
 import { renderWithIntl } from "../utils/render";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * ExpiringItems (I18N-5 blind spot) — every string it renders came from a
@@ -60,7 +61,7 @@ const expiredItem = (id: string, daysExpired: number) => ({
   id,
   product: product(id),
   location: null,
-  quantity: 1,
+  quantity: new Decimal(1),
   unit: "ud",
   daysExpired,
 });
@@ -69,7 +70,7 @@ const expiringItem = (id: string, daysUntilExpiry: number) => ({
   id,
   product: product(id),
   location: null,
-  quantity: 1,
+  quantity: new Decimal(1),
   unit: "ud",
   daysUntilExpiry,
   isExpiringSoon: daysUntilExpiry <= 3,

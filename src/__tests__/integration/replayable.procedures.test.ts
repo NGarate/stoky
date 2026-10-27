@@ -10,6 +10,7 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import type { AppSession } from "@/lib/auth/session";
+import { num } from "../utils/amount";
 
 /**
  * The five writes a shop composes, each sent twice.
@@ -316,7 +317,7 @@ describe("inventory.consumeStock", () => {
     const entries = await prisma.stockEntry.findMany({
       where: { productId: OWNER.productId },
     });
-    const net = entries.reduce((sum, entry) => sum + entry.quantity, 0);
+    const net = entries.reduce((sum, entry) => sum + num(entry.quantity), 0);
 
     // The whole point of the phase, in one number: a replayed consumption of
     // two litres against six leaves four, not two.
@@ -345,6 +346,8 @@ describe("inventory.consumeStock", () => {
     const entries = await prisma.stockEntry.findMany({
       where: { productId: OWNER.productId },
     });
-    expect(entries.reduce((sum, entry) => sum + entry.quantity, 0)).toBe(0);
+    expect(entries.reduce((sum, entry) => sum + num(entry.quantity), 0)).toBe(
+      0,
+    );
   });
 });

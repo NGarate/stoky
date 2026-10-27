@@ -1,7 +1,9 @@
+import { Decimal } from "@prisma/client-runtime-utils";
+
 /** A movement can identify its source batch; older movements may not. */
 export interface LedgerEntry {
   id: string;
-  quantity: number;
+  quantity: Decimal;
   expirationDate: Date | null;
   batchId?: string | null;
   locationId?: string | null;
@@ -15,26 +17,26 @@ export interface LedgerEntry {
  */
 export function remainingByBatch(
   entries: readonly LedgerEntry[],
-): Map<string, number | null> {
-  const remaining = new Map<string, number | null>();
+): Map<string, Decimal | null> {
+  const remaining = new Map<string, Decimal | null>();
   const batches = new Map<string, LedgerEntry>();
   // Stable sorting preserves the supplied order when timestamps tie. Untimed
   // callers supply purchases first, then withdrawals.
   const ordered = [...entries].sort(
     (a, b) =>
       (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0) ||
-      Number(b.quantity > 0) - Number(a.quantity > 0),
+      Number(b.quantity.greaterThan(0)) - Number(a.quantity.greaterThan(0)),
   );
   for (const entry of ordered) {
-    if (entry.quantity > 0) {
+    if (entry.quantity.isZero()) continue;
+    if (entry.quantity.greaterThan(0)) {
       batches.set(entry.id, entry);
       remaining.set(entry.id, entry.quantity);
       continue;
     }
-    if (entry.quantity === 0) continue;
     const candidates = [...batches.values()].filter(
       (batch) =>
-        remaining.get(batch.id) !== 0 &&
+        !remaining.get(batch.id)?.isZero() &&
         (entry.batchId
           ? batch.id === entry.batchId
           : !entry.locationId || batch.locationId === entry.locationId),
@@ -44,9 +46,7 @@ export function remainingByBatch(
       const previous = remaining.get(id);
       remaining.set(
         id,
-        previous == null
-          ? null
-          : Math.max(0, Math.round((previous + entry.quantity) * 100) / 100),
+        previous == null ? null : Decimal.max(0, previous.plus(entry.quantity)),
       );
     } else {
       for (const batch of candidates) remaining.set(batch.id, null);
@@ -54,8 +54,8 @@ export function remainingByBatch(
   }
   // A completely depleted product has no surviving batch, whichever one was
   // used first. This does not assign an unknown withdrawal to a particular lot.
-  if (netStock(entries) === 0) {
-    for (const id of remaining.keys()) remaining.set(id, 0);
+  if (netStock(entries).isZero()) {
+    for (const id of remaining.keys()) remaining.set(id, new Decimal(0));
   }
   return remaining;
 }
@@ -73,15 +73,15 @@ export function remainingByBatch(
 export function allocateFefo<T extends LedgerEntry>(
   entries: readonly T[],
   locationId: string,
-  quantity: number,
-): { parts: Array<{ batch: T; quantity: number }>; unassigned: number } {
+  quantity: Decimal,
+): { parts: Array<{ batch: T; quantity: Decimal }>; unassigned: Decimal } {
   const remaining = remainingByBatch(entries);
   const candidates = entries
     .filter(
       (entry) =>
-        entry.quantity > 0 &&
+        entry.quantity.greaterThan(0) &&
         entry.locationId === locationId &&
-        (remaining.get(entry.id) ?? 0) > 0,
+        !!remaining.get(entry.id)?.greaterThan(0),
     )
     .sort(
       (a, b) =>
@@ -90,20 +90,19 @@ export function allocateFefo<T extends LedgerEntry>(
         (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0),
     );
 
-  const parts: Array<{ batch: T; quantity: number }> = [];
-  let left = Math.round(quantity * 100) / 100;
+  const parts: Array<{ batch: T; quantity: Decimal }> = [];
+  let left = quantity;
   for (const batch of candidates) {
-    if (left <= 0) break;
-    const take = Math.min(remaining.get(batch.id) ?? 0, left);
+    if (!left.greaterThan(0)) break;
+    const take = Decimal.min(remaining.get(batch.id) ?? 0, left);
     parts.push({ batch, quantity: take });
-    left = Math.round((left - take) * 100) / 100;
+    left = left.minus(take);
   }
-  return { parts, unassigned: Math.max(0, left) };
+  return { parts, unassigned: Decimal.max(0, left) };
 }
 
-export function netStock(entries: readonly LedgerEntry[]): number {
-  const total = entries.reduce((sum, entry) => sum + entry.quantity, 0);
-  return Math.round(total * 100) / 100;
+export function netStock(entries: readonly LedgerEntry[]): Decimal {
+  return Decimal.sum(0, ...entries.map((entry) => entry.quantity));
 }
 
 /**

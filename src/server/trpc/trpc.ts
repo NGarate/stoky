@@ -1,5 +1,5 @@
 import { initTRPC, TRPCError } from "@trpc/server";
-import superjson from "superjson";
+import superjson from "@/lib/superjson";
 import type { AppSession } from "@/lib/auth/session";
 import type { HouseholdRole, PrismaClient } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";

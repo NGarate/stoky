@@ -1,3 +1,4 @@
+import type { Decimal } from "@prisma/client-runtime-utils";
 import { useTranslations } from "next-intl";
 
 import { countUnitSize } from "@/lib/inventory/units";
@@ -29,16 +30,21 @@ export type CountTranslator = (
 export function displayUnit(
   t: CountTranslator,
   unit: string | null | undefined,
-  count: number,
+  count: number | Decimal,
 ): string {
   if (!unit) return "";
-  return countUnitSize(unit) === 1 ? t("unitCount", { count }) : unit;
+  return countUnitSize(unit) === 1
+    ? t("unitCount", { count: Number(count) })
+    : unit;
 }
 
-/** "24 unidades", "1 unit", "1.5 kg" — the number, then its unit. */
+/**
+ * "24 unidades", "1 unit", "1.5 kg" — the number, then its unit. A stored
+ * amount arrives as a Decimal, a typed one as a number; both print the same.
+ */
 export function formatQuantity(
   t: CountTranslator,
-  quantity: number,
+  quantity: number | Decimal,
   unit: string | null | undefined,
 ): string {
   const word = displayUnit(t, unit, quantity);
@@ -76,9 +82,12 @@ export function displayLabelValues<T extends Record<string, unknown>>(
  * plural in both languages.
  */
 export function useQuantityFormat(): {
-  unit: (unit: string | null | undefined, count: number) => string;
+  unit: (unit: string | null | undefined, count: number | Decimal) => string;
   measure: (unit: string | null | undefined) => string;
-  quantity: (quantity: number, unit: string | null | undefined) => string;
+  quantity: (
+    quantity: number | Decimal,
+    unit: string | null | undefined,
+  ) => string;
   labelValues: <T extends Record<string, unknown>>(
     values: T | undefined,
   ) => T | undefined;

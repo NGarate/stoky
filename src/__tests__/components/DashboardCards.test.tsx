@@ -4,6 +4,8 @@ import { screen, cleanup } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
 import { renderWithIntl } from "../utils/render";
 import { axeViolations } from "../utils/axe";
+import { Decimal } from "@prisma/client-runtime-utils";
+import { asStored } from "../utils/amount";
 
 /**
  * The Panel's opening: quick actions first, then the sections themselves.
@@ -25,19 +27,24 @@ import { axeViolations } from "../utils/axe";
 
 let overviewCalls: Array<Record<string, unknown>>;
 
-const row = (over: Record<string, unknown> = {}) => ({
-  id: "p1",
-  name: "Café molido",
-  totalStock: 0,
-  minStock: 2,
-  defaultUnit: "paquete",
-  isLowStock: false,
-  ...over,
-});
+const row = (over: Record<string, unknown> = {}) =>
+  asStored(
+    {
+      id: "p1",
+      name: "Café molido",
+      totalStock: 0,
+      minStock: 2,
+      defaultUnit: "paquete",
+      isLowStock: false,
+      ...over,
+    },
+    "totalStock",
+    "minStock",
+  );
 
 const expiringItem = (over: Record<string, unknown> = {}) => ({
   id: "b1",
-  quantity: 1,
+  quantity: new Decimal(1),
   unit: "L",
   daysUntilExpiry: 3,
   isExpiringSoon: false,
@@ -48,7 +55,7 @@ const expiringItem = (over: Record<string, unknown> = {}) => ({
 
 const expiredItem = (over: Record<string, unknown> = {}) => ({
   id: "b2",
-  quantity: 1,
+  quantity: new Decimal(1),
   unit: "tarrina",
   daysExpired: 2,
   location: null,

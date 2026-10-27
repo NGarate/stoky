@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
-import { runningTotals } from "@/lib/inventory/stockLedger";
+import { Decimal } from "@prisma/client-runtime-utils";
+import { runningTotals as walk } from "@/lib/inventory/stockLedger";
 
 /**
  * Phase 8 item 5 — the stock-history chart's arithmetic.
@@ -13,7 +14,19 @@ import { runningTotals } from "@/lib/inventory/stockLedger";
  * drawn is exact regardless of how much ledger is loaded.
  */
 function entry(id: string, quantity: number, createdAt: string) {
-  return { id, quantity, createdAt: new Date(createdAt) };
+  return {
+    id,
+    quantity: new Decimal(quantity),
+    createdAt: new Date(createdAt),
+  };
+}
+
+/** The walk, with its totals read back as numbers for the assertions. */
+function runningTotals(entries: ReturnType<typeof entry>[], net: number) {
+  return walk(entries, new Decimal(net)).map((point) => ({
+    ...point,
+    total: point.total.toNumber(),
+  }));
 }
 
 describe("runningTotals", () => {

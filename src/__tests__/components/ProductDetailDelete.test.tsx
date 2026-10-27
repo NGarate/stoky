@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup, fireEvent } from "@testing-library/react";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * The delete section on `/products/[id]` — Phase 8 item 5, D90.
@@ -27,7 +28,7 @@ const product = () => ({
   imageUrl: null,
   defaultUnit: "kg",
   minStock: null,
-  totalStock: 0,
+  totalStock: new Decimal(0),
   openFoodFactsData: null,
   createdAt: new Date("2026-08-01T10:00:00Z"),
   stockEntries,
@@ -136,7 +137,7 @@ describe("deleting a product", () => {
     stockEntries = [
       {
         id: "e1",
-        quantity: 1,
+        quantity: new Decimal(1),
         unit: "kg",
         location: null,
         expirationDate: null,

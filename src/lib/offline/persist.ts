@@ -1,6 +1,6 @@
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { persistQueryClient } from "@tanstack/react-query-persist-client";
-import SuperJSON from "superjson";
+import SuperJSON from "@/lib/superjson";
 import type { Query, QueryClient } from "@tanstack/react-query";
 import type { Persister } from "@tanstack/react-query-persist-client";
 
@@ -41,7 +41,9 @@ import type { Persister } from "@tanstack/react-query-persist-client";
 // kitchen's button would silently vanish for everyone holding one.
 // Stock amounts now use individual units for dozens, and batch remainders
 // can be unknown. Old persisted query results cannot describe this schema.
-export const CACHE_VERSION = "4";
+// 5 when quantities and money became `Decimal`: a cache from before holds
+// plain numbers, and a component calling `.toNumber()` on one throws.
+export const CACHE_VERSION = "5";
 
 /**
  * The queries worth keeping between visits.

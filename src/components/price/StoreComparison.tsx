@@ -10,6 +10,7 @@ import { sectionHeading } from "@/components/ui/section";
 
 import type { JSX } from "react";
 import { formatDate } from "@/lib/dates";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * Where this product is cheapest.
@@ -66,11 +67,14 @@ export function StoreComparison({
     );
   }
 
-  const sorted = [...prices].sort((a, b) => a.unitPrice - b.unitPrice);
+  const sorted = [...prices].sort((a, b) =>
+    a.unitPrice.comparedTo(b.unitPrice),
+  );
   const best = sorted[0]!;
   const dearest = sorted[sorted.length - 1]!;
-  const average =
-    sorted.reduce((sum, price) => sum + price.unitPrice, 0) / sorted.length;
+  const average = Decimal.sum(
+    ...sorted.map((price) => price.unitPrice),
+  ).dividedBy(sorted.length);
 
   // Derived from these rows rather than being one, so it takes the cheapest
   // row's currency. A comparison mixing currencies is already meaningless; an
@@ -78,8 +82,8 @@ export function StoreComparison({
   const currency = best.currency ?? DEFAULT_CURRENCY;
 
   /** Whole percent over the cheapest. Zero for the cheapest itself. */
-  const premium = (price: number): number =>
-    Math.round((price / best.unitPrice - 1) * 100);
+  const premium = (price: Decimal): number =>
+    price.dividedBy(best.unitPrice).minus(1).times(100).round().toNumber();
 
   return (
     <section
@@ -143,7 +147,7 @@ export function StoreComparison({
                     isBest ? "bg-chart-emphasis" : "bg-chart-muted"
                   }`}
                   style={{
-                    width: `${(price.unitPrice / dearest.unitPrice) * 100}%`,
+                    width: `${price.unitPrice.dividedBy(dearest.unitPrice).times(100).toNumber()}%`,
                   }}
                 />
               </span>
@@ -158,13 +162,13 @@ export function StoreComparison({
                     {t("prices.premiumOver", { percent: `${over}%` })}
                   </span>
                 )}
-                {price.quantity === 1 ? null : (
+                {price.quantity.equals(1) ? null : (
                   <>
                     <span aria-hidden="true"> · </span>
                     <span className="sr-only">. </span>
                     {t("prices.paidFor", {
                       total: formatMoney(locale, price.price, priceCurrency),
-                      quantity: price.quantity,
+                      quantity: price.quantity.toNumber(),
                       unit: units.unit(price.unit, price.quantity),
                     })}
                   </>

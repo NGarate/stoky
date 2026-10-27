@@ -4,6 +4,7 @@ import { TRPCClientError } from "@trpc/client";
 import { screen, cleanup, fireEvent } from "@testing-library/react";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * `/products/[id]/adjust` — Phase 8 item 5.
@@ -50,7 +51,7 @@ const LOADED = {
   data: {
     id: "p1",
     name: "Huevos",
-    totalStock: 6,
+    totalStock: new Decimal(6),
     defaultUnit: "ud",
   } as unknown,
   isPending: false,

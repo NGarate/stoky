@@ -1,13 +1,41 @@
 import { describe, it, expect } from "bun:test";
+import { Decimal } from "@prisma/client-runtime-utils";
 import {
-  allocateFefo,
   daysUntilExpiry,
   endOfDayAfter,
-  netStock,
-  remainingByBatch,
   startOfToday,
   type LedgerEntry,
 } from "@/lib/inventory/batches";
+import * as batches from "@/lib/inventory/batches";
+
+// The helpers take and return Decimals; these cases read as plain numbers.
+const remainingByBatch = (entries: readonly LedgerEntry[]) =>
+  new Map(
+    [...batches.remainingByBatch(entries)].map(([id, left]) => [
+      id,
+      left === null ? null : left.toNumber(),
+    ]),
+  );
+const netStock = (entries: readonly LedgerEntry[]) =>
+  batches.netStock(entries).toNumber();
+const allocateFefo = (
+  entries: readonly LedgerEntry[],
+  locationId: string,
+  quantity: number,
+) => {
+  const { parts, unassigned } = batches.allocateFefo(
+    entries,
+    locationId,
+    new Decimal(quantity),
+  );
+  return {
+    parts: parts.map(({ batch, quantity }) => ({
+      batch,
+      quantity: quantity.toNumber(),
+    })),
+    unassigned: unassigned.toNumber(),
+  };
+};
 
 /**
  * ISSUES.md INV-1, the read half, at the only tier that can answer it cheaply.
@@ -22,7 +50,7 @@ function entry(quantity: number, expiresInDays?: number): LedgerEntry {
   counter += 1;
   return {
     id: `entry-${String(counter).padStart(3, "0")}`,
-    quantity,
+    quantity: new Decimal(quantity),
     expirationDate:
       expiresInDays === undefined ? null : new Date(2026, 0, 1 + expiresInDays),
   };
@@ -200,7 +228,7 @@ describe("allocateFefo", () => {
     extra: Partial<LedgerEntry> = {},
   ): LedgerEntry => ({
     id,
-    quantity,
+    quantity: new Decimal(quantity),
     expirationDate: day === null ? null : new Date(2026, 0, day),
     locationId,
     createdAt: new Date(2026, 0, 1, 0, Number(id.replace(/\D/g, "")) || 0),

@@ -6,8 +6,8 @@
  *
  * - **Infinity.** Zod 3's `z.number()` accepted it — `.positive()` too — and
  *   superjson carries it across the wire intact, so `quantity: Infinity`
- *   passed validation, and a `double precision` column will store it. One
- *   such row and every sum over the ledger is Infinity. Zod 4's `z.number()`
+ *   passed validation, and the `double precision` column it then was stored
+ *   it. One such row and every sum over the ledger is Infinity. Zod 4's `z.number()`
  *   refuses it; the schemas still say `.finite()`, which costs nothing and
  *   does not depend on a library default.
  * - **Unbounded page sizes.** `product.searchByName` interpolates its `limit`

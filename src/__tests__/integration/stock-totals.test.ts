@@ -4,6 +4,7 @@ import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { stockTotals } from "@/lib/stock/totals";
 import type { AppSession } from "@/lib/auth/session";
+import { num } from "../utils/amount";
 
 /**
  * One answer to "how much is there", wherever it is asked.
@@ -87,9 +88,9 @@ describe("stockTotals", () => {
   it("sums each product's movements, rounded to the hundredth", async () => {
     const totals = await stockTotals(prisma, [A.productId, A.emptyId]);
 
-    expect(totals.get(A.productId)).toBe(0.3);
+    expect(num(totals.get(A.productId))).toBe(0.3);
     // No movement at all is nothing in stock, not a missing answer.
-    expect(totals.get(A.emptyId)).toBe(0);
+    expect(num(totals.get(A.emptyId))).toBe(0);
   });
 });
 
@@ -110,12 +111,12 @@ describe("every reader agrees with the stock overview", () => {
     const expected = overview.products.find(
       (p) => p.id === A.productId,
     )?.totalStock;
-    expect(expected).toBe(0.3);
+    expect(num(expected)).toBe(0.3);
     expect(
-      products.products.find((p) => p.id === A.productId)?.totalStock,
-    ).toBe(expected);
-    expect(buyList.find((i) => i.productId === A.productId)?.stock).toBe(
-      expected,
+      num(products.products.find((p) => p.id === A.productId)?.totalStock),
+    ).toBe(num(expected));
+    expect(num(buyList.find((i) => i.productId === A.productId)?.stock)).toBe(
+      num(expected),
     );
   });
 });

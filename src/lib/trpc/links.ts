@@ -5,7 +5,7 @@ import {
   unstable_httpBatchStreamLink,
   type TRPCLink,
 } from "@trpc/client";
-import SuperJSON from "superjson";
+import SuperJSON from "@/lib/superjson";
 import { MAX_TRPC_BATCH_SIZE } from "@/lib/trpc/batch";
 import type { AppRouter } from "@/server/trpc/router";
 

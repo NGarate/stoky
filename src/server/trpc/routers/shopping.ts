@@ -5,7 +5,7 @@ import {
 } from "@/lib/inventory/units";
 import { stockTotals } from "@/lib/stock/totals";
 import { TRPCError } from "@trpc/server";
-import { type PrismaClient } from "@/generated/prisma/client";
+import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import { needsMoreOnList } from "@/lib/stock/low-stock";
 import { z } from "zod";
 import { MAX_ID_LENGTH } from "@/lib/validations/bounds";
@@ -18,6 +18,7 @@ import {
   shoppingListQuerySchema,
 } from "@/lib/validations/shopping";
 import { replayable } from "@/lib/validations/idempotency";
+import { QUANTITY_PLACES } from "@/lib/validations/amounts";
 import { withReplay } from "../replay";
 
 /**
@@ -323,7 +324,9 @@ export const shoppingRouter = createTRPCRouter({
             ? canonicalCount({ ...fields, unit: fields.unit })
             : {
                 ...fields,
-                quantity: fields.quantity * factor,
+                quantity: fields.quantity
+                  .times(factor)
+                  .toDecimalPlaces(QUANTITY_PLACES),
                 unit: product.defaultUnit,
               };
 
@@ -399,7 +402,9 @@ export const shoppingRouter = createTRPCRouter({
                   code: "CONFLICT",
                   message: "Quantity unit changed; confirm the amount",
                 });
-              quantity *= factor;
+              quantity = quantity
+                .times(factor)
+                .toDecimalPlaces(QUANTITY_PLACES);
             }
           }
           return tx.shoppingItem.update({
@@ -539,13 +544,16 @@ export const shoppingRouter = createTRPCRouter({
       });
 
       const unitOf = new Map(products.map((p) => [p.id, p.defaultUnit]));
-      const alreadyOnList = new Map<string, number>();
+      const none = new Prisma.Decimal(0);
+      const alreadyOnList = new Map<string, Prisma.Decimal>();
       for (const row of onList) {
         const unit = unitOf.get(row.productId);
         if (unit === undefined || !isProductUnit(row.unit, unit)) continue;
         alreadyOnList.set(
           row.productId,
-          (alreadyOnList.get(row.productId) ?? 0) + (row._sum.quantity ?? 0),
+          (alreadyOnList.get(row.productId) ?? none).plus(
+            row._sum.quantity ?? none,
+          ),
         );
       }
 
@@ -555,8 +563,8 @@ export const shoppingRouter = createTRPCRouter({
       // enforced.
       const needed = products.filter((product) =>
         needsMoreOnList(
-          stockOf.get(product.id) ?? 0,
-          alreadyOnList.get(product.id) ?? 0,
+          stockOf.get(product.id) ?? none,
+          alreadyOnList.get(product.id) ?? none,
           product.minStock,
         ),
       );
@@ -577,21 +585,23 @@ export const shoppingRouter = createTRPCRouter({
       );
 
       for (const product of needed) {
-        const covered =
-          (stockOf.get(product.id) ?? 0) + (alreadyOnList.get(product.id) ?? 0);
+        const covered = (stockOf.get(product.id) ?? none).plus(
+          alreadyOnList.get(product.id) ?? none,
+        );
         // 1.5× the minimum is the target to reach, not the amount to add: what
         // is in the cupboard and what is already written down both count
-        // towards it. Rounded, because these are floats and "0.30000000000004
-        // paquetes" is not a shopping list.
-        const shortfall =
-          Math.round(((product.minStock ?? 0) * 1.5 - covered) * 100) / 100;
-        if (shortfall <= 0) continue;
+        // towards it. Back at the column's scale, since 1.5× adds a decimal.
+        const shortfall = (product.minStock ?? none)
+          .times(1.5)
+          .minus(covered)
+          .toDecimalPlaces(QUANTITY_PLACES);
+        if (!shortfall.greaterThan(0)) continue;
 
         const row = existing.get(product.id);
         if (row) {
           await ctx.db.shoppingItem.update({
             where: { id: row.id },
-            data: { quantity: row.quantity + shortfall },
+            data: { quantity: row.quantity.plus(shortfall) },
           });
           continue;
         }
@@ -662,7 +672,7 @@ export const shoppingRouter = createTRPCRouter({
       productId: item.productId,
       listId: item.shoppingList.id,
       listName: item.shoppingList.name,
-      stock: stockOf.get(item.productId) ?? 0,
+      stock: stockOf.get(item.productId) ?? new Prisma.Decimal(0),
       minStock: item.product.minStock,
     }));
   }),

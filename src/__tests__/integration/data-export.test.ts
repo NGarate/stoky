@@ -291,8 +291,8 @@ describe("what must be in it", () => {
     // so the expiry of what remains cannot be read back from it.
     const exported = await owner.data.exportHousehold();
     const entries = exported.products[0]?.stockEntries ?? [];
-    const purchase = entries.find((entry) => entry.quantity > 0);
-    const consumption = entries.find((entry) => entry.quantity < 0);
+    const purchase = entries.find((entry) => entry.quantity.greaterThan(0));
+    const consumption = entries.find((entry) => entry.quantity.lessThan(0));
 
     expect(consumption?.batchId).toBe(purchase?.id);
   });

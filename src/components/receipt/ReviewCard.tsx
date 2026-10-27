@@ -9,6 +9,7 @@ import { isItemReviewed } from "@/lib/receipts";
 import { MatchSelector } from "./MatchSelector";
 import { CreateProductInline } from "./CreateProductInline";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import type { Decimal } from "@prisma/client-runtime-utils";
 
 interface ProductCandidate {
   productId: string;
@@ -20,8 +21,8 @@ interface ReceiptItem {
   id: string;
   rawText: string;
   parsedName: string | null;
-  parsedPrice: number | null;
-  parsedQuantity: number | null;
+  parsedPrice: Decimal | null;
+  parsedQuantity: Decimal | null;
   matchedProductId: string | null;
   matchStatus: string;
   matchConfidence: number | null;
@@ -87,12 +88,11 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
           <p className="font-medium text-foreground">
             {item.parsedName || item.rawText}
           </p>
-          {item.parsedPrice && (
+          {item.parsedPrice !== null && (
             <p className="text-sm text-muted-foreground">
               {formatMoney(locale, item.parsedPrice, DEFAULT_CURRENCY)}
-              {item.parsedQuantity &&
-                item.parsedQuantity > 1 &&
-                ` × ${item.parsedQuantity}`}
+              {item.parsedQuantity?.greaterThan(1) &&
+                ` × ${item.parsedQuantity.toString()}`}
             </p>
           )}
         </div>

@@ -134,7 +134,7 @@ CREATE TABLE "Product" (
     "category" TEXT,
     "imageUrl" TEXT,
     "defaultUnit" TEXT NOT NULL DEFAULT 'unit',
-    "minStock" DOUBLE PRECISION,
+    "minStock" DECIMAL(12,3),
     "openFoodFactsData" JSONB,
     "householdId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -147,7 +147,7 @@ CREATE TABLE "Product" (
 CREATE TABLE "StockEntry" (
     "id" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
-    "quantity" DOUBLE PRECISION NOT NULL,
+    "quantity" DECIMAL(12,3) NOT NULL,
     "unit" TEXT NOT NULL,
     "expirationDate" TIMESTAMP(3),
     "locationId" TEXT,
@@ -186,10 +186,10 @@ CREATE TABLE "PriceRecord" (
     "id" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
     "storeId" TEXT NOT NULL,
-    "price" DOUBLE PRECISION NOT NULL,
+    "price" DECIMAL(12,2) NOT NULL,
     "currency" TEXT NOT NULL DEFAULT 'EUR',
     "unit" TEXT NOT NULL,
-    "quantity" DOUBLE PRECISION NOT NULL DEFAULT 1,
+    "quantity" DECIMAL(12,3) NOT NULL DEFAULT 1,
     "recordedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "receiptId" TEXT,
 
@@ -203,7 +203,7 @@ CREATE TABLE "Receipt" (
     "status" "ReceiptStatus" NOT NULL DEFAULT 'UPLOADING',
     "storeId" TEXT,
     "purchaseDate" TIMESTAMP(3),
-    "totalAmount" DOUBLE PRECISION,
+    "totalAmount" DECIMAL(12,2),
     "rawOcrText" TEXT,
     "householdId" TEXT NOT NULL,
     "uploadedBy" TEXT NOT NULL,
@@ -219,8 +219,8 @@ CREATE TABLE "ReceiptItem" (
     "receiptId" TEXT NOT NULL,
     "rawText" TEXT NOT NULL,
     "parsedName" TEXT,
-    "parsedPrice" DOUBLE PRECISION,
-    "parsedQuantity" DOUBLE PRECISION,
+    "parsedPrice" DECIMAL(12,2),
+    "parsedQuantity" DECIMAL(12,3),
     "matchedProductId" TEXT,
     "matchConfidence" DOUBLE PRECISION,
     "matchStatus" "MatchStatus" NOT NULL DEFAULT 'PENDING',
@@ -245,7 +245,7 @@ CREATE TABLE "ShoppingItem" (
     "id" TEXT NOT NULL,
     "shoppingListId" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
-    "quantity" DOUBLE PRECISION NOT NULL DEFAULT 1,
+    "quantity" DECIMAL(12,3) NOT NULL DEFAULT 1,
     "unit" TEXT,
     "isChecked" BOOLEAN NOT NULL DEFAULT false,
     "checkedAt" TIMESTAMP(3),
@@ -436,7 +436,6 @@ ALTER TABLE "ShoppingItem" ADD CONSTRAINT "ShoppingItem_productId_fkey" FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE "ShoppingItem" ADD CONSTRAINT "ShoppingItem_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
 
 -- What the schema cannot declare, after everything it can.
 --

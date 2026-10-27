@@ -2,6 +2,7 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, mock } from "bun:test";
 import { cleanup, screen } from "@testing-library/react";
 import { renderWithIntl } from "../utils/render";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * The best price is the best *unit* price. A record's `price` is the total
@@ -25,10 +26,10 @@ const { BestPriceIndicator } =
 
 const row = (id: string, store: string, price: number, quantity = 1) => ({
   id,
-  price,
-  quantity,
+  price: new Decimal(price),
+  quantity: new Decimal(quantity),
   unit: "unidad",
-  unitPrice: price / quantity,
+  unitPrice: new Decimal(price).dividedBy(quantity),
   currency: "EUR",
   recordedAt: new Date("2026-08-01T10:00:00.000Z"),
   store: { id: `st-${id}`, name: store },

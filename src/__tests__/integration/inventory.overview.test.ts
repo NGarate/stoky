@@ -6,6 +6,7 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { isLowStock, needsRestock } from "@/lib/stock/low-stock";
+import { num } from "../utils/amount";
 
 /**
  * The aggregate, against a real PostgreSQL.
@@ -135,8 +136,8 @@ describe("the stock overview", () => {
     const { products } = await api.inventory.getStockOverview({ limit: 100 });
 
     const byName = new Map(products.map((p) => [p.name, p.totalStock]));
-    expect(byName.get("Leche entera")).toBe(2);
-    expect(byName.get("Café molido")).toBe(0);
+    expect(num(byName.get("Leche entera"))).toBe(2);
+    expect(num(byName.get("Café molido"))).toBe(0);
   });
 
   it("keeps a product with no stock entry at all", async () => {
@@ -154,7 +155,7 @@ describe("the stock overview", () => {
 
     // A LEFT JOIN, not an inner one. A product nobody has bought yet is
     // exactly the product you most want to see on a restock list.
-    expect(row?.totalStock).toBe(0);
+    expect(num(row?.totalStock)).toBe(0);
 
     await prisma.product.deleteMany({ where: { name: "Zumo sin historial" } });
   });
@@ -170,7 +171,7 @@ describe("the stock overview", () => {
     // turns the LEFT JOIN into an inner one and every product disappears,
     // which answers a different question from the one the screen asks.
     expect(products).toHaveLength(FIXTURES.length);
-    for (const row of products) expect(row.totalStock).toBe(0);
+    for (const row of products) expect(num(row.totalStock)).toBe(0);
   });
 
   it("counts every match, not the rows on this page", async () => {
@@ -330,7 +331,7 @@ describe("the stock overview", () => {
       direction: "desc",
     });
 
-    const totals = desc.products.map((p) => p.totalStock);
+    const totals = desc.products.map((p) => num(p.totalStock));
     expect(totals).toEqual([...totals].sort((a, b) => b - a));
   });
 
@@ -403,7 +404,7 @@ describe("what the household's lists already cover", () => {
 
     // `undefined` here reaches the kitchen as `left + undefined < min`, which
     // is `NaN < min`, which is false — and the button silently vanishes.
-    for (const row of products) expect(row.onListQuantity).toBe(0);
+    for (const row of products) expect(num(row.onListQuantity)).toBe(0);
   });
 
   it("sums every unticked item for a product, across lists", async () => {
@@ -419,7 +420,7 @@ describe("what the household's lists already cover", () => {
     const { products } = await api.inventory.getStockOverview({ limit: 100 });
     const row = products.find((p) => p.name === "Leche entera");
 
-    expect(row?.onListQuantity).toBe(7);
+    expect(num(row?.onListQuantity)).toBe(7);
 
     await prisma.shoppingItem.deleteMany({ where: { productId } });
   });
@@ -446,8 +447,8 @@ describe("what the household's lists already cover", () => {
     // Joined without aggregating first, each of the product's two stock
     // entries pairs with each of its three list items: the stock reads six
     // times over and the list twice.
-    expect(row?.totalStock).toBe(stockBefore);
-    expect(row?.onListQuantity).toBe(3);
+    expect(num(row?.totalStock)).toBe(num(stockBefore));
+    expect(num(row?.onListQuantity)).toBe(3);
 
     await prisma.shoppingItem.deleteMany({ where: { productId } });
   });
@@ -466,7 +467,7 @@ describe("what the household's lists already cover", () => {
     const row = products.find((p) => p.name === "Leche entera");
 
     // Summed raw, the 500 g read as 500 more of something counted in units.
-    expect(row?.onListQuantity).toBe(2);
+    expect(num(row?.onListQuantity)).toBe(2);
 
     await prisma.shoppingItem.deleteMany({ where: { productId } });
   });
@@ -489,7 +490,7 @@ describe("what the household's lists already cover", () => {
     const row = products.find((p) => p.name === "Leche entera");
 
     // Already in the trolley is not still to buy.
-    expect(row?.onListQuantity).toBe(0);
+    expect(num(row?.onListQuantity)).toBe(0);
 
     await prisma.shoppingItem.deleteMany({ where: { productId } });
   });

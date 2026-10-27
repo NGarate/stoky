@@ -21,11 +21,12 @@
  * than design: nothing made them, and a fourth caller had no way to know
  * which of the three to copy.
  *
- * Kept as plain arithmetic over two numbers rather than over a product, so
+ * Kept as plain arithmetic over two amounts rather than over a product, so
  * the server can apply it to a row it has just summed and a component can
  * apply it to what a query returned, without either shaping data for the
  * other.
  */
+import type { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * Below a minimum that was set. Never true when no minimum exists.
@@ -37,10 +38,10 @@
  * which is precisely the duplication this file exists to remove.
  */
 export function isLowStock(
-  totalStock: number,
-  minStock: number | null,
-): minStock is number {
-  return minStock !== null && totalStock < minStock;
+  totalStock: Decimal,
+  minStock: Decimal | null,
+): minStock is Decimal {
+  return minStock !== null && totalStock.lessThan(minStock);
 }
 
 /**
@@ -51,10 +52,10 @@ export function isLowStock(
  * consumer sees is how a green suite stops meaning anything.
  */
 export function needsRestock(
-  totalStock: number,
-  minStock: number | null,
+  totalStock: Decimal,
+  minStock: Decimal | null,
 ): boolean {
-  return totalStock <= 0 || isLowStock(totalStock, minStock);
+  return totalStock.lessThanOrEqualTo(0) || isLowStock(totalStock, minStock);
 }
 
 /**
@@ -69,9 +70,9 @@ export function needsRestock(
  * enough would mean for this product, so nothing can say it is not enough.
  */
 export function needsMoreOnList(
-  totalStock: number,
-  onListQuantity: number,
-  minStock: number | null,
+  totalStock: Decimal,
+  onListQuantity: Decimal,
+  minStock: Decimal | null,
 ): boolean {
-  return isLowStock(totalStock + onListQuantity, minStock);
+  return isLowStock(totalStock.plus(onListQuantity), minStock);
 }

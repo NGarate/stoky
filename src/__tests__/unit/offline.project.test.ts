@@ -1,11 +1,22 @@
 import { describe, it, expect } from "bun:test";
-import {
-  pendingProductIds,
-  projectOnListQuantities,
-  projectShoppingItems,
-  projectStockTotals,
-} from "@/lib/offline/project";
+import { Decimal } from "@prisma/client-runtime-utils";
+import { pendingProductIds, projectShoppingItems } from "@/lib/offline/project";
+import * as project from "@/lib/offline/project";
 import type { QueuedOp, ReplayablePath } from "@/lib/offline/queue";
+
+// The totals are Decimals; these cases read as plain numbers.
+const decimals = (totals: ReadonlyMap<string, number>) =>
+  new Map([...totals].map(([id, value]) => [id, new Decimal(value)]));
+const numbers = (totals: ReadonlyMap<string, Decimal>) =>
+  new Map([...totals].map(([id, value]) => [id, value.toNumber()]));
+const projectStockTotals = (
+  totals: ReadonlyMap<string, number>,
+  pending: readonly QueuedOp[],
+) => numbers(project.projectStockTotals(decimals(totals), pending));
+const projectOnListQuantities = (
+  totals: ReadonlyMap<string, number>,
+  pending: readonly QueuedOp[],
+) => numbers(project.projectOnListQuantities(decimals(totals), pending));
 
 /**
  * The fold that makes a queued change visible before it is sent.
@@ -97,13 +108,18 @@ describe("projectShoppingItems", () => {
   });
 
   it("shows a quantity changed offline", () => {
-    const withQuantity = [{ id: "a", isChecked: false, quantity: 1 }];
+    const withQuantity = [
+      { id: "a", isChecked: false, quantity: new Decimal(1) },
+    ];
 
     const projected = projectShoppingItems(withQuantity, [
       op("shopping.updateItem", { id: "a", quantity: 3, quantityUnit: "L" }),
     ]);
 
-    expect(projected[0]?.quantity).toBe(3);
+    // In the server's shape: the row is drawn with `.toString()` and
+    // compared with `.equals()`, which a queued number does not have.
+    expect(projected[0]?.quantity).toBeInstanceOf(Decimal);
+    expect(projected[0]?.quantity.toString()).toBe("3");
     expect(projected[0]?.isChecked).toBe(false);
   });
 
@@ -162,6 +178,30 @@ describe("projectShoppingItems", () => {
     // shapes, because the two screens read different ones.
     expect(row?.name).toBe("Pan de centeno");
     expect(row?.product?.name).toBe("Pan de centeno");
+  });
+
+  it("gives an item added offline its quantity in the server's shape", () => {
+    const added = op("shopping.addItem", {
+      shoppingListId: "list-1",
+      productId: "p-pan",
+      quantity: 2,
+    });
+    const tapped = op("shopping.addItem", {
+      shoppingListId: "list-1",
+      productId: "p-sal",
+    });
+
+    const projected = projectShoppingItems(rows, [added, tapped], "list-1");
+    const quantityOf = (id: string) =>
+      (
+        projected.find((row) => row.id === id) as
+          { quantity?: unknown } | undefined
+      )?.quantity;
+
+    // The queue holds the number typed; the row it becomes is drawn by the
+    // same code as the server's rows, which calls `.toString()` on it.
+    expect(quantityOf(added.id)).toEqual(new Decimal(2));
+    expect(quantityOf(tapped.id)).toEqual(new Decimal(1));
   });
 
   it("leaves an unnamed addition alone rather than inventing one", () => {
@@ -383,7 +423,7 @@ describe("what the lists already cover", () => {
     expect(projected.get("p1")).toBe(2);
   });
 
-  it("rounds, because quantities are entered by people", () => {
+  it("adds exactly: 0.1 and 0.2 are 0.3", () => {
     const projected = projectOnListQuantities(new Map([["p1", 0.1]]), [
       add("p1", 0.2),
     ]);

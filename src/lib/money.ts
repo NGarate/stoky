@@ -1,3 +1,5 @@
+import type { Decimal } from "@prisma/client-runtime-utils";
+
 /**
  * Money, written the way the reader's language writes it.
  *
@@ -24,14 +26,14 @@ export const DEFAULT_CURRENCY = "EUR";
  */
 export function formatMoney(
   locale: string,
-  amount: number,
+  amount: number | Decimal,
   currency: string,
 ): string {
   try {
     return new Intl.NumberFormat(locale, {
       style: "currency",
       currency,
-    }).format(amount);
+    }).format(Number(amount));
   } catch {
     return `${amount} ${currency}`;
   }
@@ -46,7 +48,7 @@ export function formatMoney(
  */
 export function formatUnitPrice(
   locale: string,
-  amount: number,
+  amount: number | Decimal,
   currency: string,
 ): string {
   try {
@@ -55,7 +57,7 @@ export function formatUnitPrice(
       currency,
       minimumFractionDigits: 2,
       maximumFractionDigits: 4,
-    }).format(amount);
+    }).format(Number(amount));
   } catch {
     return `${amount} ${currency}`;
   }

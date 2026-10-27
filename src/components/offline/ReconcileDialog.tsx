@@ -13,6 +13,7 @@ import { useDiscardChange } from "./useDiscardChange";
 import type { FailedOp } from "@/lib/offline/queue";
 import type { FormEvent, JSX } from "react";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * The question a refused consumption becomes.
@@ -169,11 +170,6 @@ export function ReconcileDialog({
     };
   }, [handleKeyDown]);
 
-  const netStock = (product.data?.stockEntries ?? []).reduce(
-    (sum, entry) => sum + entry.quantity,
-    0,
-  );
-
   /**
    * A KITCHEN account may look and consume, and not adjust.
    *
@@ -200,11 +196,12 @@ export function ReconcileDialog({
       return;
 
     setFailed(false);
+    const netStock = product.data.totalStock;
     adjust.mutate({
       productId: input.productId,
       // The delta, computed from what they told us is there.
-      quantity: Math.round((actual - netStock) * 100) / 100,
-      expectedStock: Math.round(netStock * 100) / 100,
+      quantity: new Decimal(actual).minus(netStock).toNumber(),
+      expectedStock: netStock.toNumber(),
       unit: product.data.defaultUnit,
       reason: t("reconcileReason"),
     });

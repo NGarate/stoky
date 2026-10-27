@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup } from "@testing-library/react";
 import { renderWithIntl } from "../utils/render";
 import { axeViolations } from "../utils/axe";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * The catalogue's Acciones column — Phase 8 item 5.
@@ -41,8 +42,8 @@ beforeEach(() => {
           name: "Leche entera",
           brand: "Pascual",
           category: "Lácteos",
-          totalStock: 2,
-          minStock: 6,
+          totalStock: new Decimal(2),
+          minStock: new Decimal(6),
           defaultUnit: "L",
         },
       ],
@@ -124,8 +125,8 @@ describe("when the catalogue does not fit", () => {
           name: "Leche entera",
           brand: "Pascual",
           category: "Lácteos",
-          totalStock: 2,
-          minStock: 6,
+          totalStock: new Decimal(2),
+          minStock: new Decimal(6),
           defaultUnit: "L",
         },
       ],

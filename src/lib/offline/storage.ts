@@ -1,4 +1,4 @@
-import SuperJSON from "superjson";
+import SuperJSON from "@/lib/superjson";
 
 /**
  * Where unsent changes live between one visit and the next.

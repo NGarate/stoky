@@ -25,6 +25,7 @@ import { mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { pngOf } from "../utils/png";
+import { num } from "../utils/amount";
 
 describe("OCR Pipeline Integration", () => {
   let testHouseholdId: string;
@@ -154,7 +155,7 @@ Gracias por su compra`;
 
       expect(savedReceipt?.status).toBe(ReceiptStatus.PARSED);
       expect(savedReceipt?.items.length).toBe(parsed.items.length);
-      expect(savedReceipt?.totalAmount).toBe(parsed.totalAmount);
+      expect(num(savedReceipt?.totalAmount)).toBe(parsed.totalAmount);
     });
 
     it("should handle multiple products with quantities", async () => {
@@ -630,8 +631,8 @@ Huevos 2,50
         );
 
         expect(saved).toBeDefined();
-        expect(saved?.parsedPrice).toBe(original.parsedPrice);
-        expect(saved?.parsedQuantity).toBe(original.parsedQuantity ?? 1);
+        expect(num(saved?.parsedPrice)).toBe(original.parsedPrice);
+        expect(num(saved?.parsedQuantity)).toBe(original.parsedQuantity ?? 1);
         expect(saved?.rawText).toBe(original.rawText);
         expect(saved?.matchStatus).toBe(MatchStatus.PENDING);
       }

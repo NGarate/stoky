@@ -9,7 +9,7 @@ import {
   NotHouseholdData,
   writeProcedure,
 } from "../trpc";
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import {
   openFoodFacts,
   type OpenFoodFactsProduct,
@@ -162,7 +162,7 @@ export const productRouter = createTRPCRouter({
       );
       const productsWithStock = products.map((product) => ({
         ...product,
-        totalStock: stockOf.get(product.id) ?? 0,
+        totalStock: stockOf.get(product.id) ?? new Prisma.Decimal(0),
       }));
 
       return {
@@ -236,7 +236,7 @@ export const productRouter = createTRPCRouter({
       const stockOf = await stockTotals(ctx.db, [product.id]);
       return {
         ...product,
-        totalStock: stockOf.get(product.id) ?? 0,
+        totalStock: stockOf.get(product.id) ?? new Prisma.Decimal(0),
       };
     }),
 
@@ -349,7 +349,7 @@ export const productRouter = createTRPCRouter({
             await tx.stockEntry.update({
               where: { id: row.id },
               data: {
-                quantity: row.quantity * unitConversion(row.unit, target)!,
+                quantity: row.quantity.times(unitConversion(row.unit, target)!),
                 unit: target,
               },
             });
@@ -358,7 +358,7 @@ export const productRouter = createTRPCRouter({
             await tx.priceRecord.update({
               where: { id: row.id },
               data: {
-                quantity: row.quantity * unitConversion(row.unit, target)!,
+                quantity: row.quantity.times(unitConversion(row.unit, target)!),
                 unit: target,
               },
             });
@@ -367,7 +367,7 @@ export const productRouter = createTRPCRouter({
             await tx.shoppingItem.update({
               where: { id: row.id },
               data: {
-                quantity: row.quantity * unitConversion(row.unit, target)!,
+                quantity: row.quantity.times(unitConversion(row.unit, target)!),
                 unit: target,
               },
             });
@@ -383,7 +383,7 @@ export const productRouter = createTRPCRouter({
                 message: "Unit conversion needs a known quantity per package",
               });
             }
-            data.minStock = existingProduct.minStock * factor;
+            data.minStock = existingProduct.minStock.times(factor);
           }
         }
         return tx.product.update({ where: { id }, data });
@@ -534,7 +534,8 @@ export const productRouter = createTRPCRouter({
         return {
           product: {
             ...existingProduct,
-            totalStock: stockOf.get(existingProduct.id) ?? 0,
+            totalStock:
+              stockOf.get(existingProduct.id) ?? new Prisma.Decimal(0),
           },
           source: "local" as const,
         };
@@ -561,7 +562,7 @@ export const productRouter = createTRPCRouter({
       return {
         product: {
           ...newProduct,
-          totalStock: 0,
+          totalStock: new Prisma.Decimal(0),
         },
         source: "open_food_facts" as const,
       };

@@ -24,8 +24,6 @@ import {
   MAX_ID_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_PAGE_SIZE,
-  MAX_PRICE,
-  MAX_QUANTITY,
   MAX_UNIT_LENGTH,
 } from "@/lib/validations/bounds";
 import { withReplay } from "../replay";
@@ -36,6 +34,11 @@ import type {
   StockOverviewInput,
   StockSort,
 } from "@/lib/validations/inventory";
+import {
+  priceSchema,
+  QUANTITY_PLACES,
+  quantitySchema,
+} from "@/lib/validations/amounts";
 // The value namespace, not only the type: `Prisma.sql` is a function.
 import {
   Prisma,
@@ -97,7 +100,9 @@ async function datedBatchesInWindow(
     db,
     dated.map(({ id }) => id),
   );
-  const live = dated.flatMap(({ id }) => (stockOf.get(id) ? [id] : []));
+  const live = dated.flatMap(({ id }) =>
+    stockOf.get(id)?.isZero() === false ? [id] : [],
+  );
   if (live.length === 0) return [];
 
   const products = await db.product.findMany({
@@ -122,7 +127,7 @@ async function datedBatchesInWindow(
       if (expirationDate === null) continue;
 
       const left = remaining.get(entry.id);
-      if (left === undefined || left === 0) continue;
+      if (left === undefined || left?.isZero()) continue;
 
       if (window.gte && expirationDate < window.gte) continue;
       if (window.lte && expirationDate > window.lte) continue;
@@ -183,16 +188,16 @@ function likePattern(search: string): string {
   return `%${search.replace(/[\\%_]/g, "\\$&")}%`;
 }
 
-/** One row as Postgres hands it back. Every number is already a JS number. */
+/** One row as Postgres hands it back: `numeric` arrives as a Decimal. */
 interface StockOverviewRow {
   id: string;
   name: string;
   category: string | null;
   defaultUnit: string;
-  minStock: number | null;
-  totalStock: number;
+  minStock: Prisma.Decimal | null;
+  totalStock: Prisma.Decimal;
   /** Unticked, product-linked, on any of this household's lists. */
-  onListQuantity: number;
+  onListQuantity: Prisma.Decimal;
 }
 
 /**
@@ -213,11 +218,6 @@ interface StockOverviewRow {
  *   product's stock entries would pair with each of its list items and
  *   multiply both sums — three entries and two items would report six times
  *   the stock and three times the list.
- * - **`::float8` on the aggregate.** `ROUND(…, 2)` returns `numeric`, which
- *   arrives as a Decimal object and reaches the browser as `{ s, e, d }`. The
- *   rounding itself matches `projectStockTotals`, so the figure the offline
- *   queue projects and the figure the server returns are the same number
- *   rather than the same number plus 4e-17.
  */
 function matchingProducts(
   input: StockOverviewInput,
@@ -254,7 +254,7 @@ function matchingProducts(
         product.category,
         product."defaultUnit",
         product."minStock",
-        ROUND(COALESCE(SUM(entry.quantity), 0)::numeric, 2)::float8 AS "totalStock"
+        COALESCE(SUM(entry.quantity), 0) AS "totalStock"
       FROM "Product" product
       LEFT JOIN "StockEntry" entry
         ON entry."productId" = product.id
@@ -267,7 +267,7 @@ function matchingProducts(
     "onList" AS (
       SELECT
         item."productId" AS "productId",
-        SUM(item.quantity)::float8 AS quantity
+        SUM(item.quantity) AS quantity
       FROM "ShoppingItem" item
       JOIN "ShoppingList" list ON list.id = item."shoppingListId"
       JOIN "Product" listed ON listed.id = item."productId"
@@ -281,7 +281,7 @@ function matchingProducts(
     )
     SELECT
       totals.*,
-      COALESCE("onList".quantity, 0)::float8 AS "onListQuantity"
+      COALESCE("onList".quantity, 0) AS "onListQuantity"
     FROM totals
     LEFT JOIN "onList" ON "onList"."productId" = totals.id
     WHERE true ${onlyLow} ${onlyRestock}
@@ -334,9 +334,11 @@ async function assertOwnLocation(
  * different case) is converted; anything else is refused rather than guessed.
  *
  * The forms send the product's unit unless a person edits it, so the ordinary
- * path is factor 1.
+ * path is factor 1. A converted amount is put back at the column's scale, and
+ * one that rounds to nothing there (half a gram into kilos) is refused rather
+ * than written as zero.
  */
-function inProductUnit<T extends { quantity: number; unit: string }>(
+function inProductUnit<T extends { quantity: Prisma.Decimal; unit: string }>(
   input: T,
   defaultUnit: string,
 ): T {
@@ -347,7 +349,16 @@ function inProductUnit<T extends { quantity: number; unit: string }>(
       message: "Unit cannot be converted to the product's unit",
     });
   }
-  return { ...input, quantity: input.quantity * factor, unit: defaultUnit };
+  const quantity = input.quantity
+    .times(factor)
+    .toDecimalPlaces(QUANTITY_PLACES);
+  if (quantity.isZero()) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Quantity is too small for the product's unit",
+    });
+  }
+  return { ...input, quantity, unit: defaultUnit };
 }
 
 export const inventoryRouter = createTRPCRouter({
@@ -425,7 +436,7 @@ export const inventoryRouter = createTRPCRouter({
           // A zero or negative price used to pass validation and silently
           // write no record (PRICE-1); refused at the edge instead, where the
           // person can fix it.
-          price: z.number().positive().finite().max(MAX_PRICE).optional(),
+          price: priceSchema.optional(),
           storeId: z.string().max(MAX_ID_LENGTH).optional(),
         })
         .merge(replayable),
@@ -526,7 +537,7 @@ export const inventoryRouter = createTRPCRouter({
             },
           });
 
-          if (input.price && input.price > 0 && input.storeId) {
+          if (input.price && input.storeId) {
             await tx.priceRecord.create({
               data: {
                 productId: input.productId,
@@ -665,7 +676,8 @@ export const inventoryRouter = createTRPCRouter({
           const locationId = input.consumeFromLocationId || input.locationId;
           const batch = input.batchId
             ? product.stockEntries.find(
-                (entry) => entry.id === input.batchId && entry.quantity > 0,
+                (entry) =>
+                  entry.id === input.batchId && entry.quantity.greaterThan(0),
               )
             : undefined;
           if (input.batchId && !batch) {
@@ -687,13 +699,10 @@ export const inventoryRouter = createTRPCRouter({
           const scopedEntries = product.stockEntries.filter(
             (entry) => !locationId || entry.locationId === locationId,
           );
-          // Rounded as the screens round it (`netStock`): 1 − 0.9 is
-          // 0.09999999999999998, which every screen shows as 0.1, and an
-          // unrounded guard then refuses the 0.1 the person can see.
           const totalAvailable = netStock(scopedEntries);
           if (batch) {
             const left = remainingByBatch(product.stockEntries).get(batch.id);
-            if (left == null || movement.quantity > left) {
+            if (left == null || movement.quantity.greaterThan(left)) {
               throw new TRPCError({
                 code: "CONFLICT",
                 message: "Batch quantity needs confirmation",
@@ -701,7 +710,7 @@ export const inventoryRouter = createTRPCRouter({
             }
           }
 
-          if (movement.quantity > totalAvailable) {
+          if (movement.quantity.greaterThan(totalAvailable)) {
             throw new TRPCError({
               code: "CONFLICT",
               message: "Not enough stock available",
@@ -711,7 +720,7 @@ export const inventoryRouter = createTRPCRouter({
           return tx.stockEntry.create({
             data: {
               productId: input.productId,
-              quantity: -movement.quantity,
+              quantity: movement.quantity.negated(),
               unit: movement.unit,
               batchId: batch?.id,
               locationId: batch ? batch.locationId : locationId,
@@ -783,9 +792,9 @@ export const inventoryRouter = createTRPCRouter({
           where: { productId: input.productId },
           _sum: { quantity: true },
         });
-        const current = Math.round((total._sum.quantity ?? 0) * 100) / 100;
+        const current = total._sum.quantity ?? new Prisma.Decimal(0);
         if (input.expectedStock !== undefined) {
-          if (current !== Math.round(input.expectedStock * 100) / 100) {
+          if (!current.equals(input.expectedStock)) {
             throw new TRPCError({
               code: "CONFLICT",
               message: "Stock changed; refresh before adjusting",
@@ -794,9 +803,7 @@ export const inventoryRouter = createTRPCRouter({
         }
         // The floor `consumeStock` has. `expectedStock` is optional, so without
         // this a correction larger than the ledger drove the product negative.
-        // Rounded like every other guard, so a recount to exactly zero is not
-        // refused over 1e-17 of float residue.
-        if (Math.round((current + movement.quantity) * 100) / 100 < 0) {
+        if (current.plus(movement.quantity).lessThan(0)) {
           throw new TRPCError({
             code: "CONFLICT",
             message: "Adjustment would take stock below zero",
@@ -836,7 +843,7 @@ export const inventoryRouter = createTRPCRouter({
     .input(
       z.object({
         productId: z.string().max(MAX_ID_LENGTH),
-        quantity: z.number().positive().finite().max(MAX_QUANTITY),
+        quantity: quantitySchema,
         unit: z.string().max(MAX_UNIT_LENGTH),
         fromLocationId: z.string().max(MAX_ID_LENGTH),
         toLocationId: z.string().max(MAX_ID_LENGTH),
@@ -899,15 +906,14 @@ export const inventoryRouter = createTRPCRouter({
           const movement = inProductUnit(input, product.defaultUnit);
           // Every entry at the source, not only the positive ones: `gt: 0`
           // counted what arrived and not what left, so a shelf with six in and
-          // four out offered six to move (INV-1). Rounded like
-          // `consumeStock`'s guard, for the same reason.
+          // four out offered six to move (INV-1).
           const availableInSource = netStock(
             product.stockEntries.filter(
               (entry) => entry.locationId === input.fromLocationId,
             ),
           );
 
-          if (movement.quantity > availableInSource) {
+          if (movement.quantity.greaterThan(availableInSource)) {
             throw new TRPCError({
               code: "CONFLICT",
               message: "Not enough stock in source location",
@@ -946,7 +952,7 @@ export const inventoryRouter = createTRPCRouter({
             movement.quantity,
           );
           const moves: Array<{
-            quantity: number;
+            quantity: Prisma.Decimal;
             batchId?: string;
             expirationDate?: Date | null;
           }> = parts.map(({ batch, quantity }) => ({
@@ -954,7 +960,7 @@ export const inventoryRouter = createTRPCRouter({
             batchId: batch.id,
             expirationDate: batch.expirationDate,
           }));
-          if (unassigned > 0) moves.push({ quantity: unassigned });
+          if (unassigned.greaterThan(0)) moves.push({ quantity: unassigned });
 
           const toName = locations.find(
             (l) => l.id === input.toLocationId,
@@ -969,7 +975,7 @@ export const inventoryRouter = createTRPCRouter({
               await tx.stockEntry.create({
                 data: {
                   productId: input.productId,
-                  quantity: -move.quantity,
+                  quantity: move.quantity.negated(),
                   unit: movement.unit,
                   batchId: move.batchId,
                   locationId: input.fromLocationId,

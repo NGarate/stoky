@@ -6,6 +6,8 @@ import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
 import { axeViolations } from "../utils/axe";
 import type { QueuedOp, EnqueueResult } from "@/lib/offline/queue";
+import { Decimal } from "@prisma/client-runtime-utils";
+import { asStored } from "../utils/amount";
 
 /**
  * Screen B, the kitchen (`REDESIGN_PLAN.md` §4).
@@ -111,15 +113,18 @@ const renderKitchen = () =>
   );
 
 function batch(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "batch-1",
-    quantity: 3,
-    unit: "L",
-    daysUntilExpiry: 2,
-    product: { id: "p1", name: "Leche entera" },
-    location: { name: "Nevera" },
-    ...overrides,
-  };
+  return asStored(
+    {
+      id: "batch-1",
+      quantity: 3,
+      unit: "L",
+      daysUntilExpiry: 2,
+      product: { id: "p1", name: "Leche entera" },
+      location: { name: "Nevera" },
+      ...overrides,
+    },
+    "quantity",
+  );
 }
 
 function consumeOp(productId: string): QueuedOp {
@@ -300,9 +305,9 @@ describe("using something up", () => {
           {
             id: "p9",
             name: "Café",
-            totalStock: 0,
-            minStock: 2,
-            onListQuantity: 0,
+            totalStock: new Decimal(0),
+            minStock: new Decimal(2),
+            onListQuantity: new Decimal(0),
             defaultUnit: "paquete",
           },
         ],
@@ -338,9 +343,9 @@ describe("using something up", () => {
           {
             id: "p9",
             name: "Café",
-            totalStock: 0,
-            minStock: 2,
-            onListQuantity: 0,
+            totalStock: new Decimal(0),
+            minStock: new Decimal(2),
+            onListQuantity: new Decimal(0),
             defaultUnit: "ud",
           },
         ],
@@ -360,9 +365,9 @@ describe("writing it on the list", () => {
   const cafe = {
     id: "p9",
     name: "Café molido",
-    totalStock: 0,
-    minStock: 2,
-    onListQuantity: 0,
+    totalStock: new Decimal(0),
+    minStock: new Decimal(2),
+    onListQuantity: new Decimal(0),
     defaultUnit: "paquete",
   };
 
@@ -533,9 +538,9 @@ describe("what the lists already cover", () => {
         {
           id: "p9",
           name: "Café molido",
-          totalStock,
-          minStock,
-          onListQuantity,
+          totalStock: new Decimal(totalStock),
+          minStock: minStock === null ? null : new Decimal(minStock),
+          onListQuantity: new Decimal(onListQuantity),
           defaultUnit: "paquete",
         },
       ],
@@ -665,9 +670,9 @@ describe("what is running out", () => {
           {
             id: "p9",
             name: "Café molido",
-            totalStock: 1,
-            minStock: 2,
-            onListQuantity: 0,
+            totalStock: new Decimal(1),
+            minStock: new Decimal(2),
+            onListQuantity: new Decimal(0),
             defaultUnit: "paquete",
           },
         ],
@@ -687,9 +692,9 @@ describe("what is running out", () => {
           {
             id: "p9",
             name: "Café molido",
-            totalStock: 0,
-            minStock: 2,
-            onListQuantity: 0,
+            totalStock: new Decimal(0),
+            minStock: new Decimal(2),
+            onListQuantity: new Decimal(0),
             defaultUnit: "paquete",
           },
         ],
@@ -713,9 +718,9 @@ describe("what is running out", () => {
           {
             id: "p9",
             name: "Café molido",
-            totalStock: 1,
-            minStock: 2,
-            onListQuantity: 0,
+            totalStock: new Decimal(1),
+            minStock: new Decimal(2),
+            onListQuantity: new Decimal(0),
             defaultUnit: "paquete",
           },
         ],
@@ -735,9 +740,9 @@ describe("what is running out", () => {
           {
             id: "p9",
             name: "Café molido",
-            totalStock: 0,
-            minStock: 2,
-            onListQuantity: 0,
+            totalStock: new Decimal(0),
+            minStock: new Decimal(2),
+            onListQuantity: new Decimal(0),
             defaultUnit: "paquete",
           },
         ],
@@ -769,9 +774,9 @@ describe("what is running out", () => {
           {
             id: "p1",
             name: "Leche entera",
-            totalStock: 2,
-            minStock: 6,
-            onListQuantity: 0,
+            totalStock: new Decimal(2),
+            minStock: new Decimal(6),
+            onListQuantity: new Decimal(0),
             defaultUnit: "L",
           },
         ],

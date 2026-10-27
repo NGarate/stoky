@@ -11,6 +11,7 @@ import { StockAmount, StockStatus } from "@/components/inventory/StockStatus";
 import { isLowStock } from "@/lib/stock/low-stock";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
+import type { Decimal } from "@prisma/client-runtime-utils";
 import type { JSX } from "react";
 
 /**
@@ -39,8 +40,8 @@ interface ProductRow {
   name: string;
   brand: string | null;
   category: string | null;
-  totalStock: number;
-  minStock: number | null;
+  totalStock: Decimal;
+  minStock: Decimal | null;
   defaultUnit: string;
 }
 

@@ -1,3 +1,4 @@
+import type { Decimal } from "@prisma/client-runtime-utils";
 import { unitConversion } from "@/lib/inventory/units";
 
 /**
@@ -12,10 +13,8 @@ import { unitConversion } from "@/lib/inventory/units";
  * Null when there is no usable quantity: such a row cannot be compared with
  * anything, so callers leave it out rather than invent a figure for it.
  */
-export function unitPrice(price: number, quantity: number): number | null {
-  return quantity > 0 && Number.isFinite(price / quantity)
-    ? price / quantity
-    : null;
+export function unitPrice(price: Decimal, quantity: Decimal): Decimal | null {
+  return quantity.greaterThan(0) ? price.dividedBy(quantity) : null;
 }
 
 /**
@@ -30,7 +29,7 @@ export function unitPrice(price: number, quantity: number): number | null {
  * summed in that case (`src/lib/inventory/units.ts` only converts what is
  * exact). `price` is untouched: it is still what was paid.
  */
-export function inUnit<T extends { quantity: number; unit: string }>(
+export function inUnit<T extends { quantity: Decimal; unit: string }>(
   records: readonly T[],
   unit: string,
 ): T[] {
@@ -38,22 +37,22 @@ export function inUnit<T extends { quantity: number; unit: string }>(
     const factor = unitConversion(record.unit, unit);
     return factor === undefined
       ? []
-      : [{ ...record, quantity: record.quantity * factor, unit }];
+      : [{ ...record, quantity: record.quantity.times(factor), unit }];
   });
 }
 
 /** `record` with its unit price beside it, or null when it has none. */
-export function withUnitPrice<T extends { price: number; quantity: number }>(
+export function withUnitPrice<T extends { price: Decimal; quantity: Decimal }>(
   record: T,
-): (T & { unitPrice: number }) | null {
+): (T & { unitPrice: Decimal }) | null {
   const value = unitPrice(record.price, record.quantity);
   return value === null ? null : { ...record, unitPrice: value };
 }
 
 /** Keeps only the records that have a unit price, and attaches it. */
-export function withUnitPrices<T extends { price: number; quantity: number }>(
+export function withUnitPrices<T extends { price: Decimal; quantity: Decimal }>(
   records: readonly T[],
-): Array<T & { unitPrice: number }> {
+): Array<T & { unitPrice: Decimal }> {
   return records.flatMap((record) => {
     const priced = withUnitPrice(record);
     return priced ? [priced] : [];
@@ -64,13 +63,14 @@ export function withUnitPrices<T extends { price: number; quantity: number }>(
 export function toChartPoints(
   history: ReadonlyArray<{
     recordedAt: Date;
-    unitPrice: number;
+    unitPrice: Decimal;
     store: { name: string };
   }>,
 ): Array<{ date: string; price: number; storeName: string }> {
   return history.map((record) => ({
     date: record.recordedAt.toISOString(),
-    price: record.unitPrice,
+    // A chart plots floats; this is display, not arithmetic.
+    price: record.unitPrice.toNumber(),
     storeName: record.store.name,
   }));
 }

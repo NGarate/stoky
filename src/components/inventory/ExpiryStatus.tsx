@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ItemRow } from "@/components/ui/item-row";
 import { EXPIRING_SOON_DAYS } from "@/lib/inventory/batches";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
+import type { Decimal } from "@prisma/client-runtime-utils";
 
 import type { JSX } from "react";
 
@@ -84,7 +85,7 @@ export function ExpiryRow({
   batch: {
     product: { id: string; name: string };
     location: { name: string } | null;
-    quantity: number | null;
+    quantity: Decimal | null;
     unit: string;
   };
   daysUntilExpiry: number;
@@ -103,7 +104,7 @@ export function ExpiryRow({
             batch.quantity === null
               ? t("quantityUnknown")
               : t("quantityValue", {
-                  quantity: batch.quantity,
+                  quantity: batch.quantity.toNumber(),
                   unit: units.unit(batch.unit, batch.quantity),
                 }),
         },

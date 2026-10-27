@@ -1,9 +1,16 @@
 import { describe, it, expect } from "bun:test";
-import {
-  isLowStock,
-  needsMoreOnList,
-  needsRestock,
-} from "@/lib/stock/low-stock";
+import { Decimal } from "@prisma/client-runtime-utils";
+import * as rule from "@/lib/stock/low-stock";
+
+// The rule takes Decimals; these cases read better as plain numbers.
+const amount = (value: number | null) =>
+  value === null ? null : new Decimal(value);
+const isLowStock = (stock: number, min: number | null) =>
+  rule.isLowStock(new Decimal(stock), amount(min));
+const needsRestock = (stock: number, min: number | null) =>
+  rule.needsRestock(new Decimal(stock), amount(min));
+const needsMoreOnList = (stock: number, onList: number, min: number | null) =>
+  rule.needsMoreOnList(new Decimal(stock), new Decimal(onList), amount(min));
 
 /**
  * The two questions, and the gap between them.

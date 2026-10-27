@@ -99,7 +99,7 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
       />
       <p className="mt-2 font-medium text-foreground">
         {t("currentTotal", {
-          stock: product.totalStock,
+          stock: product.totalStock.toNumber(),
           unit: units.unit(product.defaultUnit, product.totalStock),
         })}
       </p>
@@ -114,7 +114,7 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
             <StockHistoryChart
               points={[...points].reverse().map((point) => ({
                 date: new Date(point.createdAt).toISOString(),
-                total: point.total,
+                total: point.total.toNumber(),
               }))}
               unit={product.defaultUnit}
             />
@@ -139,7 +139,7 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
                     },
                     {
                       label: t("changeHeader"),
-                      value: `${entry.quantity > 0 ? "+" : ""}${units.quantity(entry.quantity, entry.unit)}`,
+                      value: `${entry.quantity.greaterThan(0) ? "+" : ""}${units.quantity(entry.quantity, entry.unit)}`,
                     },
                     {
                       label: t("locationHeader"),
@@ -182,12 +182,12 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
                       </td>
                       <td
                         className={`px-4 py-3 text-right font-medium ${
-                          entry.quantity < 0
+                          entry.quantity.lessThan(0)
                             ? "text-danger-foreground"
                             : "text-ok-foreground"
                         }`}
                       >
-                        {entry.quantity > 0 ? "+" : ""}
+                        {entry.quantity.greaterThan(0) ? "+" : ""}
                         {units.quantity(entry.quantity, entry.unit)}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">

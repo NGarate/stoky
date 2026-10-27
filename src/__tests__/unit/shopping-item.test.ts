@@ -4,6 +4,7 @@ import {
   addShoppingItemSchema,
   shoppingItemSchema,
 } from "@/lib/validations/shopping";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * An item on a list is a product and a quantity.
@@ -84,7 +85,7 @@ describe("what makes an item nameable", () => {
       productId: "p1",
     });
 
-    expect(parsed.success && parsed.data.quantity).toBe(1);
+    expect(parsed.success && parsed.data.quantity).toEqual(new Decimal(1));
   });
 
   it("takes an optional store, and lets it be left out", () => {

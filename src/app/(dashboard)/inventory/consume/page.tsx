@@ -112,7 +112,7 @@ export default function ConsumeStockPage(): JSX.Element {
       : availableStock === undefined
         ? t("availableUnknown")
         : t("availableValue", {
-            quantity: availableStock,
+            quantity: availableStock.toNumber(),
             unit: units.unit(product.defaultUnit, availableStock),
           });
 
@@ -134,7 +134,7 @@ export default function ConsumeStockPage(): JSX.Element {
         name: product?.name ?? "",
         quantity: used,
         unit: variables.unit,
-        left: Math.round(((availableStock ?? used) - used) * 100) / 100,
+        left: availableStock?.minus(used).toNumber() ?? 0,
       });
       // Including the product's own figure above, which is read from
       // product.getById: consuming twice in a row is an ordinary thing to do,
@@ -185,13 +185,13 @@ export default function ConsumeStockPage(): JSX.Element {
     } else if (
       product &&
       availableStock !== undefined &&
-      parsedQuantity > availableStock
+      availableStock.lessThan(parsedQuantity)
     ) {
       // Caught here as well as on the server so the number can be named. The
       // server check is the one that counts; this one only saves a round trip
       // and lets the message say how much there actually is.
       errors.quantity = t("errorNotEnoughStock", {
-        available: availableStock,
+        available: availableStock.toNumber(),
         unit: units.unit(product.defaultUnit, availableStock),
       });
     }

@@ -2,6 +2,7 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, mock } from "bun:test";
 import { cleanup, screen, within } from "@testing-library/react";
 import { renderWithIntl } from "../utils/render";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * "Where is this cheapest" answered once, with the answer emphasised.
@@ -25,11 +26,11 @@ const { StoreComparison } = await import("@/components/price/StoreComparison");
 
 const row = (id: string, store: string, price: number, quantity = 1) => ({
   id,
-  price,
-  quantity,
+  price: new Decimal(price),
+  quantity: new Decimal(quantity),
   unit: "unidad",
   // What `price.getLatestPrices` computes on the server.
-  unitPrice: price / quantity,
+  unitPrice: new Decimal(price).dividedBy(quantity),
   currency: "EUR",
   recordedAt: new Date("2026-08-01T10:00:00.000Z"),
   store: { id: `st-${id}`, name: store },

@@ -11,6 +11,7 @@ import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
 
+import type { Decimal } from "@prisma/client-runtime-utils";
 import type { JSX } from "react";
 
 /**
@@ -38,7 +39,7 @@ export interface EditableProduct {
   category: string | null;
   barcode: string | null;
   defaultUnit: string;
-  minStock: number | null;
+  minStock: Decimal | null;
   createdAt: Date;
 }
 
@@ -220,7 +221,7 @@ function Fields({
     category: product.category,
     barcode: product.barcode,
     defaultUnit: product.defaultUnit,
-    minStock: product.minStock,
+    minStock: product.minStock?.toNumber() ?? null,
   };
 
   /**

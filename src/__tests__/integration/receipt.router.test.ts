@@ -24,6 +24,7 @@ import {
   createMockSession,
   generateTestEmail,
 } from "../utils/test-helpers";
+import { num } from "../utils/amount";
 
 /**
  * The receipt router, procedure by procedure.
@@ -1120,14 +1121,31 @@ describe("receipt.applyReceipt", () => {
 
     const entry = await prisma.stockEntry.findFirst({ where: { productId } });
     // The parsed quantity, and the product's own unit rather than the line's.
-    expect(entry?.quantity).toBe(2);
+    expect(num(entry?.quantity)).toBe(2);
     expect(entry?.unit).toBe("L");
     expect(entry?.operationType).toBe("PURCHASE");
 
     const price = await prisma.priceRecord.findFirst({ where: { productId } });
-    expect(price?.price).toBe(2.5);
+    expect(num(price?.price)).toBe(2.5);
     expect(price?.storeId).toBe(storeId);
     expect(price?.receiptId).toBe(receipt.id);
+  });
+
+  it("adds a line priced at zero to stock and records no price for it", async () => {
+    const { receipt, first } = await seedReceipt({
+      status: ReceiptStatus.CONFIRMED,
+    });
+    await prisma.receiptItem.update({
+      where: { id: first.id },
+      data: { parsedPrice: 0 },
+    });
+
+    const result = await caller.receipt.applyReceipt({ receiptId: receipt.id });
+
+    // A Decimal is an object, so a truthiness test let zero through and
+    // recorded the milk as free.
+    expect(result.stockEntriesCreated).toBe(1);
+    expect(result.priceRecordsCreated).toBe(0);
   });
 
   it("moves the receipt to APPLIED", async () => {
@@ -1357,7 +1375,7 @@ describe("receipt.getAppliedSummary", () => {
     });
 
     const prices = summary.items
-      .map((item) => [item.parsedPrice, item.priceRecord?.price])
+      .map((item) => [num(item.parsedPrice), num(item.priceRecord?.price)])
       .sort();
     expect(prices).toEqual([
       [2.5, 2.5],

@@ -835,8 +835,8 @@ export const receiptRouter = createTRPCRouter({
           })),
         });
 
-        // Truthy on parsedPrice, as the per-line version was: a parsed price
-        // of zero records nothing, deliberately.
+        // A parsed price of zero records nothing, deliberately. Asked as a
+        // comparison: a Decimal is an object, so zero is truthy.
         const storeId = receipt.storeId;
         const priced =
           storeId === null
@@ -845,8 +845,8 @@ export const receiptRouter = createTRPCRouter({
                 (
                   item,
                 ): item is (typeof appliable)[number] & {
-                  parsedPrice: number;
-                } => !!item.parsedPrice,
+                  parsedPrice: Prisma.Decimal;
+                } => item.parsedPrice?.greaterThan(0) === true,
               );
         const { count: priceRecordsCreated } = await tx.priceRecord.createMany({
           data: priced.map((item) => ({
@@ -936,8 +936,9 @@ export const receiptRouter = createTRPCRouter({
         const index = unpaired.findIndex(
           (pr) =>
             pr.productId === item.matchedProductId &&
-            pr.price === item.parsedPrice &&
-            pr.quantity === (item.parsedQuantity ?? 1),
+            item.parsedPrice !== null &&
+            pr.price.equals(item.parsedPrice) &&
+            pr.quantity.equals(item.parsedQuantity ?? 1),
         );
         return index === -1 ? undefined : unpaired.splice(index, 1)[0];
       };

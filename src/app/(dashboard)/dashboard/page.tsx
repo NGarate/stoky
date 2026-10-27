@@ -82,10 +82,10 @@ export default function DashboardPage(): JSX.Element {
     if (!restockRows) return [];
 
     return [...restockRows].sort((a, b) => {
-      const aOut = a.totalStock <= 0 ? 0 : 1;
-      const bOut = b.totalStock <= 0 ? 0 : 1;
+      const aOut = a.totalStock.lessThanOrEqualTo(0) ? 0 : 1;
+      const bOut = b.totalStock.lessThanOrEqualTo(0) ? 0 : 1;
       if (aOut !== bOut) return aOut - bOut;
-      return a.totalStock - b.totalStock;
+      return a.totalStock.comparedTo(b.totalStock);
     });
   }, [restockRows]);
 
@@ -178,13 +178,13 @@ export default function DashboardPage(): JSX.Element {
                     // badge here, "Stock bajo" there — which is ISSUES UI-11
                     // arriving on a fifth screen.
                     meta={
-                      product.totalStock > 0
+                      product.totalStock.greaterThan(0)
                         ? [
                             {
                               label: t("restockAmountLabel"),
                               value: t("restockLow", {
-                                quantity: product.totalStock,
-                                minimum: product.minStock ?? 0,
+                                quantity: product.totalStock.toNumber(),
+                                minimum: product.minStock?.toNumber() ?? 0,
                                 unit: units.unit(
                                   product.defaultUnit,
                                   product.totalStock,

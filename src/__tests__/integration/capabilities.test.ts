@@ -13,6 +13,7 @@ import {
   generateTestEmail,
   envelope,
 } from "../utils/test-helpers";
+import { num } from "../utils/amount";
 
 /**
  * Journey 2 of `docs/SMOKE_JOURNEYS.md`: a kitchen account is refused a write
@@ -153,7 +154,7 @@ describe("Journey 2 — a kitchen account is refused a write by the server", () 
       unit: "L",
     });
 
-    expect(entry.quantity).toBe(-1);
+    expect(num(entry.quantity)).toBe(-1);
   });
 
   it("lets a kitchen account write down what is needed (D88)", async () => {

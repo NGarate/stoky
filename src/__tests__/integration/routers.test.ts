@@ -16,6 +16,7 @@ import { TRPCError } from "@trpc/server";
 import { signInWith, freshTestAddress } from "../utils/authorize";
 import { loginRateLimit } from "@/lib/rate-limit";
 import type { HouseholdRole } from "@/generated/prisma/client";
+import { num } from "../utils/amount";
 
 // Test data tracking for cleanup
 const testData = {
@@ -776,7 +777,7 @@ describe("tRPC Router Integration Tests", () => {
         locationId: location.id,
       });
 
-      expect(result.quantity).toBe(10);
+      expect(num(result.quantity)).toBe(10);
       expect(result.productId).toBe(product.id);
       testData.stockEntries.push(result.id);
     });
@@ -812,7 +813,7 @@ describe("tRPC Router Integration Tests", () => {
         unit: "unit",
       });
 
-      expect(consumeResult.quantity).toBe(-5);
+      expect(num(consumeResult.quantity)).toBe(-5);
       testData.stockEntries.push(consumeResult.id);
     });
 
@@ -864,7 +865,7 @@ describe("tRPC Router Integration Tests", () => {
         reason: "Inventory correction",
       });
 
-      expect(result.quantity).toBe(25);
+      expect(num(result.quantity)).toBe(25);
       expect(result.operationType).toBe("ADJUST");
       testData.stockEntries.push(result.id);
     });
@@ -895,7 +896,7 @@ describe("tRPC Router Integration Tests", () => {
       expect(result.products).toBeDefined();
       const foundProduct = result.products.find((p) => p.id === product.id);
       expect(foundProduct).toBeDefined();
-      expect(foundProduct?.totalStock).toBe(5);
+      expect(num(foundProduct?.totalStock)).toBe(5);
     });
 
     it("should get low stock items", async () => {
@@ -1051,8 +1052,8 @@ describe("tRPC Router Integration Tests", () => {
         where: { productId: product.id, storeId: store.id },
       });
       expect(record).not.toBeNull();
-      expect(record?.price).toBe(3.5);
-      expect(record?.quantity).toBe(2);
+      expect(num(record?.price)).toBe(3.5);
+      expect(num(record?.quantity)).toBe(2);
       expect(record?.unit).toBe("kg");
       if (record) testData.priceRecords.push(record.id);
     });
@@ -1095,8 +1096,8 @@ describe("tRPC Router Integration Tests", () => {
       });
 
       // One undated batch, so one row each way.
-      expect(result.fromEntries.map((e) => e.quantity)).toEqual([-10]);
-      expect(result.toEntries.map((e) => e.quantity)).toEqual([10]);
+      expect(result.fromEntries.map((e) => num(e.quantity))).toEqual([-10]);
+      expect(result.toEntries.map((e) => num(e.quantity))).toEqual([10]);
       expect(result.fromEntries[0]?.batchId).toBe(entry.id);
       testData.stockEntries.push(
         ...result.fromEntries.map((e) => e.id),
@@ -1433,7 +1434,7 @@ describe("tRPC Router Integration Tests", () => {
         quantity: 1,
       });
 
-      expect(result.price).toBe(9.99);
+      expect(num(result.price)).toBe(9.99);
       expect(result.currency).toBe("EUR");
       testData.priceRecords.push(result.id);
     });
@@ -1605,7 +1606,7 @@ describe("tRPC Router Integration Tests", () => {
 
       expect(result.shoppingListId).toBe(list.id);
       expect(result.productId).toBe(product.id);
-      expect(result.quantity).toBe(3);
+      expect(num(result.quantity)).toBe(3);
     });
 
     it("should add custom item to shopping list", async () => {
@@ -1635,7 +1636,7 @@ describe("tRPC Router Integration Tests", () => {
       // schema refuses: an item names a product the household knows about,
       // and the add form creates one inline when it does not.
       expect(result.productId).toBe(product.id);
-      expect(result.quantity).toBe(2);
+      expect(num(result.quantity)).toBe(2);
     });
 
     it("should check/uncheck shopping item", async () => {
@@ -1988,7 +1989,7 @@ describe("tRPC Router Integration Tests", () => {
         unit: "unit",
       });
 
-      expect(result.quantity).toBe(999999);
+      expect(num(result.quantity)).toBe(999999);
       testData.stockEntries.push(result.id);
     });
 

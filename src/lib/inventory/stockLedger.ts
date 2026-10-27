@@ -9,26 +9,28 @@
  * the newer entry's delta. Loading more pages extends the line; it never
  * changes a point already drawn.
  */
+import type { Decimal } from "@prisma/client-runtime-utils";
+
 export interface LedgerEntry {
   id: string;
-  quantity: number;
+  quantity: Decimal;
   createdAt: Date | string;
 }
 
 export interface LedgerPoint extends LedgerEntry {
   /** Net stock immediately after this entry was written. */
-  total: number;
+  total: Decimal;
 }
 
 export function runningTotals(
   newestFirst: LedgerEntry[],
-  netNow: number,
+  netNow: Decimal,
 ): LedgerPoint[] {
   const points: LedgerPoint[] = [];
   let total = netNow;
   for (const entry of newestFirst) {
     points.push({ ...entry, total });
-    total -= entry.quantity;
+    total = total.minus(entry.quantity);
   }
   return points;
 }

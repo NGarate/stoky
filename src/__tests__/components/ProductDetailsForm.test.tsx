@@ -4,6 +4,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * Editing a product where you are already looking at it.
@@ -89,7 +90,7 @@ const product = {
   category: "Lácteos",
   barcode: "8480000123456",
   defaultUnit: "L",
-  minStock: 2,
+  minStock: new Decimal(2),
   createdAt: new Date("2026-01-05T10:00:00.000Z"),
 };
 

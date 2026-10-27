@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { RouteState } from "@/components/household/RouteState";
 import { api } from "@/lib/trpc/client";
+import { Decimal } from "@prisma/client-runtime-utils";
 import type { FormEvent, JSX } from "react";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
 
@@ -91,7 +92,9 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
           key: "products.adjust.saved",
           values: {
             name: product?.name ?? "",
-            stock: (product?.totalStock ?? 0) + variables.quantity,
+            stock:
+              product?.totalStock.plus(variables.quantity).toNumber() ??
+              variables.quantity,
             unit: product?.defaultUnit ?? "",
           },
         },
@@ -121,7 +124,7 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
     const parsed = Number(actual);
     if (actual.trim() === "" || !Number.isFinite(parsed) || parsed < 0) {
       errors.actual = t("errorActualInvalid");
-    } else if (parsed === product.totalStock) {
+    } else if (product.totalStock.equals(parsed)) {
       errors.actual = t("errorSame");
     }
 
@@ -139,8 +142,8 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
 
     adjustStock.mutate({
       productId: product.id,
-      quantity: parsed - product.totalStock,
-      expectedStock: product.totalStock,
+      quantity: new Decimal(parsed).minus(product.totalStock).toNumber(),
+      expectedStock: product.totalStock.toNumber(),
       unit: product.defaultUnit,
       reason: reason.trim(),
     });
@@ -181,7 +184,7 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
 
       <p className="rounded border border-border bg-muted p-4 text-foreground">
         {t("currentLabel", {
-          stock: product.totalStock,
+          stock: product.totalStock.toNumber(),
           unit: units.unit(product.defaultUnit, product.totalStock),
         })}
       </p>

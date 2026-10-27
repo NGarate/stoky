@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { num } from "../utils/amount";
 
 describe("Receipt Parser Service - Comprehensive", () => {
   let testHouseholdId: string;
@@ -594,7 +595,7 @@ Pan 0,95
 
       for (const item of items) {
         expect(item.matchStatus).toBe(MatchStatus.PENDING);
-        expect(item.parsedQuantity).toBeGreaterThanOrEqual(1);
+        expect(num(item.parsedQuantity)).toBeGreaterThanOrEqual(1);
       }
     });
 
@@ -628,7 +629,7 @@ Pan 0,95
       });
 
       for (const item of items) {
-        expect(item.parsedQuantity).toBe(1);
+        expect(num(item.parsedQuantity)).toBe(1);
       }
     });
 

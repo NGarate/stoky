@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
 import { axeViolations } from "../utils/axe";
 import type { QueuedOp } from "@/lib/offline/queue";
+import { asStored } from "../utils/amount";
 
 /**
  * Screen A, the phone's first screen (`REDESIGN_PLAN.md` §3).
@@ -57,19 +58,24 @@ let role = "MEMBER";
 const { default: ShopPage } = await import("@/app/(dashboard)/shopping/page");
 
 function row(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "item-1",
-    name: "Leche entera",
-    quantity: 1,
-    unit: "L",
-    isChecked: false,
-    productId: "p1",
-    listId: "list-1",
-    listName: "Compra semanal",
-    stock: 2,
-    minStock: 6,
-    ...overrides,
-  };
+  return asStored(
+    {
+      id: "item-1",
+      name: "Leche entera",
+      quantity: 1,
+      unit: "L",
+      isChecked: false,
+      productId: "p1",
+      listId: "list-1",
+      listName: "Compra semanal",
+      stock: 2,
+      minStock: 6,
+      ...overrides,
+    },
+    "quantity",
+    "stock",
+    "minStock",
+  );
 }
 
 beforeEach(() => {

@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { createContext, useState } from "react";
 import { renderWithIntl as renderWithIntlOnly } from "../utils/render";
 import type { FailedOp } from "@/lib/offline/queue";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * The question a refused consumption becomes.
@@ -48,7 +49,7 @@ mock.module("@/lib/trpc/client", () => ({
             id: "p1",
             name: "Leche entera",
             defaultUnit: "L",
-            stockEntries: [{ quantity: 1 }],
+            totalStock: new Decimal(1),
           },
           error: null,
         }),

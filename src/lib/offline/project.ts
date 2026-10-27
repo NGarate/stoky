@@ -1,3 +1,4 @@
+import { Decimal } from "@prisma/client-runtime-utils";
 import { canonicalCount } from "@/lib/inventory/units";
 import type { QueuedOp } from "./queue";
 
@@ -81,11 +82,14 @@ export function projectShoppingItems<T extends ServerItem>(
       if (!existing) continue;
 
       const changes: Partial<
-        ProjectedItem & { quantity: number; storeId: string | null }
+        ProjectedItem & { quantity: Decimal; storeId: string | null }
       > = {};
       if (typeof input.isChecked === "boolean")
         changes.isChecked = input.isChecked;
-      if (typeof input.quantity === "number") changes.quantity = input.quantity;
+      // The queue holds what was typed, a number; the screen reads the
+      // server's shape, a Decimal.
+      if (typeof input.quantity === "number")
+        changes.quantity = new Decimal(input.quantity);
       // `null` is a choice — "anywhere" — so presence, not truthiness.
       if (typeof input.storeId === "string" || input.storeId === null) {
         changes.storeId = input.storeId;
@@ -126,6 +130,9 @@ export function projectShoppingItems<T extends ServerItem>(
       projected.set(op.id, {
         ...(op.input as unknown as T),
         ...(name === undefined ? {} : { name, product: { name } }),
+        quantity: new Decimal(
+          typeof input.quantity === "number" ? input.quantity : 1,
+        ),
         id: op.id,
         isChecked: false,
         pending: true,
@@ -139,9 +146,9 @@ export function projectShoppingItems<T extends ServerItem>(
 
 /** Net stock per product id, as the screen should show it. */
 export function projectStockTotals(
-  totals: ReadonlyMap<string, number>,
+  totals: ReadonlyMap<string, Decimal>,
   pending: readonly QueuedOp[],
-): Map<string, number> {
+): Map<string, Decimal> {
   const projected = new Map(totals);
 
   for (const op of pending) {
@@ -153,17 +160,17 @@ export function projectStockTotals(
     if (typeof input.productId !== "string") continue;
     if (typeof input.quantity !== "number") continue;
 
+    const amount = new Decimal(input.quantity).abs();
     const quantity =
       typeof input.unit === "string"
-        ? canonicalCount({ quantity: input.quantity, unit: input.unit })
-            .quantity
-        : input.quantity;
-    const current = projected.get(input.productId) ?? 0;
+        ? canonicalCount({ quantity: amount, unit: input.unit }).quantity
+        : amount;
+    const current = projected.get(input.productId) ?? new Decimal(0);
 
     if (op.path === "inventory.addStock") {
-      projected.set(input.productId, round(current + Math.abs(quantity)));
+      projected.set(input.productId, current.plus(quantity));
     } else if (op.path === "inventory.consumeStock") {
-      projected.set(input.productId, round(current - Math.abs(quantity)));
+      projected.set(input.productId, current.minus(quantity));
     }
   }
 
@@ -188,9 +195,9 @@ export function projectStockTotals(
  * accepted, and written down rather than discovered.
  */
 export function projectOnListQuantities(
-  quantities: ReadonlyMap<string, number>,
+  quantities: ReadonlyMap<string, Decimal>,
   pending: readonly QueuedOp[],
-): Map<string, number> {
+): Map<string, Decimal> {
   const projected = new Map(quantities);
 
   for (const op of pending) {
@@ -201,23 +208,20 @@ export function projectOnListQuantities(
       unit?: unknown;
     };
     if (typeof input.productId !== "string") continue;
-    const amount = typeof input.quantity === "number" ? input.quantity : 1;
+    const amount = new Decimal(
+      typeof input.quantity === "number" ? input.quantity : 1,
+    );
     const quantity =
       typeof input.unit === "string"
         ? canonicalCount({ quantity: amount, unit: input.unit }).quantity
         : amount;
     projected.set(
       input.productId,
-      round((projected.get(input.productId) ?? 0) + quantity),
+      (projected.get(input.productId) ?? new Decimal(0)).plus(quantity),
     );
   }
 
   return projected;
-}
-
-/** Quantities are entered by people, to two decimals at most. */
-function round(value: number): number {
-  return Math.round(value * 100) / 100;
 }
 
 /** The product ids a queued change would move, for highlighting a row. */

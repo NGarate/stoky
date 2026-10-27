@@ -3,6 +3,7 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import type { AppSession } from "@/lib/auth/session";
+import { num } from "../utils/amount";
 
 /**
  * A `PriceRecord`'s `price` is what was paid for `quantity` units: the receipt
@@ -181,8 +182,8 @@ describe("price.getLatestPrices", () => {
     const latest = await api.price.getLatestPrices({ productId });
     const byStore = new Map(latest.map((row) => [row.store.name, row]));
 
-    expect(byStore.get("Mercadona")?.unitPrice).toBeCloseTo(0.89, 10);
-    expect(byStore.get("Carrefour")?.unitPrice).toBeCloseTo(0.99, 10);
+    expect(byStore.get("Mercadona")?.unitPrice.toString()).toBe("0.89");
+    expect(byStore.get("Carrefour")?.unitPrice.toString()).toBe("0.99");
   });
 
   it("skips a sighting with no usable quantity and keeps the store's last good one", async () => {
@@ -190,8 +191,8 @@ describe("price.getLatestPrices", () => {
     const latest = await api.price.getLatestPrices({ productId });
     const diaRow = latest.find((row) => row.store.name === "Dia");
 
-    expect(diaRow?.quantity).toBe(1);
-    expect(diaRow?.unitPrice).toBeCloseTo(0.95, 10);
+    expect(num(diaRow?.quantity)).toBe(1);
+    expect(diaRow?.unitPrice.toString()).toBe("0.95");
   });
 });
 
@@ -201,11 +202,11 @@ describe("sightings in different units", () => {
     const latest = await api.price.getLatestPrices({ productId: eggsId });
     const byStore = new Map(latest.map((row) => [row.store.name, row]));
 
-    expect(byStore.get("Mercadona")?.unitPrice).toBeCloseTo(0.2, 10);
+    expect(byStore.get("Mercadona")?.unitPrice.toString()).toBe("0.2");
     expect(byStore.get("Mercadona")?.unit).toBe("unidad");
-    expect(byStore.get("Carrefour")?.unitPrice).toBeCloseTo(0.25, 10);
+    expect(byStore.get("Carrefour")?.unitPrice.toString()).toBe("0.25");
     // Dia's latest sighting is by the kilo; the one before it is comparable.
-    expect(byStore.get("Dia")?.unitPrice).toBeCloseTo(0.25, 10);
+    expect(byStore.get("Dia")?.unitPrice.toString()).toBe("0.25");
   });
 
   it("leaves the unconvertible sighting out of the history", async () => {
@@ -226,9 +227,9 @@ describe("price.getHistory", () => {
     const history = await api.price.getHistory({ productId, days: 30 });
 
     expect(history).toHaveLength(3);
-    expect(history.every((row) => row.quantity > 0)).toBe(true);
+    expect(history.every((row) => row.quantity.greaterThan(0))).toBe(true);
     const pack = history.find((row) => row.store.name === "Mercadona");
-    expect(pack?.unitPrice).toBeCloseTo(0.89, 10);
+    expect(pack?.unitPrice.toString()).toBe("0.89");
   });
 });
 
@@ -240,7 +241,7 @@ describe("price.getProductPrices", () => {
     ).filter((row) => row.id === productId);
 
     const last = product?.priceRecords[0];
-    expect(last?.quantity).toBeGreaterThan(0);
-    expect(last?.unitPrice).toBeCloseTo(last!.price / last!.quantity, 10);
+    expect(num(last?.quantity)).toBeGreaterThan(0);
+    expect(last?.unitPrice).toEqual(last!.price.dividedBy(last!.quantity));
   });
 });

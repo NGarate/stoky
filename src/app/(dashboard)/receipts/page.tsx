@@ -14,6 +14,7 @@ import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 import type { ReceiptStatus } from "@/generated/prisma/browser";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
+import type { Decimal } from "@prisma/client-runtime-utils";
 
 interface Receipt {
   id: string;
@@ -21,7 +22,7 @@ interface Receipt {
   store: { name: string } | null;
   createdAt: Date;
   purchaseDate: Date | null;
-  totalAmount: number | null;
+  totalAmount: Decimal | null;
   _count: { items: number };
 }
 
@@ -119,7 +120,7 @@ export default function ReceiptsPage() {
                       label: t("uploadedAt"),
                       value: formatDate(locale, receipt.createdAt, "long"),
                     },
-                ...(receipt.totalAmount
+                ...(receipt.totalAmount !== null
                   ? [
                       {
                         label: t("totalAmount"),

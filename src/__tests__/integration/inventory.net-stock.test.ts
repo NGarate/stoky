@@ -13,6 +13,7 @@ import { TRPCError } from "@trpc/server";
 import type { PrismaClient } from "@/generated/prisma/client";
 import type { AppSession } from "@/lib/auth/session";
 import { envelope } from "../utils/test-helpers";
+import { num } from "../utils/amount";
 
 /**
  * ISSUES.md INV-1, the half that guards writes.
@@ -75,7 +76,7 @@ async function netStock(locationId?: string): Promise<number> {
   const entries = await prisma.stockEntry.findMany({
     where: { productId, ...(locationId ? { locationId } : {}) },
   });
-  return entries.reduce((sum, entry) => sum + entry.quantity, 0);
+  return entries.reduce((sum, entry) => sum + num(entry.quantity), 0);
 }
 
 beforeAll(async () => {
@@ -410,8 +411,8 @@ describe("the expiry views report what is left", () => {
 
     expect(expiring).toHaveLength(1);
     // The exact figure ISSUES.md measured: 6 L reported against 2 L in stock.
-    expect(expiring[0]?.quantity).toBe(2);
-    expect(expiring[0]?.quantity).toBe(await netStock());
+    expect(num(expiring[0]?.quantity)).toBe(2);
+    expect(num(expiring[0]?.quantity)).toBe(await netStock());
     expect(expiring[0]?.product.name).toBe("Leche entera");
   });
 
@@ -527,7 +528,7 @@ describe("the expiry views report what is left", () => {
     const expired = await api.inventory.getExpiredItems({});
 
     expect(expired).toHaveLength(1);
-    expect(expired[0]?.quantity).toBe(2);
+    expect(num(expired[0]?.quantity)).toBe(2);
     expect(expired[0]?.daysExpired).toBe(4);
   });
 });
@@ -798,7 +799,7 @@ describe("stock integrity after an adjustment and kitchen taps", () => {
       where: { productId, operationType: "CONSUME" },
     });
     expect(movements).toHaveLength(2);
-    expect(movements.map((entry) => entry.quantity)).toEqual([-1, -1]);
+    expect(movements.map((entry) => num(entry.quantity))).toEqual([-1, -1]);
     expect(
       movements.every(
         (entry) =>
@@ -807,8 +808,12 @@ describe("stock integrity after an adjustment and kitchen taps", () => {
     ).toBe(true);
     expect(await netStock()).toBe(4);
     const batches = await api.inventory.getExpiringItems({ days: 7 });
-    expect(batches.find((batch) => batch.id === early.id)?.quantity).toBe(3);
-    expect(batches.find((batch) => batch.id === later.id)?.quantity).toBe(1);
+    expect(num(batches.find((batch) => batch.id === early.id)?.quantity)).toBe(
+      3,
+    );
+    expect(num(batches.find((batch) => batch.id === later.id)?.quantity)).toBe(
+      1,
+    );
   });
 
   it("refuses an unknown or foreign batch without changing stock", async () => {
@@ -924,7 +929,7 @@ describe("stock integrity after an adjustment and kitchen taps", () => {
       unit: "docena",
       expirationDate: inDays(2),
     });
-    expect(batch.quantity).toBe(36);
+    expect(num(batch.quantity)).toBe(36);
     expect(batch.unit).toBe("unidad");
     for (let tap = 0; tap < 2; tap++) {
       await api.inventory.consumeStock({
@@ -937,7 +942,7 @@ describe("stock integrity after an adjustment and kitchen taps", () => {
     }
     expect(await netStock()).toBe(34);
     expect(
-      (await api.inventory.getExpiringItems({ days: 7 }))[0]?.quantity,
+      num((await api.inventory.getExpiringItems({ days: 7 }))[0]?.quantity),
     ).toBe(34);
   });
 
@@ -964,11 +969,11 @@ describe("stock integrity after an adjustment and kitchen taps", () => {
       id: productId,
       defaultUnit: "unidad",
     });
-    expect(product.minStock).toBe(12);
+    expect(num(product.minStock)).toBe(12);
     const saved = await prisma.stockEntry.findUniqueOrThrow({
       where: { id: batch.id },
     });
-    expect(saved.quantity).toBe(36);
+    expect(num(saved.quantity)).toBe(36);
     expect(saved.unit).toBe("unidad");
     expect(saved.locationId).toBe(shelfId);
     expect(saved.expirationDate).toEqual(date);
@@ -989,7 +994,7 @@ describe("stock integrity after an adjustment and kitchen taps", () => {
         quantity: 2,
         unit: "docena",
       });
-      expect(item.quantity).toBe(24);
+      expect(num(item.quantity)).toBe(24);
       expect(item.unit).toBe("unidad");
       await expectCode(
         api.shopping.updateItem({
@@ -1000,11 +1005,13 @@ describe("stock integrity after an adjustment and kitchen taps", () => {
         "BAD_REQUEST",
       );
       expect(
-        (
-          await prisma.shoppingItem.findUniqueOrThrow({
-            where: { id: item.id },
-          })
-        ).quantity,
+        num(
+          (
+            await prisma.shoppingItem.findUniqueOrThrow({
+              where: { id: item.id },
+            })
+          ).quantity,
+        ),
       ).toBe(24);
       const updated = await api.shopping.updateItem({
         ...envelope(OWNER.userId),
@@ -1012,7 +1019,7 @@ describe("stock integrity after an adjustment and kitchen taps", () => {
         quantity: 3,
         quantityUnit: "docena",
       });
-      expect(updated.quantity).toBe(36);
+      expect(num(updated.quantity)).toBe(36);
       expect(updated.unit).toBe("unidad");
     } finally {
       await prisma.shoppingItem.deleteMany({
@@ -1255,7 +1262,7 @@ describe("a movement is stored in the product's unit", () => {
       unit: "Unidad",
     });
 
-    expect(entry.quantity).toBe(24);
+    expect(num(entry.quantity)).toBe(24);
     expect(entry.unit).toBe("unidad");
     expect(lower.unit).toBe("unidad");
     expect(await netStock()).toBe(21);
@@ -1304,10 +1311,10 @@ describe("a transfer carries the expiry of what it moves", () => {
       days: 7,
       locationId: cupboardId,
     });
-    expect(atShelf.map((row) => row.quantity)).toEqual([1]);
-    expect(atCupboard.map((row) => [row.quantity, row.expirationDate])).toEqual(
-      [[2, date]],
-    );
+    expect(atShelf.map((row) => num(row.quantity))).toEqual([1]);
+    expect(
+      atCupboard.map((row) => [num(row.quantity), row.expirationDate]),
+    ).toEqual([[2, date]]);
   });
 
   it("takes the soonest-expiring first and writes one movement per batch", async () => {
@@ -1340,14 +1347,14 @@ describe("a transfer carries the expiry of what it moves", () => {
       toLocationId: cupboardId,
     });
 
-    expect(fromEntries.map((entry) => [entry.batchId, entry.quantity])).toEqual(
-      [
-        [soonBatch.id, -2],
-        [laterBatch.id, -1],
-      ],
-    );
     expect(
-      toEntries.map((entry) => [entry.expirationDate, entry.quantity]),
+      fromEntries.map((entry) => [entry.batchId, num(entry.quantity)]),
+    ).toEqual([
+      [soonBatch.id, -2],
+      [laterBatch.id, -1],
+    ]);
+    expect(
+      toEntries.map((entry) => [entry.expirationDate, num(entry.quantity)]),
     ).toEqual([
       [soon, 2],
       [later, 1],
@@ -1361,15 +1368,15 @@ describe("a transfer carries the expiry of what it moves", () => {
       days: 7,
       locationId: cupboardId,
     });
-    expect(atShelf.map((row) => [row.quantity, row.expirationDate])).toEqual([
-      [2, later],
+    expect(
+      atShelf.map((row) => [num(row.quantity), row.expirationDate]),
+    ).toEqual([[2, later]]);
+    expect(
+      atCupboard.map((row) => [num(row.quantity), row.expirationDate]),
+    ).toEqual([
+      [2, soon],
+      [1, later],
     ]);
-    expect(atCupboard.map((row) => [row.quantity, row.expirationDate])).toEqual(
-      [
-        [2, soon],
-        [1, later],
-      ],
-    );
     expect(await netStock(shelfId)).toBe(2);
     expect(await netStock(cupboardId)).toBe(3);
   });
@@ -1395,7 +1402,7 @@ describe("a transfer carries the expiry of what it moves", () => {
     });
 
     const expired = await api.inventory.getExpiredItems({});
-    expect(expired.map((row) => [row.quantity, row.locationId])).toEqual([
+    expect(expired.map((row) => [num(row.quantity), row.locationId])).toEqual([
       [2, cupboardId],
     ]);
   });

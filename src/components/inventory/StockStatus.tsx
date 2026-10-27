@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 import type { JSX } from "react";
+import type { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * How much is left, and what that means — the two atoms every list that shows
@@ -33,10 +34,10 @@ import type { JSX } from "react";
  * file this time rather than two.
  */
 export function stockTone(
-  totalStock: number,
+  totalStock: Decimal,
   isLowStock: boolean,
 ): "neutral" | "warn" | "danger" {
-  if (totalStock <= 0) return "danger";
+  if (totalStock.lessThanOrEqualTo(0)) return "danger";
   if (isLowStock) return "warn";
   return "neutral";
 }
@@ -49,13 +50,13 @@ export function StockAmount({
 }: {
   defaultUnit: string;
   isLowStock: boolean;
-  totalStock: number;
+  totalStock: Decimal;
 }): JSX.Element {
   const units = useQuantityFormat();
   return (
     <span
       className={`font-medium ${
-        totalStock <= 0
+        totalStock.lessThanOrEqualTo(0)
           ? "text-danger-foreground"
           : isLowStock
             ? "text-warn-foreground"
@@ -98,13 +99,13 @@ export function StockStatus({
   isLowStock: boolean;
   /** The row this sits on is tinted with `stockTone(totalStock, isLowStock)`. */
   onTintedRow?: boolean;
-  totalStock: number;
+  totalStock: Decimal;
 }): JSX.Element {
   const t = useTranslations("inventory");
   // A healthy row is never tinted, so `ok` has nothing to clash with.
   const variant = onTintedRow ? "outline" : "solid";
 
-  if (totalStock <= 0) {
+  if (totalStock.lessThanOrEqualTo(0)) {
     return (
       <Badge className={className} tone="danger" variant={variant}>
         {t("noStock")}

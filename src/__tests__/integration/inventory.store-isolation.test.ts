@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
 import type { AppSession } from "@/lib/auth/session";
 import { envelope } from "../utils/test-helpers";
+import { num } from "../utils/amount";
 
 /**
  * Household isolation on `inventory.addStock`'s price record.
@@ -170,6 +171,6 @@ describe("addStock and another household's store", () => {
       unit: "L",
     });
 
-    expect(entry.quantity).toBe(1);
+    expect(num(entry.quantity)).toBe(1);
   });
 });

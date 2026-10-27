@@ -16,13 +16,14 @@ import { useSnackbar } from "@/components/ui/snackbar";
 
 import type { JSX } from "react";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
+import type { Decimal } from "@prisma/client-runtime-utils";
 
 interface ShoppingItemProps {
   item: {
     id: string;
     productId: string | null;
     product?: { name: string } | null;
-    quantity: number;
+    quantity: Decimal;
     unit: string | null;
     isChecked: boolean;
     storeId?: string | null;
@@ -213,15 +214,15 @@ export function ShoppingItem({
                   number is eight round trips. */}
               <Input
                 className="w-24"
-                defaultValue={item.quantity}
+                defaultValue={item.quantity.toString()}
                 id={quantityId}
                 inputMode="decimal"
-                key={item.quantity}
+                key={item.quantity.toString()}
                 min="0.1"
                 onBlur={(event) => {
                   const next = Number.parseFloat(event.target.value);
                   if (Number.isFinite(next) && next > 0) {
-                    if (next !== item.quantity) change({ quantity: next });
+                    if (!item.quantity.equals(next)) change({ quantity: next });
                     return;
                   }
                   // A rejected value used to stay on screen. The box is

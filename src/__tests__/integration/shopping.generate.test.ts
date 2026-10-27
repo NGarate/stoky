@@ -10,6 +10,7 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import type { AppSession } from "@/lib/auth/session";
+import { num } from "../utils/amount";
 
 /**
  * "Generar desde stock bajo", and what counts as already covered.
@@ -134,7 +135,7 @@ describe("generateFromLowStock", () => {
     const rows = await autoRows();
     expect(rows).toHaveLength(1);
     // 1.5× a minimum of 2 is the target, and nothing counts towards it yet.
-    expect(rows[0]?.quantity).toBe(3);
+    expect(num(rows[0]?.quantity)).toBe(3);
   });
 
   it("leaves alone what another list already covers", async () => {
@@ -157,7 +158,7 @@ describe("generateFromLowStock", () => {
 
     const rows = await autoRows();
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.quantity).toBe(3);
+    expect(num(rows[0]?.quantity)).toBe(3);
   });
 
   it("stores an item added in a convertible unit in the product's", async () => {
@@ -182,7 +183,7 @@ describe("generateFromLowStock", () => {
     // "uds" is the product's unit by another name; stored as typed, it would
     // not count towards what the lists cover.
     expect(item.unit).toBe("unidad");
-    expect(item.quantity).toBe(3);
+    expect(num(item.quantity)).toBe(3);
   });
 
   it("counts a ticked row as bought, not as covered", async () => {
@@ -210,7 +211,7 @@ describe("generateFromLowStock", () => {
 
     const rows = await autoRows();
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.quantity).toBe(3);
+    expect(num(rows[0]?.quantity)).toBe(3);
   });
 
   it("asks for less when the cupboard is part of the way there", async () => {
@@ -229,6 +230,6 @@ describe("generateFromLowStock", () => {
 
     const rows = await autoRows();
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.quantity).toBe(2);
+    expect(num(rows[0]?.quantity)).toBe(2);
   });
 });

@@ -23,6 +23,7 @@ import {
 } from "@/lib/offline/project";
 import type { JSX } from "react";
 import { formatTime } from "@/lib/dates";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * Screen B — the kitchen, "at home" (`REDESIGN_PLAN.md` §4).
@@ -238,10 +239,10 @@ export default function KitchenPage(): JSX.Element {
     const used = queue.pending.reduce((sum, op) => {
       const input = op.input as { batchId?: string; quantity?: number };
       return op.path === "inventory.consumeStock" && input.batchId === batch.id
-        ? sum + (input.quantity ?? 0)
+        ? sum.plus(input.quantity ?? 0)
         : sum;
-    }, 0);
-    return Math.max(0, batch.quantity - used);
+    }, new Decimal(0));
+    return Decimal.max(0, batch.quantity.minus(used)).toNumber();
   }
 
   function useOne(batch: (typeof batches)[number]): void {
@@ -407,7 +408,7 @@ export default function KitchenPage(): JSX.Element {
             <ul>
               {lowStock.map((product) => {
                 const left = totals.get(product.id) ?? product.totalStock;
-                const already = onList.get(product.id) ?? 0;
+                const already = onList.get(product.id) ?? new Decimal(0);
                 return (
                   <ItemRow
                     density="touch"
@@ -422,8 +423,8 @@ export default function KitchenPage(): JSX.Element {
                         // *means* is the status badge's job.
                         label: t("leftLabel"),
                         value: t("leftOf", {
-                          stock: Math.max(0, left),
-                          minimum: product.minStock ?? 0,
+                          stock: Decimal.max(0, left).toNumber(),
+                          minimum: product.minStock?.toNumber() ?? 0,
                           unit: units.unit(
                             product.defaultUnit,
                             product.minStock ?? 0,
@@ -470,7 +471,7 @@ export default function KitchenPage(): JSX.Element {
                       ) : (
                         <p className="text-lg text-muted-foreground md:text-xl">
                           {t("onList", {
-                            quantity: already,
+                            quantity: already.toNumber(),
                             unit: units.unit(product.defaultUnit, already),
                           })}
                         </p>

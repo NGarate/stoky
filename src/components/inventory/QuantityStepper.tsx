@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Minus, Plus } from "lucide-react";
+import type { Decimal } from "@prisma/client-runtime-utils";
 import type { JSX } from "react";
 
 /**
@@ -32,7 +33,7 @@ export function QuantityStepper({
   removeDisabled = false,
 }: {
   /** What the screen should show: the projected total, not the server's. */
-  value: number;
+  value: Decimal;
   unit: string;
   /** Full accessible name for +, naming the product — "más" alone names nothing. */
   addLabel: string;
@@ -63,7 +64,7 @@ export function QuantityStepper({
         className="min-w-16 text-center text-2xl font-bold tabular-nums text-heading"
         data-testid="stepper-value"
       >
-        {value}{" "}
+        {value.toString()}{" "}
         <span className="text-sm font-normal text-muted-foreground">
           {unit}
         </span>

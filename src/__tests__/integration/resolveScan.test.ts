@@ -23,6 +23,7 @@ import {
   createTestUser,
   generateTestEmail,
 } from "../utils/test-helpers";
+import { num } from "../utils/amount";
 
 /**
  * `product.resolveScan` — the replayable scan T7 adds.
@@ -256,7 +257,7 @@ describe("product.resolveScan", () => {
       defaultUnit: product.defaultUnit,
       minStock: 2,
     });
-    expect(saved.minStock).toBe(2);
+    expect(num(saved.minStock)).toBe(2);
   });
 });
 

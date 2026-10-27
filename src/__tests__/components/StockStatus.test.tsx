@@ -7,6 +7,7 @@ import {
   StockStatus,
   stockTone,
 } from "@/components/inventory/StockStatus";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * ISSUES UI-11, pinned.
@@ -24,9 +25,12 @@ afterEach(cleanup);
 
 describe("StockStatus", () => {
   it("says run out, not low, when a product with a minimum is at zero", () => {
-    renderWithIntl(<StockStatus isLowStock={true} totalStock={0} />, {
-      locale: "es",
-    });
+    renderWithIntl(
+      <StockStatus isLowStock={true} totalStock={new Decimal(0)} />,
+      {
+        locale: "es",
+      },
+    );
 
     // Both are true of this product. Run out is the stronger statement.
     expect(screen.getByText("Sin stock")).toBeInTheDocument();
@@ -34,25 +38,34 @@ describe("StockStatus", () => {
   });
 
   it("says run out for a product with no minimum at all", () => {
-    renderWithIntl(<StockStatus isLowStock={false} totalStock={0} />, {
-      locale: "es",
-    });
+    renderWithIntl(
+      <StockStatus isLowStock={false} totalStock={new Decimal(0)} />,
+      {
+        locale: "es",
+      },
+    );
 
     expect(screen.getByText("Sin stock")).toBeInTheDocument();
   });
 
   it("says low while there is still something on the shelf", () => {
-    renderWithIntl(<StockStatus isLowStock={true} totalStock={1} />, {
-      locale: "es",
-    });
+    renderWithIntl(
+      <StockStatus isLowStock={true} totalStock={new Decimal(1)} />,
+      {
+        locale: "es",
+      },
+    );
 
     expect(screen.getByText("Queda poco")).toBeInTheDocument();
   });
 
   it("says nothing is wrong when nothing is", () => {
-    renderWithIntl(<StockStatus isLowStock={false} totalStock={5} />, {
-      locale: "es",
-    });
+    renderWithIntl(
+      <StockStatus isLowStock={false} totalStock={new Decimal(5)} />,
+      {
+        locale: "es",
+      },
+    );
 
     expect(screen.getByText("Correcto")).toBeInTheDocument();
   });
@@ -73,7 +86,7 @@ describe("StockStatus on and off a tinted row", () => {
 
   it("outlines run out on a row already tinted danger", () => {
     renderWithIntl(
-      <StockStatus isLowStock={true} onTintedRow totalStock={0} />,
+      <StockStatus isLowStock={true} onTintedRow totalStock={new Decimal(0)} />,
     );
     expect(pill("Sin stock")).toContain("border-danger-foreground");
     expect(pill("Sin stock")).not.toContain("bg-danger");
@@ -81,25 +94,33 @@ describe("StockStatus on and off a tinted row", () => {
 
   it("outlines low on a row already tinted warn", () => {
     renderWithIntl(
-      <StockStatus isLowStock={true} onTintedRow totalStock={1} />,
+      <StockStatus isLowStock={true} onTintedRow totalStock={new Decimal(1)} />,
     );
     expect(pill("Queda poco")).toContain("border-warn-foreground");
     expect(pill("Queda poco")).not.toContain("bg-warn");
   });
 
   it("fills low on an untinted row, where an outline would be the faint one", () => {
-    renderWithIntl(<StockStatus isLowStock={true} totalStock={1} />);
+    renderWithIntl(
+      <StockStatus isLowStock={true} totalStock={new Decimal(1)} />,
+    );
     expect(pill("Queda poco")).toContain("bg-warn");
   });
 
   it("fills run out on an untinted row", () => {
-    renderWithIntl(<StockStatus isLowStock={false} totalStock={0} />);
+    renderWithIntl(
+      <StockStatus isLowStock={false} totalStock={new Decimal(0)} />,
+    );
     expect(pill("Sin stock")).toContain("bg-danger");
   });
 
   it("keeps healthy filled either way: a healthy row has no tint to clash with", () => {
     renderWithIntl(
-      <StockStatus isLowStock={false} onTintedRow totalStock={5} />,
+      <StockStatus
+        isLowStock={false}
+        onTintedRow
+        totalStock={new Decimal(5)}
+      />,
     );
     expect(pill("Correcto")).toContain("bg-ok");
   });
@@ -108,7 +129,11 @@ describe("StockStatus on and off a tinted row", () => {
 describe("StockAmount", () => {
   it("tints by the same precedence the words use", () => {
     renderWithIntl(
-      <StockAmount defaultUnit="paquete" isLowStock={true} totalStock={0} />,
+      <StockAmount
+        defaultUnit="paquete"
+        isLowStock={true}
+        totalStock={new Decimal(0)}
+      />,
       { locale: "es" },
     );
 
@@ -124,15 +149,19 @@ describe("StockAmount", () => {
     // in a **warn** row under a **danger** badge, and one at 0 with no
     // minimum had no tint at all under a danger badge — the state where the
     // tint matters most was the one it did not draw.
-    expect(stockTone(0, true)).toBe("danger");
-    expect(stockTone(0, false)).toBe("danger");
-    expect(stockTone(1, true)).toBe("warn");
-    expect(stockTone(5, false)).toBe("neutral");
+    expect(stockTone(new Decimal(0), true)).toBe("danger");
+    expect(stockTone(new Decimal(0), false)).toBe("danger");
+    expect(stockTone(new Decimal(1), true)).toBe("warn");
+    expect(stockTone(new Decimal(5), false)).toBe("neutral");
   });
 
   it("writes the stored count unit as a word, pluralised", () => {
     renderWithIntl(
-      <StockAmount defaultUnit="unit" isLowStock={false} totalStock={24} />,
+      <StockAmount
+        defaultUnit="unit"
+        isLowStock={false}
+        totalStock={new Decimal(24)}
+      />,
       { locale: "es" },
     );
 
@@ -144,7 +173,11 @@ describe("StockAmount", () => {
 
   it("always carries the unit, because a bare number is not an amount", () => {
     renderWithIntl(
-      <StockAmount defaultUnit="kg" isLowStock={false} totalStock={5} />,
+      <StockAmount
+        defaultUnit="kg"
+        isLowStock={false}
+        totalStock={new Decimal(5)}
+      />,
       { locale: "es" },
     );
 

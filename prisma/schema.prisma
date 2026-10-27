@@ -260,7 +260,7 @@ model Product {
   category      String?
   imageUrl      String?
   defaultUnit   String    @default("unit")
-  minStock      Float?
+  minStock      Decimal?  @db.Decimal(12, 3)
   openFoodFactsData Json?
   householdId   String
   household     Household @relation(fields: [householdId], references: [id])
@@ -280,7 +280,7 @@ model StockEntry {
   id            String    @id @default(cuid())
   productId     String
   product       Product   @relation(fields: [productId], references: [id])
-  quantity      Float
+  quantity      Decimal   @db.Decimal(12, 3)
   unit          String
   expirationDate DateTime?
   locationId    String?
@@ -332,10 +332,10 @@ model PriceRecord {
   product     Product   @relation(fields: [productId], references: [id])
   storeId     String
   store       Store     @relation(fields: [storeId], references: [id])
-  price       Float
+  price       Decimal   @db.Decimal(12, 2)
   currency    String    @default("EUR")
   unit        String
-  quantity    Float     @default(1)
+  quantity    Decimal   @default(1) @db.Decimal(12, 3)
   recordedAt  DateTime  @default(now())
   receiptId   String?
 
@@ -350,7 +350,7 @@ model Receipt {
   storeId       String?
   store         Store?        @relation(fields: [storeId], references: [id])
   purchaseDate  DateTime?
-  totalAmount   Float?
+  totalAmount   Decimal?      @db.Decimal(12, 2)
   rawOcrText    String?
   items         ReceiptItem[]
   householdId   String
@@ -369,8 +369,8 @@ model ReceiptItem {
   receipt         Receipt     @relation(fields: [receiptId], references: [id])
   rawText         String
   parsedName      String?
-  parsedPrice     Float?
-  parsedQuantity  Float?
+  parsedPrice     Decimal?    @db.Decimal(12, 2)
+  parsedQuantity  Decimal?    @db.Decimal(12, 3)
   matchedProductId String?
   matchedProduct  Product?    @relation(fields: [matchedProductId], references: [id])
   matchConfidence Float?
@@ -401,7 +401,7 @@ model ShoppingItem {
   /// was accepted until 2026-08-22 and cost more than it gave (D103).
   productId      String
   product        Product   @relation(fields: [productId], references: [id])
-  quantity       Float     @default(1)
+  quantity       Decimal   @default(1) @db.Decimal(12, 3)
   unit           String?
   isChecked      Boolean   @default(false)
   checkedAt      DateTime?

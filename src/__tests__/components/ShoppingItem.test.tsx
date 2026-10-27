@@ -4,6 +4,7 @@ import { screen, cleanup, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import { Decimal } from "@prisma/client-runtime-utils";
 
 const enqueue = mock((_op: unknown) => ({ ok: true as const, id: "op-1" }));
 const cancel = mock((_id: string) => true);
@@ -51,7 +52,7 @@ const baseItem = {
   id: "item-1",
   productId: "product-1",
   product: { name: "Leche entera" },
-  quantity: 2,
+  quantity: new Decimal(2),
   unit: "L",
   isChecked: false,
 };

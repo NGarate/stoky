@@ -13,6 +13,7 @@ import { useWriteQueue } from "@/lib/offline/queue-context";
 import { projectShoppingItems } from "@/lib/offline/project";
 import type { JSX } from "react";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
+import type { Decimal } from "@prisma/client-runtime-utils";
 
 /**
  * Screen A — the phone, "day to day" (`REDESIGN_PLAN.md` §3).
@@ -206,11 +207,11 @@ export default function ShopPage(): JSX.Element {
 interface Row {
   id: string;
   name: string;
-  quantity: number;
+  quantity: Decimal;
   unit: string | null;
   isChecked: boolean;
-  stock: number | null;
-  minStock: number | null;
+  stock: Decimal | null;
+  minStock: Decimal | null;
   listName: string;
   pending: boolean;
   /** An addition not sent yet, whose id is the queued change's. */
@@ -247,11 +248,8 @@ function ShopRow({
   // branch above would have reached `stockOf` with nothing to fill it.
   const hasNotch = item.stock != null && item.minStock != null;
   const filled =
-    hasNotch && (item.minStock as number) > 0
-      ? Math.min(
-          100,
-          ((item.stock as number) / (item.minStock as number)) * 100,
-        )
+    item.stock != null && item.minStock?.greaterThan(0)
+      ? Math.min(100, item.stock.dividedBy(item.minStock).times(100).toNumber())
       : 0;
 
   const circle = (
@@ -284,14 +282,14 @@ function ShopRow({
         {item.queued
           ? t("notSentYet")
           : item.stock == null || item.minStock == null
-            ? item.stock === 0
+            ? item.stock?.isZero()
               ? t("stockNone")
               : t("stockUnknown")
-            : item.stock <= 0
+            : item.stock.lessThanOrEqualTo(0)
               ? t("stockNone")
               : t("stockOf", {
-                  stock: item.stock,
-                  minimum: item.minStock,
+                  stock: item.stock.toNumber(),
+                  minimum: item.minStock.toNumber(),
                   unit: units.unit(item.unit, item.minStock),
                 })}
       </span>
