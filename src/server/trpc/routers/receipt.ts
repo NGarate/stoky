@@ -248,7 +248,6 @@ export const receiptRouter = createTRPCRouter({
           storeId: z.string().max(MAX_ID_LENGTH).optional(),
           // A shop typed rather than picked, found or created by `storeNamed`.
           storeName: z.string().trim().min(1).max(MAX_NAME_LENGTH).optional(),
-          purchaseDate: z.date().optional(),
         })
         .refine((input) => !(input.storeId && input.storeName), {
           message: "Send a storeId or a storeName, not both",
@@ -358,7 +357,6 @@ export const receiptRouter = createTRPCRouter({
             householdId,
             uploadedBy: user.id,
             storeId,
-            purchaseDate: input.purchaseDate,
             status: ReceiptStatus.UPLOADING,
           },
         });
