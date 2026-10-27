@@ -3,12 +3,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import {
+  SHELL_USER_KEY,
   forgetPersistedReads,
   forgetPersistedReadsExcept,
 } from "@/lib/offline/persist";
 import { forgetCachedShell, reconcileUser } from "@/lib/sw/register";
-
-const STORAGE_KEY = "stoky.shell.user";
 
 /**
  * Drop what the device keeps for an account once that account is gone.
@@ -58,7 +57,7 @@ export function ShellCacheGuard({ userId }: { userId: string | null }): null {
 
     let previous: string | null = null;
     try {
-      previous = window.localStorage.getItem(STORAGE_KEY);
+      previous = window.localStorage.getItem(SHELL_USER_KEY);
     } catch {
       previous = null;
     }
@@ -84,8 +83,8 @@ export function ShellCacheGuard({ userId }: { userId: string | null }): null {
     }
 
     try {
-      if (userId === null) window.localStorage.removeItem(STORAGE_KEY);
-      else window.localStorage.setItem(STORAGE_KEY, userId);
+      if (userId === null) window.localStorage.removeItem(SHELL_USER_KEY);
+      else window.localStorage.setItem(SHELL_USER_KEY, userId);
     } catch {
       // A blocked storage costs a redundant purge, not correctness.
     }

@@ -133,14 +133,32 @@ function defaultStorage(): Storage | null {
  */
 const forgotten = new Set<string>();
 
-/** A storage whose writes to a forgotten key are dropped. */
-function refusingForgotten(storage: Storage | null): Storage | null {
+/**
+ * The account this device's shell was last opened for, written by
+ * `ShellCacheGuard`: set on the way into the dashboard, removed at `/login`.
+ */
+export const SHELL_USER_KEY = "stoky.shell.user";
+
+/**
+ * A storage whose writes are dropped once the account has left the device.
+ *
+ * Two ways to have left, because `forgotten` is one tab's memory: a sign-out
+ * in this tab, and the shell's owner key no longer naming this account — set
+ * by another tab's sign-out or sign-in. Without the second, a tab still open
+ * on the departed account refetched on focus, kept its data through the 401,
+ * and wrote it back under that account until someone next reached `/login`.
+ */
+function refusingDeparted(
+  storage: Storage | null,
+  userId: string,
+): Storage | null {
   if (storage === null) return null;
   return {
     getItem: (key: string) => storage.getItem(key),
     removeItem: (key: string) => storage.removeItem(key),
     setItem: (key: string, value: string) => {
       if (forgotten.has(key)) return;
+      if (storage.getItem(SHELL_USER_KEY) !== userId) return;
       storage.setItem(key, value);
     },
   } as Storage;
@@ -154,8 +172,9 @@ export function createReadPersister(
   forgotten.delete(persistKey(userId));
   return createSyncStoragePersister({
     key: persistKey(userId),
-    storage: refusingForgotten(
+    storage: refusingDeparted(
       seams.storage === undefined ? defaultStorage() : seams.storage,
+      userId,
     ),
     throttleTime: seams.throttleTime ?? 1000,
     serialize: (client) => SuperJSON.stringify(client),

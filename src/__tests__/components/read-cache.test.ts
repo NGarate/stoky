@@ -5,6 +5,7 @@ import {
   persistQueryClientSave,
 } from "@tanstack/react-query-persist-client";
 import {
+  SHELL_USER_KEY,
   forgetPersistedReads,
   persistKey,
   persistOptions,
@@ -76,6 +77,8 @@ async function roundTrip(userId: string, data: unknown): Promise<unknown> {
 
 beforeEach(() => {
   window.localStorage.clear();
+  // The shell was opened for USER, as the dashboard's guard records it.
+  window.localStorage.setItem(SHELL_USER_KEY, USER);
 });
 
 describe("what comes back on the next visit", () => {
@@ -218,6 +221,31 @@ describe("forgetting, against a write already on its way", () => {
     });
 
     forgetPersistedReads(USER);
+    await flushWrites();
+
+    expect(window.localStorage.getItem(persistKey(USER))).toBeNull();
+  });
+
+  it("does not put them back from another tab still open on the account", async () => {
+    // The `forgotten` set is one tab's memory. The account signed out in
+    // another tab, which reached /login and cleared the shell's owner; this
+    // tab refetched on focus, kept its data through the 401, and saved it.
+    window.localStorage.removeItem(SHELL_USER_KEY);
+    await persistQueryClientSave({
+      queryClient: clientWith([{ id: "b1" }]),
+      ...persistOptions(USER, { throttleTime: 0 }),
+    });
+    await flushWrites();
+
+    expect(window.localStorage.getItem(persistKey(USER))).toBeNull();
+  });
+
+  it("does not write for an account the device has since moved on from", async () => {
+    window.localStorage.setItem(SHELL_USER_KEY, OTHER);
+    await persistQueryClientSave({
+      queryClient: clientWith([{ id: "b1" }]),
+      ...persistOptions(USER, { throttleTime: 0 }),
+    });
     await flushWrites();
 
     expect(window.localStorage.getItem(persistKey(USER))).toBeNull();
