@@ -1336,6 +1336,35 @@ describe("receipt.getAppliedSummary", () => {
     expect(summary.receipt.store?.id).toBe(storeId);
   });
 
+  it("gives each line its own price when one product is on two lines", async () => {
+    const { receipt, second } = await seedReceipt({
+      status: ReceiptStatus.CONFIRMED,
+    });
+    // The same milk again, scanned at another price.
+    await prisma.receiptItem.update({
+      where: { id: second.id },
+      data: {
+        matchedProductId: productId,
+        matchStatus: MatchStatus.USER_CONFIRMED,
+        parsedPrice: 2.75,
+        parsedQuantity: 1,
+      },
+    });
+    await caller.receipt.applyReceipt({ receiptId: receipt.id });
+
+    const summary = await caller.receipt.getAppliedSummary({
+      receiptId: receipt.id,
+    });
+
+    const prices = summary.items
+      .map((item) => [item.parsedPrice, item.priceRecord?.price])
+      .sort();
+    expect(prices).toEqual([
+      [2.5, 2.5],
+      [2.75, 2.75],
+    ]);
+  });
+
   it("still counts a line the matcher matched and nobody reviewed", async () => {
     // The regression D18 records: filtering on USER_CONFIRMED | USER_CREATED
     // is narrower than what is applied, so an AUTO_MATCHED line got stock and

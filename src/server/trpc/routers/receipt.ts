@@ -928,6 +928,20 @@ export const receiptRouter = createTRPCRouter({
         include: { product: true, store: true },
       });
 
+      // Each record answers one line. A price record names its receipt and
+      // product but not its line, so the same product bought on two lines —
+      // the milk scanned twice — showed the first line's price on both.
+      const unpaired = [...priceRecords];
+      const priceOf = (item: (typeof receipt.items)[number]) => {
+        const index = unpaired.findIndex(
+          (pr) =>
+            pr.productId === item.matchedProductId &&
+            pr.price === item.parsedPrice &&
+            pr.quantity === (item.parsedQuantity ?? 1),
+        );
+        return index === -1 ? undefined : unpaired.splice(index, 1)[0];
+      };
+
       return {
         receipt,
         itemsAdded: stockEntries.length,
@@ -939,9 +953,7 @@ export const receiptRouter = createTRPCRouter({
         items: receipt.items.map((item) => ({
           ...item,
           stockEntry: stockEntries.find((se) => se.receiptItemId === item.id),
-          priceRecord: priceRecords.find(
-            (pr) => pr.productId === item.matchedProductId,
-          ),
+          priceRecord: priceOf(item),
         })),
       };
     }),
