@@ -89,6 +89,10 @@ export const dataRouter = createTRPCRouter({
                 unit: true,
                 expirationDate: true,
                 locationId: true,
+                // Which purchase a consumption or a move drew from: without
+                // it the ledger's sum survives, but not what each batch has
+                // left, so no expiry can be read back from the file.
+                batchId: true,
                 operationType: true,
                 note: true,
                 createdAt: true,

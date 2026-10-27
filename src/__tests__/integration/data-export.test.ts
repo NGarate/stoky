@@ -93,13 +93,25 @@ beforeAll(async () => {
   });
   productId = product.id;
 
-  await prisma.stockEntry.create({
+  const batch = await prisma.stockEntry.create({
     data: {
       productId,
       quantity: 6,
       unit: "L",
       operationType: "PURCHASE",
       locationId: location.id,
+      expirationDate: new Date("2026-11-01T00:00:00.000Z"),
+      createdBy: ownerUser.id,
+    },
+  });
+  await prisma.stockEntry.create({
+    data: {
+      productId,
+      quantity: -1,
+      unit: "L",
+      operationType: "CONSUME",
+      locationId: location.id,
+      batchId: batch.id,
       createdBy: ownerUser.id,
     },
   });
@@ -268,10 +280,21 @@ describe("what must be in it", () => {
     const exported = await owner.data.exportHousehold();
     const product = exported.products[0];
 
-    expect(product?.stockEntries).toHaveLength(1);
+    expect(product?.stockEntries).toHaveLength(2);
     expect(product?.priceRecords).toHaveLength(1);
     expect(exported.receipts[0]?.items).toHaveLength(1);
     expect(exported.shoppingLists[0]?.items).toHaveLength(1);
+  });
+
+  it("keeps which batch a consumption drew from", async () => {
+    // Without it the file holds the sum and not what each batch has left,
+    // so the expiry of what remains cannot be read back from it.
+    const exported = await owner.data.exportHousehold();
+    const entries = exported.products[0]?.stockEntries ?? [];
+    const purchase = entries.find((entry) => entry.quantity > 0);
+    const consumption = entries.find((entry) => entry.quantity < 0);
+
+    expect(consumption?.batchId).toBe(purchase?.id);
   });
 
   it("references receipt images by path", async () => {
