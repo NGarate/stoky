@@ -831,7 +831,7 @@ describe("a change made with a hold", () => {
 });
 
 describe("dealing with what failed", () => {
-  it("puts a retried change back at the tail with its strikes cleared", async () => {
+  it("puts a retried change back with its strikes cleared", async () => {
     let fail = true;
     const queue = open(async () => {
       if (fail) throw refusal(500);
@@ -849,6 +849,80 @@ describe("dealing with what failed", () => {
     // The same key, so a change the server did apply is recognised rather than
     // applied a second time.
     expect(queue.getState().pending[0]?.id).toBe(failedId);
+  });
+
+  describe("against a later edit of the same item", () => {
+    function openTimed(send: (op: QueuedOp) => Promise<unknown>) {
+      let clock = new Date("2026-08-11T10:00:00.000Z");
+      return {
+        queue: open(send, { now: () => clock }),
+        later() {
+          clock = new Date(clock.getTime() + 1_000);
+        },
+      };
+    }
+    const quantity = (value: number) => ({
+      path: "shopping.updateItem" as const,
+      input: { id: "item-1", quantity: value, quantityUnit: "unidad" },
+      label: { key: "shopping.itemUpdated" },
+    });
+
+    it("drops the failed edit once a later one of the same fields lands", async () => {
+      let refuse = true;
+      const { queue, later } = openTimed(async () => {
+        if (refuse) throw refusal(403);
+      });
+      queue.enqueue(quantity(3));
+      await queue.drain();
+
+      refuse = false;
+      later();
+      queue.enqueue(quantity(5));
+      await queue.drain();
+
+      // Still offered, "Reintentar" would have put 3 back over the 5.
+      expect(queue.getState().failed).toHaveLength(0);
+    });
+
+    it("keeps a failed edit of fields the later one did not touch", async () => {
+      let refuse = true;
+      const { queue, later } = openTimed(async () => {
+        if (refuse) throw refusal(403);
+      });
+      queue.enqueue(quantity(3));
+      await queue.drain();
+
+      refuse = false;
+      later();
+      queue.enqueue(tick());
+      await queue.drain();
+
+      expect(queue.getState().failed).toHaveLength(1);
+    });
+
+    it("sends a retried edit before a later one still waiting", async () => {
+      const sent: unknown[] = [];
+      let refuse = true;
+      const { queue, later } = openTimed(async (op) => {
+        if (refuse) throw refusal(403);
+        sent.push(op.input.quantity);
+      });
+      queue.enqueue(quantity(3));
+      await queue.drain();
+      const failedId = queue.getState().failed[0]?.id as string;
+
+      later();
+      queue.enqueue({ ...quantity(5), holdMs: 10_000 });
+      queue.retry(failedId);
+      refuse = false;
+      await queue.drain();
+
+      // 3 goes first; the 5 is held behind it, and lands last.
+      expect(sent).toEqual([3]);
+      expect(queue.getState().pending.map((op) => op.input.quantity)).toEqual([
+        5,
+      ]);
+    });
   });
 
   it("forgets a discarded change", async () => {

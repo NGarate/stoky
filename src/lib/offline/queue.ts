@@ -289,6 +289,23 @@ function reasonFor(error: unknown, path: ReplayablePath): FailureReason | null {
   }
 }
 
+/**
+ * Whether `newer`, once it has landed, makes the failed `older` moot: an edit
+ * of the same shopping item, made later, setting every field `older` set.
+ *
+ * Retried after it, `older` would put back what the person had since changed
+ * — quantity 3 over the 5 they set afterwards.
+ */
+function supersedes(newer: QueuedOp, older: QueuedOp): boolean {
+  return (
+    newer.path === "shopping.updateItem" &&
+    older.path === "shopping.updateItem" &&
+    older.input.id === newer.input.id &&
+    older.createdAt.getTime() < newer.createdAt.getTime() &&
+    Object.keys(older.input).every((key) => key in newer.input)
+  );
+}
+
 export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
   const {
     userId,
@@ -531,6 +548,7 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
             commit((state) => ({
               ...state,
               pending: state.pending.filter((entry) => entry.id !== op.id),
+              failed: state.failed.filter((entry) => !supersedes(op, entry)),
             }));
           } catch (error) {
             inFlightId = null;
@@ -610,12 +628,25 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
         const op = state.failed.find((entry) => entry.id === id);
         if (!op) return state;
         const { reason: _reason, ...rest } = op;
+        // Back in the order it was made, not at the tail: behind a later
+        // change it would be sent after it, and undo it. Never ahead of the
+        // change already in flight.
+        const before = state.pending.findIndex(
+          (entry) =>
+            entry.id !== inFlightId &&
+            entry.createdAt.getTime() > op.createdAt.getTime(),
+        );
+        const at = before === -1 ? state.pending.length : before;
         return {
           ...state,
           failed: state.failed.filter((entry) => entry.id !== id),
           // Same id, so a change the server did in fact apply is recognised
           // rather than applied twice.
-          pending: [...state.pending, { ...rest, attempts: 0 }],
+          pending: [
+            ...state.pending.slice(0, at),
+            { ...rest, attempts: 0 },
+            ...state.pending.slice(at),
+          ],
         };
       });
     },
