@@ -3,6 +3,7 @@ import {
   isProductUnit,
   unitConversion,
 } from "@/lib/inventory/units";
+import { stockTotals } from "@/lib/stock/totals";
 import { TRPCError } from "@trpc/server";
 import { type PrismaClient } from "@/generated/prisma/client";
 import { needsMoreOnList } from "@/lib/stock/low-stock";
@@ -508,10 +509,11 @@ export const shoppingRouter = createTRPCRouter({
             not: null,
           },
         },
-        include: {
-          stockEntries: true,
-        },
       });
+      const stockOf = await stockTotals(
+        ctx.db,
+        products.map((product) => product.id),
+      );
 
       /**
        * What the household has already written down to buy, across every list.
@@ -553,7 +555,7 @@ export const shoppingRouter = createTRPCRouter({
       // enforced.
       const needed = products.filter((product) =>
         needsMoreOnList(
-          product.stockEntries.reduce((sum, entry) => sum + entry.quantity, 0),
+          stockOf.get(product.id) ?? 0,
           alreadyOnList.get(product.id) ?? 0,
           product.minStock,
         ),
@@ -575,11 +577,8 @@ export const shoppingRouter = createTRPCRouter({
       );
 
       for (const product of needed) {
-        const stock = product.stockEntries.reduce(
-          (sum, entry) => sum + entry.quantity,
-          0,
-        );
-        const covered = stock + (alreadyOnList.get(product.id) ?? 0);
+        const covered =
+          (stockOf.get(product.id) ?? 0) + (alreadyOnList.get(product.id) ?? 0);
         // 1.5× the minimum is the target to reach, not the amount to add: what
         // is in the cupboard and what is already written down both count
         // towards it. Rounded, because these are floats and "0.30000000000004
@@ -641,11 +640,15 @@ export const shoppingRouter = createTRPCRouter({
     const items = await ctx.db.shoppingItem.findMany({
       where: { shoppingList: { householdId: ctx.householdId } },
       include: {
-        product: { include: { stockEntries: true } },
+        product: true,
         shoppingList: { select: { id: true, name: true } },
       },
       orderBy: [{ isChecked: "asc" }, { id: "asc" }],
     });
+    const stockOf = await stockTotals(
+      ctx.db,
+      items.map((item) => item.productId),
+    );
 
     // The product is always present: `productId` is required with a foreign
     // key since D103 retired free-text items. The optional chaining this map
@@ -659,13 +662,7 @@ export const shoppingRouter = createTRPCRouter({
       productId: item.productId,
       listId: item.shoppingList.id,
       listName: item.shoppingList.name,
-      stock:
-        Math.round(
-          item.product.stockEntries.reduce(
-            (sum, entry) => sum + entry.quantity,
-            0,
-          ) * 100,
-        ) / 100,
+      stock: stockOf.get(item.productId) ?? 0,
       minStock: item.product.minStock,
     }));
   }),

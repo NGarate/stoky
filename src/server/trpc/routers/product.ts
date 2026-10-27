@@ -17,6 +17,8 @@ import {
 import { withReplay } from "@/server/trpc/replay";
 import { enforceRateLimit } from "@/server/trpc/throttle";
 import { productLookupRateLimit } from "@/lib/rate-limit";
+import { netStock } from "@/lib/inventory/batches";
+import { stockTotals } from "@/lib/stock/totals";
 import {
   productSchema,
   updateProductSchema,
@@ -138,11 +140,6 @@ export const productRouter = createTRPCRouter({
         cursor: cursor ? { id: cursor } : undefined,
         orderBy: { name: "asc" },
         include: {
-          stockEntries: {
-            select: {
-              quantity: true,
-            },
-          },
           _count: {
             select: {
               stockEntries: true,
@@ -159,17 +156,14 @@ export const productRouter = createTRPCRouter({
         }
       }
 
-      const productsWithStock = products.map((product) => {
-        const totalStock = product.stockEntries.reduce(
-          (sum, entry) => sum + entry.quantity,
-          0,
-        );
-        return {
-          ...product,
-          totalStock,
-          stockEntries: undefined,
-        };
-      });
+      const stockOf = await stockTotals(
+        ctx.db,
+        products.map((product) => product.id),
+      );
+      const productsWithStock = products.map((product) => ({
+        ...product,
+        totalStock: stockOf.get(product.id) ?? 0,
+      }));
 
       return {
         products: productsWithStock,
@@ -210,14 +204,9 @@ export const productRouter = createTRPCRouter({
         });
       }
 
-      const totalStock = product.stockEntries.reduce(
-        (sum, entry) => sum + entry.quantity,
-        0,
-      );
-
       return {
         ...product,
-        totalStock,
+        totalStock: netStock(product.stockEntries),
       };
     }),
 
@@ -238,28 +227,16 @@ export const productRouter = createTRPCRouter({
             householdId: ctx.householdId,
           },
         },
-        include: {
-          stockEntries: {
-            select: {
-              quantity: true,
-            },
-          },
-        },
       });
 
       if (!product) {
         return null;
       }
 
-      const totalStock = product.stockEntries.reduce(
-        (sum, entry) => sum + entry.quantity,
-        0,
-      );
-
+      const stockOf = await stockTotals(ctx.db, [product.id]);
       return {
         ...product,
-        totalStock,
-        stockEntries: undefined,
+        totalStock: stockOf.get(product.id) ?? 0,
       };
     }),
 
@@ -550,25 +527,14 @@ export const productRouter = createTRPCRouter({
             householdId: ctx.householdId,
           },
         },
-        include: {
-          stockEntries: {
-            select: {
-              quantity: true,
-            },
-          },
-        },
       });
 
       if (existingProduct) {
-        const totalStock = existingProduct.stockEntries.reduce(
-          (sum, entry) => sum + entry.quantity,
-          0,
-        );
+        const stockOf = await stockTotals(ctx.db, [existingProduct.id]);
         return {
           product: {
             ...existingProduct,
-            totalStock,
-            stockEntries: undefined,
+            totalStock: stockOf.get(existingProduct.id) ?? 0,
           },
           source: "local" as const,
         };
