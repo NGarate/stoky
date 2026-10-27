@@ -116,11 +116,6 @@ export async function matchReceiptItems(
     where: { id: receiptId },
     include: {
       items: true,
-      household: {
-        include: {
-          products: true,
-        },
-      },
     },
   });
 
