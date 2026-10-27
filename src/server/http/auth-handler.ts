@@ -1132,6 +1132,11 @@ function rebuild(
  *
  * - **The bodies lose the token always.** It is the unsigned one, which no
  *   endpoint accepts (`requireSignature`), and nothing needs it.
+ * - **The session loses `deviceId` always.** It is the `stoky_device` cookie's
+ *   value, the known-device credential that buys a sign-in budget of its own,
+ *   and `HttpOnly` for the same reason. The passkey plugin answers its sign-in
+ *   with the raw session row, which carries it (`@better-auth/passkey`,
+ *   `verify-authentication`).
  * - **The header is dropped whenever the request carried a cookie**, with its
  *   entry in the expose list. A browser always carries one here — the page
  *   that sends a sign-in was rendered, which gave it `stoky_device`
@@ -1170,6 +1175,7 @@ async function guardResponse(
         const session = record.session;
         if (session && typeof session === "object" && !Array.isArray(session)) {
           delete (session as Record<string, unknown>).token;
+          delete (session as Record<string, unknown>).deviceId;
         }
         body = JSON.stringify(record);
       }

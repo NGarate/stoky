@@ -747,6 +747,23 @@ describe("what an answer may carry", () => {
     expect(body.user.id).toBe("user-1");
   });
 
+  it("never the device cookie's value inside the session", async () => {
+    // The passkey sign-in answers with the raw session row, deviceId and all.
+    const { handler } = fakeHandler(() =>
+      Response.json({
+        session: { id: "s1", deviceId: "device-cookie-value" },
+        user: { id: "user-1" },
+      }),
+    );
+
+    const response = await handleAuthRequest(
+      new Request(`${BASE}/get-session`),
+      { handler },
+    );
+
+    expect(await response.text()).not.toContain("device-cookie-value");
+  });
+
   it("never a bearer token in a header, to a request that carried a cookie", async () => {
     const { handler } = fakeHandler(
       () =>
