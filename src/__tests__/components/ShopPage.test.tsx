@@ -4,6 +4,7 @@ import { createContext } from "react";
 import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 import type { QueuedOp } from "@/lib/offline/queue";
 
 /**
@@ -396,4 +397,10 @@ describe("an account that cannot tick things off", () => {
 
     expect(document.querySelector("[aria-pressed]")).not.toBeNull();
   });
+});
+
+it("passes axe at AAA", async () => {
+  const { container } = renderWithIntl(<ShopPage />);
+  await screen.findByText("Leche entera");
+  expect(await axeViolations(container)).toBe("");
 });

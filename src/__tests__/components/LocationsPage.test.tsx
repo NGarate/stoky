@@ -4,6 +4,7 @@ import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 
 /**
  * The storage locations screen could not create, rename or remove anything.
@@ -388,4 +389,10 @@ describe("the storage locations screen", () => {
     expect(back.querySelectorAll("svg").length).toBe(1);
     expect(back.textContent).toBe("Volver a configuración");
   });
+});
+
+it("passes axe at AAA", async () => {
+  const { container } = renderPage();
+  await screen.findByRole("button", { name: /Editar Nevera/ });
+  expect(await axeViolations(container)).toBe("");
 });

@@ -4,6 +4,7 @@ import { screen, cleanup } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
 import { Suspense, createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 
 /**
  * Four routes that gated on `isLoading` alone.
@@ -324,4 +325,31 @@ describe("a route that used to hand-roll its states", () => {
       ).toContain(back.startsWith("/products") ? "/products" : back);
     });
   }
+});
+
+it("passes axe at AAA on a loaded /receipts", async () => {
+  queryStub = {
+    ...queryStub,
+    isPending: false,
+    data: {
+      items: [
+        {
+          id: "r1",
+          status: "NEEDS_REVIEW",
+          purchaseDate: new Date("2026-10-20"),
+          createdAt: new Date("2026-10-20"),
+          totalAmount: 7.44,
+          store: { name: "Mercadona" },
+          _count: { items: 4 },
+        },
+      ],
+    },
+  };
+  const { container } = renderWithIntl(
+    <SnackbarProvider>
+      <ReceiptsPage />
+    </SnackbarProvider>,
+  );
+  await screen.findAllByText("Mercadona");
+  expect(await axeViolations(container)).toBe("");
 });

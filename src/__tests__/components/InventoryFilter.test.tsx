@@ -2,6 +2,7 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup, fireEvent } from "@testing-library/react";
 import { renderWithIntl } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 
 /**
  * `/inventory?filter=restock` — the Panel's restock card lands here.
@@ -293,4 +294,27 @@ describe("paging a long inventory", () => {
 
     expect(overviewCalls[0]).toMatchObject({ page: 1 });
   });
+});
+
+it("passes axe at AAA", async () => {
+  overviewStub.data = {
+    products: [
+      {
+        id: "p1",
+        name: "Café molido",
+        category: "Desayuno",
+        defaultUnit: "paquete",
+        minStock: 2,
+        totalStock: 0,
+        isLowStock: true,
+        onListQuantity: 0,
+      },
+    ],
+    total: 1,
+    page: 1,
+    pageCount: 1,
+  };
+  const { container } = renderWithIntl(<InventoryView />, { locale: "es" });
+  await screen.findAllByRole("link", { name: "Café molido" });
+  expect(await axeViolations(container)).toBe("");
 });

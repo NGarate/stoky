@@ -9,6 +9,7 @@ import {
   renderWithIntl as renderWithIntlOnly,
   type TestLocale,
 } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 import { useComposer } from "@/components/offline/Composer";
 import { persistKey } from "@/lib/offline/persist";
 import type { FailedOp, QueuedOp } from "@/lib/offline/queue";
@@ -1807,4 +1808,15 @@ describe("a member's two-step verification, from the people page", () => {
     );
     expect(membersInvalidated).toBe(1);
   });
+});
+
+it("passes axe at AAA on the people page", async () => {
+  const { container } = renderWithIntl(
+    <SnackbarProvider>
+      <PeoplePage />
+    </SnackbarProvider>,
+    { locale: "es" },
+  );
+  await screen.findAllByText("Ana", { exact: true });
+  expect(await axeViolations(container)).toBe("");
 });

@@ -4,6 +4,7 @@ import { screen, cleanup, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 
 /**
  * What /receipts/upload says once the receipt has been read.
@@ -213,4 +214,10 @@ describe("the receipt's store", () => {
     expect(uploads[0]).not.toHaveProperty("storeId");
     expect(uploads[0]).not.toHaveProperty("storeName");
   });
+});
+
+it("passes axe at AAA", async () => {
+  const container = mount();
+  await screen.findByRole("heading", { level: 1 });
+  expect(await axeViolations(container)).toBe("");
 });

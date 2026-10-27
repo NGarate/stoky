@@ -20,6 +20,7 @@ preload fails — there is no `document`.
 | `src/__tests__/setup/register-dom.ts` | Registers happy-dom globals (+ a `ResizeObserver` stub). Preloaded. |
 | `src/__tests__/setup/matchers.ts` | Adds the jest-dom assertions to Bun's `expect`. Imported first by each test file. |
 | `src/__tests__/utils/render.tsx` | `renderWithIntl` — wraps a component in the Spanish next-intl provider. |
+| `src/__tests__/utils/axe.ts` | `axeViolations` — axe-core at AAA over a rendered container; `""` when clean. |
 | `src/types/bun-test-dom.d.ts` | Types the jest-dom matchers onto `bun:test`. |
 
 `matchers.ts` is imported per test file rather than preloaded on purpose:
@@ -38,6 +39,10 @@ to a broken world.
 - **Mock at the module boundary,** not the component: `mock.module(...)` for
   `@/lib/trpc/client`, `next/navigation`, `next/link`, server actions, and the
   barcode-scanner library, then `await import(...)` the component afterwards.
+- **Every screen passes axe at AAA.** A test that renders a whole page ends
+  with `expect(await axeViolations(container)).toBe("")`, after a `findBy`
+  for real content so it audits the loaded page, not its skeleton. happy-dom
+  has no layout, so contrast comes back incomplete; `check:contrast` owns it.
 - **No tautologies.** An assertion that cannot fail is not a test. Every test
   here was verified to fail against a deliberately broken component.
 

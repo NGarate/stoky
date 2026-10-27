@@ -4,6 +4,7 @@ import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 
 /**
  * The stores settings screen writes to the list rendered directly below it,
@@ -273,4 +274,10 @@ describe("the stores settings screen", () => {
       screen.getByRole("link", { name: "Volver a configuración" }),
     ).toHaveAttribute("href", "/settings");
   });
+});
+
+it("passes axe at AAA", async () => {
+  const { container } = renderPage();
+  await screen.findAllByText(/Mercadona/);
+  expect(await axeViolations(container)).toBe("");
 });

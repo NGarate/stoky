@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup, fireEvent } from "@testing-library/react";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 
 /**
  * Creating a list on /shopping/lists.
@@ -165,4 +166,14 @@ describe("creating a list", () => {
       await screen.findByText(/No se ha podido generar la lista/),
     ).toBeInTheDocument();
   });
+});
+
+it("passes axe at AAA", async () => {
+  const { container } = renderWithIntl(
+    <SnackbarProvider>
+      <ShoppingListsPage />
+    </SnackbarProvider>,
+  );
+  await screen.findAllByText(/Semanal/);
+  expect(await axeViolations(container)).toBe("");
 });

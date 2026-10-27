@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
 import { renderWithIntl } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 
 /**
  * The Panel's opening: quick actions first, then the sections themselves.
@@ -325,4 +326,10 @@ describe("the Panel's lists", () => {
       );
     }
   });
+});
+
+it("passes axe at AAA", async () => {
+  const { container } = renderWithIntl(<DashboardPage />, { locale: "es" });
+  await screen.findByRole("heading", { level: 1 });
+  expect(await axeViolations(container)).toBe("");
 });

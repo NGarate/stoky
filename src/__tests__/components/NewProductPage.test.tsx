@@ -4,6 +4,7 @@ import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 
 /**
  * `/products/new` reached from a queued scan nobody could name (T7).
@@ -164,4 +165,10 @@ describe("brand, category and unit", () => {
       category: "Conservas",
     });
   });
+});
+
+it("passes axe at AAA", async () => {
+  const { container } = renderWithIntl(<NewProductPage />);
+  await screen.findByLabelText(/Nombre del producto/);
+  expect(await axeViolations(container)).toBe("");
 });

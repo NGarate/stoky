@@ -4,6 +4,7 @@ import { createContext } from "react";
 import { act, cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 import type { QueuedOp, EnqueueResult } from "@/lib/offline/queue";
 
 /**
@@ -802,4 +803,10 @@ describe("with no connection and nothing saved", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("No hay nada a punto de caducar")).toBeAbsent();
   });
+});
+
+it("passes axe at AAA", async () => {
+  const { container } = renderKitchen();
+  await screen.findByText("Leche entera");
+  expect(await axeViolations(container)).toBe("");
 });

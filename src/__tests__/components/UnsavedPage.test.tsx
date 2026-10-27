@@ -4,6 +4,7 @@ import { createContext } from "react";
 import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl as renderWithIntlOnly } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 import type { FailedOp, FailureReason } from "@/lib/offline/queue";
 
 /**
@@ -298,4 +299,11 @@ describe("taking a discard back", () => {
     await userEvent.click(screen.getByRole("button", { name: "Deshacer" }));
     expect(restore).toHaveBeenCalledWith(change);
   });
+});
+
+it("passes axe at AAA", async () => {
+  failed = [failure("refused")];
+  const { container } = renderWithIntl(<UnsavedPage />);
+  await screen.findByText(/Usaste 1 L de «Leche entera»/);
+  expect(await axeViolations(container)).toBe("");
 });

@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { act, screen, cleanup, fireEvent } from "@testing-library/react";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 
 /**
  * `/inventory/add` in two layers — Phase 8 item 3.
@@ -242,4 +243,10 @@ describe("after a save", () => {
       expect.arrayContaining(["inventory", "product", "shopping"]),
     );
   });
+});
+
+it("passes axe at AAA", async () => {
+  const { container } = renderWithIntl(<AddStockPage />, { locale: "es" });
+  await screen.findByLabelText("Producto");
+  expect(await axeViolations(container)).toBe("");
 });

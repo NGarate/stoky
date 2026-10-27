@@ -2,6 +2,7 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup } from "@testing-library/react";
 import { renderWithIntl } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 
 /**
  * The catalogue's Acciones column — Phase 8 item 5.
@@ -146,4 +147,10 @@ describe("when the catalogue does not fit", () => {
 
     expect(screen.queryByText(/Hay más en el catálogo/)).toBeAbsent();
   });
+});
+
+it("passes axe at AAA", async () => {
+  const { container } = renderWithIntl(<ProductsPage />, { locale: "es" });
+  await screen.findAllByRole("link", { name: "Leche entera" });
+  expect(await axeViolations(container)).toBe("");
 });

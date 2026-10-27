@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup, fireEvent, within } from "@testing-library/react";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 
 /**
  * What an empty list says, and what it offers.
@@ -194,4 +195,15 @@ describe("/shopping/lists with no lists", () => {
       within(box).getByRole("button", { name: "Crear lista" }),
     ).toBeInTheDocument();
   });
+});
+
+it("passes axe at AAA on /prices", async () => {
+  listData = [];
+  const { container } = renderWithIntl(
+    <SnackbarProvider>
+      <PricesPage />
+    </SnackbarProvider>,
+  );
+  await screen.findByText("Todavía no hay precios");
+  expect(await axeViolations(container)).toBe("");
 });

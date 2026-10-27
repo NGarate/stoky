@@ -4,6 +4,7 @@ import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 import es from "../../../messages/es.json";
 
 /**
@@ -277,4 +278,10 @@ describe("when it does not work", () => {
     expect(applyCalls).toBe(0);
     expect(pushes).toEqual([]);
   });
+});
+
+it("passes axe at AAA", async () => {
+  const { container } = render();
+  await screen.findByRole("button", { name: es.receipts.applyToInventory });
+  expect(await axeViolations(container)).toBe("");
 });

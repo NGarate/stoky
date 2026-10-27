@@ -16,6 +16,7 @@ import {
   renderWithIntl as renderWithIntlOnly,
   type TestLocale,
 } from "../utils/render";
+import { axeViolations } from "../utils/axe";
 import { resolve } from "../setup/tailwind";
 import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
 import { registerSchema } from "@/lib/validations/auth";
@@ -1364,4 +1365,24 @@ describe("the passkey offer on the login page", () => {
       expect(screen.getByRole("button", { name: WORDS.signIn })).toBeEnabled();
     });
   }
+});
+
+it("passes axe at AAA on /login", async () => {
+  const page = await LoginPage();
+  const { container } = renderWithIntlOnly(
+    <QueryClientProvider client={new QueryClient()}>
+      {page}
+    </QueryClientProvider>,
+    { locale: "es" },
+  );
+  await screen.findAllByRole("heading", { name: "Iniciar sesión" });
+  expect(await axeViolations(container)).toBe("");
+});
+
+it("passes axe at AAA on /register", async () => {
+  const { container } = renderWithIntlOnly(await RegisterPage(), {
+    locale: "es",
+  });
+  await screen.findAllByRole("heading", { level: 1 });
+  expect(await axeViolations(container)).toBe("");
 });
