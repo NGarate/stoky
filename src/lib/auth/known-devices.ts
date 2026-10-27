@@ -90,11 +90,6 @@ export function deviceIdFromHeaders(headers: Headers): string | undefined {
   return undefined;
 }
 
-/** `deviceIdFromHeaders` for a whole request. */
-export function deviceIdFromRequest(request: Request): string | undefined {
-  return deviceIdFromHeaders(request.headers);
-}
-
 /**
  * Has `account` been signed in to from this device before?
  *

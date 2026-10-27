@@ -3,7 +3,6 @@ import { DEVICE_ID_COOKIE, mintDeviceId } from "@/lib/device";
 import {
   deviceFingerprint,
   deviceIdFromHeaders,
-  deviceIdFromRequest,
 } from "@/lib/auth/known-devices";
 
 /**
@@ -15,17 +14,15 @@ import {
  * what is refused.
  */
 
-const requestWith = (cookie?: string) =>
-  new Request("http://localhost/api/auth/callback/credentials", {
-    headers: cookie === undefined ? {} : { cookie },
-  });
+const headersWith = (cookie?: string) =>
+  new Headers(cookie === undefined ? {} : { cookie });
 
-describe("deviceIdFromRequest", () => {
+describe("reading the device cookie", () => {
   it("reads the device cookie among others", () => {
     const id = mintDeviceId();
     expect(
-      deviceIdFromRequest(
-        requestWith(
+      deviceIdFromHeaders(
+        headersWith(
           `authjs.csrf-token=abc; ${DEVICE_ID_COOKIE}=${id}; NEXT_LOCALE=es`,
         ),
       ),
@@ -33,16 +30,16 @@ describe("deviceIdFromRequest", () => {
   });
 
   it("is undefined with no cookie, or none of ours", () => {
-    expect(deviceIdFromRequest(requestWith())).toBeUndefined();
-    expect(deviceIdFromRequest(requestWith("NEXT_LOCALE=es"))).toBeUndefined();
+    expect(deviceIdFromHeaders(headersWith())).toBeUndefined();
+    expect(deviceIdFromHeaders(headersWith("NEXT_LOCALE=es"))).toBeUndefined();
   });
 
   it("does not take a cookie whose name only ends in ours", () => {
     // `x_stoky_device` is somebody else's cookie, and matching on a suffix
     // would let it stand in for the device.
     expect(
-      deviceIdFromRequest(
-        requestWith(`x_${DEVICE_ID_COOKIE}=${mintDeviceId()}`),
+      deviceIdFromHeaders(
+        headersWith(`x_${DEVICE_ID_COOKIE}=${mintDeviceId()}`),
       ),
     ).toBeUndefined();
   });
@@ -52,7 +49,7 @@ describe("deviceIdFromRequest", () => {
     // gets that far.
     for (const value of ["", "not-a-uuid", "*", `${mintDeviceId()}x`]) {
       expect(
-        deviceIdFromRequest(requestWith(`${DEVICE_ID_COOKIE}=${value}`)),
+        deviceIdFromHeaders(headersWith(`${DEVICE_ID_COOKIE}=${value}`)),
       ).toBeUndefined();
     }
   });
