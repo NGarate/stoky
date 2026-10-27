@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { MatchStatus, ReceiptStatus } from "@/generated/prisma/client";
+import { MatchStatus, Prisma, ReceiptStatus } from "@/generated/prisma/client";
+import { folded } from "@/server/fold";
 import { NotFoundError } from "./errors";
 
 interface ProductMatch {
@@ -18,10 +19,6 @@ interface MatchResult {
 const AUTO_MATCH_THRESHOLD = 0.7;
 const MIN_CANDIDATE_THRESHOLD = 0.3;
 const MAX_CANDIDATES = 5;
-
-/** What `normalizeForSimilarity` strips, for the SQL side of the comparison. */
-const ACCENTED = "áàâäéèêëíìîïóòôöúùûüñç";
-const UNACCENTED = "aaaaeeeeiiiioooouuuunc";
 
 function normalizeForSimilarity(value: string): string {
   return value
@@ -218,7 +215,7 @@ async function findProductMatches(
     FROM (
       -- Lower-cased and accent-folded like the parsed name it is compared
       -- with: receipts print "JAMON" for the household's "Jamón".
-      SELECT id, name, translate(lower(name), ${ACCENTED}, ${UNACCENTED}) AS folded
+      SELECT id, name, ${folded(Prisma.sql`name`)} AS folded
       FROM "Product"
       WHERE "householdId" = ${householdId}
     ) AS product

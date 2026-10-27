@@ -29,6 +29,7 @@ import {
   MAX_UNIT_LENGTH,
 } from "@/lib/validations/bounds";
 import { withReplay } from "../replay";
+import { folded } from "@/server/fold";
 import type {
   StockDirection,
   StockOverviewInput,
@@ -130,27 +131,6 @@ async function datedBatchesInWindow(
  * shop composes — because Phase 4's offline queue may send the same write twice — see `src/server/trpc/replay.ts`. Those carry an
  * `idempotencyKey` and run inside one transaction with the product row held.
  */
-/**
- * Accent folding, in the only language the database speaks.
- *
- * `datcollate` on the shipped image is en_US.utf8 on musl, which collates by
- * byte: `ORDER BY lower(name)` files "Ávila" and "Ñoquis" *after* "Zumo".
- * Measured against the dev database. `COLLATE "es-x-icu"` fixes it and exists
- * on that image, but a self-hosted Postgres built without ICU would fail this
- * query outright — and this is the inventory's main query, not a nicety. So
- * the fold is done with `translate`, which depends on nothing.
- *
- * One fragment for sorting *and* searching, deliberately: the two have to
- * agree about which letters are the same letter, or "cafe" finds a row the
- * sort then files somewhere else. The cost is that "ñ" folds onto "n", so the
- * RAE's ordering is lost on ties, and that a trigram index cannot serve the
- * folded predicate. Both are stated rather than discovered.
- */
-const ACCENTED = "áàäâãéèëêíìïîóòöôõúùüûñç";
-const UNACCENTED = "aaaaaeeeeiiiiooooouuuunc";
-
-const folded = (value: Prisma.Sql): Prisma.Sql =>
-  Prisma.sql`translate(lower(${value}), ${ACCENTED}, ${UNACCENTED})`;
 
 /**
  * The sort keys, as SQL fragments.

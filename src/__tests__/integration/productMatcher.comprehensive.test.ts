@@ -223,6 +223,23 @@ leche semi desnatada 1,25
       expect(match.autoMatch?.similarity).toBe(1);
     });
 
+    it("folds the same letters the inventory search folds", async () => {
+      // The matcher's list lacked "ã" and "õ" while the inventory's had them,
+      // so "pao" found "Pão" in a search and only half-matched it here.
+      const product = await prisma.product.create({
+        data: {
+          name: "Pão de forma",
+          householdId: testHouseholdId,
+          defaultUnit: "unidad",
+        },
+      });
+
+      const [match] = await matchLines("PAO DE FORMA 1,80");
+
+      expect(match.autoMatch?.productId).toBe(product.id);
+      expect(match.autoMatch?.similarity).toBe(1);
+    });
+
     it("should handle word order variations", async () => {
       await prisma.product.create({
         data: {
