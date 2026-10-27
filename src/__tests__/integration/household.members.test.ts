@@ -14,7 +14,7 @@ import { TRPCError } from "@trpc/server";
 import * as argon2 from "argon2";
 import { hashPassword } from "@/lib/auth/password-hash";
 import { createCredentialUser } from "@/lib/auth/credentials";
-import type { HouseholdRole } from "@/generated/prisma/client";
+import type { HouseholdRole, Prisma } from "@/generated/prisma/client";
 import type { AppSession } from "@/lib/auth/session";
 import { isPasswordIdentityRefusal } from "@/lib/validations/password";
 import { retryAfterSeconds } from "@/server/trpc/throttle";
@@ -67,6 +67,43 @@ async function makeUser(
     },
     await hashPassword("TestPassword123!"),
   );
+}
+
+/** Until some statement against this database waits on a row lock. */
+async function untilBlocked(): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const [row] = await prisma.$queryRaw<{ waiting: number }[]>`
+      SELECT count(*)::int AS waiting FROM pg_stat_activity
+      WHERE datname = current_database() AND wait_event_type = 'Lock'
+    `;
+    if ((row?.waiting ?? 0) > 0) return;
+    await Bun.sleep(20);
+  }
+}
+
+/**
+ * Demote `adminId` while `start()`'s call waits on the rows `lock` holds: the
+ * call's role was read as ADMIN at the start, and is MEMBER by the write.
+ */
+async function demotedMidCall(
+  adminId: string,
+  lock: (tx: Prisma.TransactionClient) => Promise<unknown>,
+  start: () => Promise<unknown>,
+): Promise<string> {
+  let outcome: Promise<string> = Promise.resolve("not started");
+  await prisma.$transaction(
+    async (tx) => {
+      await lock(tx);
+      outcome = codeOf(start());
+      await untilBlocked();
+      await tx.user.update({
+        where: { id: adminId },
+        data: { role: "MEMBER" },
+      });
+    },
+    { timeout: 15_000 },
+  );
+  return outcome;
 }
 
 async function codeOf(call: Promise<unknown>): Promise<string> {
@@ -498,6 +535,33 @@ describe("setting a member's password", () => {
     expect((await stored(bystander.id)).passkeys).toBe(1);
   });
 
+  it("refuses an admin demoted while the new password was being hashed", async () => {
+    const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "reset-demoted");
+    const member = await makeUser(
+      HOUSEHOLD.id,
+      "MEMBER",
+      "reset-demoted-target",
+    );
+    const api = await callerFor(admin.id, HOUSEHOLD.id);
+    const before = await stored(member.id);
+
+    const code = await demotedMidCall(
+      admin.id,
+      (tx) =>
+        tx.$queryRaw`SELECT id FROM "User" WHERE id = ${admin.id} FOR UPDATE`,
+      () =>
+        api.household.resetMemberPassword({
+          userId: member.id,
+          newPassword: NEW,
+        }),
+    );
+
+    // Otherwise somebody no longer allowed to set it has set the member's
+    // password, and can sign in as them.
+    expect(code).toBe("FORBIDDEN");
+    expect(await stored(member.id)).toEqual(before);
+  });
+
   it("refuses a member of another household with NOT_FOUND, and changes nothing", async () => {
     // The class SECURITY_REVIEW.md §2 found four times: the tier says an
     // admin may do this, and only the household check says *to whom*.
@@ -749,6 +813,29 @@ describe("setting a member's password", () => {
  */
 describe("removing a member", () => {
   const PASSWORD = "TestPassword123!";
+
+  it("refuses an admin demoted while the call waited on the owners' lock", async () => {
+    const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "remove-demoted");
+    const member = await makeUser(
+      HOUSEHOLD.id,
+      "MEMBER",
+      "remove-demoted-target",
+    );
+    const api = await callerFor(admin.id, HOUSEHOLD.id);
+
+    const code = await demotedMidCall(
+      admin.id,
+      (tx) =>
+        tx.$queryRaw`SELECT id FROM "User" WHERE "householdId" = ${HOUSEHOLD.id} AND role = 'OWNER' FOR UPDATE`,
+      () => api.household.removeMember({ userId: member.id }),
+    );
+
+    expect(code).toBe("FORBIDDEN");
+    expect(
+      (await prisma.user.findUniqueOrThrow({ where: { id: member.id } }))
+        .householdId,
+    ).toBe(HOUSEHOLD.id);
+  });
 
   async function browser(email: string) {
     const signedIn = await signInWith({ email, password: PASSWORD });

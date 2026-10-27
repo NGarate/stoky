@@ -1,5 +1,10 @@
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, adminProcedure, protectedProcedure } from "../trpc";
+import {
+  CAPABILITY_ROLES,
+  createTRPCRouter,
+  adminProcedure,
+  protectedProcedure,
+} from "../trpc";
 import { enforceRateLimit } from "../throttle";
 import { addMemberRateLimit, clientAddress } from "@/lib/rate-limit";
 import { hashPassword } from "@/lib/auth/password-hash";
@@ -171,6 +176,36 @@ async function withOwnersLocked<T>(
     `;
     return work(tx);
   });
+}
+
+/**
+ * The caller's role as it stands at the write, held until the write commits.
+ *
+ * `adminProcedure` reads the role once, as the request starts, and these
+ * writes come after a wait: Argon2id on a new password, a re-entered password
+ * checked, the owner rows' lock. An owner who demoted or removed this admin in
+ * that window had the admin's write land anyway — a member's password set by
+ * somebody no longer allowed to set it. `FOR UPDATE`, taken after the owner
+ * rows where those are locked too, so every caller locks in the same order.
+ */
+async function actorRole(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  householdId: string,
+): Promise<HouseholdRole> {
+  const rows = await tx.$queryRaw<{ role: HouseholdRole }[]>`
+    SELECT role FROM "User"
+    WHERE id = ${userId} AND "householdId" = ${householdId}
+    FOR UPDATE
+  `;
+  const role = rows[0]?.role;
+  if (role === undefined || !CAPABILITY_ROLES.admin.includes(role)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "You may no longer change the household",
+    });
+  }
+  return role;
 }
 
 export const householdRouter = createTRPCRouter({
@@ -364,7 +399,11 @@ export const householdRouter = createTRPCRouter({
           ctx.householdId,
         );
 
-        assertMayActOnOwner(ctx.role, member.role, input.role);
+        assertMayActOnOwner(
+          await actorRole(tx, ctx.session.user.id, ctx.householdId),
+          member.role,
+          input.role,
+        );
         await assertAnOwnerRemains(tx, ctx.householdId, member, input.role);
 
         return tx.user.update({
@@ -415,7 +454,10 @@ export const householdRouter = createTRPCRouter({
             ctx.householdId,
           );
 
-          assertMayActOnOwner(ctx.role, member.role);
+          assertMayActOnOwner(
+            await actorRole(tx, ctx.session.user.id, ctx.householdId),
+            member.role,
+          );
           await assertAnOwnerRemains(tx, ctx.householdId, member, null);
 
           await tx.user.update({
@@ -710,14 +752,20 @@ export const householdRouter = createTRPCRouter({
 
       const passwordHash = await hashPassword(input.newPassword);
 
-      const count = await setPasswordAndEndSessions(
-        ctx.db,
-        {
-          userId: member.id,
-          guard: { householdId: ctx.householdId, role: member.role },
-        },
-        passwordHash,
-      );
+      const count = await ctx.db.$transaction(async (tx) => {
+        assertMayActOnOwner(
+          await actorRole(tx, callerId, ctx.householdId),
+          member.role,
+        );
+        return setPasswordAndEndSessions(
+          tx,
+          {
+            userId: member.id,
+            guard: { householdId: ctx.householdId, role: member.role },
+          },
+          passwordHash,
+        );
+      });
 
       if (count === 0) {
         throw new TRPCError({
@@ -802,6 +850,10 @@ export const householdRouter = createTRPCRouter({
       assertMayActOnOwner(ctx.role, member.role);
 
       const ended = await ctx.db.$transaction(async (tx) => {
+        assertMayActOnOwner(
+          await actorRole(tx, callerId, ctx.householdId),
+          member.role,
+        );
         const { count } = await tx.user.updateMany({
           where: {
             id: member.id,
