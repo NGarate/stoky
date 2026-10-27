@@ -30,6 +30,7 @@ import {
 } from "@/lib/validations/bounds";
 import { withReplay } from "../replay";
 import { folded } from "@/server/fold";
+import { stockTotals } from "@/lib/stock/totals";
 import type {
   StockDirection,
   StockOverviewInput,
@@ -62,6 +63,16 @@ interface ExpiryWindow {
  * The query is therefore per *product* rather than per entry — a batch's
  * remaining quantity cannot be known without the rest of that product's
  * ledger — and `remainingByBatch` states the drawdown rule.
+ *
+ * **Only the ledgers that can produce a row are loaded.** Reading every
+ * product that ever had a dated batch, with its whole history, on every
+ * dashboard visit grew with each week of use, and `remainingByBatch` weighs
+ * each consumption against each batch. Two questions the database answers
+ * first, neither of which changes the result: does the product have a dated
+ * batch in the window (in the location asked about) — only those are listed —
+ * and is its stock above zero — at zero `remainingByBatch` empties every
+ * batch. What a product that passes both costs is still its whole ledger;
+ * making that smaller needs a batch's remainder stored, not derived.
  */
 async function datedBatchesInWindow(
   db: Prisma.TransactionClient,
@@ -69,11 +80,28 @@ async function datedBatchesInWindow(
   locationId: string | undefined,
   window: ExpiryWindow,
 ) {
-  const products = await db.product.findMany({
+  const dated = await db.product.findMany({
     where: {
       householdId,
-      stockEntries: { some: { expirationDate: { not: null } } },
+      stockEntries: {
+        some: {
+          quantity: { gt: 0 },
+          expirationDate: { not: null, ...window },
+          ...(locationId && { locationId }),
+        },
+      },
     },
+    select: { id: true },
+  });
+  const stockOf = await stockTotals(
+    db,
+    dated.map(({ id }) => id),
+  );
+  const live = dated.flatMap(({ id }) => (stockOf.get(id) ? [id] : []));
+  if (live.length === 0) return [];
+
+  const products = await db.product.findMany({
+    where: { id: { in: live } },
     include: {
       stockEntries: {
         // Read the full ledger before filtering locations: an unlocated

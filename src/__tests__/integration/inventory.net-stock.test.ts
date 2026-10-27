@@ -474,6 +474,44 @@ describe("the expiry views report what is left", () => {
     expect(await api.inventory.getExpiredItems({})).toHaveLength(0);
   });
 
+  it("does not read the ledger of a product that has run out", async () => {
+    // Every product that ever had a dated batch used to be read with its
+    // whole history on each visit; one at zero cannot have a batch to list.
+    await (
+      await caller()
+    ).inventory.addStock({
+      ...envelope(OWNER.userId),
+      productId,
+      quantity: 2,
+      unit: "L",
+      expirationDate: inDays(-4),
+    });
+    await (
+      await caller()
+    ).inventory.consumeStock({
+      ...envelope(OWNER.userId),
+      productId,
+      quantity: 2,
+      unit: "L",
+    });
+    const ledgersRead: unknown[] = [];
+    const watched = prisma.$extends({
+      query: {
+        product: {
+          findMany({ args, query }) {
+            if (args.include?.stockEntries) ledgersRead.push(args.where);
+            return query(args);
+          },
+        },
+      },
+    }) as unknown as PrismaClient;
+
+    const api = await caller(watched);
+
+    expect(await api.inventory.getExpiredItems({})).toHaveLength(0);
+    expect(ledgersRead).toEqual([]);
+  });
+
   it("still lists an expired batch nobody got to", async () => {
     const api = await caller();
 
