@@ -760,6 +760,43 @@ describe("a change made with a hold", () => {
     expect(queue.nextDelayMs()).toBe(6_000);
   });
 
+  it("waits longer each time nothing answers, though no strike is counted", async () => {
+    // A captive portal answers HTML, which carries no status tRPC can read,
+    // while the browser says it is online. The wait must still grow.
+    const queue = open(async () => {
+      throw dropped();
+    });
+    queue.enqueue(tick());
+
+    await queue.drain();
+    const first = queue.nextDelayMs();
+    for (let i = 0; i < 4; i += 1) await queue.drain();
+
+    expect(queue.getState().pending[0]?.attempts).toBe(0);
+    // random() is 0.5: half of 2 s after one, half of the 30 s ceiling
+    // after five.
+    expect(first).toBe(1_000);
+    expect(queue.nextDelayMs()).toBe(15_000);
+  });
+
+  it("starts the wait again once something answers", async () => {
+    let answer = false;
+    const queue = open(async () => {
+      if (answer) return;
+      throw dropped();
+    });
+    queue.enqueue(tick());
+    for (let i = 0; i < 4; i += 1) await queue.drain();
+
+    answer = true;
+    await queue.drain();
+    answer = false;
+    queue.enqueue(tick());
+    await queue.drain();
+
+    expect(queue.nextDelayMs()).toBe(1_000);
+  });
+
   it("does not delay a change that asked for no hold", async () => {
     const send = mock(async () => {});
     const { queue } = openHeld(send);

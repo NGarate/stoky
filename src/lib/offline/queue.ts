@@ -386,6 +386,16 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
   }
 
   let draining = false;
+  /**
+   * Failures in a row that no server answered: a dropped connection, but also
+   * a captive portal's HTML or a proxy's plain-text 502, neither of which
+   * carries a status tRPC can read. Not strikes — they say nothing about the
+   * change — so they never exhaust one; they only lengthen the wait. Memory
+   * only, and any answer resets it. Without it the wait stayed under a second
+   * for as long as the browser believed it was online: one to four requests a
+   * second from every device with something queued.
+   */
+  let unanswered = 0;
   /** The operation currently in flight, which cannot be taken back. */
   let inFlightId: string | null = null;
   /**
@@ -512,6 +522,7 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
             inFlightId = op.id;
             await send(op);
             inFlightId = null;
+            unanswered = 0;
             sent += 1;
             commit((state) => ({
               ...state,
@@ -533,6 +544,7 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
 
             const strike = receivedResponse(error) ? 1 : 0;
             const attempts = op.attempts + strike;
+            unanswered = strike ? 0 : unanswered + 1;
 
             if (attempts >= MAX_ATTEMPTS) {
               failHead(op, "exhausted");
@@ -645,7 +657,7 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
       // A head inside its undo window has never been attempted, so the wait
       // is the window itself, not a backoff.
       const held = holdRemainingMs(head);
-      return held > 0 ? held : backoffDelay(head.attempts, random);
+      return held > 0 ? held : backoffDelay(head.attempts + unanswered, random);
     },
   };
 }
