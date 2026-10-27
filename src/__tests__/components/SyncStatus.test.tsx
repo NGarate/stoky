@@ -27,6 +27,7 @@ let queueState = {
   failed: [] as FailedOp[],
   status: "idle" as "idle" | "sending" | "needs-signin",
   full: false,
+  unsaved: false,
   hydrated: true,
 };
 
@@ -116,6 +117,7 @@ beforeEach(() => {
     failed: [],
     status: "idle",
     full: false,
+    unsaved: false,
     hydrated: true,
   };
   productQuery = {
@@ -254,6 +256,13 @@ describe("every state has words", () => {
       },
     },
     {
+      name: "unsaved",
+      apply: () => {
+        queueState.unsaved = true;
+        queueState.pending = [op("a")];
+      },
+    },
+    {
       name: "failed",
       apply: () => {
         queueState.failed = [failed("f", "refused")];
@@ -278,6 +287,17 @@ describe("every state has words", () => {
       expect(region.textContent?.trim().length ?? 0).toBeGreaterThan(0);
     });
   }
+});
+
+describe("a change kept only in this tab", () => {
+  it("says it could not be saved on the device, and to keep the app open", () => {
+    queueState = { ...queueState, unsaved: true, pending: [op("a")] };
+    renderWithIntl(<SyncStatus />);
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "No cierres la aplicación",
+    );
+  });
 });
 
 describe("a change that did not save", () => {

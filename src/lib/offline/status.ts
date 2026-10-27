@@ -22,6 +22,7 @@ export type SyncState =
   | "needs-reconciliation"
   | "needs-review"
   | "failed"
+  | "unsaved"
   | "full"
   | "unrepresented";
 
@@ -56,6 +57,11 @@ export function syncStatus(queue: QueueState): SyncSummary {
     if (otherFailures > 0) {
       return { state: "failed", count: otherFailures };
     }
+    // Before "full": a change accepted but kept only in this tab is lost
+    // when the tab closes, which is worse than one refused out loud.
+    if (queue.unsaved && pending > 0) {
+      return { state: "unsaved", count: pending };
+    }
     if (queue.full) {
       return { state: "full", count: pending };
     }
@@ -85,6 +91,7 @@ export function isUrgent(state: SyncState): boolean {
     state === "needs-reconciliation" ||
     state === "needs-review" ||
     state === "failed" ||
+    state === "unsaved" ||
     state === "full" ||
     state === "unrepresented"
   );

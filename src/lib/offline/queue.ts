@@ -128,6 +128,13 @@ export interface QueueState {
    * hydrated stop coinciding.
    */
   hydrated: boolean;
+  /**
+   * The last write to the device failed — storage is full, refused, or there
+   * is none — so what is pending lives only in this tab and goes with it.
+   * Absent is false. Accepted rather than refused, because every write goes
+   * through the queue, online too, and refusing would stop all of them.
+   */
+  unsaved?: boolean;
 }
 
 export interface EnqueueInput {
@@ -306,8 +313,6 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
   const store = createStore<QueueState>(() => ({ ...EMPTY }));
 
   let hydrated = false;
-  /** Whether storage holds what this tab holds: the last write landed. */
-  let inStep = true;
 
   function persist(state: QueueState): boolean {
     return storage.write(userId, {
@@ -336,15 +341,13 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
    * copy let the last tab to write erase every change another tab had made
    * since — three ticks in one tab, one in another, and the three were gone.
    * Not after a write has failed, though: storage is then behind this copy,
-   * and the copy is the queue until a write lands again.
+   * and the copy is the queue until a write lands again (`unsaved`).
    */
-  function commit(next: (state: QueueState) => QueueState): boolean {
+  function commit(next: (state: QueueState) => QueueState): void {
     const current = store.getState();
-    const shared = hydrated && inStep;
+    const shared = hydrated && !current.unsaved;
     const updated = next(shared ? { ...current, ...stored() } : current);
-    store.setState(updated, true);
-    inStep = persist(updated);
-    return inStep;
+    store.setState({ ...updated, unsaved: !persist(updated) }, true);
   }
 
   /**
@@ -574,7 +577,7 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
     },
 
     sync() {
-      if (!hydrated || !inStep) return;
+      if (!hydrated || store.getState().unsaved) return;
       store.setState((state) => ({ ...state, ...stored() }), true);
     },
 

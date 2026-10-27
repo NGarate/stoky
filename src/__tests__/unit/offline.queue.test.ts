@@ -548,6 +548,30 @@ describe("what survives a reload", () => {
     // click handler loses it immediately and looks like a broken app.
     expect(() => queue.enqueue(tick())).not.toThrow();
     expect(queue.getState().pending).toHaveLength(1);
+    // But it says so, rather than reporting a change as kept that is not.
+    expect(queue.getState().unsaved).toBe(true);
+  });
+
+  it("is saved again once a write lands", () => {
+    let refuse = true;
+    const memory = createMemoryStorage();
+    const flaky = {
+      read: (userId: string) => memory.read(userId),
+      write: (userId: string, value: unknown) =>
+        !refuse && memory.write(userId, value),
+      clear: (userId: string) => memory.clear(userId),
+    };
+    const queue = open(async () => {}, { storage: flaky });
+
+    queue.enqueue(tick());
+    refuse = false;
+    queue.enqueue(tick());
+
+    expect(queue.getState().unsaved).toBe(false);
+    // Both, not only the second: storage was behind this tab's copy.
+    expect((memory.read(USER) as { pending: unknown[] }).pending).toHaveLength(
+      2,
+    );
   });
 });
 

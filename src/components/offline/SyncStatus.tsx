@@ -69,9 +69,11 @@ export function SyncStatus(): JSX.Element {
                 ? t("needsReview", { count: summary.count })
                 : summary.state === "failed"
                   ? t("failed", { count: summary.count })
-                  : summary.state === "full"
-                    ? t("full")
-                    : t("unrepresented");
+                  : summary.state === "unsaved"
+                    ? t("unsaved", { count: summary.count })
+                    : summary.state === "full"
+                      ? t("full")
+                      : t("unrepresented");
 
   return (
     // `data-sync` separates "the device has been read and there is nothing

@@ -978,6 +978,7 @@
     "syncing": "Sending your changes…",
     "needsSignin": "Sign in again to send your changes. None of them are lost.",
     "failed": "{count, plural, one {# change was not saved} other {# changes were not saved}}",
+    "unsaved": "{count, plural, one {# unsent change could not be saved on this device. Keep the app open until it is sent.} other {# unsent changes could not be saved on this device. Keep the app open until they are sent.}}",
     "full": "No room for more offline changes. Get a signal to send the ones you have.",
     "unrepresented": "Something is wrong with your unsent changes. Get a signal and open the app again.",
     "needsReconciliation": "{count, plural, one {# product needs checking} other {# products need checking}}",

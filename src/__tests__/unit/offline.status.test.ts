@@ -47,30 +47,33 @@ describe("syncStatus over every queue it can be handed", () => {
 
     for (const status of STATUSES) {
       for (const full of [false, true]) {
-        for (const pendingCount of [0, 1, 3]) {
-          for (const reason of [null, ...REASONS]) {
-            const state: QueueState = {
-              status,
-              full,
-              hydrated: true,
-              pending: Array.from({ length: pendingCount }, (_, i) =>
-                op(`p${i}`),
-              ),
-              failed: reason ? [failed("f1", reason)] : [],
-            };
+        for (const unsaved of [false, true]) {
+          for (const pendingCount of [0, 1, 3]) {
+            for (const reason of [null, ...REASONS]) {
+              const state: QueueState = {
+                status,
+                full,
+                unsaved,
+                hydrated: true,
+                pending: Array.from({ length: pendingCount }, (_, i) =>
+                  op(`p${i}`),
+                ),
+                failed: reason ? [failed("f1", reason)] : [],
+              };
 
-            const summary = syncStatus(state);
-            if (summary.state === "unrepresented") {
-              unnamed.push(
-                `${status}/full=${full}/pending=${pendingCount}/${reason}`,
-              );
+              const summary = syncStatus(state);
+              if (summary.state === "unrepresented") {
+                unnamed.push(
+                  `${status}/full=${full}/unsaved=${unsaved}/pending=${pendingCount}/${reason}`,
+                );
+              }
             }
           }
         }
       }
     }
 
-    // 126 points. A hole here is a blank space on a screen somebody is
+    // 252 points. A hole here is a blank space on a screen somebody is
     // relying on.
     expect(unnamed).toEqual([]);
   });
@@ -172,6 +175,23 @@ describe("what it says, and in which order", () => {
     expect(syncStatus(state)).toEqual({ state: "needs-review", count: 1 });
   });
 
+  it("says when what is waiting could not be kept on the device", () => {
+    const state: QueueState = {
+      ...base,
+      unsaved: true,
+      full: true,
+      pending: [op("a")],
+    };
+
+    // Ahead of "full": an accepted change that leaves with the tab is a
+    // worse surprise than a refused one.
+    expect(syncStatus(state)).toEqual({ state: "unsaved", count: 1 });
+  });
+
+  it("does not warn about storage when nothing is waiting", () => {
+    expect(syncStatus({ ...base, unsaved: true }).state).toBe("synced");
+  });
+
   it("puts a stock disagreement ahead of a scan to review", () => {
     const state: QueueState = {
       ...base,
@@ -191,6 +211,7 @@ describe("which live region a state belongs in", () => {
     "needs-reconciliation",
     "needs-review",
     "failed",
+    "unsaved",
     "full",
     "unrepresented",
   ];
@@ -216,6 +237,7 @@ describe("which live region a state belongs in", () => {
         "synced",
         "syncing",
         "unrepresented",
+        "unsaved",
       ].sort(),
     );
   });

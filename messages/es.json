@@ -978,6 +978,7 @@
     "syncing": "Enviando tus cambios…",
     "needsSignin": "Vuelve a entrar para enviar tus cambios. No se ha perdido ninguno.",
     "failed": "{count, plural, one {# cambio no se ha guardado} other {# cambios no se han guardado}}",
+    "unsaved": "{count, plural, one {# cambio sin enviar no se ha podido guardar en este dispositivo. No cierres la aplicación hasta que se envíe.} other {# cambios sin enviar no se han podido guardar en este dispositivo. No cierres la aplicación hasta que se envíen.}}",
     "full": "No caben más cambios sin conexión. Conéctate para enviar los que hay.",
     "unrepresented": "Algo va mal con tus cambios sin enviar. Conéctate y vuelve a abrir la aplicación.",
     "needsReconciliation": "{count, plural, one {Hay que comprobar # producto} other {Hay que comprobar # productos}}",
