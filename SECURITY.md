@@ -585,7 +585,7 @@ Verified against the files named in each row.
   (PROGRESS D144), with our Argon2id either way. It is stored in the
   account's `credential` row of the `Account` table, where Better Auth reads
   it, not on `User` (PROGRESS D134); that row is deleted with its account.
-- **Better Auth 1.7.7, with sessions in the database** (PROGRESS D135,
+- **Better Auth 1.7.12, with sessions in the database** (PROGRESS D135,
   replacing next-auth and D125). A session is a `Session` row and the cookie
   is a signed reference to it: Better Auth reads the row on every request —
   its cookie cache is off — and refuses one whose `expiresAt` has passed,
@@ -978,7 +978,7 @@ Verified against the files named in each row.
     second step; the log records who did it to whom.
   - **Not for native clients yet**: an account with two-step verification
     signs in from a browser (D142).
-- **Passkeys** (PROGRESS D151, `@better-auth/passkey` 1.7.7 with
+- **Passkeys** (PROGRESS D151, `@better-auth/passkey` 1.7.12 with
   `@simplewebauthn/server`), where WebAuthn can work:
   - **Only at the first `STOKY_URLS` address.** A passkey belongs to a
     relying party named by a host, and here that is the canonical entry's

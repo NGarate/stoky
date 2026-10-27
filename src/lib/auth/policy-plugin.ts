@@ -94,12 +94,12 @@ import { logSecurityEvent } from "@/lib/security-log";
  * so for an unticked box the cookie is set again as a browser cookie, and the
  * first `Set-Cookie` for it is taken out, so the answer carries one.
  *
- * Coupled to Better Auth 1.7.7's internals: the `two_factor` cookie and the
- * challenge row it names, `secretConfig`, how a before-hook's returned body
- * is merged (`defu`: a value given replaces, `undefined` does not), how a
- * backup code is looked up (`includes` over the decoded list, then a write
- * conditional on the list read), and how an after-hook's cookies are added to
- * the endpoint's. The version is pinned exactly, and
+ * Coupled to Better Auth 1.7.12's internals (first read in 1.7.7): the
+ * `two_factor` cookie and the challenge row it names, `secretConfig`, how a
+ * before-hook's returned body is merged (`defu`: a value given replaces,
+ * `undefined` does not), how a backup code is looked up (`includes` over the
+ * decoded list, then a write conditional on the list read), and how an
+ * after-hook's cookies are added to the endpoint's. The version is pinned exactly, and
  * `integration/two-factor.test.ts` and `integration/passkeys.test.ts` fail if
  * any of them moves.
  */
@@ -239,7 +239,7 @@ interface PluginHooks {
  * turns `Authorization: Bearer` into the session cookie by returning new
  * headers from its before-hook, and Better Auth applies a hook's returned
  * context to the endpoint alone: every other before-hook is handed the
- * request as it came (`runBeforeHooks`, Better Auth 1.7.7). Read from there,
+ * request as it came (`runBeforeHooks`, Better Auth 1.7.12). Read from there,
  * a native client's request has no session, so a check that found none and
  * stood aside let a bearer token add a passkey without the step-up, and turn
  * an authenticator on without its first code being claimed.

@@ -1095,9 +1095,10 @@ they show as done, and drain one at a time on reconnect. A refused consumption
 is not a failure but a question — see *Reconciliation* below. Proven by
 `e2e/shopping.spec.ts`, which is the phase's done-when.
 
-**Auth — working, on Better Auth 1.7.7 since 2026-10-15 (D135).** Real forms
-post to the auth API through `src/lib/auth/client.ts`, with Argon2id hashing,
-error mapping and i18n; the route in front of Better Auth
+**Auth — working, on Better Auth since 2026-10-15 (D135), 1.7.12 since
+2026-10-25.** Real forms post to the auth API through
+`src/lib/auth/client.ts`, with Argon2id hashing, error mapping and i18n; the
+route in front of Better Auth
 (`src/server/http/auth-handler.ts`) answers seventeen endpoints and applies
 the limits. Two-step verification with an authenticator app is in, each code
 usable once (D148), with backup codes stored as hashes (D149): the login form
