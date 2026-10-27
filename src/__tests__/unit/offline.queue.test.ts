@@ -279,17 +279,17 @@ describe("counting attempts", () => {
 describe("a queue composed in another household", () => {
   it("is refused rather than written into the wrong one", async () => {
     const send = mock(async () => {});
-    const queue = open(send);
+    const storage = createMemoryStorage();
+    const queue = open(send, { storage });
 
     queue.enqueue(tick());
     const stored = queue.getState().pending[0] as QueuedOp;
-    queue.store.setState(
-      {
-        ...queue.getState(),
-        pending: [{ ...stored, householdId: "clsomeoneelsesomeoneelses" }],
-      },
-      true,
-    );
+    // Storage is the queue every tab shares, so that is where it is changed.
+    storage.write(USER, {
+      pending: [{ ...stored, householdId: "clsomeoneelsesomeoneelses" }],
+      failed: [],
+    });
+    queue.sync();
 
     await queue.drain();
 
@@ -488,6 +488,52 @@ describe("what survives a reload", () => {
 
     expect(theirs.getState().pending).toHaveLength(0);
     expect(mine.getState().pending).toHaveLength(1);
+  });
+
+  it("keeps the changes another tab made when this one writes", () => {
+    const storage = createMemoryStorage();
+    const tabA = open(async () => {}, { storage });
+    const tabB = open(async () => {}, { storage });
+    tabA.hydrate();
+    tabB.hydrate();
+
+    tabA.enqueue(tick());
+    tabA.enqueue(tick());
+    tabB.enqueue(tick());
+
+    // B was hydrated before A wrote anything. Writing its own copy would
+    // leave storage holding B's one change and nothing of A's two.
+    const stored = storage.read(USER) as { pending: QueuedOp[] };
+    expect(stored.pending).toHaveLength(3);
+  });
+
+  it("takes up another tab's changes when told storage moved", () => {
+    const storage = createMemoryStorage();
+    const tabA = open(async () => {}, { storage });
+    const tabB = open(async () => {}, { storage });
+    tabA.hydrate();
+    tabB.hydrate();
+
+    tabA.enqueue(tick());
+    tabB.sync();
+
+    expect(tabB.getState().pending).toHaveLength(1);
+  });
+
+  it("does not write back a queue another tab purged", () => {
+    const storage = createMemoryStorage();
+    const tabA = open(async () => {}, { storage });
+    const tabB = open(async () => {}, { storage });
+    tabA.hydrate();
+    tabB.hydrate();
+    tabA.enqueue(tick());
+    tabB.sync();
+
+    tabA.purgeAll();
+    tabB.enqueue(tick());
+
+    const stored = storage.read(USER) as { pending: QueuedOp[] };
+    expect(stored.pending).toHaveLength(1);
   });
 
   it("survives storage that refuses to write", () => {

@@ -17,6 +17,7 @@ import {
 } from "@/lib/offline/queue-context";
 import { openWriteQueue, type WriteQueue } from "@/lib/offline/queue";
 import { createOperationSender } from "@/lib/offline/sender";
+import { queueKey } from "@/lib/offline/storage";
 import type { JSX, ReactNode } from "react";
 
 /**
@@ -130,12 +131,20 @@ export function WriteQueueProvider({
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", drain);
 
+    // Another tab of this account changed the queue. `key` is null when
+    // storage was cleared wholesale.
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key === queueKey(userId)) queue.sync();
+    };
+    window.addEventListener("storage", onStorage);
+
     return () => {
       unsubscribe();
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", drain);
+      window.removeEventListener("storage", onStorage);
     };
-  }, [drain, queue]);
+  }, [drain, queue, userId]);
 
   /**
    * The retry timer, armed only while something is waiting.

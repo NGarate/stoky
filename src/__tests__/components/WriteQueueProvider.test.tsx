@@ -43,7 +43,7 @@ mock.module("@/lib/trpc/client", () => ({
 const { WriteQueueProvider } =
   await import("@/components/offline/WriteQueueProvider");
 const { openWriteQueue } = await import("@/lib/offline/queue");
-const { createMemoryStorage } = await import("@/lib/offline/storage");
+const { createMemoryStorage, queueKey } = await import("@/lib/offline/storage");
 
 /**
  * The queue is driven directly rather than through `useWriteQueue`.
@@ -364,5 +364,41 @@ describe("refreshing what is on screen", () => {
     });
 
     expect(invalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe("another tab", () => {
+  it("takes up the changes another tab stored", async () => {
+    const storage = createMemoryStorage();
+    const open = () =>
+      openWriteQueue({
+        userId: "clttttttttttttttttttttttt",
+        householdId: "clhhhhhhhhhhhhhhhhhhhhhhh",
+        send: () => new Promise(() => {}),
+        storage,
+      });
+    const mine = open();
+    const theirs = open();
+    theirs.hydrate();
+
+    onlineManager.setOnline(false);
+    await act(async () => {
+      renderWithIntl(
+        <WriteQueueProvider queue={mine}>
+          <Readout />
+        </WriteQueueProvider>,
+      );
+    });
+
+    theirs.enqueue(tick);
+    await act(async () => {
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: queueKey("clttttttttttttttttttttttt"),
+        }),
+      );
+    });
+
+    expect(mine.getState().pending).toHaveLength(1);
   });
 });

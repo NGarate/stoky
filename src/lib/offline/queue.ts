@@ -233,6 +233,11 @@ export interface WriteQueue {
    * been written into the second.
    */
   setHousehold(id: string): void;
+  /**
+   * Take up what another tab has written. Called on the `storage` event; a
+   * no-op until hydrated, and it writes nothing.
+   */
+  sync(): void;
   /** How long to wait before the next attempt, or null when there is nothing. */
   nextDelayMs(): number | null;
 }
@@ -300,15 +305,46 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
    */
   const store = createStore<QueueState>(() => ({ ...EMPTY }));
 
-  function persist(state: QueueState): void {
-    storage.write(userId, { pending: state.pending, failed: state.failed });
+  let hydrated = false;
+  /** Whether storage holds what this tab holds: the last write landed. */
+  let inStep = true;
+
+  function persist(state: QueueState): boolean {
+    return storage.write(userId, {
+      pending: state.pending,
+      failed: state.failed,
+    });
   }
 
-  /** Every state change goes through here, so nothing can skip persistence. */
-  function commit(next: (state: QueueState) => QueueState): void {
-    const updated = next(store.getState());
+  /**
+   * The lists as stored, which another tab may have changed since this one
+   * last looked. A missing key is an empty queue: it was sent and emptied, or
+   * purged by a sign-out, elsewhere.
+   */
+  function stored(): Pick<QueueState, "pending" | "failed"> {
+    const value = storage.read(userId);
+    return isPersisted(value)
+      ? { pending: value.pending, failed: value.failed }
+      : { pending: [], failed: [] };
+  }
+
+  /**
+   * Every state change goes through here, so nothing can skip persistence.
+   *
+   * Once hydrated, the change is applied to the *stored* lists rather than to
+   * this tab's copy. Every tab writes the whole queue, so applying it to the
+   * copy let the last tab to write erase every change another tab had made
+   * since — three ticks in one tab, one in another, and the three were gone.
+   * Not after a write has failed, though: storage is then behind this copy,
+   * and the copy is the queue until a write lands again.
+   */
+  function commit(next: (state: QueueState) => QueueState): boolean {
+    const current = store.getState();
+    const shared = hydrated && inStep;
+    const updated = next(shared ? { ...current, ...stored() } : current);
     store.setState(updated, true);
-    persist(updated);
+    inStep = persist(updated);
+    return inStep;
   }
 
   /**
@@ -361,8 +397,6 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
     if (!op.holdMs) return 0;
     return Math.max(0, op.createdAt.getTime() + op.holdMs - now().getTime());
   }
-
-  let hydrated = false;
 
   /**
    * Load what is on the device, once.
@@ -537,6 +571,11 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
     setHousehold(id) {
       householdId = id;
       bindUnstamped();
+    },
+
+    sync() {
+      if (!hydrated || !inStep) return;
+      store.setState((state) => ({ ...state, ...stored() }), true);
     },
 
     holdRemainingMs(id) {
