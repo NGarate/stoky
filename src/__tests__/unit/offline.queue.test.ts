@@ -369,6 +369,28 @@ describe("room", () => {
     expect(queue.getState().full).toBe(true);
   });
 
+  it("stops saying it is full once there is room again", async () => {
+    const queue = open(async () => {});
+    for (let i = 0; i < MAX_PENDING; i += 1) queue.enqueue(tick());
+    queue.enqueue(tick());
+
+    // The signal came back and everything was sent; nothing new was made.
+    await queue.drain();
+
+    expect(queue.getState().pending).toHaveLength(0);
+    expect(queue.getState().full).toBe(false);
+  });
+
+  it("stops saying it is full when a change is taken back", () => {
+    const queue = open(async () => {});
+    const first = queue.enqueue(tick());
+    for (let i = 1; i < MAX_PENDING; i += 1) queue.enqueue(tick());
+    queue.enqueue(tick());
+
+    expect(first.ok && queue.cancel(first.id)).toBe(true);
+    expect(queue.getState().full).toBe(false);
+  });
+
   it("never evicts from the failed list to make room", async () => {
     const queue = open(async () => {
       throw refusal(403);

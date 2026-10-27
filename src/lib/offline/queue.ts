@@ -347,7 +347,11 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
     const current = store.getState();
     const shared = hydrated && !current.unsaved;
     const updated = next(shared ? { ...current, ...stored() } : current);
-    store.setState({ ...updated, unsaved: !persist(updated) }, true);
+    // "Full" is a fact about now. Set by a refusal, it stood until the next
+    // change was accepted, so a queue that had sent everything kept saying
+    // no more would fit.
+    const full = updated.full && updated.pending.length >= MAX_PENDING;
+    store.setState({ ...updated, full, unsaved: !persist(updated) }, true);
   }
 
   /**
