@@ -138,10 +138,9 @@ docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d postgre
   -c "DROP DATABASE IF EXISTS \"${TEST_DB_NAME}\";" \
   -c "CREATE DATABASE \"${TEST_DB_NAME}\";"
 
-echo "Ensuring required PostgreSQL extensions in ${TEST_DB_NAME}..."
-docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d "$TEST_DB_NAME" -v ON_ERROR_STOP=1 \
-  -c "CREATE EXTENSION IF NOT EXISTS \"pg_trgm\";" \
-  -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+# No extensions created here: the first migration creates them, and doing it
+# for it would let a migration that forgot one pass locally and fail only in
+# CI or on a first install (scripts/ci-in-image.sh says why that matters).
 
 export DATABASE_URL="$TEST_DATABASE_URL"
 export VALKEY_URL="${VALKEY_URL:-redis://localhost:6379}"
