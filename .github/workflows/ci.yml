@@ -544,7 +544,7 @@ jobs:
       # the condition. `cache` is explained at the gate below.
       - name: Scan image
         if: github.event.repository.private == false
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: stoky:scan
           format: sarif
@@ -552,6 +552,7 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           cache: ${{ github.ref_type != 'tag' }}
+          version: v0.76.1
 
       - name: Upload scan results
         uses: github/codeql-action/upload-sarif@c4dd10e44af883a891fe31ced449bcb4a6728b9b # v3.37.6
@@ -569,7 +570,7 @@ jobs:
       # instead: a planted binary or database would pass anything. Branch runs
       # keep the cache, which spares the database registry a download per run.
       - name: Fail on critical or high findings
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: stoky:scan
           format: table
@@ -577,6 +578,7 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           cache: ${{ github.ref_type != 'tag' }}
+          version: v0.76.1
 
   # ---------------------------------------------------------- image-publish --
   # The only job that waits for everything, and the only one that can ship.
@@ -809,7 +811,7 @@ jobs:
         id: image
         run: echo "name=${REGISTRY}/${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
       - name: Scan the pushed digest
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           # Never a copy in the local daemon: what the registry serves.
           TRIVY_IMAGE_SRC: remote

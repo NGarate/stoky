@@ -384,6 +384,13 @@ describe("the CI workflow's release path restores no cache", () => {
       expect(input(step, "cache", tag)).toBe("false");
     }
   });
+
+  // Unnamed, the scanner is trivy-action's default, which moves with the pin.
+  it("names one Trivy version in every scan", () => {
+    for (const step of using("aquasecurity/trivy-action")) {
+      expect(step.with?.version).toBe("v0.76.1");
+    }
+  });
 });
 
 // image-build's Trivy gate scans a build that is never pushed; on a tag the

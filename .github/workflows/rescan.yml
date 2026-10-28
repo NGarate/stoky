@@ -116,7 +116,7 @@ jobs:
       # category. `trivy-release-` keeps it apart from ci.yml's `trivy`, which
       # is master's image, so neither analysis replaces the other.
       - name: Scan for the report
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           TRIVY_IMAGE_SRC: remote
         with:
@@ -146,7 +146,7 @@ jobs:
       # gate that is always red tells nobody anything. Every other file of
       # every image, the rest of postgres included, is gated.
       - name: Fail on critical or high findings
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           TRIVY_IMAGE_SRC: remote
         with:
