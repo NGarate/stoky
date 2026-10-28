@@ -83,7 +83,7 @@ jobs:
       # credential just declined, which on a private repository is the
       # "could not read Username" the `changes` job ran into. The whole
       # history is under 8 MB.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -178,7 +178,7 @@ jobs:
       STOKY_SECRET: ci-only-not-a-real-secret
       STOKY_URLS: http://localhost:3000
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # The three suites inside the development image, for the reason the
@@ -299,7 +299,7 @@ jobs:
       # is the fix Playwright's own error message names.
       HOME: /root
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # The image ships browsers, not a general toolchain, and it has no
@@ -381,7 +381,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # `no-cache`: the job installs nothing, so the only thing setup-bun
@@ -425,7 +425,7 @@ jobs:
       contents: read
       actions: read # find the last successful run on master
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           # The whole history, so the base commit is already here and the
@@ -511,7 +511,7 @@ jobs:
       # succeeded, so the pipeline reported failure while shipping the image.
       actions: read
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
@@ -640,7 +640,7 @@ jobs:
             echo "::error::Release $RELEASE_TAG is already published; create a new version instead of replacing its image."
             exit 1
           fi
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
@@ -741,7 +741,7 @@ jobs:
     timeout-minutes: 10
     if: github.ref_type == 'tag' || github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # `no-cache` for the reason every job here downloads Bun on a tag. The
@@ -773,7 +773,7 @@ jobs:
       # Full history: release-assets.sh checks the notes' change list against
       # the commits since the previous release's tag, which a depth-1
       # checkout does not have. quality's checkout is full for the same call.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
