@@ -712,11 +712,15 @@ jobs:
         run: echo "name=${REGISTRY}/${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
       - name: Attest provenance
         if: github.event.repository.private == false
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ${{ steps.image.outputs.name }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+          # v4 would also file an artifact storage record, which needs
+          # `artifact-metadata: write` and exists only for organisations'
+          # repositories; this one is a user's.
+          create-storage-record: false
 
   # --------------------------------------------------------- release-images --
   # The bundle's PostgreSQL, Valkey and Traefik, as deploy/docker-compose.yml
@@ -907,7 +911,7 @@ jobs:
       # the same private-fork reason.
       - name: Attest the installation files
         if: github.event.repository.private == false
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
             ${{ runner.temp }}/release/docker-compose.yml
