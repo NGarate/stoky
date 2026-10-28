@@ -190,7 +190,7 @@ Verified against the files named in each row.
   and ships with the next release. The app image is named by `STOKY_VERSION`.
   `src/__tests__/unit/deployment.test.ts` fails if a service image loses its
   digest or names a floating major. Verified by running each pinned reference:
-  PostgreSQL 16.15, Valkey 8.1.10, Traefik 3.7.16.
+  PostgreSQL 16.15, Valkey 8.1.11, Traefik 3.7.16.
 - `no-new-privileges:true` on every service.
 - `cap_drop: [ALL]` on every service, with capabilities added back only where
   they are actually needed (Postgres for its data directory, Valkey for
