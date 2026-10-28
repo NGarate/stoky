@@ -8,7 +8,7 @@ import {
 import { matchReceiptItems } from "@/server/services/productMatcher";
 import { ReceiptStatus } from "@/generated/prisma/client";
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -19,8 +19,7 @@ describe("Service Performance & Error Handling Tests", () => {
   let cleanupDirs: string[] = [];
 
   beforeEach(async () => {
-    testDir = join(tmpdir(), `stoky-perf-test-${randomUUID()}`);
-    await mkdir(testDir, { recursive: true });
+    testDir = await mkdtemp(join(tmpdir(), "stoky-perf-test-"));
 
     const user = await prisma.user.create({
       data: {

@@ -6,7 +6,7 @@ import {
 } from "@/server/services/receiptParser";
 import { ReceiptStatus, MatchStatus } from "@/generated/prisma/client";
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { num } from "../utils/amount";
@@ -18,8 +18,7 @@ describe("Receipt Parser Service - Comprehensive", () => {
   let cleanupDirs: string[] = [];
 
   beforeEach(async () => {
-    testDir = join(tmpdir(), `stoky-parser-test-${randomUUID()}`);
-    await mkdir(testDir, { recursive: true });
+    testDir = await mkdtemp(join(tmpdir(), "stoky-parser-test-"));
 
     const user = await prisma.user.create({
       data: {

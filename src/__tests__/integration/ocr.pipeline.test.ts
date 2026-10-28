@@ -21,7 +21,7 @@ import { matchReceiptItems } from "@/server/services/productMatcher";
 import { failInterruptedReceipts } from "@/server/services/receipt-recovery";
 import { ReceiptStatus, MatchStatus } from "@/generated/prisma/client";
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { pngOf } from "../utils/png";
@@ -34,8 +34,7 @@ describe("OCR Pipeline Integration", () => {
   let cleanupDirs: string[] = [];
 
   beforeAll(async () => {
-    testDir = join(tmpdir(), `stoky-ocr-test-${randomUUID()}`);
-    await mkdir(testDir, { recursive: true });
+    testDir = await mkdtemp(join(tmpdir(), "stoky-ocr-test-"));
   });
 
   beforeEach(async () => {
