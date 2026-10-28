@@ -20,8 +20,10 @@ services:
     logging: *logging
     security_opt:
       - no-new-privileges:true
+    # The image's postgres user (70 on Alpine), so the entrypoint never runs
+    # as root and never steps down through gosu: no capability is needed.
+    user: "70:70"
     cap_drop: [ALL]
-    cap_add: [CHOWN, DAC_READ_SEARCH, FOWNER, SETGID, SETUID]
     deploy:
       resources:
         limits:

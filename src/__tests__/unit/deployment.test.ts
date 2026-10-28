@@ -15,7 +15,9 @@ interface Service {
   environment?: Record<string, string>;
   read_only?: boolean;
   tmpfs?: string[];
+  user?: string;
   cap_drop: string[];
+  cap_add?: string[];
   security_opt: string[];
   restart: string;
   deploy: {
@@ -159,6 +161,14 @@ describe("the downloadable installation", () => {
     expect(compose.services.traefik.read_only).toBe(true);
     expect(compose.services.app.tmpfs).toEqual(["/tmp", "/app/.next/cache"]);
     expect(compose.services.app.volumes).toContain("uploads:/app/uploads");
+  });
+
+  // As root the entrypoint steps down through gosu, which needs five
+  // capabilities back and is a Go binary carrying every stdlib advisory since
+  // the Go it was built with. Started as postgres, neither runs.
+  it("starts PostgreSQL as its own user, with no capability back", () => {
+    expect(compose.services.db.user).toBe("70:70");
+    expect(compose.services.db.cap_add).toBeUndefined();
   });
 
   it("bounds Valkey's memory below its container limit and evicts least-recently-used keys", () => {

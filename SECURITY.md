@@ -193,8 +193,14 @@ Verified against the files named in each row.
   PostgreSQL 16.15, Valkey 8.1.11, Traefik 3.7.16.
 - `no-new-privileges:true` on every service.
 - `cap_drop: [ALL]` on every service, with capabilities added back only where
-  they are actually needed (Postgres for its data directory, Valkey for
-  setgid/setuid, Traefik for `NET_BIND_SERVICE`).
+  they are actually needed (Valkey for setgid/setuid, Traefik for
+  `NET_BIND_SERVICE`). PostgreSQL needs none: it starts as the image's
+  `postgres` user (`user: "70:70"`), so its entrypoint never runs as root and
+  never steps down through `gosu`, the Go binary behind every PostgreSQL row
+  of the weekly re-scan. Verified on 2026-10-28 with the bundle itself: a new
+  database, the migrations, `pg_dump`/`pg_restore` through `docker compose
+  exec`, a restart, and a data directory first created by the root
+  entrypoint, which opens unchanged.
 - The app container runs with `read_only: true`. Writes are confined to the
   `uploads` volume plus tmpfs mounts for `/tmp` and `/app/.next/cache`.
 - Postgres and Valkey sit on an `internal: true` bridge network and publish **no
