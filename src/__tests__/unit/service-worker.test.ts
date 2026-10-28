@@ -439,8 +439,22 @@ describe("what an unlisted navigation keeps", () => {
   it("deletes it on sign-out as well", async () => {
     const worker = load(["none", "stoky-shell-v1", "someone-else"]);
 
-    await worker.fire("message", { data: "STOKY_FORGET" });
+    await worker.fire("message", {
+      origin: "https://stoky.example",
+      data: "STOKY_FORGET",
+    });
 
     expect(worker.deleted).toEqual(["none", "stoky-shell-v1"]);
+  });
+
+  it("ignores the same message from another origin", async () => {
+    const worker = load(["none", "stoky-shell-v1"]);
+
+    await worker.fire("message", {
+      origin: "https://elsewhere.example",
+      data: "STOKY_FORGET",
+    });
+
+    expect(worker.deleted).toEqual([]);
   });
 });

@@ -256,6 +256,8 @@ self.addEventListener("fetch", (event) => {
  * in, and embeds the session's expiry.
  */
 self.addEventListener("message", (event) => {
+  // Only this origin's pages can message its worker; the check states it.
+  if (event.origin !== self.location.origin) return;
   if (event.data !== "STOKY_FORGET") return;
   event.waitUntil(
     (async () => {
