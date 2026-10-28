@@ -16,7 +16,6 @@ describe("Service Performance & Error Handling Tests", () => {
   let testHouseholdId: string;
   let testUserId: string;
   let testDir: string;
-  let cleanupDirs: string[] = [];
 
   beforeEach(async () => {
     testDir = await mkdtemp(join(tmpdir(), "stoky-perf-test-"));
@@ -42,6 +41,7 @@ describe("Service Performance & Error Handling Tests", () => {
 
   afterEach(async () => {
     await terminateWorker();
+    await rm(testDir, { recursive: true, force: true });
 
     const receipts = await prisma.receipt.findMany({
       where: { householdId: testHouseholdId },
@@ -67,15 +67,6 @@ describe("Service Performance & Error Handling Tests", () => {
     await prisma.household.delete({
       where: { id: testHouseholdId },
     });
-
-    for (const dir of cleanupDirs) {
-      try {
-        await rm(dir, { recursive: true, force: true });
-      } catch {
-        // Ignore cleanup errors
-      }
-    }
-    cleanupDirs = [];
   });
 
   describe("Performance Benchmarks", () => {
@@ -117,7 +108,6 @@ producto de prueba 1 5,00
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -145,7 +135,6 @@ producto de prueba 1 5,00
     it("should measure concurrent receipt processing", async () => {
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const ocrText = `TIENDA
 Fecha: 15/03/2024
@@ -234,7 +223,6 @@ TOTAL: 1000,00 EUR`;
     it("should handle missing image file gracefully", async () => {
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "non-existent.jpg");
 
@@ -263,7 +251,6 @@ TOTAL: 1000,00 EUR`;
     it("should handle corrupt image data", async () => {
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "corrupt.jpg");
       await writeFile(imagePath, Buffer.from("not-a-valid-image"));
@@ -300,7 +287,6 @@ Leche 1,25
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -331,7 +317,6 @@ Leche 1,25
     it("should handle non-image file types", async () => {
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.txt");
       await writeFile(imagePath, "This is a text file, not an image");
@@ -361,7 +346,6 @@ Leche 1,25
     it("should handle empty file uploads", async () => {
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "empty.jpg");
       await writeFile(imagePath, Buffer.from(""));
@@ -446,7 +430,6 @@ Leche 1,25
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -475,7 +458,6 @@ Leche 1,25
     it("should handle multiple simultaneous receipts", async () => {
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const ocrText = `TIENDA
 Fecha: 15/03/2024

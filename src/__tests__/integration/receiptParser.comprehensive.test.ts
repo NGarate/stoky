@@ -15,7 +15,6 @@ describe("Receipt Parser Service - Comprehensive", () => {
   let testHouseholdId: string;
   let testUserId: string;
   let testDir: string;
-  let cleanupDirs: string[] = [];
 
   beforeEach(async () => {
     testDir = await mkdtemp(join(tmpdir(), "stoky-parser-test-"));
@@ -40,6 +39,7 @@ describe("Receipt Parser Service - Comprehensive", () => {
   });
 
   afterEach(async () => {
+    await rm(testDir, { recursive: true, force: true });
     const receipts = await prisma.receipt.findMany({
       where: { householdId: testHouseholdId },
     });
@@ -64,15 +64,6 @@ describe("Receipt Parser Service - Comprehensive", () => {
     await prisma.household.delete({
       where: { id: testHouseholdId },
     });
-
-    for (const dir of cleanupDirs) {
-      try {
-        await rm(dir, { recursive: true, force: true });
-      } catch {
-        // Ignore cleanup errors
-      }
-    }
-    cleanupDirs = [];
   });
 
   describe("Receipt Format Variations", () => {
@@ -571,7 +562,6 @@ Pan 0,95
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -606,7 +596,6 @@ Pan 0,95
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -639,7 +628,6 @@ Leche semi desnatada 1L 1,25
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -718,7 +706,6 @@ Pan 0,95
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));

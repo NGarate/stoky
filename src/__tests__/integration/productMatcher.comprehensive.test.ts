@@ -18,7 +18,6 @@ describe("Product Matcher Service - Comprehensive", () => {
   let testHouseholdId: string;
   let testUserId: string;
   let testDir: string;
-  let cleanupDirs: string[] = [];
 
   beforeEach(async () => {
     testDir = await mkdtemp(join(tmpdir(), "stoky-matcher-test-"));
@@ -43,6 +42,7 @@ describe("Product Matcher Service - Comprehensive", () => {
   });
 
   afterEach(async () => {
+    await rm(testDir, { recursive: true, force: true });
     const receipts = await prisma.receipt.findMany({
       where: { householdId: testHouseholdId },
     });
@@ -67,15 +67,6 @@ describe("Product Matcher Service - Comprehensive", () => {
     await prisma.household.delete({
       where: { id: testHouseholdId },
     });
-
-    for (const dir of cleanupDirs) {
-      try {
-        await rm(dir, { recursive: true, force: true });
-      } catch {
-        // Ignore cleanup errors
-      }
-    }
-    cleanupDirs = [];
   });
 
   /** Parse `lines` as a receipt of this household's and match it. */
@@ -119,7 +110,6 @@ leche semi desnatada 1,25
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -255,7 +245,6 @@ yogur desnatado natural 1,80
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -299,7 +288,6 @@ producto similar 1,00
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -339,7 +327,6 @@ leche entera 1,25
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -437,7 +424,6 @@ chocolat con leche 2,50
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -480,7 +466,6 @@ cafe descafeinado 3,50
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -523,7 +508,6 @@ leche entera 1,25
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -562,7 +546,6 @@ aceite oliva virgen extra 5,50
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -607,7 +590,6 @@ pan de molde integral 1,50
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -649,7 +631,6 @@ leche entera 1,25
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -693,7 +674,6 @@ coca cola 1,80
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -747,7 +727,6 @@ pan 0,95
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -790,7 +769,6 @@ producto desconocido xyz 5,00
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -846,7 +824,6 @@ leche 1,25
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -901,7 +878,6 @@ leche 1,25
     it("should handle empty receipt items gracefully", async () => {
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));

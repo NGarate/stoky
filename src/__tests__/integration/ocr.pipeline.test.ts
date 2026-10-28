@@ -3,6 +3,7 @@ import {
   it,
   expect,
   beforeEach,
+  afterAll,
   afterEach,
   beforeAll,
 } from "bun:test";
@@ -31,10 +32,13 @@ describe("OCR Pipeline Integration", () => {
   let testHouseholdId: string;
   let testUserId: string;
   let testDir: string;
-  let cleanupDirs: string[] = [];
 
   beforeAll(async () => {
     testDir = await mkdtemp(join(tmpdir(), "stoky-ocr-test-"));
+  });
+
+  afterAll(async () => {
+    await rm(testDir, { recursive: true, force: true });
   });
 
   beforeEach(async () => {
@@ -88,15 +92,6 @@ describe("OCR Pipeline Integration", () => {
     await prisma.household.delete({
       where: { id: testHouseholdId },
     });
-
-    for (const dir of cleanupDirs) {
-      try {
-        await rm(dir, { recursive: true, force: true });
-      } catch {
-        // Ignore cleanup errors
-      }
-    }
-    cleanupDirs = [];
   });
 
   describe("Complete Pipeline - Valid Receipt", () => {
@@ -116,7 +111,6 @@ Gracias por su compra`;
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imageBuffer = Buffer.from("fake-image-data");
       const imagePath = join(receiptDir, "receipt.jpg");
@@ -202,7 +196,6 @@ Leche semi desnatada 1,25
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -263,7 +256,6 @@ Leche desnatada 1,25
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -312,7 +304,6 @@ Producto completamente diferente xyz123 5,00
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -353,7 +344,6 @@ Producto completamente diferente xyz123 5,00
     it("fails a receipt OCR read no text from, instead of leaving it PARSED", async () => {
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.png");
       await writeFile(imagePath, pngOf(60, 40));
@@ -381,7 +371,6 @@ Producto completamente diferente xyz123 5,00
     it("hands back the text and moves to PARSED when OCR reads some", async () => {
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.png");
       await writeFile(imagePath, pngOf(60, 40));
@@ -411,7 +400,6 @@ Producto completamente diferente xyz123 5,00
     it("moves to FAILED when recognition runs out of time", async () => {
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.png");
       await writeFile(imagePath, pngOf(60, 40));
@@ -457,7 +445,6 @@ Producto completamente diferente xyz123 5,00
     it("should mark receipt as FAILED on OCR error", async () => {
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "non-existent.jpg");
 
@@ -600,7 +587,6 @@ Huevos 2,50
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -640,7 +626,6 @@ Huevos 2,50
     it("should update receipt status through pipeline stages", async () => {
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
@@ -695,7 +680,6 @@ Leche 1,25
 
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
 
       const imagePath = join(receiptDir, "receipt.jpg");
       await writeFile(imagePath, Buffer.from("fake"));
