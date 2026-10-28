@@ -522,7 +522,7 @@ jobs:
       # this same commit from these layers. A tag's image-publish does not read
       # them — see there.
       - name: Build for scanning
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           target: production
@@ -679,7 +679,7 @@ jobs:
       # nothing new. Neither on a tag: see the comment above this job.
       - name: Push
         id: push
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           target: production
