@@ -413,7 +413,9 @@ and PostgreSQL (gosu left out, measured unreachable) and red for
 ships a fixed Traefik ([Releasing](RELEASING.md#after-publication-weekly-re-scans)).
 On 2026-10-22 `scripts/scan-bundle-images.sh` found `v3.7.14`, then on
 `master`, red with five, and `traefik:v3.7.16` and the rebuilt
-`postgres:16.15-alpine` clean; `master` names those two since.
+`postgres:16.15-alpine` clean; `master` names those two since. On 2026-10-28
+`postgres:16.15-alpine` was rebuilt upstream (index `sha256:0cefaabd…`) and
+`master` takes that build, clean under the same scan.
 
 `bun audit --audit-level moderate` reports no vulnerabilities across 598 packages (2026-10-25, after taking happy-dom 21.0.4, fast-uri 3.1.9 and zod 4; before them it reported two high advisories and two moderate ones, three of them published on 2026-10-23, and zod's had no 3.x fix).
 Trivy 0.69.3 (the CI version), with a fresh 2026-09-25 database, scans the Bun-only
