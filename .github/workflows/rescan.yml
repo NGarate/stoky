@@ -112,6 +112,26 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.images.outputs.images) }}
     steps:
+      # postgres's gosu is built with an old Go on purpose, and Trivy matches
+      # every stdlib advisory since against it. govulncheck, the judge gosu's
+      # author asks for, decides per advisory whether the binary reaches it;
+      # scripts/gosu-vex.sh turns that into a VEX document the report applies,
+      # so what remains is what gosu runs (and what govulncheck cannot judge).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: matrix.service == 'db'
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        if: matrix.service == 'db'
+        with:
+          bun-version-file: .bun-version
+          no-cache: true
+      - name: Say which of gosu's advisories it reaches
+        if: matrix.service == 'db'
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: sh scripts/gosu-vex.sh "$IMAGE" "$RUNNER_TEMP/gosu.openvex.json"
+
       # The report: every fixable finding, uploaded per image under its own
       # category. `trivy-release-` keeps it apart from ci.yml's `trivy`, which
       # is master's image, so neither analysis replaces the other.
@@ -119,6 +139,8 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           TRIVY_IMAGE_SRC: remote
+          # Empty for the other images, which Trivy reads as no VEX at all.
+          TRIVY_VEX: ${{ matrix.service == 'db' && format('{0}/gosu.openvex.json', runner.temp) || '' }}
         with:
           image-ref: ${{ matrix.image }}
           format: sarif
@@ -137,7 +159,8 @@ jobs:
 
       # The gate, which is what notifies. One file is left out of it, and stays
       # in the report above: postgres's /usr/local/bin/gosu, a Go program the
-      # entrypoint runs once as root, to re-run itself as the postgres user.
+      # entrypoint runs once as root, to re-run itself as the postgres user
+      # (bundles from 2026-10-28 start as that user, and never run it).
       # Measured 2026-10-12 on postgres:16-alpine, all 25 of its fixable
       # CRITICAL/HIGH findings are Go standard-library advisories in packages
       # gosu does not link (net, net/http, crypto/tls, crypto/x509, net/url,

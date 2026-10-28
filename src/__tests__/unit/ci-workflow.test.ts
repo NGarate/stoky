@@ -919,12 +919,39 @@ describe("the weekly rescan of the published release", () => {
     const [, scan] = scanJob();
     expect(scan.if).toBeUndefined();
     expect(scan["continue-on-error"]).toBeUndefined();
+    // The report alone may read a VEX document (the case below).
     const trivyEnv = [rescan.env, scan.env, ...trivySteps.map((s) => s.env)]
       .flatMap((env) => Object.keys(env ?? {}))
       .filter(
         (name) => name.startsWith("TRIVY_") && name !== "TRIVY_IMAGE_SRC",
       );
-    expect(trivyEnv).toEqual([]);
+    expect(trivyEnv).toEqual(["TRIVY_VEX"]);
+    expect(Object.keys(report?.env ?? {})).toContain("TRIVY_VEX");
+  });
+
+  // gosu's findings are annotated, never skipped: the VEX document says which
+  // advisories govulncheck finds unreachable, and is written in the same job
+  // from the image being scanned, for postgres's job only.
+  it("annotates only postgres's report, with govulncheck's verdict on its gosu", () => {
+    const report = trivySteps.find((s) => s.with?.format === "sarif");
+    const vex = String(report?.env?.TRIVY_VEX);
+    expect(vex).toBe(
+      "${{ matrix.service == 'db' && format('{0}/gosu.openvex.json', runner.temp) || '' }}",
+    );
+
+    const [, scan] = scanJob();
+    const stepsOfScan = scan.steps ?? [];
+    const writes = stepsOfScan.findIndex(
+      (s) => typeof s.run === "string" && s.run.includes("scripts/gosu-vex.sh"),
+    );
+    expect(writes).toBeGreaterThanOrEqual(0);
+    expect(writes).toBeLessThan(stepsOfScan.indexOf(report!));
+    const writer = stepsOfScan[writes];
+    expect(writer.if).toBe("matrix.service == 'db'");
+    expect(String(writer.run).trim()).toBe(
+      'sh scripts/gosu-vex.sh "$IMAGE" "$RUNNER_TEMP/gosu.openvex.json"',
+    );
+    expect(writer.env?.IMAGE).toBe("${{ matrix.image }}");
   });
 
   // The published copy of a release's notes drifted from its file once (the

@@ -1480,7 +1480,9 @@ Verified against the files named in each row.
   `contents: read`; only its scan job adds `security-events: write` and
   `actions: read` for the upload. The gate leaves out postgres's
   `/usr/local/bin/gosu`, whose 25 findings on 2026-10-12 were all in Go
-  packages the binary does not link; the report keeps them. Before this, a
+  packages the binary does not link; the report keeps them, annotated by
+  govulncheck's verdict on the binary through `scripts/gosu-vex.sh`, so only
+  what gosu reaches, or what govulncheck cannot judge, stands open. Before this, a
   release was scanned once and an advisory published later reached nobody until
   the next push. Neither scan sees dependencies compiled into the `.next` bundle
   or the Bun binary itself. [Releasing](docs/RELEASING.md#after-publication-weekly-re-scans)

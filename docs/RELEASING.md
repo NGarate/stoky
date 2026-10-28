@@ -293,7 +293,16 @@ job per image uploads the full report to code scanning under
 The gate leaves out one file, postgres's `/usr/local/bin/gosu`; the report keeps
 it. Measured on 2026-10-12, its 25 findings were all Go standard-library
 advisories in packages the binary does not link, so gating on it would keep the
-run red with nothing to act on.
+run red with nothing to act on. Since 2026-10-28 the report is annotated
+rather than raw: `scripts/gosu-vex.sh` copies gosu out of the image being
+scanned, runs `govulncheck -mode=binary` on it (pinned, in a pinned Go image)
+and hands Trivy the verdict as an OpenVEX document, so an advisory the binary
+never reaches is marked not affected and one it reaches stays. On that day it
+took postgres:16.15-alpine's gosu 1.19 from 61 findings to 3: GO-2026-6686 in
+`moby/sys/user`, reachable and fixed in gosu 1.20, and two Windows-only
+advisories (`x/sys/windows`, `os.Root` junctions) govulncheck leaves out for a
+Linux binary without writing a statement. Releases from then on also start
+PostgreSQL as its own user, so gosu is never run at all.
 
 Run it by hand after changing it, or to check a release on demand:
 
