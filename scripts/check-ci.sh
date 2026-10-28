@@ -62,15 +62,15 @@ ACTIONLINT_IMAGE="rhysd/actionlint:${ACTIONLINT_VERSION}@sha256:b1934ee5f1c50961
 # From actionlint_1.7.12_checksums.txt on the GitHub release, linux_amd64.
 ACTIONLINT_SHA256="8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
 
-ZIZMOR_VERSION="1.16.3"
-# `docker buildx imagetools inspect ghcr.io/zizmorcore/zizmor:1.16.3` — the
+ZIZMOR_VERSION="1.31.1"
+# `docker buildx imagetools inspect ghcr.io/zizmorcore/zizmor:1.31.1` — the
 # index, not a per-platform manifest.
-ZIZMOR_IMAGE="ghcr.io/zizmorcore/zizmor:${ZIZMOR_VERSION}@sha256:f09cee55087d54e7a162fc255ffe82ef942f68e683f967c8a6471ffe35e7ec64"
+ZIZMOR_IMAGE="ghcr.io/zizmorcore/zizmor:${ZIZMOR_VERSION}@sha256:42d409dbb851d4c5d35a058cf042b828bea1e3f2884378c526eb0974780e18d9"
 # The release publishes no checksum file. This is the `digest` GitHub records
 # for the x86_64-unknown-linux-gnu asset
-# (`gh api repos/zizmorcore/zizmor/releases/tags/v1.16.3`), and a download
-# hashed to it on 2026-10-12.
-ZIZMOR_SHA256="f0070985e94dd7b29e30abe249f6c7b2f14078c35a8f2de78e2d6ce89de0c132"
+# (`gh api repos/zizmorcore/zizmor/releases/tags/v1.31.1`), and a download
+# hashed to it on 2026-10-28.
+ZIZMOR_SHA256="d185f726bdaf92df78273217dfdd24ebcd6b0ef48cf3ce776ff5762b6e138c99"
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"

@@ -1374,7 +1374,7 @@ Verified against the files named in each row.
   [Release deployment](#release-deployment--deploydocker-composeyml)).
 - **The workflows are audited for security before anything is published.**
   `scripts/check-ci.sh`, the first step of the `quality` job (which
-  `image-publish` needs) and part of `check:all`, runs zizmor 1.16.3 over
+  `image-publish` needs) and part of `check:all`, runs zizmor 1.31.1 over
   `.github/` (both workflows and `dependabot.yml`): template injection, credentials persisted in the
   checkout, caches a release path restores, dangerous triggers, Dependabot
   without a cooldown. It comes from `ghcr.io/zizmorcore/zizmor` pinned by
