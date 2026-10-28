@@ -126,7 +126,7 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           cache: false
-          version: v0.69.3
+          version: v0.76.1
 
       - name: Upload the report
         if: always() && needs.images.outputs.private == 'false'
@@ -157,7 +157,7 @@ jobs:
           ignore-unfixed: true
           skip-files: usr/local/bin/gosu
           cache: false
-          version: v0.69.3
+          version: v0.76.1
 
   # ------------------------------------------------------------------- notes --
   # Every published release's notes on GitHub against docs/releases/<tag>.md,

@@ -2,7 +2,7 @@
 
 # Scans the release bundle's service images — PostgreSQL, Valkey, Traefik, as
 # deploy/docker-compose.yml names them — with the release gate's scanner and
-# its rule: Trivy 0.69.3, fixable CRITICAL or HIGH fails, read from the
+# its rule: Trivy 0.76.1, fixable CRITICAL or HIGH fails, read from the
 # registry, postgres's gosu left out (RELEASING.md, weekly re-scans, has the
 # measurement behind that one file).
 #
@@ -37,11 +37,11 @@
 
 set -euo pipefail
 
-TRIVY_VERSION="0.69.3"
-# `docker buildx imagetools inspect aquasec/trivy:0.69.3` — the index, not a
+TRIVY_VERSION="0.76.1"
+# `docker buildx imagetools inspect aquasec/trivy:0.76.1` — the index, not a
 # per-platform manifest. ci-workflow.test.ts holds the version to the one
 # ci.yml's release gate and rescan.yml pass to trivy-action.
-TRIVY_IMAGE="aquasec/trivy:${TRIVY_VERSION}@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c"
+TRIVY_IMAGE="aquasec/trivy:${TRIVY_VERSION}@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c"
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"

@@ -472,7 +472,7 @@ describe("the CI workflow's release scans the digest it promotes", () => {
     expect(scan.with?.severity).toBe("CRITICAL,HIGH");
     expect(String(scan.with?.["ignore-unfixed"])).toBe("true");
     expect(String(scan.with?.cache)).toBe("false");
-    expect(scan.with?.version).toBe("v0.69.3");
+    expect(scan.with?.version).toBe("v0.76.1");
   });
 });
 
@@ -868,7 +868,7 @@ describe("the weekly rescan of the published release", () => {
     expect(trivySteps).toHaveLength(2);
     for (const step of trivySteps) {
       expect(String(step.with?.cache)).toBe("false");
-      expect(step.with?.version).toBe("v0.69.3");
+      expect(step.with?.version).toBe("v0.76.1");
       expect(step.env?.TRIVY_IMAGE_SRC).toBe("remote");
       expect(step.with?.["image-ref"]).toBe("${{ matrix.image }}");
     }

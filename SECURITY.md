@@ -1394,7 +1394,7 @@ Verified against the files named in each row.
 - **A release's version tag names only a scanned digest.** The scanned build is
   never pushed: the published image is a second build, and on a tag a clean
   one, so the two digests differ. `release-draft` scans the pushed digest from
-  the registry with the same gate (Trivy 0.69.3 pinned, CRITICAL/HIGH,
+  the registry with the same gate (Trivy 0.76.1 pinned, CRITICAL/HIGH,
   `ignore-unfixed`, no Actions cache) before it retags it as the version.
   `latest` and `sha-` rely on the first build's scan. This catches a known CVE
   that only the shipped build carries; it is not a defence against a poisoned
@@ -1468,7 +1468,7 @@ Verified against the files named in each row.
   (`.github/workflows/rescan.yml`, Mondays and by hand). It downloads that
   release's `docker-compose.yml` and scans every image Compose resolves from it
   — the application at its digest, PostgreSQL, Valkey and Traefik — with
-  `release-draft`'s scanner and gate (Trivy 0.69.3, from the registry, no Actions
+  `release-draft`'s scanner and gate (Trivy 0.76.1, from the registry, no Actions
   cache, fixable CRITICAL/HIGH), uploading one SARIF report per image and failing
   the run so the failure reaches the maintainer. The workflow holds
   `contents: read`; only its scan job adds `security-events: write` and
@@ -1483,7 +1483,7 @@ Verified against the files named in each row.
 - **A release's service images are scanned before its draft exists.** On a
   tag, `ci.yml`'s `release-images` job runs `scripts/scan-bundle-images.sh`
   over the PostgreSQL, Valkey and Traefik images `deploy/docker-compose.yml`
-  names, with the same rule (Trivy 0.69.3 pinned by digest, from the registry,
+  names, with the same rule (Trivy 0.76.1 pinned by digest, from the registry,
   no cache, fixable CRITICAL/HIGH, gosu the only skip), and `release-draft`
   needs it: a red bundle is never promoted or packaged. It runs on pull
   requests too, as information. Before it, these images were first scanned by

@@ -820,7 +820,7 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           cache: false
-          version: v0.69.3
+          version: v0.76.1
       # Run the downloaded registry image, including its migrations, against
       # new volumes. This checks the actual publication, beyond the build and
       # source tests. Public DNS/certificate issuance is an operator check.

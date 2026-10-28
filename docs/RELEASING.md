@@ -116,7 +116,7 @@ attestation and anonymous-pull steps below depend on that (see
    builds operators will pull. `src/__tests__/unit/deployment.test.ts` fails if
    a service image loses its digest or goes back to a bare major tag.
 
-   Then scan them with the release gate's scanner and rule — Trivy 0.69.3,
+   Then scan them with the release gate's scanner and rule — Trivy 0.76.1,
    pinned by digest and run in its own container, fixable CRITICAL or HIGH
    fails, postgres's gosu left out:
 
@@ -287,7 +287,7 @@ answers 404 while every release is an alpha), downloads that release's
 `docker-compose.yml`, and scans each image `docker compose config` resolves from
 it — the application at the digest the file names (by tag for bundles up to
 `v0.1.0-alpha.3`), and PostgreSQL, Valkey and Traefik as named. The scanner is
-`release-draft`'s: Trivy 0.69.3 pinned, from the registry, no Actions cache. One
+`release-draft`'s: Trivy 0.76.1 pinned, from the registry, no Actions cache. One
 job per image uploads the full report to code scanning under
 `trivy-release-<service>` and then fails on a fixable CRITICAL or HIGH finding.
 The gate leaves out one file, postgres's `/usr/local/bin/gosu`; the report keeps
