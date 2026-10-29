@@ -2695,6 +2695,14 @@ happy-dom enforces that type exactly as a browser does, and a bare `<div>`
 would have let every torch assertion pass vacuously. Verified failing first:
 7 of the 16 go red with the component reverted.
 
+**Later (2026-10-29): the wrapper is gone.** The scanner now drives
+`@zxing/browser` itself and renders its own `<video>`, so the torch reads the
+track straight off a ref and the workaround above no longer exists. Owning the
+decode also means owning the stream: the component stops it after the first
+barcode, when scanning turns off, on unmount, and when the permission prompt
+is answered after the scanner has already gone — each pinned by a test in
+`Scanner.test.tsx` that goes red with its `stop()` removed.
+
 ---
 
 ### ✅ DEBT-3: OpenFoodFacts service uses in-memory cache

@@ -46,6 +46,8 @@ const RUNTIME_WITHOUT_IMPORT: Record<string, string> = {
   prisma: "the image runs `prisma migrate deploy` from /opt/prisma on start",
   "react-dom":
     "Next renders with it; it is a peer of next, not an import of ours",
+  "@zxing/library":
+    "the barcode decoders @zxing/browser runs; a required peer, not an import of ours",
 };
 
 /** Source files that end up in what ships: `src/` outside the test suite, and the Next config. */

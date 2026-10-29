@@ -8,44 +8,63 @@ import {
   mock,
   spyOn,
 } from "bun:test";
-import { screen, cleanup, act } from "@testing-library/react";
+import { screen, cleanup, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
 import { minimumHeight } from "../setup/tailwind";
 
-type ScannerProps = {
-  doScan: boolean;
-  onSuccess: (barcode: string) => void;
-  onError: (error?: Error) => void;
-  onLoad?: () => void;
-};
+type DecodeCallback = (
+  result: { getText: () => string } | undefined,
+  error: Error | undefined,
+  controls: { stop: () => void },
+) => void;
 
-// Handles onto the props the component hands the third-party scanner, so a
-// test can simulate a scan, a camera failure, or the feed becoming ready.
-let lastScannerProps: ScannerProps | undefined;
+/**
+ * Handles onto the decode zxing was asked for, so a test can simulate a scan,
+ * a camera failure, or the feed becoming ready.
+ */
+let decode:
+  | {
+      constraints: MediaStreamConstraints;
+      callback: DecodeCallback;
+      reject: (error?: Error) => void;
+      open: () => void;
+      stop: ReturnType<typeof mock>;
+    }
+  | undefined;
+let decodeCalls = 0;
 
-/** The stream the mocked library hangs off its <video>, as a browser would. */
+/** The stream zxing hangs off the <video>, as a browser would. */
 let currentStream: unknown;
 
 /**
- * The library renders `<video ref={...} {...videoProps} />` and hands the
- * element to zxing, which sets `srcObject`. The component reaches that element
- * through its own wrapper, so the mock has to be a real <video> carrying a real
- * `srcObject` — a bare div would let every torch assertion pass vacuously.
+ * zxing opens the camera into the component's own <video> and sets its
+ * `srcObject`, which is where the torch is read from — so the mock does the
+ * same with a real `MediaStream`; a bare object would let every torch
+ * assertion pass vacuously.
  */
-mock.module("@thewirv/react-barcode-scanner", () => ({
-  BarcodeScanner: (props: ScannerProps) => {
-    lastScannerProps = props;
-    return (
-      <video
-        data-testid="barcode-scanner"
-        ref={(node: HTMLVideoElement | null) => {
-          if (node) node.srcObject = currentStream as MediaStream;
-        }}
-      >
-        <track kind="captions" />
-      </video>
-    );
+mock.module("@zxing/browser", () => ({
+  BrowserMultiFormatReader: class {
+    decodeFromConstraints(
+      constraints: MediaStreamConstraints,
+      video: HTMLVideoElement,
+      callback: DecodeCallback,
+    ) {
+      decodeCalls += 1;
+      video.srcObject = currentStream as MediaStream | null;
+      const stop = mock(() => {});
+      // Pending until a test opens or refuses the camera, as the permission
+      // prompt holds it in a browser.
+      return new Promise((resolve, reject) => {
+        decode = {
+          constraints,
+          callback,
+          reject,
+          open: () => resolve({ stop }),
+          stop,
+        };
+      });
+    }
   },
 }));
 
@@ -81,15 +100,34 @@ function stubCamera({
   return { applyConstraints, track };
 }
 
-/** No camera at all — the feed never arrives, so `onLoad` never fires. */
+/** No camera at all — the feed never arrives, so `loadeddata` never fires. */
 function stubNoCamera() {
   currentStream = null;
 }
 
-/** What the library does once the feed has data. */
+/** What the <video> does once the feed has data. */
 function feedReady() {
+  fireEvent.loadedData(screen.getByTestId("barcode-scanner"));
+}
+
+/** zxing finding a barcode in a frame. */
+function scan(barcode: string) {
   act(() => {
-    lastScannerProps?.onLoad?.();
+    decode?.callback({ getText: () => barcode }, undefined, decode);
+  });
+}
+
+/** The camera opening — the decode promise resolves with its controls. */
+async function cameraOpens() {
+  await act(async () => {
+    decode?.open();
+  });
+}
+
+/** The camera refusing to open — the decode promise rejects. */
+async function cameraRefuses(error?: Error) {
+  await act(async () => {
+    decode?.reject(error);
   });
 }
 
@@ -109,7 +147,8 @@ function stubInsecureContext() {
 const { BarcodeScanner } = await import("@/components/barcode/Scanner");
 
 beforeEach(() => {
-  lastScannerProps = undefined;
+  decode = undefined;
+  decodeCalls = 0;
   stubCamera({ torch: false });
   Object.defineProperty(window, "isSecureContext", {
     value: true,
@@ -136,32 +175,73 @@ describe("BarcodeScanner", () => {
     ).toBeInTheDocument();
   });
 
-  it("tells the underlying scanner to scan", () => {
+  it("asks for the rear camera, without the microphone", () => {
     renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
-    expect(lastScannerProps?.doScan).toBe(true);
+    expect(decode?.constraints).toEqual({
+      audio: false,
+      video: { facingMode: "environment" },
+    });
   });
 
   it("reports a scanned barcode to onScan", () => {
     const onScan = mock((_barcode: string) => {});
     renderWithIntl(<BarcodeScanner onScan={onScan} />);
 
-    act(() => {
-      lastScannerProps?.onSuccess("8410000000123");
-    });
+    scan("8410000000123");
 
     expect(onScan).toHaveBeenCalledWith("8410000000123");
   });
 
-  it("surfaces a camera error and forwards it to onError", () => {
+  it("reports one barcode and lets go of the camera, not one per frame", () => {
+    const onScan = mock((_barcode: string) => {});
+    renderWithIntl(<BarcodeScanner onScan={onScan} />);
+
+    // zxing calls back on every frame; frames without a barcode carry an error.
+    act(() => {
+      decode?.callback(undefined, new Error("NotFoundException"), decode);
+    });
+    scan("8410000000123");
+    scan("8410000000123");
+
+    expect(onScan).toHaveBeenCalledTimes(1);
+    expect(decode?.stop).toHaveBeenCalled();
+  });
+
+  it("does not reopen the camera when the page re-renders", () => {
+    const { rerender } = renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+    // The scan page hands a fresh handler on every render.
+    rerender(<BarcodeScanner onScan={() => {}} />);
+
+    expect(decodeCalls).toBe(1);
+  });
+
+  it("releases the camera when scanning stops", async () => {
+    const { rerender } = renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+    await cameraOpens();
+
+    rerender(<BarcodeScanner isScanning={false} onScan={() => {}} />);
+
+    expect(decode?.stop).toHaveBeenCalled();
+  });
+
+  it("releases a camera that opens only after the scanner has gone", async () => {
+    // Left on the permission prompt, then navigated away: the stream arrives
+    // with nobody to stop it.
+    const { unmount } = renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+    unmount();
+    await cameraOpens();
+
+    expect(decode?.stop).toHaveBeenCalled();
+  });
+
+  it("surfaces a camera error and forwards it to onError", async () => {
     const onError = mock((_error: Error) => {});
     const consoleError = spyOn(console, "error").mockImplementation(() => {});
     renderWithIntl(<BarcodeScanner onScan={() => {}} onError={onError} />);
 
     const failure = new DOMException("Permission denied", "NotAllowedError");
-    act(() => {
-      lastScannerProps?.onError(failure);
-    });
+    await cameraRefuses(failure);
 
     expect(
       screen.getByText("No se ha podido usar la cámara"),
@@ -176,15 +256,13 @@ describe("BarcodeScanner", () => {
    * for developers. It was shown verbatim: "Permission denied" in the middle
    * of a Spanish screen, with no word on how to give the permission back.
    */
-  it("says what a denied permission means, in the catalogue's words", () => {
+  it("says what a denied permission means, in the catalogue's words", async () => {
     const consoleError = spyOn(console, "error").mockImplementation(() => {});
     renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
-    act(() => {
-      lastScannerProps?.onError(
-        new DOMException("Permission denied", "NotAllowedError"),
-      );
-    });
+    await cameraRefuses(
+      new DOMException("Permission denied", "NotAllowedError"),
+    );
 
     expect(
       screen.getByText(/Permite el acceso a la cámara para este sitio/),
@@ -194,15 +272,13 @@ describe("BarcodeScanner", () => {
     consoleError.mockRestore();
   });
 
-  it("says when there is no camera at all", () => {
+  it("says when there is no camera at all", async () => {
     const consoleError = spyOn(console, "error").mockImplementation(() => {});
     renderWithIntl(<BarcodeScanner onScan={() => {}} />, { locale: "en" });
 
-    act(() => {
-      lastScannerProps?.onError(
-        new DOMException("Requested device not found", "NotFoundError"),
-      );
-    });
+    await cameraRefuses(
+      new DOMException("Requested device not found", "NotFoundError"),
+    );
 
     expect(
       screen.getByText(/No camera was found on this device/),
@@ -212,18 +288,16 @@ describe("BarcodeScanner", () => {
     consoleError.mockRestore();
   });
 
-  it("keeps the explanation once the page stops scanning because of it", () => {
+  it("keeps the explanation once the page stops scanning because of it", async () => {
     // The scan page answers a camera error by turning scanning off, and this
     // component's "off" branch returned before the error panel — so the
     // explanation was set and never seen.
     const consoleError = spyOn(console, "error").mockImplementation(() => {});
     const { rerender } = renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
-    act(() => {
-      lastScannerProps?.onError(
-        new DOMException("Permission denied", "NotAllowedError"),
-      );
-    });
+    await cameraRefuses(
+      new DOMException("Permission denied", "NotAllowedError"),
+    );
     rerender(<BarcodeScanner isScanning={false} onScan={() => {}} />);
 
     expect(
@@ -236,14 +310,12 @@ describe("BarcodeScanner", () => {
     consoleError.mockRestore();
   });
 
-  it("shows a fallback message when the error carries no detail", () => {
+  it("shows a fallback message when the error carries no detail", async () => {
     const onError = mock((_error: Error) => {});
     const consoleError = spyOn(console, "error").mockImplementation(() => {});
     renderWithIntl(<BarcodeScanner onScan={() => {}} onError={onError} />);
 
-    act(() => {
-      lastScannerProps?.onError(undefined);
-    });
+    await cameraRefuses(undefined);
 
     expect(
       screen.getByText("El navegador no ha dicho por qué."),
@@ -266,9 +338,10 @@ describe("BarcodeScanner", () => {
         "La cámara solo funciona con una conexión segura. Abre la aplicación con una dirección https:// (o localhost) e inténtalo de nuevo.",
       ),
     ).toBeInTheDocument();
-    // The scanner itself must not mount: the library would fire its own
-    // misleading "your browser has no support" error over this one.
+    // The camera must not even be asked for: with no `mediaDevices` zxing
+    // would fail with its own, unexplained error over this one.
     expect(screen.queryByTestId("barcode-scanner")).toBeAbsent();
+    expect(decodeCalls).toBe(0);
   });
 
   it("hides the error panel until something fails", () => {
@@ -289,7 +362,7 @@ describe("BarcodeScanner", () => {
     stubNoCamera();
     renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
-    // No camera, so the library never reports a loaded feed and the component
+    // No camera, so the <video> never reports a loaded feed and the component
     // never learns of a torch. The control is absent rather than inert.
     expect(screen.queryByRole("button", { name: /linterna/ })).toBeAbsent();
   });

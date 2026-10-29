@@ -85,10 +85,13 @@ mock.module("next/navigation", () => ({
  * went red or green by file order.
  */
 let scannerOnError: ((error?: Error) => void) | undefined;
-mock.module("@thewirv/react-barcode-scanner", () => ({
-  BarcodeScanner: (props: { onError: (error?: Error) => void }) => {
-    scannerOnError = props.onError;
-    return <div data-testid="barcode-scanner" />;
+mock.module("@zxing/browser", () => ({
+  BrowserMultiFormatReader: class {
+    decodeFromConstraints() {
+      return new Promise((_resolve, reject) => {
+        scannerOnError = reject;
+      });
+    }
   },
 }));
 
@@ -113,6 +116,12 @@ async function typeBarcode(value: string) {
 }
 
 beforeEach(() => {
+  // happy-dom leaves it undefined, which the scanner reads as plain HTTP and
+  // answers with the HTTPS panel instead of opening the camera.
+  Object.defineProperty(window, "isSecureContext", {
+    value: true,
+    configurable: true,
+  });
   enqueue.mockClear();
   scanMutate.mockClear();
   routerPush.mockClear();
@@ -302,14 +311,14 @@ describe("a lookup refused for being one too many", () => {
 });
 
 describe("a camera that cannot be used", () => {
-  it("puts focus in the field where the code can be typed instead", () => {
+  it("puts focus in the field where the code can be typed instead", async () => {
     // §7 rule 4: "No camera available. Type the barcode instead" — with the
     // field already focused. The refusal a phone gives when the permission
     // was denied.
     render();
     expect(screen.getByLabelText("Código de barras")).not.toHaveFocus();
 
-    act(() => {
+    await act(async () => {
       scannerOnError?.(
         Object.assign(new Error("Permission denied"), {
           name: "NotAllowedError",

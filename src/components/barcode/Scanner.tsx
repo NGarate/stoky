@@ -1,8 +1,14 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useRef,
+} from "react";
 import { useTranslations } from "next-intl";
-import { BarcodeScanner as BarcodeScannerComponent } from "@thewirv/react-barcode-scanner";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 import { Button } from "@/components/ui/button";
 
 interface BarcodeScannerProps {
@@ -67,7 +73,7 @@ export function BarcodeScanner({
   const [hasTorch, setHasTorch] = useState(false);
   const [torchFailed, setTorchFailed] = useState(false);
   const [scanError, setScanError] = useState<CameraProblem | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   /**
    * Whether the page can reach the camera at all. Browsers remove
@@ -84,13 +90,6 @@ export function BarcodeScanner({
     setSecureContext(window.isSecureContext);
   }, []);
 
-  const handleSuccess = useCallback(
-    (barcode: string) => {
-      onScan(barcode);
-    },
-    [onScan],
-  );
-
   const handleError = useCallback(
     (error?: Error) => {
       console.error("Barcode scanner error:", error?.message);
@@ -103,16 +102,53 @@ export function BarcodeScanner({
   );
 
   /**
-   * The live camera track the scanner is decoding from, or null.
-   *
-   * Found through this component's own wrapper rather than a ref handed to the
-   * library: it renders `<video ref={...} {...videoProps} />` with the spread
-   * *after* its ref, so a ref passed in `videoProps` silently replaces the one
-   * decoding depends on and the scanner stops reading barcodes.
+   * Opens the rear camera into our <video> and decodes until the first
+   * barcode, then lets go of the camera. Errors from the per-frame callback
+   * are only "no barcode in this frame" and are ignored; a camera that cannot
+   * be opened rejects the promise instead, and that is what reaches the user.
+   * The callbacks are effect events: the page hands new ones every render, and
+   * that must not reopen the camera.
    */
+  const scanned = useEffectEvent((barcode: string) => onScan(barcode));
+  const failed = useEffectEvent((error?: Error) => handleError(error));
+  useEffect(() => {
+    const video = videoRef.current;
+    // Read directly: the state above is still true on the first commit.
+    if (!isScanning || !window.isSecureContext || !video) return;
+
+    let controls: { stop: () => void } | undefined;
+    let done = false;
+    new BrowserMultiFormatReader()
+      .decodeFromConstraints(
+        { audio: false, video: { facingMode: "environment" } },
+        video,
+        (result, _error, scanControls) => {
+          if (!result || done) return;
+          done = true;
+          scanControls.stop();
+          scanned(result.getText());
+        },
+      )
+      .then(
+        (started) => {
+          // Unmounted or toggled off while the permission prompt was open.
+          if (done) started.stop();
+          else controls = started;
+        },
+        (error: unknown) => {
+          if (!done) failed(error instanceof Error ? error : undefined);
+        },
+      );
+    return () => {
+      done = true;
+      controls?.stop();
+    };
+  }, [isScanning]);
+
+  /** The live camera track the scanner is decoding from, or null. */
   const cameraTrack = useCallback((): MediaStreamTrack | null => {
-    const video = containerRef.current?.querySelector("video");
-    const stream = video?.srcObject as MediaStream | null | undefined;
+    const stream = videoRef.current?.srcObject as
+      MediaStream | null | undefined;
     if (!stream || typeof stream.getVideoTracks !== "function") return null;
     return stream.getVideoTracks()[0] ?? null;
   }, []);
@@ -196,14 +232,20 @@ export function BarcodeScanner({
   }
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div className="relative">
       <div className="relative overflow-hidden rounded-lg aspect-[4/3] bg-black">
-        <BarcodeScannerComponent
-          doScan={isScanning}
-          onSuccess={handleSuccess}
-          onError={handleError}
-          onLoad={handleLoad}
-        />
+        {/* The camera feed is not speech, so there is nothing to caption. */}
+        <video
+          className="absolute inset-0 h-full w-full object-cover"
+          data-testid="barcode-scanner"
+          disablePictureInPicture
+          muted
+          onLoadedData={handleLoad}
+          playsInline
+          ref={videoRef}
+        >
+          <track kind="captions" />
+        </video>
 
         {/* Overlay guides. Deliberately outside the token system: these sit
             on live camera output rather than a themed surface, so they are
