@@ -3,23 +3,70 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
-import { Menu, Package, ScanLine, ShoppingCart } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  ChartLine,
+  CookingPot,
+  LayoutDashboard,
+  Menu,
+  Package,
+  Receipt,
+  Settings,
+  ShoppingCart,
+  Tags,
+} from "lucide-react";
 import { NavSheet } from "./NavSheet";
 import {
   COMPACT_DESTINATIONS,
-  PRIMARY_DESTINATIONS,
-  SECONDARY_DESTINATIONS,
+  DEFAULT_SLOTS,
   activeHref,
+  nextSlots,
+  parseSlots,
+  type Destination,
+  type Slots,
 } from "./navigation";
 import type { ComponentType, JSX, SVGProps } from "react";
 
-/** One glyph per primary destination, keyed by its label. */
+/** One glyph per destination, since any of them can take a slot. */
 const ICONS: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
-  shoppingShort: ShoppingCart,
-  inventory: Package,
-  scan: ScanLine,
+  "/shopping": ShoppingCart,
+  "/inventory": Package,
+  "/kitchen": CookingPot,
+  "/dashboard": LayoutDashboard,
+  "/products": Tags,
+  "/receipts": Receipt,
+  "/prices": ChartLine,
+  "/settings": Settings,
 };
+
+/** Where this device remembers its bar. A convenience: losing it costs a default. */
+const SLOTS_KEY = "stoky.nav-slots";
+
+function readSlots(): Slots | null {
+  try {
+    const raw = localStorage.getItem(SLOTS_KEY);
+    return raw === null ? null : parseSlots(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+function writeSlots(slots: Slots): void {
+  try {
+    localStorage.setItem(SLOTS_KEY, JSON.stringify(slots));
+  } catch {
+    // Private mode or storage blocked: the bar still follows this visit.
+  }
+}
+
+function destinationOf(href: string): Destination {
+  return (
+    COMPACT_DESTINATIONS.find((d) => d.href === href) ?? {
+      href,
+      labelKey: "more",
+    }
+  );
+}
 
 /**
  * The phone and tablet navigation.
@@ -37,8 +84,9 @@ const ICONS: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
  *   because it is the least dense tier, not an interpolation towards desktop
  *   (D14).
  *
- * Both carry the same four items and open the same "Más" sheet, so there is one
- * thing to learn and one thing to keep working.
+ * Both carry the same three destinations — the three last used on this device,
+ * so the one you are on is always among them (`nextSlots`) — and open the same
+ * "Más" sheet, so there is one thing to learn and one thing to keep working.
  *
  * Only one of the two is ever rendered visibly, which is why they can share the
  * accessible name: a hidden `<nav>` is not in the accessibility tree, so the
@@ -50,8 +98,24 @@ export function CompactNav(): JSX.Element {
   const [isSheetOpen, setSheetOpen] = useState(false);
 
   const current = activeHref(pathname, COMPACT_DESTINATIONS);
-  const currentIsInSheet = SECONDARY_DESTINATIONS.some(
-    (destination) => destination.href === current,
+
+  // The server and the first client render draw the default bar, so hydration
+  // agrees; the device's own bar, with this screen in it, follows at once.
+  // Read from storage on every visit, so a bar changed in another tab is the
+  // one this tab continues from; the ref is the fallback when storage is not
+  // there to ask.
+  const [slots, setSlots] = useState<Slots>(DEFAULT_SLOTS);
+  const latest = useRef<Slots>(DEFAULT_SLOTS);
+  useEffect(() => {
+    const next = nextSlots(readSlots() ?? latest.current, current);
+    latest.current = next;
+    writeSlots(next);
+    setSlots(next);
+  }, [current]);
+
+  const inBar = slots.hrefs.map(destinationOf);
+  const inSheet = COMPACT_DESTINATIONS.filter(
+    (destination) => !slots.hrefs.includes(destination.href),
   );
 
   // A route change with the sheet open would otherwise leave it covering the
@@ -77,20 +141,17 @@ export function CompactNav(): JSX.Element {
         className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         <ul className="flex items-stretch">
-          {PRIMARY_DESTINATIONS.map((destination) => (
+          {inBar.map((destination) => (
             <li className="flex-1" key={destination.href}>
               <BarLink
                 current={current === destination.href}
                 href={destination.href}
                 label={t(destination.labelKey)}
-                labelKey={destination.labelKey}
               />
             </li>
           ))}
           <li className="flex-1">
             <MoreButton
-              containsCurrent={currentIsInSheet}
-              containsCurrentLabel={t("moreContainsCurrent")}
               label={t("more")}
               onOpen={() => setSheetOpen(true)}
               open={isSheetOpen}
@@ -106,20 +167,17 @@ export function CompactNav(): JSX.Element {
         className="fixed inset-y-0 left-0 z-40 hidden w-32 flex-col border-r border-border bg-card md:flex lg:hidden"
       >
         <ul className="flex flex-col gap-2 p-2">
-          {PRIMARY_DESTINATIONS.map((destination) => (
+          {inBar.map((destination) => (
             <li key={destination.href}>
               <RailLink
                 current={current === destination.href}
                 href={destination.href}
                 label={t(destination.labelKey)}
-                labelKey={destination.labelKey}
               />
             </li>
           ))}
           <li>
             <MoreButton
-              containsCurrent={currentIsInSheet}
-              containsCurrentLabel={t("moreContainsCurrent")}
               label={t("more")}
               onOpen={() => setSheetOpen(true)}
               open={isSheetOpen}
@@ -131,6 +189,7 @@ export function CompactNav(): JSX.Element {
 
       <NavSheet
         currentHref={current}
+        destinations={inSheet}
         onClose={() => setSheetOpen(false)}
         open={isSheetOpen}
       />
@@ -158,14 +217,12 @@ function BarLink({
   current,
   href,
   label,
-  labelKey,
 }: {
   current: boolean;
   href: string;
   label: string;
-  labelKey: string;
 }): JSX.Element {
-  const Icon = ICONS[labelKey];
+  const Icon = ICONS[href];
 
   return (
     <Link
@@ -184,14 +241,12 @@ function RailLink({
   current,
   href,
   label,
-  labelKey,
 }: {
   current: boolean;
   href: string;
   label: string;
-  labelKey: string;
 }): JSX.Element {
-  const Icon = ICONS[labelKey];
+  const Icon = ICONS[href];
 
   return (
     <Link
@@ -209,21 +264,15 @@ function RailLink({
  * The control that opens the sheet, in whichever tier asked for it.
  *
  * It is a button and not a link because it opens a dialog rather than
- * navigating, and it says so with `aria-haspopup` and `aria-expanded`. When the
- * route you are on lives inside the sheet, it says that too — in words for a
- * screen reader and as a dot on screen — so the bar is never silent about where
- * you are.
+ * navigating, and it says so with `aria-haspopup` and `aria-expanded`. It is
+ * never current: the screen you are on has a slot of its own in the bar.
  */
 function MoreButton({
-  containsCurrent,
-  containsCurrentLabel,
   label,
   onOpen,
   open,
   variant,
 }: {
-  containsCurrent: boolean;
-  containsCurrentLabel: string;
   label: string;
   onOpen: () => void;
   open: boolean;
@@ -237,22 +286,14 @@ function MoreButton({
       aria-haspopup="dialog"
       className={`flex w-full flex-col items-center justify-center gap-1 ${
         isBar
-          ? `min-h-[56px] px-1 py-2 text-xs ${currentClasses(containsCurrent, "top")}`
-          : `min-h-[76px] rounded-md px-1 py-2 text-base ${currentClasses(containsCurrent, "left")}`
+          ? `min-h-[56px] px-1 py-2 text-xs ${currentClasses(false, "top")}`
+          : `min-h-[76px] rounded-md px-1 py-2 text-base ${currentClasses(false, "left")}`
       }`}
       onClick={onOpen}
       type="button"
     >
       <Menu aria-hidden="true" className={isBar ? "h-6 w-6" : "h-7 w-7"} />
-      <span className="text-center leading-tight">
-        {label}
-        {containsCurrent ? (
-          <>
-            <span aria-hidden="true"> ·</span>
-            <span className="sr-only"> — {containsCurrentLabel}</span>
-          </>
-        ) : null}
-      </span>
+      <span className="text-center leading-tight">{label}</span>
     </button>
   );
 }

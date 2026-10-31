@@ -75,11 +75,9 @@
     "settings": "Configuración",
     "dashboard": "Panel",
     "shoppingShort": "Compra",
-    "scan": "Escanear",
     "more": "Más",
     "mainLabel": "Navegación principal",
     "moreTitle": "Más secciones",
-    "moreContainsCurrent": "aquí está la página actual",
     "kitchen": "Cocina"
   },
   "dashboard": {
@@ -530,7 +528,6 @@
   "receipts": {
     "title": "Tickets",
     "upload": "Subir ticket",
-    "scan": "Escanear ticket",
     "review": "Revisar ticket",
     "store": "Tienda",
     "purchaseDate": "Fecha de compra",

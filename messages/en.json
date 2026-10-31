@@ -75,11 +75,9 @@
     "settings": "Settings",
     "dashboard": "Dashboard",
     "shoppingShort": "Shopping",
-    "scan": "Scan",
     "more": "More",
     "mainLabel": "Main navigation",
     "moreTitle": "More sections",
-    "moreContainsCurrent": "the current page is in here",
     "kitchen": "Kitchen"
   },
   "dashboard": {
@@ -530,7 +528,6 @@
   "receipts": {
     "title": "Receipts",
     "upload": "Upload receipt",
-    "scan": "Scan receipt",
     "review": "Review receipt",
     "store": "Store",
     "purchaseDate": "Purchase date",

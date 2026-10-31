@@ -5,6 +5,7 @@
 * Marca, categoría y unidad te sugieren lo que ya usas
 * Al subir un ticket, elige la tienda o escribe una nueva
 * Siempre sabes cuánto queda de cada lote
+* La barra del móvil muestra dónde estás
 
 ### Marca, categoría y unidad te sugieren lo que ya usas
 
@@ -31,6 +32,14 @@ mismo al corregir el recuento a la baja y al mover cosas de sitio. Así cada
 lote sabe lo que le queda, y la cocina y la ficha del producto ya no muestran
 «Cantidad sin confirmar».
 
+### La barra del móvil muestra dónde estás
+
+En el móvil y la tableta, los tres botones de la barra son las tres últimas
+pantallas que has usado en ese dispositivo. La que tienes abierta siempre
+está en la barra, marcada; al abrir otra, ocupa el sitio de la que llevas
+más tiempo sin usar y las demás no se mueven. **Más** tiene el resto.
+**Escanear** ya no está en la barra: sigue en Productos, Inventario y Compra.
+
 ## English
 
 ### Brand, category and unit suggest what you already use
@@ -55,3 +64,11 @@ that expires first, on the shelf you chose or anywhere if you chose none.
 Recounting down and moving things work the same way. Every batch knows what
 it has left, so the kitchen and the product page no longer say "Quantity
 unconfirmed".
+
+### The phone's bar shows where you are
+
+On a phone or tablet, the bar's three buttons are the last three screens
+you used on that device. The one you are on is always there, marked;
+opening another puts it in place of the one you used longest ago, and the
+others stay where they are. **More** has the rest. **Scan** has left the
+bar: it is still on Products, Inventory and Shopping.

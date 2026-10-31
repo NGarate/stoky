@@ -1,10 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import {
   COMPACT_DESTINATIONS,
+  DEFAULT_SLOTS,
   DESKTOP_DESTINATIONS,
-  PRIMARY_DESTINATIONS,
-  SECONDARY_DESTINATIONS,
   activeHref,
+  nextSlots,
+  parseSlots,
 } from "@/components/dashboard/navigation";
 
 /**
@@ -26,11 +27,17 @@ describe("activeHref", () => {
     );
   });
 
-  it("prefers the longest match, so scanning does not also light up products", () => {
-    // Both "/products" and "/products/scan" are destinations in the compact
-    // tiers. A first-match rule would make two items current at once.
+  it("prefers the longest match, so a nested destination lights up alone", () => {
+    const nested = [
+      { href: "/products", labelKey: "products" },
+      { href: "/products/scan", labelKey: "scan" },
+    ];
+    expect(activeHref("/products/scan", nested)).toBe("/products/scan");
+  });
+
+  it("files scanning under products, now it has no slot of its own", () => {
     expect(activeHref("/products/scan", COMPACT_DESTINATIONS)).toBe(
-      "/products/scan",
+      "/products",
     );
   });
 
@@ -78,16 +85,6 @@ describe("activeHref", () => {
 });
 
 describe("destination lists", () => {
-  it("gives the phone four slots: three destinations plus Más", () => {
-    // PROGRESS D15: seven destinations do not fit a bottom bar at 48px targets
-    // on a 390px screen, and the phone answers "what do I need to buy".
-    expect(PRIMARY_DESTINATIONS.map((d) => d.href)).toEqual([
-      "/shopping",
-      "/inventory",
-      "/products/scan",
-    ]);
-  });
-
   it("reaches every desktop destination from the compact tiers", () => {
     const compact = new Set(COMPACT_DESTINATIONS.map((d) => d.href));
 
@@ -103,10 +100,90 @@ describe("destination lists", () => {
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });
 
-  it("puts nothing in both the bar and the sheet", () => {
-    const primary = new Set(PRIMARY_DESTINATIONS.map((d) => d.href));
-    for (const destination of SECONDARY_DESTINATIONS) {
-      expect(primary.has(destination.href)).toBe(false);
+  it("no longer offers scanning as a place to go", () => {
+    // It is offered where a product is chosen (owner's report, 2026-10-31).
+    for (const list of [COMPACT_DESTINATIONS, DESKTOP_DESTINATIONS]) {
+      expect(list.map((d) => d.href)).not.toContain("/products/scan");
+    }
+  });
+});
+
+describe("nextSlots", () => {
+  it("starts with the phone's two jobs and the overview", () => {
+    expect(DEFAULT_SLOTS.hrefs).toEqual([
+      "/shopping",
+      "/inventory",
+      "/dashboard",
+    ]);
+  });
+
+  it("puts a screen that is not in the bar in place of the least recently used", () => {
+    const next = nextSlots(DEFAULT_SLOTS, "/products");
+
+    // "/dashboard" was last in `recent`; the other two keep their places.
+    expect(next.hrefs).toEqual(["/shopping", "/inventory", "/products"]);
+    expect(next.recent).toEqual(["/products", "/shopping", "/inventory"]);
+  });
+
+  it("replaces by recency, not by position", () => {
+    const used = nextSlots(DEFAULT_SLOTS, "/dashboard");
+    expect(used.hrefs).toEqual(DEFAULT_SLOTS.hrefs);
+
+    // Inventory is now the least recent, so it is the one to go.
+    expect(nextSlots(used, "/receipts").hrefs).toEqual([
+      "/shopping",
+      "/receipts",
+      "/dashboard",
+    ]);
+  });
+
+  it("always shows the screen you are on", () => {
+    let slots = DEFAULT_SLOTS;
+    for (const destination of COMPACT_DESTINATIONS) {
+      slots = nextSlots(slots, destination.href);
+      expect(slots.hrefs).toContain(destination.href);
+      expect(new Set(slots.hrefs).size).toBe(3);
+    }
+  });
+
+  it("changes nothing for a route that is no destination", () => {
+    expect(nextSlots(DEFAULT_SLOTS, null)).toBe(DEFAULT_SLOTS);
+  });
+});
+
+describe("parseSlots", () => {
+  it("accepts a bar it wrote", () => {
+    const slots = nextSlots(DEFAULT_SLOTS, "/prices");
+    expect(parseSlots(JSON.parse(JSON.stringify(slots)))).toEqual(slots);
+  });
+
+  it("refuses anything that is not three distinct destinations, in both orders", () => {
+    const cases: unknown[] = [
+      null,
+      "x",
+      {
+        hrefs: ["/shopping", "/inventory"],
+        recent: ["/shopping", "/inventory"],
+      },
+      {
+        hrefs: ["/shopping", "/shopping", "/inventory"],
+        recent: ["/shopping", "/shopping", "/inventory"],
+      },
+      {
+        hrefs: ["/products/scan", "/inventory", "/dashboard"],
+        recent: ["/products/scan", "/inventory", "/dashboard"],
+      },
+      {
+        hrefs: ["https://evil.example", "/inventory", "/dashboard"],
+        recent: ["https://evil.example", "/inventory", "/dashboard"],
+      },
+      {
+        hrefs: ["/shopping", "/inventory", "/dashboard"],
+        recent: ["/shopping", "/inventory", "/prices"],
+      },
+    ];
+    for (const raw of cases) {
+      expect(parseSlots(raw)).toBeNull();
     }
   });
 });

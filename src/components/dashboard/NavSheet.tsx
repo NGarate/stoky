@@ -5,12 +5,14 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useRef } from "react";
 import { tabbableWithin } from "@/lib/focus";
 
-import { SECONDARY_DESTINATIONS } from "./navigation";
+import type { Destination } from "./navigation";
 import type { JSX } from "react";
 
 interface NavSheetProps {
   /** The destination the current route belongs to, or `null`. */
   currentHref: string | null;
+  /** What the bar is not showing, in the order to list it. */
+  destinations: readonly Destination[];
   /** Called for Escape, the close button and a tap on the scrim. */
   onClose: () => void;
   open: boolean;
@@ -40,6 +42,7 @@ interface NavSheetProps {
  */
 export function NavSheet({
   currentHref,
+  destinations,
   onClose,
   open,
 }: NavSheetProps): JSX.Element | null {
@@ -152,7 +155,7 @@ export function NavSheet({
         </div>
 
         <ul className="mt-4 space-y-2">
-          {SECONDARY_DESTINATIONS.map((destination) => {
+          {destinations.map((destination) => {
             const isCurrent = currentHref === destination.href;
 
             return (

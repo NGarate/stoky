@@ -16,9 +16,8 @@ import { asStored } from "../utils/amount";
  * place. The third removed the sentence: "3 productos por reponer" sitting
  * above a section headed "Necesita reposición" that lists three products is
  * the same count twice, and the section was always the door. The scan quick
- * action went in the second pass: on a phone Escanear is permanently in the
- * bottom bar, and this screen is the desktop overview, where there is no
- * camera.
+ * action went in the second pass: this screen is the desktop overview, where
+ * there is no camera, and scanning is offered where a product is chosen.
  *
  * What survives from Phase 8 item 2 is the invariant, not its wording: this
  * screen asks the server the same `needsRestock` question the inventory's
@@ -148,7 +147,7 @@ describe("the Panel's opening order", () => {
     ).toBeTruthy();
   });
 
-  it("does not offer scanning: the phone's bar has it, the desktop no camera", () => {
+  it("does not offer scanning: it belongs where a product is chosen", () => {
     renderWithIntl(<DashboardPage />, { locale: "es" });
 
     expect(
