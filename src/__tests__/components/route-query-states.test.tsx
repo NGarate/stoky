@@ -182,6 +182,11 @@ const DETAIL_ROUTES = [
     back: "/products",
   },
   {
+    name: "/products/[id] from the overview",
+    render: () => <ProductDetailView from="dashboard" id="p1" />,
+    back: "/dashboard",
+  },
+  {
     name: "/products/[id]/adjust",
     render: () => <AdjustStockView id="p1" />,
     back: "/products/p1",

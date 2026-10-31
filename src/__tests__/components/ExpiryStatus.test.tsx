@@ -93,6 +93,7 @@ describe("ExpiryRow", () => {
             unit: "L",
           }}
           daysUntilExpiry={1}
+          from="dashboard"
         />
       </ul>,
       { locale: "es" },
@@ -101,7 +102,7 @@ describe("ExpiryRow", () => {
     expect(screen.getByText("1.5 L")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Leche" })).toHaveAttribute(
       "href",
-      "/products/p1",
+      "/products/p1?from=dashboard",
     );
     expect(screen.getByText("Caduca mañana")).toBeInTheDocument();
   });

@@ -207,6 +207,8 @@
       "loadingTitle": "Producto",
       "notFoundTitle": "No encontramos este producto",
       "backToProducts": "Volver a productos",
+      "backToDashboard": "Volver al panel",
+      "backToInventory": "Volver al inventario",
       "errorTitle": "No se ha podido mostrar el producto",
       "errorNotFound": "Este producto no está en el catálogo de tu hogar. Puede que se haya eliminado, o que el enlace apunte a otra parte. Vuelve a la lista y elígelo desde ahí.",
       "errorNoHousehold": "Tu cuenta todavía no pertenece a ningún hogar. Crea un hogar o pide que te inviten para poder ver los productos.",

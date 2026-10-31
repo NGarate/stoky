@@ -27,6 +27,29 @@ import { formatDate } from "@/lib/dates";
 
 interface ProductDetailPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string | string[] }>;
+}
+
+/**
+ * Where "back" goes, by the screen that linked here (`?from=`).
+ *
+ * The page is reached from the overview and the inventory as well as from the
+ * catalogue, and a link that always said "Volver a productos" sent somebody
+ * who came from the overview to a screen they had never been on. A fixed list
+ * rather than the referrer: an arbitrary `from` would make this link an open
+ * redirect, and anything not named here falls back to the catalogue.
+ */
+const BACK_TO = {
+  dashboard: { href: "/dashboard", labelKey: "backToDashboard" },
+  inventory: { href: "/inventory", labelKey: "backToInventory" },
+} as const;
+
+export type ProductOrigin = keyof typeof BACK_TO;
+
+function originOf(from: string | string[] | undefined): ProductOrigin | null {
+  return typeof from === "string" && Object.hasOwn(BACK_TO, from)
+    ? (from as ProductOrigin)
+    : null;
 }
 
 /** A location, or the absence of one, with the net quantity filed against it. */
@@ -48,13 +71,21 @@ interface Batch {
 
 export default function ProductDetailPage({
   params,
+  searchParams,
 }: ProductDetailPageProps): JSX.Element {
   const { id } = use(params);
-  return <ProductDetailView id={id} />;
+  const { from } = use(searchParams);
+  return <ProductDetailView from={originOf(from)} id={id} />;
 }
 
 /** Exported apart from the route so the component suite can render it. */
-export function ProductDetailView({ id }: { id: string }): JSX.Element {
+export function ProductDetailView({
+  id,
+  from = null,
+}: {
+  id: string;
+  from?: ProductOrigin | null;
+}): JSX.Element {
   const t = useTranslations("products.detail");
   const units = useQuantityFormat();
   const locale = useLocale();
@@ -184,7 +215,9 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
       .sort((a, b) => a.expiresAt.getTime() - b.expiresAt.getTime());
   }, [product]);
 
-  const back = { href: "/products", label: t("backToProducts") };
+  const back = from
+    ? { href: BACK_TO[from].href, label: t(BACK_TO[from].labelKey) }
+    : { href: "/products", label: t("backToProducts") };
 
   /**
    * Every state without a product, through the one component that tells them

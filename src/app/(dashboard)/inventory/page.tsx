@@ -384,7 +384,7 @@ export function InventoryView(): JSX.Element {
                 >
                   <td className="px-4 py-3">
                     <Button asChild variant="link">
-                      <Link href={`/products/${product.id}`}>
+                      <Link href={`/products/${product.id}?from=inventory`}>
                         {" "}
                         {product.name}{" "}
                       </Link>
@@ -420,7 +420,7 @@ export function InventoryView(): JSX.Element {
       <ul className="space-y-3 lg:hidden">
         {products.map((product) => (
           <ItemRow
-            href={`/products/${product.id}`}
+            href={`/products/${product.id}?from=inventory`}
             key={product.id}
             meta={[
               {

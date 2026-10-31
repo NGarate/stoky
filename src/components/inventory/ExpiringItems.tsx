@@ -81,6 +81,7 @@ export function ExpiringItems({
             {displayExpired.map((item) => (
               <ExpiryRow
                 batch={item}
+                from="inventory"
                 daysUntilExpiry={-item.daysExpired}
                 key={item.id}
               />
@@ -103,6 +104,7 @@ export function ExpiringItems({
             {displayExpiring.map((item) => (
               <ExpiryRow
                 batch={item}
+                from="inventory"
                 daysUntilExpiry={item.daysUntilExpiry}
                 key={item.id}
               />

@@ -81,7 +81,10 @@ export function ExpiryStatus({
 export function ExpiryRow({
   batch,
   daysUntilExpiry,
+  from,
 }: {
+  /** The screen it sits on, so the product page leads back to it. */
+  from: "dashboard" | "inventory";
   batch: {
     product: { id: string; name: string };
     location: { name: string } | null;
@@ -96,7 +99,7 @@ export function ExpiryRow({
   return (
     <ItemRow
       density="compact"
-      href={`/products/${batch.product.id}`}
+      href={`/products/${batch.product.id}?from=${from}`}
       meta={[
         {
           label: t("quantityLabel"),

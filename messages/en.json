@@ -207,6 +207,8 @@
       "loadingTitle": "Product",
       "notFoundTitle": "We can't find this product",
       "backToProducts": "Back to products",
+      "backToDashboard": "Back to the dashboard",
+      "backToInventory": "Back to inventory",
       "errorTitle": "This product could not be shown",
       "errorNotFound": "This product is not in your household's catalogue. It may have been deleted, or the link may point somewhere else. Go back to the list and pick it from there.",
       "errorNoHousehold": "Your account does not belong to a household yet. Create one, or ask to be invited, before viewing products.",

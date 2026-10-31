@@ -170,7 +170,7 @@ export default function DashboardPage(): JSX.Element {
                 {restock.slice(0, MAX_ROWS).map((product) => (
                   <ItemRow
                     density="compact"
-                    href={`/products/${product.id}`}
+                    href={`/products/${product.id}?from=dashboard`}
                     key={product.id}
                     // How much is left is a detail, so it is meta; the state is
                     // StockStatus's word, the same one the inventory wears. This
@@ -242,6 +242,7 @@ export default function DashboardPage(): JSX.Element {
                 {expiredItems.slice(0, MAX_ROWS).map((item) => (
                   <ExpiryRow
                     batch={item}
+                    from="dashboard"
                     daysUntilExpiry={-item.daysExpired}
                     key={item.id}
                   />
@@ -249,6 +250,7 @@ export default function DashboardPage(): JSX.Element {
                 {expiringItems.slice(0, MAX_ROWS).map((item) => (
                   <ExpiryRow
                     batch={item}
+                    from="dashboard"
                     daysUntilExpiry={item.daysUntilExpiry}
                     key={item.id}
                   />
