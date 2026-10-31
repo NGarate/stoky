@@ -1,6 +1,7 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, mock } from "bun:test";
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { renderWithIntl, esMessages, enMessages } from "../utils/render";
 
 /**
@@ -25,7 +26,15 @@ mock.module("@/lib/trpc/client", () => ({
       list: {
         useQuery: () => ({
           data: {
-            products: [{ id: "p1", name: "Leche entera", defaultUnit: "L" }],
+            products: [
+              {
+                id: "p1",
+                name: "Leche entera",
+                brand: null,
+                defaultUnit: "L",
+                barcode: "8410000000123",
+              },
+            ],
           },
           isPending: false,
         }),
@@ -115,5 +124,36 @@ describe("the catalogue behind it", () => {
       expect(inventory.add).not.toHaveProperty("productSearchLabel");
       expect(inventory.consume).not.toHaveProperty("productSearchLabel");
     }
+  });
+});
+
+describe("a code typed into the search", () => {
+  it("chooses the product that carries it, as a hand scanner types it", async () => {
+    const onChange = mock((_product: unknown) => {});
+    renderWithIntl(<ProductPicker hint="" onChange={onChange} value="" />);
+
+    await userEvent.type(
+      screen.getByLabelText("Buscar producto"),
+      "8410000000123",
+    );
+
+    await waitFor(() => {
+      expect(onChange).toHaveBeenCalledWith({
+        id: "p1",
+        name: "Leche entera",
+        brand: null,
+        defaultUnit: "L",
+      });
+    });
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("chooses nothing for a name, which is only a filter", async () => {
+    const onChange = mock((_product: unknown) => {});
+    renderWithIntl(<ProductPicker hint="" onChange={onChange} value="" />);
+
+    await userEvent.type(screen.getByLabelText("Buscar producto"), "Leche");
+
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

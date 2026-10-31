@@ -1,6 +1,12 @@
 "use client";
 
-import { useDeferredValue, useId, useState } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useEffectEvent,
+  useId,
+  useState,
+} from "react";
 import { useTranslations } from "next-intl";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -34,6 +40,15 @@ interface ProductPickerProps {
    * page about using things up. Confirmed in a browser before it was fixed.
    */
   hint: string;
+}
+
+function toPicked(product: PickedProduct): PickedProduct {
+  return {
+    id: product.id,
+    name: product.name,
+    brand: product.brand,
+    defaultUnit: product.defaultUnit,
+  };
 }
 
 /**
@@ -77,6 +92,27 @@ export function ProductPicker({
   );
 
   const products = data?.products ?? [];
+
+  /**
+   * A code typed or scanned into the search chooses its product.
+   *
+   * A USB or Bluetooth scanner is a keyboard: it types the code into the
+   * field with focus, and the server's search matches a barcode exactly. The
+   * one product carrying that code is then the answer, not one option among
+   * the list, so it is chosen as if picked — keyed on its id, so it happens
+   * once per code rather than on every refetch.
+   */
+  const exactMatch = products.find(
+    (product) => trimmedSearch !== "" && product.barcode === trimmedSearch,
+  );
+  const chooseMatch = useEffectEvent((id: string) => {
+    const match = products.find((product) => product.id === id);
+    if (match && match.id !== value) onChange(toPicked(match));
+  });
+  const exactMatchId = exactMatch?.id;
+  useEffect(() => {
+    if (exactMatchId) chooseMatch(exactMatchId);
+  }, [exactMatchId]);
 
   const statusMessage = isPending
     ? t("loadingProducts")
@@ -122,16 +158,7 @@ export function ProductPicker({
             const selected = products.find(
               (product) => product.id === event.target.value,
             );
-            onChange(
-              selected
-                ? {
-                    id: selected.id,
-                    name: selected.name,
-                    brand: selected.brand,
-                    defaultUnit: selected.defaultUnit,
-                  }
-                : null,
-            );
+            onChange(selected ? toPicked(selected) : null);
           }}
         >
           <option value="">{t("productPlaceholder")}</option>

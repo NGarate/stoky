@@ -711,6 +711,30 @@ describe("tRPC Router Integration Tests", () => {
       expect(result.products.length).toBeGreaterThanOrEqual(2);
     });
 
+    it("finds a product by its barcode as well as by its name", async () => {
+      const { user, householdId } = await createTestUserWithHousehold(
+        "product-search-barcode@example.com",
+        "Product Search User",
+        "Product Search Household",
+      );
+      await createTestProduct(householdId, {
+        name: "Leche entera",
+        barcode: "8410000000123",
+      });
+      await createTestProduct(householdId, { name: "Pan" });
+      const { caller } = await createTestContext(user.id, householdId);
+
+      const byCode = await caller.product.list({ search: "8410000000123" });
+      expect(byCode.products.map((p) => p.name)).toEqual(["Leche entera"]);
+
+      // Exactly, not as a fragment: part of a code is not a product.
+      const byPart = await caller.product.list({ search: "84100000" });
+      expect(byPart.products).toHaveLength(0);
+
+      const byName = await caller.product.list({ search: "lech" });
+      expect(byName.products.map((p) => p.name)).toEqual(["Leche entera"]);
+    });
+
     it("should get product by barcode", async () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "product6@example.com",

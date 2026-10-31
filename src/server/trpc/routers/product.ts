@@ -118,7 +118,14 @@ const MAX_SUGGESTIONS = 200;
  * kitchen.
  */
 export const productRouter = createTRPCRouter({
-  /** The catalogue, paginated, newest first. */
+  /**
+   * The catalogue, paginated, newest first.
+   *
+   * `search` matches a name, or a barcode exactly. The second is for the
+   * USB and Bluetooth scanners that type a code and Enter into whatever field
+   * has focus: in the product picker's search, the code finds its product
+   * the way a name does (Grocy's picker does the same).
+   */
   list: householdProcedure
     .input(productPaginationSchema)
     .query(async ({ ctx, input }) => {
@@ -127,10 +134,10 @@ export const productRouter = createTRPCRouter({
       const where = {
         householdId: ctx.householdId,
         ...(search && {
-          name: {
-            contains: search,
-            mode: "insensitive" as const,
-          },
+          OR: [
+            { name: { contains: search, mode: "insensitive" as const } },
+            { barcode: search },
+          ],
         }),
       };
 
