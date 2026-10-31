@@ -80,6 +80,18 @@ describe("the catalogue's actions column", () => {
     }
   });
 
+  it("draws each action with an edge, so it reads as something to press", () => {
+    renderWithIntl(<ProductsPage />, { locale: "es" });
+
+    // A ghost had no edge at all: three words in body ink under the card's
+    // details, which read as more details.
+    for (const link of screen.getAllByRole("link", {
+      name: /de «Leche entera»/,
+    })) {
+      expect(link.className).toContain("border-input");
+    }
+  });
+
   it("says the stock state in words, not only in colour", () => {
     renderWithIntl(<ProductsPage />, { locale: "es" });
 

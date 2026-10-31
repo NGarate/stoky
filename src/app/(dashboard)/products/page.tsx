@@ -51,7 +51,9 @@ interface ProductRow {
  * Named for a screen reader with the row's product, because "Ajustar" read
  * out of context names nothing — WCAG 2.4.9, and the criterion the old bare
  * "Ver" was DESIGN_AUDIT A4.5's example of failing. A link rather than a
- * button because it genuinely navigates.
+ * button because it genuinely navigates; drawn as an outlined button because,
+ * as a ghost, three words in body ink under a card's details read as more
+ * details rather than as things to press (owner's report, 2026-10-31).
  */
 function RowAction({
   href,
@@ -63,7 +65,7 @@ function RowAction({
   name: string;
 }): JSX.Element {
   return (
-    <Button asChild size="sm" variant="ghost">
+    <Button asChild size="sm" variant="outline">
       <Link href={href}>
         {label}
         <span className="sr-only"> {name}</span>
