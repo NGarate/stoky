@@ -62,6 +62,11 @@ guardárselo. Si tienes varias cámaras, puedes elegir cuál usar y se
 recuerda. Un lector de códigos USB o Bluetooth también vale: escribe el
 código en la búsqueda y el producto queda elegido.
 
+El **modo escaneo**, en Añadir stock y Apuntar consumo, guarda cada
+producto en cuanto lo escaneas, con la cantidad que pongas (1 si la dejas vacía),
+y vuelve a abrir la cámara para el siguiente: una bolsa de la compra se
+guarda escaneando.
+
 ## English
 
 ### Brand, category and unit suggest what you already use
@@ -114,3 +119,7 @@ already on it, or to save it onto a product you choose. With more than one
 camera you can pick which, and it is remembered. A USB or Bluetooth barcode
 reader works too: it types the code into the search and the product is
 chosen.
+
+**Scan mode**, on Add stock and Record use, saves each product as soon as
+it is scanned, with the quantity given (1 if left empty), and opens the
+camera again for the next: a bag of shopping is put away scan by scan.

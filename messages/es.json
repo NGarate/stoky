@@ -320,7 +320,10 @@
       "assignCancel": "No guardar el código",
       "typedLabel": "¿No lo lee? Escribe el código",
       "typedSubmit": "Buscar",
-      "scanLineOf": "Escanear el producto de «{name}»"
+      "scanLineOf": "Escanear el producto de «{name}»",
+      "scanMode": "Modo escaneo",
+      "scanModeAddHint": "Cada producto que escanees se añade al momento con la cantidad que pongas abajo (1 si la dejas vacía), y la cámara se abre otra vez para el siguiente.",
+      "scanModeConsumeHint": "Cada producto que escanees se apunta como gastado al momento con la cantidad que pongas abajo (1 si la dejas vacía), y la cámara se abre otra vez para el siguiente."
     },
     "rating": {
       "title": "Calidad",

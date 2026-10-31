@@ -4,10 +4,11 @@ import Link from "next/link";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { LocationPicker } from "@/components/inventory/LocationPicker";
 import { ProductPicker } from "@/components/inventory/ProductPicker";
+import { ScanModeToggle, useScanMode } from "@/components/barcode/ScanMode";
 import { Button } from "@/components/ui/button";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Dialog } from "@/components/ui/dialog";
@@ -105,6 +106,20 @@ export default function ConsumeStockPage(): JSX.Element {
 
   const availableStock = product ? availability.data?.totalStock : undefined;
 
+  // Scan mode, as on /inventory/add — but the save waits for the figure
+  // above, which the form checks the quantity against.
+  const scanMode = useScanMode("consume");
+  const tScan = useTranslations("products.scanPick");
+  const formRef = useRef<HTMLFormElement>(null);
+  const [submitScanned, setSubmitScanned] = useState(false);
+  const [scanSaved, setScanSaved] = useState("");
+  const stockKnown = Boolean(product) && !availability.isPending;
+  useEffect(() => {
+    if (!submitScanned || !stockKnown) return;
+    setSubmitScanned(false);
+    formRef.current?.requestSubmit();
+  }, [submitScanned, stockKnown]);
+
   const availableMessage = !product
     ? t("availableNoProduct")
     : availability.isPending
@@ -130,12 +145,25 @@ export default function ConsumeStockPage(): JSX.Element {
      */
     onSuccess: async (_data, variables) => {
       const used = Math.abs(variables.quantity);
-      setSaved({
+      const done = {
         name: product?.name ?? "",
         quantity: used,
         unit: variables.unit,
         left: availableStock?.minus(used).toNumber() ?? 0,
-      });
+      };
+      if (scanMode.on) {
+        setScanSaved(
+          t("successBody", {
+            ...done,
+            unit: units.unit(done.unit, done.quantity),
+            leftUnit: units.unit(done.unit, done.left),
+          }),
+        );
+        setProduct(null);
+        scanMode.next();
+      } else {
+        setSaved(done);
+      }
       // Including the product's own figure above, which is read from
       // product.getById: consuming twice in a row is an ordinary thing to do,
       // so it must not be served from cache.
@@ -261,11 +289,23 @@ export default function ConsumeStockPage(): JSX.Element {
         title={t("title")}
       />
 
-      <form noValidate onSubmit={handleSubmit} className="space-y-6">
+      <form
+        noValidate
+        onSubmit={handleSubmit}
+        className="space-y-6"
+        ref={formRef}
+      >
         <FormErrorSummary
           focusSignal={errorSignal}
           messages={summaryMessages}
           title={t("errorTitle")}
+        />
+
+        <ScanModeToggle
+          hint={tScan("scanModeConsumeHint")}
+          on={scanMode.on}
+          onChange={scanMode.setOn}
+          saved={scanSaved}
         />
 
         <ProductPicker
@@ -273,6 +313,15 @@ export default function ConsumeStockPage(): JSX.Element {
           value={product?.id ?? ""}
           onChange={handleProductChange}
           error={fieldErrors.product}
+          onScanned={
+            scanMode.on
+              ? () => {
+                  if (quantity.trim() === "") setQuantity("1");
+                  setSubmitScanned(true);
+                }
+              : undefined
+          }
+          scanRequest={scanMode.scanRequest}
         />
 
         <div className="rounded border border-border bg-muted p-4">

@@ -1,6 +1,13 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
-import { act, screen, cleanup, fireEvent } from "@testing-library/react";
+import {
+  act,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
 import { axeViolations } from "../utils/axe";
@@ -65,7 +72,15 @@ mock.module("@/lib/trpc/client", () => ({
       list: {
         useQuery: () => ({
           data: {
-            products: [{ id: "p1", name: "Leche entera", defaultUnit: "L" }],
+            products: [
+              {
+                id: "p1",
+                name: "Leche entera",
+                brand: null,
+                defaultUnit: "L",
+                barcode: "8410000000123",
+              },
+            ],
           },
           isPending: false,
         }),
@@ -77,6 +92,9 @@ mock.module("@/lib/trpc/client", () => ({
           error: null,
         }),
       },
+      // The scan dialog's, which scan mode reopens after each save.
+      scanBarcode: { useMutation: () => ({ isPending: false, mutate() {} }) },
+      create: { useMutation: () => ({ isPending: false, mutate() {} }) },
     },
     location: {
       list: {
@@ -114,6 +132,14 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
+mock.module("@zxing/browser", () => ({
+  BrowserMultiFormatReader: class {
+    decodeFromConstraints() {
+      return new Promise(() => {});
+    }
+  },
+}));
+
 const { default: AddStockPage } =
   await import("@/app/(dashboard)/inventory/add/page");
 
@@ -123,7 +149,10 @@ beforeEach(() => {
   addSucceeds = false;
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 function pickProduct(): void {
   fireEvent.change(screen.getByLabelText("Producto"), {
@@ -249,4 +278,69 @@ it("passes axe at AAA", async () => {
   const { container } = renderWithIntl(<AddStockPage />, { locale: "es" });
   await screen.findByLabelText("Producto");
   expect(await axeViolations(container)).toBe("");
+});
+
+describe("scan mode", () => {
+  /** A hand scanner: it types the code into the focused search field. */
+  async function handScan(): Promise<void> {
+    await userEvent.type(
+      screen.getByLabelText("Buscar producto"),
+      "8410000000123",
+    );
+  }
+
+  beforeEach(() => {
+    Object.defineProperty(window, "isSecureContext", {
+      value: true,
+      configurable: true,
+    });
+  });
+
+  it("saves a scanned product at once, one of it, and asks for the next", async () => {
+    addSucceeds = true;
+    renderWithIntl(<AddStockPage />, { locale: "es" });
+
+    await userEvent.click(screen.getByLabelText("Modo escaneo"));
+    await handScan();
+
+    await waitFor(() => {
+      expect(addStockCalls).toHaveLength(1);
+    });
+    expect(addStockCalls[0]).toMatchObject({
+      productId: "p1",
+      quantity: 1,
+      unit: "L",
+    });
+    // Said in the live region beside the switch, not in a dialog over the
+    // camera; and the camera is open again.
+    expect(
+      await screen.findByText(/Has añadido 1 .* de «Leche entera»/),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("dialog", { name: "Escanear un producto" }),
+    ).toBeInTheDocument();
+  });
+
+  it("only chooses the product when it is off", async () => {
+    renderWithIntl(<AddStockPage />, { locale: "es" });
+
+    await handScan();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Producto")).toHaveValue("p1");
+    });
+    expect(addStockCalls).toHaveLength(0);
+  });
+
+  it("stays on, on this device, once switched on", async () => {
+    renderWithIntl(<AddStockPage />, { locale: "es" });
+    await userEvent.click(screen.getByLabelText("Modo escaneo"));
+    cleanup();
+
+    renderWithIntl(<AddStockPage />, { locale: "es" });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Modo escaneo")).toBeChecked();
+    });
+  });
 });

@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { LocationPicker } from "@/components/inventory/LocationPicker";
 import { ProductPicker } from "@/components/inventory/ProductPicker";
+import { ScanModeToggle, useScanMode } from "@/components/barcode/ScanMode";
 import { StoreSelector } from "@/components/store/StoreSelector";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,20 @@ export default function AddStockPage(): JSX.Element {
 
   const [product, setProduct] = useState<PickedProduct | null>(null);
   const [quantity, setQuantity] = useState("");
+
+  // Scan mode: a scanned product is saved as soon as the form has it, then
+  // the camera asks for the next. The submit is the form's own, so it is
+  // validated exactly as a pressed button would be.
+  const scanMode = useScanMode("add");
+  const tScan = useTranslations("products.scanPick");
+  const formRef = useRef<HTMLFormElement>(null);
+  const [submitScanned, setSubmitScanned] = useState(false);
+  const [scanSaved, setScanSaved] = useState("");
+  useEffect(() => {
+    if (!submitScanned || !product) return;
+    setSubmitScanned(false);
+    formRef.current?.requestSubmit();
+  }, [submitScanned, product]);
   const [unit, setUnit] = useState("");
   // True once the person edits the unit themselves, after which selecting a
   // different product must not overwrite what they typed.
@@ -119,11 +134,25 @@ export default function AddStockPage(): JSX.Element {
      * `/products/new`, which is why PROGRESS.md D8 exists.
      */
     onSuccess: async (_data, variables) => {
-      setSaved({
+      const done = {
         name: product?.name ?? "",
         quantity: Math.abs(variables.quantity),
         unit: variables.unit,
-      });
+      };
+      if (scanMode.on) {
+        // Said beside the switch rather than in the dialog, which would sit
+        // over the camera the next scan needs.
+        setScanSaved(
+          t("successBody", {
+            ...done,
+            unit: units.unit(done.unit, done.quantity),
+          }),
+        );
+        setProduct(null);
+        scanMode.next();
+      } else {
+        setSaved(done);
+      }
       await invalidateAfterStockChange(utils);
       router.refresh();
     },
@@ -265,11 +294,23 @@ export default function AddStockPage(): JSX.Element {
         title={t("title")}
       />
 
-      <form noValidate onSubmit={handleSubmit} className="space-y-6">
+      <form
+        noValidate
+        onSubmit={handleSubmit}
+        className="space-y-6"
+        ref={formRef}
+      >
         <FormErrorSummary
           focusSignal={errorSignal}
           messages={summaryMessages}
           title={t("errorTitle")}
+        />
+
+        <ScanModeToggle
+          hint={tScan("scanModeAddHint")}
+          on={scanMode.on}
+          onChange={scanMode.setOn}
+          saved={scanSaved}
         />
 
         <ProductPicker
@@ -277,6 +318,15 @@ export default function AddStockPage(): JSX.Element {
           value={product?.id ?? ""}
           onChange={handleProductChange}
           error={fieldErrors.product}
+          onScanned={
+            scanMode.on
+              ? () => {
+                  if (quantity.trim() === "") setQuantity("1");
+                  setSubmitScanned(true);
+                }
+              : undefined
+          }
+          scanRequest={scanMode.scanRequest}
         />
 
         <div>

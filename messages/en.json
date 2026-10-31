@@ -320,7 +320,10 @@
       "assignCancel": "Don't save the code",
       "typedLabel": "Won't read? Type the code",
       "typedSubmit": "Look up",
-      "scanLineOf": "Scan the product for “{name}”"
+      "scanLineOf": "Scan the product for “{name}”",
+      "scanMode": "Scan mode",
+      "scanModeAddHint": "Each product you scan is added at once with the quantity given below (1 if left empty), and the camera opens again for the next.",
+      "scanModeConsumeHint": "Each product you scan is recorded as used at once with the quantity given below (1 if left empty), and the camera opens again for the next."
     },
     "rating": {
       "title": "Quality",

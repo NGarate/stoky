@@ -43,6 +43,14 @@ interface ProductPickerProps {
    * page about using things up. Confirmed in a browser before it was fixed.
    */
   hint: string;
+  /**
+   * Called, after `onChange`, when the product came from a code — the camera
+   * or a hand scanner typing into the search — rather than from the list. A
+   * page's scan mode saves on it.
+   */
+  onScanned?: (product: PickedProduct) => void;
+  /** Each new value opens the camera: a page's scan mode, asking for the next. */
+  scanRequest?: number;
 }
 
 function toPicked(product: PickedProduct): PickedProduct {
@@ -73,6 +81,8 @@ export function ProductPicker({
   onChange,
   error,
   hint,
+  onScanned,
+  scanRequest = 0,
 }: ProductPickerProps) {
   // The labels are the same wherever this is used, so they live in a namespace
   // of their own rather than in whichever page happened to be written first.
@@ -130,12 +140,22 @@ export function ProductPicker({
   );
   const chooseMatch = useEffectEvent((id: string) => {
     const match = products.find((product) => product.id === id);
-    if (match && match.id !== value) onChange(toPicked(match));
+    if (!match) return;
+    // The code is spent: cleared, so a hand scanner's next code starts an
+    // empty field, and the product held, so the cleared list still shows it.
+    setScannedProduct(toPicked(match));
+    setSearch("");
+    onChange(toPicked(match));
+    onScanned?.(toPicked(match));
   });
   const exactMatchId = exactMatch?.id;
   useEffect(() => {
     if (exactMatchId) chooseMatch(exactMatchId);
   }, [exactMatchId]);
+
+  useEffect(() => {
+    if (scanRequest > 0) setScanOpen(true);
+  }, [scanRequest]);
 
   const statusMessage = isPending
     ? t("loadingProducts")
@@ -184,6 +204,7 @@ export function ProductPicker({
           setScannedProduct(product);
           setPendingCode(null);
           onChange(product);
+          onScanned?.(product);
         }}
         open={scanOpen}
       />
