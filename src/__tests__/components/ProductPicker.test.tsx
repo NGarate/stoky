@@ -20,28 +20,64 @@ import { renderWithIntl, esMessages, enMessages } from "../utils/render";
  * the labels no longer come from one particular page's namespace.
  */
 
+const MILK = {
+  id: "p1",
+  name: "Leche entera",
+  brand: null,
+  defaultUnit: "L",
+  barcode: "8410000000123",
+};
+const BREAD = {
+  id: "p2",
+  name: "Pan",
+  brand: null,
+  defaultUnit: "unit",
+  barcode: null,
+};
+const updates: Array<Record<string, unknown>> = [];
+
 mock.module("@/lib/trpc/client", () => ({
   api: {
+    useUtils: () => ({
+      product: {
+        invalidate: async () => {},
+        getByBarcode: {
+          fetch: async ({ barcode }: { barcode: string }) =>
+            barcode === MILK.barcode ? MILK : null,
+        },
+      },
+    }),
     product: {
       list: {
         useQuery: () => ({
-          data: {
-            products: [
-              {
-                id: "p1",
-                name: "Leche entera",
-                brand: null,
-                defaultUnit: "L",
-                barcode: "8410000000123",
-              },
-            ],
-          },
+          data: { products: [MILK, BREAD] },
           isPending: false,
         }),
       },
+      update: {
+        useMutation: (options: {
+          onSuccess: (data: unknown, variables: { barcode?: string }) => void;
+        }) => ({
+          isPending: false,
+          mutate: (input: { id: string; barcode: string }) => {
+            updates.push(input);
+            options.onSuccess({}, input);
+          },
+        }),
+      },
+      scanBarcode: { useMutation: () => ({ isPending: false, mutate() {} }) },
+      create: { useMutation: () => ({ isPending: false, mutate() {} }) },
     },
   },
   TRPCProvider: ({ children }: { children: unknown }) => children,
+}));
+
+mock.module("@zxing/browser", () => ({
+  BrowserMultiFormatReader: class {
+    decodeFromConstraints() {
+      return new Promise(() => {});
+    }
+  },
 }));
 
 const { ProductPicker } = await import("@/components/inventory/ProductPicker");
@@ -155,5 +191,116 @@ describe("a code typed into the search", () => {
     await userEvent.type(screen.getByLabelText("Buscar producto"), "Leche");
 
     expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("scanning from the picker", () => {
+  async function scanCode(code: string): Promise<void> {
+    Object.defineProperty(window, "isSecureContext", {
+      value: true,
+      configurable: true,
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Escanear" }));
+    await userEvent.type(
+      screen.getByLabelText("¿No lo lee? Escribe el código"),
+      code,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Buscar" }));
+  }
+
+  it("chooses the product a scanned code belongs to", async () => {
+    const onChange = mock((_product: unknown) => {});
+    renderWithIntl(<ProductPicker hint="" onChange={onChange} value="" />);
+
+    await scanCode(MILK.barcode);
+
+    await waitFor(() => {
+      expect(onChange).toHaveBeenCalledWith({
+        id: "p1",
+        name: "Leche entera",
+        brand: null,
+        defaultUnit: "L",
+      });
+    });
+    expect(screen.queryByRole("dialog")).toBeAbsent();
+  });
+
+  it("keeps its own searches out of the form it sits in", async () => {
+    const submitted = mock(() => {});
+    renderWithIntl(
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          submitted();
+        }}
+      >
+        <ProductPicker hint="" onChange={() => {}} value="" />
+      </form>,
+    );
+
+    await scanCode("5000000000001");
+    await userEvent.type(
+      await screen.findByLabelText("Nombre del producto nuevo"),
+      "Galletas",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Crear con este código" }),
+    );
+
+    // The add-stock and shopping forms hold this picker; looking a code up
+    // must not save stock or a shopping line.
+    expect(submitted).not.toHaveBeenCalled();
+  });
+
+  it("saves an unknown code onto the product chosen for it, when asked", async () => {
+    updates.length = 0;
+    const { rerender } = renderWithIntl(
+      <ProductPicker hint="" onChange={() => {}} value="" />,
+    );
+
+    await scanCode("5000000000001");
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: "Es un producto que ya tengo",
+      }),
+    );
+
+    expect(
+      screen.getByText(
+        "Elige a qué producto pertenece el código 5000000000001.",
+      ),
+    ).toBeInTheDocument();
+    // Nothing is saved by choosing; it waits for the explicit button.
+    rerender(<ProductPicker hint="" onChange={() => {}} value="p2" />);
+    expect(updates).toEqual([]);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Guardar el código en «Pan»" }),
+    );
+
+    expect(updates).toEqual([{ id: "p2", barcode: "5000000000001" }]);
+    expect(
+      await screen.findByText("El código 5000000000001 es ahora de «Pan»."),
+    ).toBeInTheDocument();
+  });
+
+  it("warns that saving replaces the code a product already has", async () => {
+    const { rerender } = renderWithIntl(
+      <ProductPicker hint="" onChange={() => {}} value="" />,
+    );
+    await scanCode("5000000000001");
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: "Es un producto que ya tengo",
+      }),
+    );
+
+    rerender(<ProductPicker hint="" onChange={() => {}} value="p1" />);
+
+    expect(
+      screen.getByText(
+        "«Leche entera» ya tiene el código 8410000000123; se sustituirá.",
+      ),
+    ).toBeInTheDocument();
   });
 });

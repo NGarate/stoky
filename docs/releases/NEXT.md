@@ -7,6 +7,7 @@
 * Siempre sabes cuánto queda de cada lote
 * La barra del móvil muestra dónde estás
 * Tu cuenta y cerrar sesión, a un toque
+* Escanea el producto donde lo eliges
 
 ### Marca, categoría y unidad te sugieren lo que ya usas
 
@@ -48,6 +49,17 @@ cuenta: con qué nombre y correo estás dentro, **Seguridad y acceso** y
 **Cerrar sesión**. En el móvil y la tableta está lo mismo al principio de
 **Más**. Ya no hace falta bajar hasta el final de Configuración para salir.
 
+### Escanea el producto donde lo eliges
+
+Al añadir o gastar stock, el botón **Escanear** junto a la búsqueda abre la
+cámara y elige el producto por su código de barras, sin salir de la
+pantalla. Si la cámara no lo lee, puedes escribir el código. Si ningún
+producto tiene ese código, Stoky te ofrece buscarlo en Open Food Facts,
+crearlo con el código ya puesto o decir a qué producto pertenece y
+guardárselo. Si tienes varias cámaras, puedes elegir cuál usar y se
+recuerda. Un lector de códigos USB o Bluetooth también vale: escribe el
+código en la búsqueda y el producto queda elegido.
+
 ## English
 
 ### Brand, category and unit suggest what you already use
@@ -87,3 +99,14 @@ On a desktop, the circle with your initials at the top right opens your
 account: the name and address you are signed in with, **Security and
 access** and **Sign out**. On a phone or tablet the same is at the top of
 **More**. Signing out no longer means scrolling to the end of Settings.
+
+### Scan the product where you choose it
+
+Adding or using up stock, the **Scan** button beside the search opens the
+camera and chooses the product by its barcode, without leaving the screen.
+If the camera will not read it, type the code. If no product has that code,
+Stoky offers to look it up in Open Food Facts, to create it with the code
+already on it, or to save it onto a product you choose. With more than one
+camera you can pick which, and it is remembered. A USB or Bluetooth barcode
+reader works too: it types the code into the search and the product is
+chosen.
