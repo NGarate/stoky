@@ -78,7 +78,9 @@
     "more": "Más",
     "mainLabel": "Navegación principal",
     "moreTitle": "Más secciones",
-    "kitchen": "Cocina"
+    "kitchen": "Cocina",
+    "account": "Tu cuenta",
+    "accountOf": "Tu cuenta: {name}"
   },
   "dashboard": {
     "title": "Panel",

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { AccountMenu } from "@/components/session/AccountMenu";
+import type { Account } from "@/components/session/AccountPanel";
 import { DESKTOP_DESTINATIONS, activeHref } from "./navigation";
 import type { JSX } from "react";
 
@@ -27,8 +29,11 @@ import type { JSX } from "react";
  * screen whose whole job is what to buy and what is running out. They live on
  * `/settings`, which this bar links to, and which is where somebody goes when
  * changing a setting is what they came to do.
+ *
+ * It ends with the account circle (`AccountMenu`): who is signed in, and the
+ * way out, from every screen rather than from the foot of `/settings`.
  */
-export function DashboardNav(): JSX.Element {
+export function DashboardNav({ account }: { account: Account }): JSX.Element {
   const t = useTranslations("navigation");
   const pathname = usePathname();
   const current = activeHref(pathname, DESKTOP_DESTINATIONS);
@@ -78,6 +83,7 @@ export function DashboardNav(): JSX.Element {
             })}
           </ul>
         </div>
+        <AccountMenu account={account} />
       </div>
     </nav>
   );

@@ -2,7 +2,9 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, mock } from "bun:test";
 import { screen, cleanup, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { AnchorHTMLAttributes, ReactNode } from "react";
+import { createContext } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { AnchorHTMLAttributes, ReactElement, ReactNode } from "react";
 import { renderWithIntl } from "../utils/render";
 
 /**
@@ -46,6 +48,30 @@ mock.module("@/lib/i18n/cookies", () => ({
   setLocalePreference: async () => {},
 }));
 
+// The account panel's sign-out asks the queue what is unsent. Complete, with
+// a real context, for the reason ShoppingItem.test.tsx gives.
+mock.module("@/lib/offline/queue-context", () => ({
+  WriteQueueContext: createContext(null),
+  useWriteQueue: () => ({
+    state: { pending: [], failed: [], status: "idle", full: false },
+    enqueue: () => ({ ok: true as const, id: "x" }),
+    drain: () => {},
+    retry: () => {},
+    discard: () => {},
+    flush: async () => 0,
+    purgeAll: () => {},
+  }),
+}));
+
+const ACCOUNT = { name: "Noa García", email: "noa@example.com" };
+
+/** The shell's providers the account panel needs: a query client. */
+function renderNav(ui: ReactElement): ReturnType<typeof renderWithIntl> {
+  return renderWithIntl(
+    <QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>,
+  );
+}
+
 const { CompactNav } = await import("@/components/dashboard/CompactNav");
 
 afterEach(() => {
@@ -67,7 +93,7 @@ function openSheet(): Promise<void> {
 describe("CompactNav", () => {
   it("renders a phone bar and a tablet rail, both named", () => {
     pathname = "/dashboard";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     // Only one is ever visible, which is why they can share the name: a
     // display:none landmark is not in the accessibility tree.
@@ -76,7 +102,7 @@ describe("CompactNav", () => {
 
   it("starts with three destinations and Más, Spanish and short", () => {
     pathname = "/dashboard";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     const bar = within(bars()[0]);
     expect(
@@ -95,7 +121,7 @@ describe("CompactNav", () => {
 
   it("marks the current destination with aria-current, not colour alone", () => {
     pathname = "/inventory";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     const link = within(bars()[0]).getByRole("link", { name: "Inventario" });
     expect(link).toHaveAttribute("aria-current", "page");
@@ -106,7 +132,7 @@ describe("CompactNav", () => {
 
   it("keeps a destination current on its nested routes", () => {
     pathname = "/shopping/list-1";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     expect(
       within(bars()[0]).getByRole("link", { name: "Compra" }),
@@ -115,7 +141,7 @@ describe("CompactNav", () => {
 
   it("marks exactly one destination as current", async () => {
     pathname = "/products/scan";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     await within(bars()[0]).findByRole("link", { name: "Productos" });
     const current = within(bars()[0])
@@ -132,7 +158,7 @@ describe("CompactNav", () => {
    */
   it("gives the screen you are on a slot in the bar, never Más", async () => {
     pathname = "/receipts";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     const bar = within(bars()[0]);
     const tickets = await bar.findByRole("link", { name: "Tickets" });
@@ -150,12 +176,12 @@ describe("CompactNav", () => {
 
   it("remembers the bar on this device from one visit to the next", async () => {
     pathname = "/prices";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
     await within(bars()[0]).findByRole("link", { name: "Precios" });
     cleanup();
 
     pathname = "/shopping";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     // Shopping was in the bar already, so nothing was replaced.
     await waitFor(() => {
@@ -170,7 +196,7 @@ describe("CompactNav", () => {
   it("starts again from the default when what it stored is not a bar", async () => {
     localStorage.setItem("stoky.nav-slots", '{"hrefs":["https://x"]}');
     pathname = "/inventory";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     await waitFor(() => {
       expect(
@@ -183,7 +209,7 @@ describe("CompactNav", () => {
 
   it("keeps the sheet closed, and its links out of the tab order, until asked", () => {
     pathname = "/dashboard";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     expect(screen.queryByRole("dialog")).toBeAbsent();
     expect(screen.queryByRole("link", { name: "Tickets" })).toBeAbsent();
@@ -194,7 +220,7 @@ describe("CompactNav", () => {
 
   it("opens a named dialog holding the remaining destinations", async () => {
     pathname = "/dashboard";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     await openSheet();
 
@@ -226,7 +252,7 @@ describe("CompactNav", () => {
    */
   it("carries destinations and nothing else", async () => {
     pathname = "/dashboard";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     await openSheet();
 
@@ -240,7 +266,7 @@ describe("CompactNav", () => {
 
   it("keeps the current page out of the sheet: it is in the bar", async () => {
     pathname = "/settings/stores";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     await within(bars()[0]).findByRole("link", { name: "Configuración" });
     await openSheet();
@@ -252,9 +278,28 @@ describe("CompactNav", () => {
     ).toBeAbsent();
   });
 
+  it("says who is signed in at the head of the sheet, with the way out", async () => {
+    pathname = "/dashboard";
+    renderNav(<CompactNav account={ACCOUNT} />);
+
+    await openSheet();
+
+    const account = within(screen.getByRole("dialog")).getByRole("region", {
+      name: "Tu cuenta",
+    });
+    expect(within(account).getByText("Noa García")).toBeInTheDocument();
+    expect(within(account).getByText("noa@example.com")).toBeInTheDocument();
+    expect(
+      within(account).getByRole("link", { name: "Seguridad y acceso" }),
+    ).toHaveAttribute("href", "/settings/security");
+    expect(
+      within(account).getByRole("button", { name: "Cerrar sesión" }),
+    ).toBeInTheDocument();
+  });
+
   it("moves focus into the sheet when it opens", async () => {
     pathname = "/dashboard";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     await openSheet();
 
@@ -265,7 +310,7 @@ describe("CompactNav", () => {
 
   it("closes on Escape and gives focus back to the button that opened it", async () => {
     pathname = "/dashboard";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     const trigger = within(bars()[0]).getByRole("button", { name: /Más/ });
     await userEvent.click(trigger);
@@ -281,7 +326,7 @@ describe("CompactNav", () => {
 
   it("closes from its own button", async () => {
     pathname = "/dashboard";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     await openSheet();
     await userEvent.click(
@@ -297,7 +342,7 @@ describe("CompactNav", () => {
 
   it("traps Tab inside the sheet", async () => {
     pathname = "/dashboard";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     await openSheet();
     const sheet = screen.getByRole("dialog");
@@ -312,7 +357,7 @@ describe("CompactNav", () => {
 
   it("never wraps onto a control Tab cannot reach", async () => {
     pathname = "/dashboard";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     await openSheet();
     const sheet = screen.getByRole("dialog");
@@ -334,7 +379,7 @@ describe("CompactNav", () => {
 
   it("wraps backwards from the first control to the last", async () => {
     pathname = "/dashboard";
-    renderWithIntl(<CompactNav />);
+    renderNav(<CompactNav account={ACCOUNT} />);
 
     await openSheet();
     const sheet = screen.getByRole("dialog");

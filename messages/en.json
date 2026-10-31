@@ -78,7 +78,9 @@
     "more": "More",
     "mainLabel": "Main navigation",
     "moreTitle": "More sections",
-    "kitchen": "Kitchen"
+    "kitchen": "Kitchen",
+    "account": "Your account",
+    "accountOf": "Your account: {name}"
   },
   "dashboard": {
     "title": "Dashboard",

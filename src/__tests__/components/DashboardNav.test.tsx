@@ -1,7 +1,10 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, mock } from "bun:test";
-import { screen, cleanup } from "@testing-library/react";
-import type { AnchorHTMLAttributes, ReactNode } from "react";
+import { screen, cleanup, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { createContext } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { AnchorHTMLAttributes, ReactElement, ReactNode } from "react";
 import { renderWithIntl } from "../utils/render";
 
 let pathname = "/dashboard";
@@ -38,6 +41,30 @@ mock.module("@/lib/i18n/cookies", () => ({
   setLocalePreference: async () => {},
 }));
 
+// The account panel's sign-out asks the queue what is unsent. Complete, with
+// a real context, for the reason ShoppingItem.test.tsx gives.
+mock.module("@/lib/offline/queue-context", () => ({
+  WriteQueueContext: createContext(null),
+  useWriteQueue: () => ({
+    state: { pending: [], failed: [], status: "idle", full: false },
+    enqueue: () => ({ ok: true as const, id: "x" }),
+    drain: () => {},
+    retry: () => {},
+    discard: () => {},
+    flush: async () => 0,
+    purgeAll: () => {},
+  }),
+}));
+
+const ACCOUNT = { name: "Noa García", email: "noa@example.com" };
+
+/** The shell's providers the account panel needs: a query client. */
+function renderNav(ui: ReactElement): ReturnType<typeof renderWithIntl> {
+  return renderWithIntl(
+    <QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>,
+  );
+}
+
 const { DashboardNav } = await import("@/components/dashboard/DashboardNav");
 
 afterEach(cleanup);
@@ -51,7 +78,7 @@ function activeLink(): HTMLElement | undefined {
 describe("DashboardNav", () => {
   it("renders every section using the Spanish catalogue", () => {
     pathname = "/dashboard";
-    renderWithIntl(<DashboardNav />);
+    renderNav(<DashboardNav account={ACCOUNT} />);
 
     const expected = [
       ["Panel", "/dashboard"],
@@ -73,7 +100,7 @@ describe("DashboardNav", () => {
 
   it("links the wordmark back to the dashboard", () => {
     pathname = "/inventory";
-    renderWithIntl(<DashboardNav />);
+    renderNav(<DashboardNav account={ACCOUNT} />);
 
     expect(screen.getByRole("link", { name: "Stoky" })).toHaveAttribute(
       "href",
@@ -83,21 +110,21 @@ describe("DashboardNav", () => {
 
   it("highlights the section matching the current route", () => {
     pathname = "/inventory";
-    renderWithIntl(<DashboardNav />);
+    renderNav(<DashboardNav account={ACCOUNT} />);
 
     expect(activeLink()?.textContent).toBe("Inventario");
   });
 
   it("keeps the section highlighted on nested routes", () => {
     pathname = "/receipts/abc123/review";
-    renderWithIntl(<DashboardNav />);
+    renderNav(<DashboardNav account={ACCOUNT} />);
 
     expect(activeLink()?.textContent).toBe("Tickets");
   });
 
   it("highlights exactly one section at a time", () => {
     pathname = "/prices/product-1";
-    renderWithIntl(<DashboardNav />);
+    renderNav(<DashboardNav account={ACCOUNT} />);
 
     const highlighted = screen
       .getAllByRole("link")
@@ -108,21 +135,21 @@ describe("DashboardNav", () => {
   it("does not confuse a prefix match for a section match", () => {
     // "/products" must not light up while on "/prices".
     pathname = "/prices";
-    renderWithIntl(<DashboardNav />);
+    renderNav(<DashboardNav account={ACCOUNT} />);
 
     expect(activeLink()?.textContent).toBe("Precios");
   });
 
   it("highlights nothing on an unrelated route", () => {
     pathname = "/some/other/page";
-    renderWithIntl(<DashboardNav />);
+    renderNav(<DashboardNav account={ACCOUNT} />);
 
     expect(activeLink()).toBeUndefined();
   });
 
   it("names the landmark", () => {
     pathname = "/dashboard";
-    renderWithIntl(<DashboardNav />);
+    renderNav(<DashboardNav account={ACCOUNT} />);
 
     expect(
       screen.getByRole("navigation", { name: "Navegación principal" }),
@@ -131,7 +158,7 @@ describe("DashboardNav", () => {
 
   it("marks the current section with aria-current, not colour alone", () => {
     pathname = "/inventory";
-    renderWithIntl(<DashboardNav />);
+    renderNav(<DashboardNav account={ACCOUNT} />);
 
     const link = screen.getByRole("link", { name: "Inventario" });
     expect(link).toHaveAttribute("aria-current", "page");
@@ -140,7 +167,7 @@ describe("DashboardNav", () => {
 
   it("is the desktop tier only, and hands over rather than disappearing", () => {
     pathname = "/dashboard";
-    const { container } = renderWithIntl(<DashboardNav />);
+    const { container } = renderNav(<DashboardNav account={ACCOUNT} />);
 
     // Below `lg` this bar is hidden — but `CompactNav` renders a bottom bar or
     // a rail at those widths, so nothing is dropped (ISSUES.md NAV-1).
@@ -151,7 +178,7 @@ describe("DashboardNav", () => {
 
   it("gives every link a 48px target", () => {
     pathname = "/dashboard";
-    renderWithIntl(<DashboardNav />);
+    renderNav(<DashboardNav account={ACCOUNT} />);
 
     for (const label of ["Panel", "Inventario", "Configuración"]) {
       expect(screen.getByRole("link", { name: label }).className).toContain(
@@ -168,7 +195,7 @@ describe("DashboardNav", () => {
    */
   it("carries no settings controls, only destinations", () => {
     pathname = "/dashboard";
-    renderWithIntl(<DashboardNav />);
+    renderNav(<DashboardNav account={ACCOUNT} />);
 
     expect(screen.queryByLabelText("Idioma")).toBeAbsent();
     expect(screen.queryByRole("group", { name: "Tema" })).toBeAbsent();
@@ -179,5 +206,25 @@ describe("DashboardNav", () => {
       "href",
       "/settings",
     );
+  });
+
+  it("ends with the account circle, named in words, which opens the account", async () => {
+    pathname = "/dashboard";
+    renderNav(<DashboardNav account={ACCOUNT} />);
+
+    const circle = screen.getByRole("button", {
+      name: "Tu cuenta: Noa García",
+    });
+    // The initials are decoration; the name is the button's.
+    expect(circle).toHaveTextContent("NG");
+    expect(circle).toHaveAttribute("aria-expanded", "false");
+
+    await userEvent.click(circle);
+
+    const dialog = screen.getByRole("dialog", { name: "Tu cuenta" });
+    expect(within(dialog).getByText("noa@example.com")).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "Cerrar sesión" }),
+    ).toBeInTheDocument();
   });
 });

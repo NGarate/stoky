@@ -16,6 +16,7 @@ import {
   Tags,
 } from "lucide-react";
 import { NavSheet } from "./NavSheet";
+import type { Account } from "@/components/session/AccountPanel";
 import {
   COMPACT_DESTINATIONS,
   DEFAULT_SLOTS,
@@ -92,7 +93,7 @@ function destinationOf(href: string): Destination {
  * accessible name: a hidden `<nav>` is not in the accessibility tree, so the
  * landmark stays unique at every width.
  */
-export function CompactNav(): JSX.Element {
+export function CompactNav({ account }: { account: Account }): JSX.Element {
   const t = useTranslations("navigation");
   const pathname = usePathname();
   const [isSheetOpen, setSheetOpen] = useState(false);
@@ -188,6 +189,7 @@ export function CompactNav(): JSX.Element {
       </nav>
 
       <NavSheet
+        account={account}
         currentHref={current}
         destinations={inSheet}
         onClose={() => setSheetOpen(false)}

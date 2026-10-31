@@ -4,11 +4,14 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useRef } from "react";
 import { tabbableWithin } from "@/lib/focus";
+import { AccountPanel, type Account } from "@/components/session/AccountPanel";
 
 import type { Destination } from "./navigation";
 import type { JSX } from "react";
 
 interface NavSheetProps {
+  /** Who is signed in, drawn at the head of the sheet. */
+  account: Account;
   /** The destination the current route belongs to, or `null`. */
   currentHref: string | null;
   /** What the bar is not showing, in the order to list it. */
@@ -19,7 +22,8 @@ interface NavSheetProps {
 }
 
 /**
- * The "Más" panel: the destinations the compact tiers do not show.
+ * The "Más" panel: who is signed in, then the destinations the compact
+ * tiers' bar is not showing.
  *
  * It used to carry theme and language as well. They have gone to `/settings`,
  * which is one of the destinations listed here — a settings control reachable
@@ -41,6 +45,7 @@ interface NavSheetProps {
  * opened it. Both are the same DOM.
  */
 export function NavSheet({
+  account,
   currentHref,
   destinations,
   onClose,
@@ -152,6 +157,12 @@ export function NavSheet({
           >
             {tCommon("close")}
           </button>
+        </div>
+
+        {/* First, above the destinations: on a phone this is the only place
+            the account is, and on a shared device it is what matters. */}
+        <div className="mt-4 border-b border-border pb-4">
+          <AccountPanel account={account} />
         </div>
 
         <ul className="mt-4 space-y-2">

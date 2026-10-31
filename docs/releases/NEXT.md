@@ -6,6 +6,7 @@
 * Al subir un ticket, elige la tienda o escribe una nueva
 * Siempre sabes cuánto queda de cada lote
 * La barra del móvil muestra dónde estás
+* Tu cuenta y cerrar sesión, a un toque
 
 ### Marca, categoría y unidad te sugieren lo que ya usas
 
@@ -40,6 +41,13 @@ está en la barra, marcada; al abrir otra, ocupa el sitio de la que llevas
 más tiempo sin usar y las demás no se mueven. **Más** tiene el resto.
 **Escanear** ya no está en la barra: sigue en Productos, Inventario y Compra.
 
+### Tu cuenta y cerrar sesión, a un toque
+
+En el ordenador, el círculo con tus iniciales arriba a la derecha abre tu
+cuenta: con qué nombre y correo estás dentro, **Seguridad y acceso** y
+**Cerrar sesión**. En el móvil y la tableta está lo mismo al principio de
+**Más**. Ya no hace falta bajar hasta el final de Configuración para salir.
+
 ## English
 
 ### Brand, category and unit suggest what you already use
@@ -72,3 +80,10 @@ you used on that device. The one you are on is always there, marked;
 opening another puts it in place of the one you used longest ago, and the
 others stay where they are. **More** has the rest. **Scan** has left the
 bar: it is still on Products, Inventory and Shopping.
+
+### Your account and signing out, one tap away
+
+On a desktop, the circle with your initials at the top right opens your
+account: the name and address you are signed in with, **Security and
+access** and **Sign out**. On a phone or tablet the same is at the top of
+**More**. Signing out no longer means scrolling to the end of Settings.

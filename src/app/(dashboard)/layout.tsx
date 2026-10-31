@@ -56,6 +56,10 @@ export default async function DashboardLayout({
     select: { snackbarDuration: true },
   });
 
+  // Who is signed in, for the account circle. From the session the layout
+  // already holds, so the shell asks the server nothing more for it.
+  const account = { name: session.user.name, email: session.user.email };
+
   return (
     // The only place that has awaited `auth()`. Every change composed below
     // here carries the account and the household it was composed under, and
@@ -73,8 +77,8 @@ export default async function DashboardLayout({
             working down the page — F8 is how you reach it deliberately. */}
         <SnackbarProvider>
           <div className="min-h-screen bg-background text-foreground">
-            <DashboardNav />
-            <CompactNav />
+            <DashboardNav account={account} />
+            <CompactNav account={account} />
             {/* WCAG 2.2.6: an idle session must say so before it takes work with it. */}
             <SessionKeepAlive
               expiresAt={session.expires}

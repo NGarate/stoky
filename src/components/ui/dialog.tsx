@@ -67,8 +67,11 @@ export function Dialog({
   /** Becomes `aria-describedby`. Say what is at stake, not "are you sure". */
   description?: string;
   children?: ReactNode;
-  /** The actions. Buttons, in the order they should be read. */
-  footer: ReactNode;
+  /**
+   * The actions. Buttons, in the order they should be read. Absent for a
+   * panel whose controls are its content, which the close button then ends.
+   */
+  footer?: ReactNode;
   tone?: "neutral" | "danger";
   /** Where focus goes on close, when the opener is not a Radix trigger. */
   returnFocus?: RefObject<HTMLElement | null>;
@@ -168,7 +171,11 @@ export function Dialog({
 
           {children ? <div className="mt-4">{children}</div> : null}
 
-          <div className="mt-6 flex flex-wrap justify-end gap-2">{footer}</div>
+          {footer ? (
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
+              {footer}
+            </div>
+          ) : null}
         </RadixDialog.Content>
       </RadixDialog.Portal>
     </RadixDialog.Root>
