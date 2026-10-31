@@ -30,6 +30,10 @@ describe("the development compose files", () => {
     });
   }
 
+  it("start PostgreSQL as its own user, so gosu never runs", () => {
+    expect(full.services.db?.user).toBe("70:70");
+  });
+
   it("put both on the same network definition", () => {
     expect(dev.networks?.stoky).toEqual(full.networks?.stoky);
   });

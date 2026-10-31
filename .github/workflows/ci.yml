@@ -163,7 +163,9 @@ jobs:
           POSTGRES_PASSWORD: stoky_ci
           POSTGRES_DB: stoky_test
         ports: ["5432:5432"]
+        # The image's postgres user, as in deploy/: no root, so no gosu.
         options: >-
+          --user 70:70
           --health-cmd "pg_isready -h 127.0.0.1 -U stoky -d stoky_test"
           --health-interval 5s --health-timeout 5s --health-retries 10
       cache:
@@ -265,7 +267,9 @@ jobs:
           POSTGRES_USER: stoky
           POSTGRES_PASSWORD: stoky_ci
           POSTGRES_DB: stoky
+        # The image's postgres user, as in deploy/: no root, so no gosu.
         options: >-
+          --user 70:70
           --health-cmd "pg_isready -h 127.0.0.1 -U stoky -d stoky"
           --health-interval 5s --health-timeout 5s --health-retries 10
       cache:

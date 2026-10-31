@@ -16,6 +16,9 @@
 services:
   db:
     image: postgres:16-alpine
+    # The image's postgres user (70 on Alpine), as in deploy/: the entrypoint
+    # then never runs as root and never steps down through gosu.
+    user: "70:70"
     environment:
       POSTGRES_USER: stoky
       POSTGRES_PASSWORD: stoky_dev_password

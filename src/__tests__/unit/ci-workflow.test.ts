@@ -1137,3 +1137,23 @@ describe("Dependabot's update configuration", () => {
     }
   });
 });
+
+describe("the CI workflow's PostgreSQL services", () => {
+  // As in deploy/: started as the image's postgres user, the entrypoint never
+  // runs as root and never steps down through gosu.
+  it("start as the image's postgres user, so gosu never runs", () => {
+    const jobs = (workflow.jobs ?? {}) as Record<
+      string,
+      { services?: Record<string, { image?: string; options?: string }> }
+    >;
+    const postgres = Object.values(jobs).flatMap((job) =>
+      Object.values(job.services ?? {}).filter((service) =>
+        service.image?.startsWith("postgres:"),
+      ),
+    );
+    expect(postgres.length).toBeGreaterThan(0);
+    for (const service of postgres) {
+      expect(service.options).toMatch(/(?:^|\s)--user 70:70(?:\s|$)/);
+    }
+  });
+});
