@@ -51,7 +51,8 @@ cuenta: con qué nombre y correo estás dentro, **Seguridad y acceso** y
 
 ### Escanea el producto donde lo eliges
 
-Al añadir o gastar stock, el botón **Escanear** junto a la búsqueda abre la
+Al añadir o gastar stock, o al añadir algo a una lista de la compra, el
+botón **Escanear** junto a la búsqueda abre la
 cámara y elige el producto por su código de barras, sin salir de la
 pantalla. Al revisar un ticket, cada línea tiene también **Escanear**: si el
 paquete está a mano, su código dice qué producto es mejor que el texto del
@@ -109,7 +110,8 @@ access** and **Sign out**. On a phone or tablet the same is at the top of
 
 ### Scan the product where you choose it
 
-Adding or using up stock, the **Scan** button beside the search opens the
+Adding or using up stock, or adding to a shopping list, the **Scan**
+button beside the search opens the
 camera and chooses the product by its barcode, without leaving the screen.
 Reviewing a receipt, each line has **Scan** too: with the packet at hand,
 its code says which product it is better than the receipt's text does.
