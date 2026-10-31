@@ -417,7 +417,7 @@ On 2026-10-22 `scripts/scan-bundle-images.sh` found `v3.7.14`, then on
 `postgres:16.15-alpine` was rebuilt upstream (index `sha256:0cefaabd…`) and
 `master` takes that build, clean under the same scan.
 
-`bun audit --audit-level moderate` reports no vulnerabilities across 598 packages (2026-10-25, after taking happy-dom 21.0.4, fast-uri 3.1.9 and zod 4; before them it reported two high advisories and two moderate ones, three of them published on 2026-10-23, and zod's had no 3.x fix).
+`bun audit --audit-level moderate` reports no vulnerabilities across 682 packages (2026-10-31, after the minimatch override; 598 on 2026-10-25, after taking happy-dom 21.0.4, fast-uri 3.1.9 and zod 4, before which it reported two high advisories and two moderate ones, three of them published on 2026-10-23, and zod's had no 3.x fix).
 Trivy 0.69.3 (the CI version), with a fresh 2026-09-25 database, scans the Bun-only
 production image with zero fixable HIGH/CRITICAL findings. The image was exported
 and scanned read-only, without exposing the Docker socket to the scanner.
@@ -547,7 +547,7 @@ binary you happen to be holding.
 | Schema drift | `bunx --bun prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code` | ✅ no difference between `schema.prisma` and what the one baseline migration builds (2026-10-27); run after `migrate deploy` by CI's test job and `test-integration-local.sh` |
 | Seed | `bun run db:seed` | ✅ idempotent across re-runs |
 | E2E | `bun run test:e2e` | ✅ 12 pass / 0 fail in 46.7 s at four workers, 51 s wall with the build (2026-10-27; 205 tests in 3.3 min before, after the suite became one happy path per process, D154), in Playwright's image with Bun from `.bun-version` (`scripts/e2e-in-image.sh`) — Chromium from the image, nothing installed on the host |
-| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 598 packages (2026-10-25, after the zod 4 migration; 563 at the security branch head, 2026-10-12) |
+| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 682 packages (2026-10-31, after the minimatch override; 598 on 2026-10-25; 563 at the security branch head, 2026-10-12) |
 
 **Nothing enforces the installer version any more.** corepack left with pnpm,
 and `setup-bun` pins only the copy CI runs, so on a developer's own machine the
@@ -1276,6 +1276,16 @@ fixed release exists), was removed by moving react-doctor from 0.9.11 to
 0.9.17, which no longer depends on deslop-js. The same day Next.js went to
 16.3.8 for GHSA-vcvr-r3jv-pc5j (critical, `next/og`). `bun audit`: no
 vulnerabilities across 564 packages.
+
+**2026-10-31: minimatch, across a major.** GHSA-g3hv-75wg-m249 (moderate,
+published 2026-10-30) has its only fix in minimatch 11.0.1, and the one path
+to it, react-doctor > eslint-plugin-react-hooks > eslint > @eslint/config-array,
+asks for `^10.2.4` in config-array's latest release. The override crosses the
+major because nothing that runs is on the other side of it: eslint is in the
+tree only as a peer Bun installs for eslint-plugin-react-hooks, which imports
+its types and nothing else, and react-doctor loads the plugin into oxlint. With
+`node_modules/eslint` moved aside, `check:react` passed with no "failed to
+load" notice. `bun audit`: no vulnerabilities across 682 packages.
 
 Dependabot alerts are enabled (`gh api repos/NGarate/stoky/vulnerability-alerts`
 answers 204) and on 2026-10-12 none was open: all 58 it ever raised are

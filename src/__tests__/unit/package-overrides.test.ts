@@ -5,7 +5,7 @@ import { join } from "node:path";
 /**
  * The security overrides, and the one way they fail without saying so.
  *
- * These five entries exist because a transitive dependency had an advisory and
+ * These entries exist because a transitive dependency had an advisory and
  * no parent release to move to — `docs/STATUS.md` § Dependency security has the
  * history, including the deepmerge-ts one that crosses a major because 7.x has
  * no fix.
@@ -121,6 +121,7 @@ describe("the dependency overrides", () => {
       "defu",
       "effect",
       "fast-uri",
+      "minimatch",
       "nanoid",
     ]);
   });
