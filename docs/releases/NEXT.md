@@ -1,5 +1,11 @@
 # Stoky: próxima versión
 
+> [!CAUTION]
+> Trae correcciones de seguridad que conviene instalar cuanto antes. El
+> Traefik de alpha.4 (`v3.7.16`) tiene un aviso HIGH en `go-jose` y dos en
+> `golang.org/x/net`; esta versión instala `v3.7.17`, que no tiene ninguno.
+> Valkey pasa a `8.1.11`, con `zlib` y `musl` corregidos.
+
 ## Destacado
 
 * Marca, categoría y unidad te sugieren lo que ya usas
@@ -69,6 +75,12 @@ y vuelve a abrir la cámara para el siguiente: una bolsa de la compra se
 guarda escaneando.
 
 ## English
+
+> [!CAUTION]
+> Carries security fixes worth installing soon. alpha.4's Traefik
+> (`v3.7.16`) has a HIGH advisory in `go-jose` and two in
+> `golang.org/x/net`; this release installs `v3.7.17`, which has none.
+> Valkey moves to `8.1.11`, with `zlib` and `musl` fixed.
 
 ### Brand, category and unit suggest what you already use
 
