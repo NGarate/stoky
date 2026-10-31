@@ -5,11 +5,13 @@ import {
   useCallback,
   useEffect,
   useEffectEvent,
+  useId,
   useRef,
 } from "react";
 import { useTranslations } from "next-intl";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 
 interface BarcodeScannerProps {
   onScan: (barcode: string) => void;
@@ -63,6 +65,32 @@ export function cameraProblem(error: Error | undefined): CameraProblem {
   }
 }
 
+/** Where this device remembers the camera chosen for scanning. */
+const CAMERA_KEY = "stoky.scan-camera";
+
+function storedCamera(): string | null {
+  try {
+    return localStorage.getItem(CAMERA_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storeCamera(deviceId: string | null): void {
+  try {
+    if (deviceId === null) localStorage.removeItem(CAMERA_KEY);
+    else localStorage.setItem(CAMERA_KEY, deviceId);
+  } catch {
+    // Private mode or storage blocked: the choice holds for this visit.
+  }
+}
+
+/** One camera the device offers, as the picker lists it. */
+interface Camera {
+  deviceId: string;
+  label: string;
+}
+
 export function BarcodeScanner({
   onScan,
   onError,
@@ -74,6 +102,19 @@ export function BarcodeScanner({
   const [torchFailed, setTorchFailed] = useState(false);
   const [scanError, setScanError] = useState<CameraProblem | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  /**
+   * Which camera to open: the one chosen on this device before, or none, in
+   * which case the rear one. A phone with three rear lenses picks one of them
+   * for "environment", and not always the one that can focus at a hand's
+   * length, so the person can choose and the choice is kept (Grocy does the
+   * same). Read in the initialiser: nothing rendered depends on it until the
+   * list below exists, so the server's render still matches.
+   */
+  const [deviceId, setDeviceId] = useState<string | null>(storedCamera);
+  const [cameras, setCameras] = useState<Camera[]>([]);
+  const cameraFieldId = useId();
+  const [activeCamera, setActiveCamera] = useState("");
 
   /**
    * Whether the page can reach the camera at all. Browsers remove
@@ -110,7 +151,20 @@ export function BarcodeScanner({
    * that must not reopen the camera.
    */
   const scanned = useEffectEvent((barcode: string) => onScan(barcode));
-  const failed = useEffectEvent((error?: Error) => handleError(error));
+  const failed = useEffectEvent((error?: Error) => {
+    // The remembered camera has gone — unplugged, or another browser
+    // profile's id. Forget it and open the rear camera instead of failing.
+    if (
+      deviceId !== null &&
+      (error?.name === "OverconstrainedError" ||
+        error?.name === "NotFoundError")
+    ) {
+      storeCamera(null);
+      setDeviceId(null);
+      return;
+    }
+    handleError(error);
+  });
   useEffect(() => {
     const video = videoRef.current;
     // Read directly: the state above is still true on the first commit.
@@ -120,7 +174,13 @@ export function BarcodeScanner({
     let done = false;
     new BrowserMultiFormatReader()
       .decodeFromConstraints(
-        { audio: false, video: { facingMode: "environment" } },
+        {
+          audio: false,
+          video:
+            deviceId === null
+              ? { facingMode: "environment" }
+              : { deviceId: { exact: deviceId } },
+        },
         video,
         (result, _error, scanControls) => {
           if (!result || done) return;
@@ -143,7 +203,7 @@ export function BarcodeScanner({
       done = true;
       controls?.stop();
     };
-  }, [isScanning]);
+  }, [isScanning, deviceId]);
 
   /** The live camera track the scanner is decoding from, or null. */
   const cameraTrack = useCallback((): MediaStreamTrack | null => {
@@ -174,7 +234,23 @@ export function BarcodeScanner({
     setTorchFailed(false);
     // The feed arrived, so whatever stopped it last time no longer applies.
     setScanError(null);
-  }, [cameraTrack]);
+    setActiveCamera(track?.getSettings?.().deviceId ?? "");
+    // Listed now rather than at mount: until the camera is allowed, browsers
+    // hide the labels, and a list of blank names is no choice at all.
+    void navigator.mediaDevices
+      ?.enumerateDevices?.()
+      .then((devices) =>
+        setCameras(
+          devices
+            .filter((device) => device.kind === "videoinput" && device.deviceId)
+            .map((device, index) => ({
+              deviceId: device.deviceId,
+              label: device.label || t("cameraNumber", { number: index + 1 }),
+            })),
+        ),
+      )
+      .catch(() => setCameras([]));
+  }, [cameraTrack, t]);
 
   const toggleTorch = useCallback(async () => {
     const track = cameraTrack();
@@ -338,6 +414,30 @@ export function BarcodeScanner({
       </p>
 
       {errorPanel}
+
+      {/* Only when there is a choice to make. */}
+      {cameras.length > 1 ? (
+        <div className="mt-4">
+          <label className="text-sm font-medium" htmlFor={cameraFieldId}>
+            {t("cameraLabel")}
+          </label>
+          <Select
+            className="mt-1"
+            id={cameraFieldId}
+            onChange={(event) => {
+              storeCamera(event.target.value);
+              setDeviceId(event.target.value);
+            }}
+            value={activeCamera}
+          >
+            {cameras.map((camera) => (
+              <option key={camera.deviceId} value={camera.deviceId}>
+                {camera.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+      ) : null}
 
       <p className="mt-4 text-center text-sm text-muted-foreground">
         {t("framingHint")}

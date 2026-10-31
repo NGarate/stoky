@@ -156,7 +156,10 @@ beforeEach(() => {
   });
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 describe("BarcodeScanner", () => {
   it("shows a disabled placeholder when scanning is off", () => {
@@ -517,5 +520,83 @@ describe("BarcodeScanner", () => {
     expect(
       screen.getByRole("button", { name: "Encender linterna" }),
     ).toBeInTheDocument();
+  });
+
+  describe("choosing the camera", () => {
+    /** The device's cameras, and the one the open track is on. */
+    function stubCameras(ids: string[], open = ids[0]): void {
+      const { track } = stubCamera();
+      Object.assign(track, { getSettings: () => ({ deviceId: open }) });
+      Object.defineProperty(globalThis.navigator, "mediaDevices", {
+        value: {
+          enumerateDevices: async () => [
+            { kind: "audioinput", deviceId: "mic", label: "Micrófono" },
+            ...ids.map((deviceId) => ({
+              kind: "videoinput",
+              deviceId,
+              label: `Lente ${deviceId}`,
+            })),
+          ],
+        },
+        configurable: true,
+        writable: true,
+      });
+    }
+
+    it("offers no choice on a device with one camera", async () => {
+      stubCameras(["a"]);
+      renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+      feedReady();
+      await act(async () => {});
+
+      expect(screen.queryByLabelText("Cámara")).toBeAbsent();
+    });
+
+    it("lists the cameras once one is open, and opens the one chosen", async () => {
+      stubCameras(["a", "b"]);
+      renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+      feedReady();
+
+      const field = await screen.findByLabelText("Cámara");
+      expect(field).toHaveValue("a");
+      expect(
+        screen.getAllByRole("option").map((option) => option.textContent),
+      ).toEqual(["Lente a", "Lente b"]);
+
+      await userEvent.selectOptions(field, "b");
+
+      expect(decodeCalls).toBe(2);
+      expect(decode?.constraints).toEqual({
+        audio: false,
+        video: { deviceId: { exact: "b" } },
+      });
+    });
+
+    it("opens the camera chosen last time", () => {
+      localStorage.setItem("stoky.scan-camera", "b");
+      renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+
+      expect(decode?.constraints).toEqual({
+        audio: false,
+        video: { deviceId: { exact: "b" } },
+      });
+    });
+
+    it("falls back to the rear camera when the remembered one has gone", async () => {
+      localStorage.setItem("stoky.scan-camera", "gone");
+      const onError = mock((_error: Error) => {});
+      renderWithIntl(<BarcodeScanner onError={onError} onScan={() => {}} />);
+
+      const gone = new Error("no such device");
+      gone.name = "OverconstrainedError";
+      await cameraRefuses(gone);
+
+      expect(decode?.constraints).toEqual({
+        audio: false,
+        video: { facingMode: "environment" },
+      });
+      expect(onError).not.toHaveBeenCalled();
+      expect(localStorage.getItem("stoky.scan-camera")).toBeNull();
+    });
   });
 });
