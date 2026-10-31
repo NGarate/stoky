@@ -53,7 +53,9 @@ cuenta: con qué nombre y correo estás dentro, **Seguridad y acceso** y
 
 Al añadir o gastar stock, el botón **Escanear** junto a la búsqueda abre la
 cámara y elige el producto por su código de barras, sin salir de la
-pantalla. Si la cámara no lo lee, puedes escribir el código. Si ningún
+pantalla. Al revisar un ticket, cada línea tiene también **Escanear**: si el
+paquete está a mano, su código dice qué producto es mejor que el texto del
+ticket. Si la cámara no lo lee, puedes escribir el código. Si ningún
 producto tiene ese código, Stoky te ofrece buscarlo en Open Food Facts,
 crearlo con el código ya puesto o decir a qué producto pertenece y
 guardárselo. Si tienes varias cámaras, puedes elegir cuál usar y se
@@ -104,6 +106,8 @@ access** and **Sign out**. On a phone or tablet the same is at the top of
 
 Adding or using up stock, the **Scan** button beside the search opens the
 camera and chooses the product by its barcode, without leaving the screen.
+Reviewing a receipt, each line has **Scan** too: with the packet at hand,
+its code says which product it is better than the receipt's text does.
 If the camera will not read it, type the code. If no product has that code,
 Stoky offers to look it up in Open Food Facts, to create it with the code
 already on it, or to save it onto a product you choose. With more than one

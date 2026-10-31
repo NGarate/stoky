@@ -319,7 +319,8 @@
       "assignFailed": "No se ha podido guardar el código. Puede que ya sea de otro producto.",
       "assignCancel": "No guardar el código",
       "typedLabel": "¿No lo lee? Escribe el código",
-      "typedSubmit": "Buscar"
+      "typedSubmit": "Buscar",
+      "scanLineOf": "Escanear el producto de «{name}»"
     },
     "rating": {
       "title": "Calidad",

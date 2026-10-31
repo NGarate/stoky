@@ -2,12 +2,16 @@
 
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Check, Plus } from "lucide-react";
+import { Check, Plus, ScanLine } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { isItemReviewed } from "@/lib/receipts";
 import { MatchSelector } from "./MatchSelector";
 import { CreateProductInline } from "./CreateProductInline";
+import {
+  ScanProductDialog,
+  type ScannedProduct,
+} from "@/components/barcode/ScanProductDialog";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import type { Decimal } from "@prisma/client-runtime-utils";
 
@@ -44,8 +48,24 @@ interface ReviewCardProps {
 
 export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
   const t = useTranslations("receipts");
+  const tScan = useTranslations("products.scanPick");
   const locale = useLocale();
   const [isCreating, setIsCreating] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  /**
+   * The product the packet in hand turned out to be. A receipt's words are
+   * often not enough to match on ("LCH ENT 1L"), and the packet is usually
+   * on the counter, so its code is the surest answer; it joins the
+   * candidates, chosen.
+   */
+  const [scanned, setScanned] = useState<ScannedProduct | null>(null);
+  const candidates =
+    scanned && !item.candidates.some((c) => c.productId === scanned.id)
+      ? [
+          { productId: scanned.id, name: scanned.name, similarity: 1 },
+          ...item.candidates,
+        ]
+      : item.candidates;
   const [selectedProductId, setSelectedProductId] = useState<string | null>(
     item.matchedProductId,
   );
@@ -121,9 +141,9 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
             />
           ) : (
             <>
-              {item.candidates.length > 0 && (
+              {candidates.length > 0 && (
                 <MatchSelector
-                  candidates={item.candidates}
+                  candidates={candidates}
                   selectedId={selectedProductId}
                   onSelect={handleSelect}
                   autoMatch={
@@ -134,7 +154,28 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
                 />
               )}
 
-              <div className="flex gap-2">
+              <ScanProductDialog
+                onClose={() => setIsScanning(false)}
+                onFound={(product) => {
+                  setScanned(product);
+                  setSelectedProductId(product.id);
+                }}
+                open={isScanning}
+              />
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  aria-label={tScan("scanLineOf", {
+                    name: item.parsedName || item.rawText,
+                  })}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsScanning(true)}
+                >
+                  <ScanLine aria-hidden="true" className="mr-1 size-5" />
+                  {tScan("open")}
+                </Button>
                 <Button
                   type="button"
                   variant="outline"

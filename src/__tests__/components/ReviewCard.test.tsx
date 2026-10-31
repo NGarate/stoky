@@ -1,9 +1,46 @@
 import "../setup/matchers";
-import { describe, it, expect, afterEach } from "bun:test";
-import { cleanup, screen } from "@testing-library/react";
+import { describe, it, expect, afterEach, mock } from "bun:test";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
-import { ReviewCard } from "@/components/receipt/ReviewCard";
 import { Decimal } from "@prisma/client-runtime-utils";
+
+// The scan dialog's lookup, for the one case that opens it. Complete, with
+// the provider, per D50.
+mock.module("@/lib/trpc/client", () => ({
+  api: {
+    useUtils: () => ({
+      product: {
+        invalidate: async () => {},
+        getByBarcode: {
+          fetch: async ({ barcode }: { barcode: string }) =>
+            barcode === "8410000000123"
+              ? {
+                  id: "p9",
+                  name: "Leche Granja",
+                  brand: null,
+                  defaultUnit: "L",
+                }
+              : null,
+        },
+      },
+    }),
+    product: {
+      scanBarcode: { useMutation: () => ({ isPending: false, mutate() {} }) },
+      create: { useMutation: () => ({ isPending: false, mutate() {} }) },
+    },
+  },
+  TRPCProvider: ({ children }: { children: unknown }) => children,
+}));
+mock.module("@zxing/browser", () => ({
+  BrowserMultiFormatReader: class {
+    decodeFromConstraints() {
+      return new Promise(() => {});
+    }
+  },
+}));
+
+const { ReviewCard } = await import("@/components/receipt/ReviewCard");
 
 /**
  * One receipt line under review.
@@ -96,5 +133,44 @@ describe("ReviewCard status", () => {
     expect(
       (container.firstElementChild as HTMLElement).className,
     ).not.toContain("bg-ok");
+  });
+});
+
+describe("scanning the packet for a line", () => {
+  it("chooses the product its code belongs to, ready to confirm", async () => {
+    Object.defineProperty(window, "isSecureContext", {
+      value: true,
+      configurable: true,
+    });
+    const confirmed: unknown[][] = [];
+    renderWithIntl(
+      <ReviewCard
+        item={line({ matchedProductId: null, matchedProduct: null })}
+        onConfirm={(...args) => confirmed.push(args)}
+      />,
+      { locale: "es" },
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Escanear el producto de «Leche entera»",
+      }),
+    );
+    const dialog = screen.getByRole("dialog");
+    await userEvent.type(
+      within(dialog).getByLabelText("¿No lo lee? Escribe el código"),
+      "8410000000123",
+    );
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Buscar" }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Leche Granja" }),
+      ).toHaveAttribute("aria-pressed", "true");
+    });
+    await userEvent.click(screen.getByRole("button", { name: /Confirmar/ }));
+    expect(confirmed).toEqual([["MATCH", "p9"]]);
   });
 });

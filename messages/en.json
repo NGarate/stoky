@@ -319,7 +319,8 @@
       "assignFailed": "The code could not be saved. It may already belong to another product.",
       "assignCancel": "Don't save the code",
       "typedLabel": "Won't read? Type the code",
-      "typedSubmit": "Look up"
+      "typedSubmit": "Look up",
+      "scanLineOf": "Scan the product for “{name}”"
     },
     "rating": {
       "title": "Quality",
