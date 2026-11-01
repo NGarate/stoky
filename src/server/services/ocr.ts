@@ -4,6 +4,7 @@ import { ReceiptStatus } from "@/generated/prisma/client";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { InvalidInputError, NotFoundError } from "./errors";
+import { parseReceiptText } from "./receiptParser";
 import { MAX_PIXELS, cropImage, findPaper, readImageMetadata } from "./image";
 
 /**
@@ -131,9 +132,21 @@ export function ocrTimeoutMs(configured = process.env.OCR_TIMEOUT_MS): number {
 }
 
 type RecognisingWorker = {
-  recognize(image: Buffer): Promise<{ data: { text: string } }>;
+  recognize(
+    image: Buffer,
+    options?: Record<string, unknown>,
+  ): Promise<{ data: { text: string } }>;
   terminate(): Promise<unknown>;
 };
+
+/** What one recognition is asked for: Tesseract's options and parameters. */
+export type RecogniseOptions = Record<string, string | boolean>;
+
+/** The OCR engine, as the pipeline sees it: an image and options in, text out. */
+export type Recognise = (
+  image: Buffer,
+  options?: RecogniseOptions,
+) => Promise<string>;
 
 /**
  * Recognition with a time limit, one image at a time.
@@ -165,10 +178,13 @@ type RecognisingWorker = {
 export function timedRecogniser<W extends RecognisingWorker>(
   worker: { get(): Promise<W>; terminate(): Promise<void> },
   timeoutMs: () => number = ocrTimeoutMs,
-): (image: Buffer) => Promise<string> {
+): Recognise {
   let queue: Promise<unknown> = Promise.resolve();
 
-  async function recogniseOne(image: Buffer): Promise<string> {
+  async function recogniseOne(
+    image: Buffer,
+    options: RecogniseOptions = {},
+  ): Promise<string> {
     // Loading the model is outside the limit: it is the same for every
     // image, and a load that fails rejects on its own.
     const current = await worker.get();
@@ -188,7 +204,7 @@ export function timedRecogniser<W extends RecognisingWorker>(
     try {
       const {
         data: { text },
-      } = await Promise.race([current.recognize(image), expired]);
+      } = await Promise.race([current.recognize(image, options), expired]);
       return text;
     } catch (error) {
       // Before the next image is let through, so it gets a fresh worker
@@ -200,8 +216,8 @@ export function timedRecogniser<W extends RecognisingWorker>(
     }
   }
 
-  return (image) => {
-    const run = queue.then(() => recogniseOne(image));
+  return (image, options) => {
+    const run = queue.then(() => recogniseOne(image, options));
     // The next image waits for this one to end, however it ends.
     queue = run.catch(() => undefined);
     return run;
@@ -222,14 +238,55 @@ export const OCR_MIN_WIDTH = 1400;
 const OCR_MAX_PIXELS = 20_000_000;
 
 /**
- * The photograph as Tesseract should see it: the ticket alone, grey and wide
- * enough to read.
+ * One way of reading a photograph: how it is prepared, and what Tesseract is
+ * asked to do with it.
+ */
+export interface OcrPass {
+  /** Upscale a narrow ticket to `OCR_MIN_WIDTH` and drop its colour. */
+  enlarge: boolean;
+  options: RecogniseOptions;
+}
+
+/**
+ * The readings tried on every photograph; the most consistent one is kept
+ * (`bestReading`).
+ *
+ * Two, because no single way of reading wins on every ticket. Both straighten
+ * the image first (`rotateAuto`): a phone photograph is rarely square to the
+ * ticket, and Tesseract reads a line that drifts a few degrees as two.
+ *
+ * - The first enlarges and greys the ticket and binarises it with Sauvola
+ *   (`thresholding_method: 2`), which picks the black/white cut per
+ *   neighbourhood: a shadow across half the ticket or a fold that catches the
+ *   light loses the text in the darker half under one cut for the page.
+ * - The second reads the ticket as photographed, with Tesseract's one global
+ *   cut (Otsu). It wins where Sauvola turns a faded or textured background
+ *   into specks.
+ *
+ * Measured over 77 receipt photographs — 29 real tickets from eleven chains
+ * and 48 degraded copies of them — against what a person read off each: the
+ * parse score (articles with the right name and price, total, date, shop)
+ * went from 37% with the photograph as it was to 43.5% with the first pass
+ * alone and 49.7% with both. A third pass added under one point; the larger
+ * `tessdata_best` model scored lower than the shipped `tessdata_fast`.
+ */
+export const OCR_PASSES: readonly OcrPass[] = [
+  { enlarge: true, options: { rotateAuto: true, thresholding_method: "2" } },
+  { enlarge: false, options: { rotateAuto: true, thresholding_method: "0" } },
+];
+
+/**
+ * The photograph as Tesseract should see it for `pass`: the ticket alone
+ * and, when the pass asks, grey and wide enough to read.
  *
  * Cropped to the paper (`findPaper`) because the table around a ticket is
  * read as text. The stored photograph is not changed — this is what is
  * handed to the OCR, every time it runs.
  */
-export async function prepareForOcr(image: Buffer): Promise<Buffer> {
+export async function prepareForOcr(
+  image: Buffer,
+  pass: Pick<OcrPass, "enlarge"> = OCR_PASSES[0]!,
+): Promise<Buffer> {
   const { width, height } = await readImageMetadata(image);
   if (!width || !height) return image;
   const paper = await findPaper(image, width, height);
@@ -237,17 +294,104 @@ export async function prepareForOcr(image: Buffer): Promise<Buffer> {
   const sourceWidth = paper?.width ?? width;
   const sourceHeight = paper?.height ?? height;
 
-  const scale = Math.max(
-    1,
-    Math.min(
-      OCR_MIN_WIDTH / sourceWidth,
-      Math.sqrt(OCR_MAX_PIXELS / (sourceWidth * sourceHeight)),
-    ),
-  );
-  const prepared = new Bun.Image(source, { maxPixels: MAX_PIXELS })
-    .resize(Math.round(sourceWidth * scale))
-    .modulate({ saturation: 0 });
+  let prepared = new Bun.Image(source, { maxPixels: MAX_PIXELS });
+  if (pass.enlarge) {
+    const scale = Math.max(
+      1,
+      Math.min(
+        OCR_MIN_WIDTH / sourceWidth,
+        Math.sqrt(OCR_MAX_PIXELS / (sourceWidth * sourceHeight)),
+      ),
+    );
+    prepared = prepared
+      .resize(Math.round(sourceWidth * scale))
+      .modulate({ saturation: 0 });
+  }
   return Buffer.from(await prepared.png().toBuffer());
+}
+
+/**
+ * How believable a reading is, without knowing what the ticket says: how
+ * many articles it yields, and whether they add up to the total it yields.
+ *
+ * A misread digit or a lost line breaks the sum, so of two readings of the
+ * same ticket the one whose articles come to its total is almost always the
+ * better one — and when neither does, the one with more articles.
+ */
+export function readingScore(text: string): number {
+  const { items, totalAmount, discountAmount = 0 } = parseReceiptText(text);
+  const count = items.length;
+  if (!totalAmount || count === 0) return count;
+  // Less the discounts the reading found: a correct reading of a ticket with
+  // a `DTO -0,50` misses its total by exactly that, and a misread digit that
+  // happened to close the gap used to beat it.
+  const sum =
+    items.reduce((total, item) => total + item.parsedPrice, 0) - discountAmount;
+  const gap = Math.abs(sum - totalAmount) / totalAmount;
+  const agreement = gap < 0.005 ? 3 : gap < 0.05 ? 1.5 : gap < 0.2 ? 0.5 : 0;
+  return count * (1 + agreement);
+}
+
+/**
+ * The reading `readingScore` believes most; the first of equals.
+ *
+ * **With a date from another reading when it has none.** The date is one
+ * short line, and which pass reads it is close to chance; the score cannot
+ * weigh it — a date bonus in `readingScore` chose worse readings. So the
+ * first line of another reading that parses to a date on its own is added to
+ * the end of the one kept. Measured over 111 photographs: two tickets gained
+ * their date and no score fell.
+ */
+export function bestReading(readings: readonly string[]): string {
+  let best = readings[0] ?? "";
+  for (const reading of readings.slice(1)) {
+    if (readingScore(reading) > readingScore(best)) best = reading;
+  }
+  if (parseReceiptText(best).purchaseDate) return best;
+  for (const reading of readings) {
+    if (reading === best) continue;
+    const dated = reading
+      .split("\n")
+      .find((line) => parseReceiptText(line).purchaseDate);
+    if (dated) return `${best}\n${dated}`;
+  }
+  return best;
+}
+
+/**
+ * Every pass of `OCR_PASSES` over `image`, and the reading kept.
+ *
+ * **Upside down, only when nothing was read.** `rotateAuto` straightens a
+ * ticket a few degrees off, not one photographed the wrong way up — an Eroski
+ * ticket shot that way read as mirrored nonsense ("YLISIA NS dod SYIOVED")
+ * and gave no article at all. Turning every photograph round would double the
+ * time of every scan to rescue the rare one, so the passes are read again,
+ * turned half a turn, only when the right way up yielded no article
+ * (`readingScore` 0): an ordinary ticket pays nothing for it. Measured over
+ * the 77 photographs above: 5 took the second round, and the Eroski ticket's
+ * parse score went from 0 to 65%; no other score moved.
+ */
+export async function readReceiptPhoto(
+  image: Buffer,
+  recognise: Recognise,
+): Promise<string> {
+  const readings: string[] = [];
+  for (const pass of OCR_PASSES) {
+    readings.push(
+      await recognise(await prepareForOcr(image, pass), pass.options),
+    );
+  }
+  const upright = bestReading(readings);
+  if (readingScore(upright) > 0) return upright;
+  for (const pass of OCR_PASSES) {
+    const turned = new Bun.Image(await prepareForOcr(image, pass), {
+      maxPixels: MAX_PIXELS,
+    }).rotate(180);
+    readings.push(
+      await recognise(Buffer.from(await turned.png().toBuffer()), pass.options),
+    );
+  }
+  return bestReading(readings);
 }
 
 const ocrWorker = sharedWorker<Worker>(() =>
@@ -272,7 +416,7 @@ const recogniseWithTesseract = timedRecogniser(ocrWorker);
  */
 export async function processReceiptOcr(
   receiptId: string,
-  recognise: (image: Buffer) => Promise<string> = recogniseWithTesseract,
+  recognise: Recognise = recogniseWithTesseract,
 ): Promise<string> {
   const receipt = await prisma.receipt.findUnique({
     where: { id: receiptId },
@@ -302,7 +446,7 @@ export async function processReceiptOcr(
     // than through the procedure that checked them.
     await readImageMetadata(imageBuffer);
 
-    const text = await recognise(await prepareForOcr(imageBuffer));
+    const text = await readReceiptPhoto(imageBuffer, recognise);
     if (text.trim().length === 0) {
       throw new InvalidInputError("No text recognised in the image");
     }

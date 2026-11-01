@@ -1,6 +1,13 @@
 import { describe, it, expect } from "bun:test";
 import { cropImage, decodePng, findPaper } from "@/server/services/image";
-import { OCR_MIN_WIDTH, prepareForOcr } from "@/server/services/ocr";
+import {
+  OCR_MIN_WIDTH,
+  OCR_PASSES,
+  bestReading,
+  prepareForOcr,
+  readReceiptPhoto,
+} from "@/server/services/ocr";
+import { parseReceiptText } from "@/server/services/receiptParser";
 import { pngPainted } from "../utils/png";
 
 /**
@@ -127,5 +134,73 @@ describe("prepareForOcr", () => {
     const wide = pngPainted(1600, 200, (_, y) => (y % 12 < 3 ? INK : PAPER));
 
     expect((await pixelsOf(await prepareForOcr(wide))).width).toBe(1600);
+  });
+});
+
+describe("readReceiptPhoto", () => {
+  const READ = "LECHE ENTERA 1,00\nPAN 0,50\nTOTAL 1,50";
+
+  it("reads an ordinary ticket once per pass", async () => {
+    const seen: Buffer[] = [];
+    const text = await readReceiptPhoto(ticketOnATable(), async (image) => {
+      seen.push(image);
+      return READ;
+    });
+
+    expect(text).toBe(READ);
+    expect(seen).toHaveLength(OCR_PASSES.length);
+  });
+
+  it("turns a ticket that gave no article upside down and reads it again", async () => {
+    const seen: Buffer[] = [];
+    const text = await readReceiptPhoto(ticketOnATable(), async (image) => {
+      seen.push(image);
+      return seen.length > OCR_PASSES.length ? READ : "05,1 LATOT";
+    });
+
+    expect(text).toBe(READ);
+    expect(seen).toHaveLength(2 * OCR_PASSES.length);
+    // The same picture, half a turn round: its first row is the last one.
+    const upright = await pixelsOf(seen[0]!);
+    const turned = await pixelsOf(seen[OCR_PASSES.length]!);
+    expect([turned.width, turned.height]).toEqual([
+      upright.width,
+      upright.height,
+    ]);
+    for (const y of [0, 5, upright.height >> 1]) {
+      expect(turned.at(3, upright.height - 1 - y)).toEqual(
+        upright.at(upright.width - 4, y),
+      );
+    }
+  });
+});
+
+describe("bestReading", () => {
+  it("takes the date from another reading when the one kept has none", () => {
+    const text = bestReading([
+      "PAN 1,00\nTOTAL 1,00\n| _va-0d 2024 19:55:50",
+      "PAN 1,00\n08-04-2024 19:58:56",
+    ]);
+
+    const date = parseReceiptText(text).purchaseDate!;
+    expect([date.getFullYear(), date.getMonth() + 1, date.getDate()]).toEqual([
+      2024, 4, 8,
+    ]);
+  });
+
+  it("leaves a reading that has its own date as it is", () => {
+    const kept = "PAN 1,00\nTOTAL 1,00\n07-04-2024 10:00";
+
+    expect(bestReading([kept, "PAN 1,00\n08-04-2024 19:58:56"])).toBe(kept);
+  });
+});
+
+describe("bestReading", () => {
+  it("believes the reading whose articles less its discounts make the total", () => {
+    const good =
+      "CARREFOUR\nZUMO 2,00\nDTO ZUMO -0,50\nPAN 1,00\nLECHE 2,00\nTOTAL 4,50";
+    const misread = good.replace("LECHE 2,00", "LECHE 1,50");
+
+    expect(bestReading([misread, good])).toBe(good);
   });
 });
