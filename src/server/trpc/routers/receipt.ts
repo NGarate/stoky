@@ -33,6 +33,7 @@ import {
   MAX_RECEIPT_BASE64_LENGTH,
   MAX_RECEIPT_BYTES,
   RECEIPT_IMAGE_TYPES,
+  receiptDetailsSchema,
   receiptItemAddSchema,
   receiptItemMatchSchema,
   receiptItemUpdateSchema,
@@ -190,10 +191,11 @@ async function assertOwnProduct(
 }
 
 /**
- * Refuse a receipt a line cannot be added to: open for review, or FAILED,
- * whose lines a person types from the photograph (`addItem`).
+ * Refuse a receipt a person cannot type into: open for review, or FAILED,
+ * whose lines and details a person types from the photograph (`addItem`,
+ * `updateDetails`).
  */
-function assertOpenForAdding(status: ReceiptStatus): void {
+function assertOpenForTyping(status: ReceiptStatus): void {
   if (status !== ReceiptStatus.FAILED) assertOpenForReview(status);
 }
 
@@ -733,10 +735,10 @@ export const receiptRouter = createTRPCRouter({
         });
       }
 
-      assertOpenForAdding(receipt.status);
+      assertOpenForTyping(receipt.status);
 
       return ctx.db.$transaction(async (tx) => {
-        assertOpenForAdding(await lockReceiptStatus(tx, receipt.id));
+        assertOpenForTyping(await lockReceiptStatus(tx, receipt.id));
 
         // The bound `confirmAll` takes: a receipt with more lines than that
         // could not be submitted in one review.
@@ -770,6 +772,53 @@ export const receiptRouter = createTRPCRouter({
 
         return created;
       });
+    }),
+
+  /**
+   * Corrects what the receipt says about itself: its shop, date and total.
+   *
+   * The shop matters most: without one, applying records no prices. It is
+   * resolved as `upload` resolves it — checked as this household's, or found
+   * or created by name inside the transaction, so a refused edit creates no
+   * shop. Open while a person may type into the receipt, FAILED included,
+   * and re-checked under the row lock like every line edit.
+   */
+  updateDetails: writeProcedure
+    .input(receiptDetailsSchema)
+    .mutation(async ({ ctx, input }) => {
+      const receipt = await ctx.db.receipt.findFirst({
+        where: { id: input.receiptId, householdId: ctx.householdId },
+        select: { id: true, status: true },
+      });
+
+      if (!receipt) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Receipt not found",
+        });
+      }
+
+      assertOpenForTyping(receipt.status);
+      await assertOwnStore(ctx.db, input.storeId, ctx.householdId);
+
+      await ctx.db.$transaction(async (tx) => {
+        assertOpenForTyping(await lockReceiptStatus(tx, receipt.id));
+
+        const storeId = input.storeName
+          ? await storeNamed(tx, input.storeName, ctx.householdId)
+          : (input.storeId ?? null);
+
+        await tx.receipt.update({
+          where: { id: receipt.id },
+          data: {
+            storeId,
+            purchaseDate: input.purchaseDate,
+            totalAmount: input.totalAmount,
+          },
+        });
+      });
+
+      return { success: true };
     }),
 
   /**

@@ -31,7 +31,7 @@ import { MAX_RECEIPT_LINES } from "@/lib/validations/bounds";
 /**
  * The receipt router, procedure by procedure.
  *
- * It is the largest router in the project — eleven procedures — and it was
+ * It is the largest router in the project — twelve procedures — and it was
  * the least covered: 28.6% of its functions and 19.5% of its lines, against
  * 90% for the integration tier as a whole. The pipeline's *services* were
  * well tested and the browser suite walked the screens, so what was missing
@@ -1174,6 +1174,135 @@ describe("receipt.addItem", () => {
       () => caller.receipt.addItem({ receiptId: receipt.id, ...line }),
       "BAD_REQUEST",
     );
+  });
+});
+
+describe("receipt.updateDetails", () => {
+  const details = {
+    purchaseDate: new Date("2026-10-30T00:00:00.000Z"),
+    totalAmount: 12.4,
+  };
+
+  it("corrects the shop, the date and the total", async () => {
+    const { receipt } = await seedReceipt({ withStore: false });
+
+    await caller.receipt.updateDetails({
+      receiptId: receipt.id,
+      storeId,
+      ...details,
+    });
+
+    const after = await prisma.receipt.findUniqueOrThrow({
+      where: { id: receipt.id },
+    });
+    expect(after.storeId).toBe(storeId);
+    expect(after.purchaseDate?.toISOString()).toBe("2026-10-30T00:00:00.000Z");
+    expect(num(after.totalAmount)).toBe(12.4);
+  });
+
+  it("files it under a shop typed by name, the one already there whatever its case", async () => {
+    const { receipt } = await seedReceipt({ withStore: false });
+
+    await caller.receipt.updateDetails({
+      receiptId: receipt.id,
+      storeName: "receipt router store",
+      ...details,
+    });
+
+    const after = await prisma.receipt.findUniqueOrThrow({
+      where: { id: receipt.id },
+    });
+    expect(after.storeId).toBe(storeId);
+  });
+
+  it("clears what is sent empty", async () => {
+    const { receipt } = await seedReceipt({});
+
+    await caller.receipt.updateDetails({
+      receiptId: receipt.id,
+      purchaseDate: null,
+      totalAmount: null,
+    });
+
+    const after = await prisma.receipt.findUniqueOrThrow({
+      where: { id: receipt.id },
+    });
+    expect(after.storeId).toBeNull();
+    expect(after.purchaseDate).toBeNull();
+    expect(after.totalAmount).toBeNull();
+  });
+
+  it("is open on a receipt OCR could not read, and closed once applied", async () => {
+    const failed = await seedReceipt({ status: ReceiptStatus.FAILED });
+    await caller.receipt.updateDetails({
+      receiptId: failed.receipt.id,
+      storeId,
+      ...details,
+    });
+
+    const applied = await seedReceipt({ status: ReceiptStatus.APPLIED });
+    await expectCode(
+      () =>
+        caller.receipt.updateDetails({
+          receiptId: applied.receipt.id,
+          storeId,
+          ...details,
+        }),
+      "BAD_REQUEST",
+    );
+  });
+
+  it("refuses another household's shop, and creates no shop when refused", async () => {
+    const { receipt } = await seedReceipt({ withStore: false });
+    const theirs = await prisma.store.create({
+      data: {
+        name: "Receipt Router Their Store",
+        householdId: otherHouseholdId,
+      },
+    });
+
+    await expectCode(
+      () =>
+        caller.receipt.updateDetails({
+          receiptId: receipt.id,
+          storeId: theirs.id,
+          ...details,
+        }),
+      "NOT_FOUND",
+    );
+
+    const applied = await seedReceipt({ status: ReceiptStatus.APPLIED });
+    await expectCode(
+      () =>
+        caller.receipt.updateDetails({
+          receiptId: applied.receipt.id,
+          storeName: "Tienda que no debe existir",
+          ...details,
+        }),
+      "BAD_REQUEST",
+    );
+    expect(
+      await prisma.store.count({
+        where: { name: "Tienda que no debe existir" },
+      }),
+    ).toBe(0);
+    const after = await prisma.receipt.findUniqueOrThrow({
+      where: { id: receipt.id },
+    });
+    expect(after.storeId).toBeNull();
+  });
+
+  it("is NOT_FOUND for another household's receipt and refused for a kitchen account", async () => {
+    const { receipt } = await seedReceipt({});
+    const edit = { receiptId: receipt.id, ...details };
+
+    await expectCode(() => outsider.receipt.updateDetails(edit), "NOT_FOUND");
+    await expectCode(() => kitchen.receipt.updateDetails(edit), "FORBIDDEN");
+
+    const after = await prisma.receipt.findUniqueOrThrow({
+      where: { id: receipt.id },
+    });
+    expect(after.storeId).toBe(storeId);
   });
 });
 

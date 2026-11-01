@@ -566,6 +566,12 @@
     "review": "Revisar ticket",
     "photo": "Ver la foto del ticket",
     "photoAlt": "Foto del ticket",
+    "details": {
+      "edit": "Corregir los datos del ticket",
+      "save": "Guardar los datos",
+      "storeNew": "Se añadirá la tienda «{name}» al guardar.",
+      "saveFailed": "No se han podido guardar los datos del ticket. Vuelve a intentarlo."
+    },
     "line": {
       "correct": "Corregir",
       "correctOf": "Corregir la línea «{name}»",

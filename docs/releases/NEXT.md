@@ -118,6 +118,13 @@ automática se saltó. Y un ticket que no se pudo leer ya no hay que repetirlo:
 y lo termines como cualquier otro. También se llega desde la lista de
 tickets.
 
+### Corrige la tienda, la fecha y el total de un ticket
+
+**Corregir los datos del ticket**, en la revisión, cambia la tienda, la fecha
+de compra y el importe total cuando no se leyeron o se leyeron mal. La tienda
+se elige o se escribe como al subirlo. Importa sobre todo: sin tienda, los
+precios del ticket no se guardan. La revisión muestra ahora también el total.
+
 ## English
 
 > [!CAUTION]
@@ -224,3 +231,10 @@ reading skipped. And a receipt that could not be read no longer has to be
 uploaded again: **Add the lines by hand** opens it with its photo so you can
 type its lines and finish it like any other. The receipts list leads there
 too.
+
+### Correct a receipt's store, date and total
+
+**Correct the receipt's details**, in the review, changes the store, the
+purchase date and the total when they were not read or were misread. The
+store is picked or typed as when uploading. It matters most: without a store,
+the receipt's prices are not kept. The review now shows the total as well.

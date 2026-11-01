@@ -566,6 +566,12 @@
     "review": "Review receipt",
     "photo": "See the receipt photo",
     "photoAlt": "Receipt photo",
+    "details": {
+      "edit": "Correct the receipt's details",
+      "save": "Save the details",
+      "storeNew": "The store “{name}” will be added when you save.",
+      "saveFailed": "The receipt's details could not be saved. Try again."
+    },
     "line": {
       "correct": "Correct",
       "correctOf": "Correct the line “{name}”",

@@ -20,6 +20,7 @@ import es from "../../../messages/es.json";
 const invalidated: string[] = [];
 const confirmAllCalls: unknown[] = [];
 const addItemCalls: unknown[] = [];
+const updateDetailsCalls: unknown[] = [];
 let applyCalls = 0;
 
 /** When true, every mutation reports a failure instead of succeeding. */
@@ -108,7 +109,15 @@ mock.module("@/lib/trpc/client", () => ({
       product: { invalidate: async () => void invalidated.push("product") },
       shopping: { invalidate: async () => void invalidated.push("shopping") },
       price: { invalidate: async () => void invalidated.push("price") },
+      store: {
+        list: { invalidate: async () => void invalidated.push("store.list") },
+      },
     }),
+    store: {
+      list: {
+        useQuery: () => ({ data: [{ id: "st1", name: "Mercadona" }] }),
+      },
+    },
     receipt: {
       getReceiptWithItems: {
         useQuery: () => ({ data: receipt, isLoading: false }),
@@ -135,6 +144,15 @@ mock.module("@/lib/trpc/client", () => ({
       },
       updateItem: {
         useMutation: () => ({ mutate: () => {}, isPending: false }),
+      },
+      updateDetails: {
+        useMutation: (opts?: Callbacks) => ({
+          mutate: (input: unknown) => {
+            updateDetailsCalls.push(input);
+            void opts?.onSuccess?.();
+          },
+          isPending: false,
+        }),
       },
       addItem: {
         useMutation: (opts?: Callbacks) => ({
@@ -192,6 +210,7 @@ beforeEach(() => {
   invalidated.length = 0;
   confirmAllCalls.length = 0;
   addItemCalls.length = 0;
+  updateDetailsCalls.length = 0;
   applyCalls = 0;
   failing = false;
   role = "MEMBER";
@@ -270,6 +289,70 @@ describe("finishing a receipt review", () => {
     } finally {
       receipt.status = status;
     }
+  });
+});
+
+describe("correcting the receipt's own details", () => {
+  it("files it under a shop the household has, by the name typed", async () => {
+    render();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.details.edit }),
+    );
+    const store = screen.getByLabelText(es.receipts.uploadStoreLabel);
+    expect((store as HTMLInputElement).value).toBe("Mercadona");
+    await userEvent.clear(store);
+    await userEvent.type(store, "mercadona");
+    await userEvent.type(
+      screen.getByLabelText(es.receipts.purchaseDate),
+      "2026-10-30",
+    );
+    const total = screen.getByLabelText(es.receipts.totalAmount);
+    await userEvent.clear(total);
+    await userEvent.type(total, "13.1");
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.details.save }),
+    );
+
+    expect(updateDetailsCalls).toEqual([
+      {
+        receiptId: "r1",
+        storeId: "st1",
+        purchaseDate: new Date("2026-10-30T00:00:00.000Z"),
+        totalAmount: 13.1,
+      },
+    ]);
+    // A new shop may have been created: the list is refetched.
+    expect(invalidated).toContain("store.list");
+  });
+
+  it("sends a shop it does not know as a name, and empty fields as nothing", async () => {
+    render();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.details.edit }),
+    );
+    const store = screen.getByLabelText(es.receipts.uploadStoreLabel);
+    await userEvent.clear(store);
+    await userEvent.type(store, "Frutería Paqui");
+    expect(
+      screen.getByText(
+        es.receipts.details.storeNew.replace("{name}", "Frutería Paqui"),
+      ),
+    ).toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText(es.receipts.totalAmount));
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.details.save }),
+    );
+
+    expect(updateDetailsCalls).toEqual([
+      {
+        receiptId: "r1",
+        storeName: "Frutería Paqui",
+        purchaseDate: null,
+        totalAmount: null,
+      },
+    ]);
   });
 });
 

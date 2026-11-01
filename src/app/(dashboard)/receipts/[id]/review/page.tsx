@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { Package, Plus } from "lucide-react";
+import { Package, Pencil, Plus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useSnackbar } from "@/components/ui/snackbar";
@@ -12,11 +12,13 @@ import { RouteState } from "@/components/household/RouteState";
 import { isItemReviewed } from "@/lib/receipts";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
+import { ReceiptDetailsForm } from "@/components/receipt/ReceiptDetailsForm";
 import { ReceiptLineForm } from "@/components/receipt/ReceiptLineForm";
 import { ReceiptPhoto } from "@/components/receipt/ReceiptPhoto";
 import { ReviewCard } from "@/components/receipt/ReviewCard";
 import { ReceiptStatusStep } from "@/components/receipt/ReceiptStatus";
 import { formatDate } from "@/lib/dates";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 
 export default function ReviewPage() {
   const t = useTranslations("receipts");
@@ -28,6 +30,7 @@ export default function ReviewPage() {
 
   const utils = api.useUtils();
   const [addingLine, setAddingLine] = useState(false);
+  const [editingDetails, setEditingDetails] = useState(false);
   const receiptQuery = api.receipt.getReceiptWithItems.useQuery({
     receiptId,
   });
@@ -130,6 +133,21 @@ export default function ReviewPage() {
       }),
   });
 
+  const updateDetailsMutation = api.receipt.updateDetails.useMutation({
+    onSuccess: () => {
+      setEditingDetails(false);
+      void utils.receipt.getReceiptWithItems.invalidate({ receiptId });
+      // A shop typed by name may be a new one.
+      void utils.store.list.invalidate();
+    },
+    onError: () =>
+      snackbar.show({
+        kind: "confirm",
+        tone: "danger",
+        message: { key: "receipts.details.saveFailed" },
+      }),
+  });
+
   // "Not found" only when the server said so. Gated on `isLoading`, a query
   // paused offline or refused with a 500 fell through to this branch and
   // told somebody their receipt did not exist.
@@ -221,6 +239,8 @@ export default function ReviewPage() {
             {receipt.store?.name || t("storeUnknown")}
             {receipt.purchaseDate &&
               ` • ${formatDate(locale, receipt.purchaseDate, "long")}`}
+            {receipt.totalAmount !== null &&
+              ` • ${formatMoney(locale, receipt.totalAmount, DEFAULT_CURRENCY)}`}
           </>
         }
         title={t("review")}
@@ -257,6 +277,36 @@ export default function ReviewPage() {
         </div>
       ) : (
         <>
+          {/* The shop, date and total in the heading, as the receipt says
+              them — the shop most, since without one no price is kept. */}
+          <div className="mb-6">
+            {editingDetails ? (
+              <div className="rounded-lg border border-border bg-card p-4">
+                <ReceiptDetailsForm
+                  defaults={{
+                    storeName: receipt.store?.name ?? "",
+                    date:
+                      receipt.purchaseDate?.toISOString().slice(0, 10) ?? "",
+                    total: receipt.totalAmount?.toString() ?? "",
+                  }}
+                  onCancel={() => setEditingDetails(false)}
+                  onSubmit={(details) =>
+                    updateDetailsMutation.mutate({ receiptId, ...details })
+                  }
+                />
+              </div>
+            ) : (
+              <Button
+                onClick={() => setEditingDetails(true)}
+                type="button"
+                variant="outline"
+              >
+                <Pencil aria-hidden="true" className="mr-2 size-5" />
+                {t("details.edit")}
+              </Button>
+            )}
+          </div>
+
           {/* Wraps: at 390px the sentence and the action do not fit on one line,
               and the action is what pushed the row past the viewport. */}
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

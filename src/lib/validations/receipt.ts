@@ -121,6 +121,26 @@ export const receiptItemUpdateSchema = receiptLineSchema.extend({
   receiptItemId: z.string().min(1).max(MAX_ID_LENGTH),
 });
 
+/**
+ * What the receipt says about itself, corrected: shop, date, total.
+ *
+ * Every field is sent each time and replaces what is there, so a cleared
+ * field clears the column. The shop is the upload's choice again — an id
+ * picked, a name typed (`storeNamed` finds or creates it), or neither for no
+ * shop — and not both, for the reason `upload` refuses both.
+ */
+export const receiptDetailsSchema = z
+  .object({
+    receiptId: z.string().min(1).max(MAX_ID_LENGTH),
+    storeId: z.string().min(1).max(MAX_ID_LENGTH).optional(),
+    storeName: z.string().trim().min(1).max(MAX_NAME_LENGTH).optional(),
+    purchaseDate: z.date().nullable(),
+    totalAmount: priceSchema.nullable(),
+  })
+  .refine((input) => !(input.storeId && input.storeName), {
+    message: "Send a storeId or a storeName, not both",
+  });
+
 /** Adding a line OCR did not find. */
 export const receiptItemAddSchema = receiptLineSchema.extend({
   receiptId: z.string().min(1).max(MAX_ID_LENGTH),
