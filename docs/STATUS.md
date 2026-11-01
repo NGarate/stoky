@@ -1687,6 +1687,15 @@ one-tap add-to-list. The per-journey evidence is in that file.
   and a developer's dev server could and did kill each other's.
 - If message catalogues appear stale, the running dev server has cached them —
   `touch next.config.ts` makes it reload.
+- **A page that reloads itself in a loop under `bun run dev`** — on a phone
+  through Tailscale or on `localhost`, signed in or not — is a stale
+  Turbopack development cache, not the network. Seen 2026-11-01 with a 1.6 GB
+  `.next/dev` whose client entry chunk was five days old: on every HMR connect
+  the server sent `{"type":"restart"}` for that chunk, and the browser reloaded
+  (13–24 navigations of `/login` in 15 s). Stop the dev server,
+  `rm -rf .next/dev`, start it again: two navigations in 15 s afterwards, the
+  load and one reload, then quiet. To tell it from a real reload, log the HMR
+  frames (Playwright `page.on("websocket")`) and look for `restart`.
 
 ---
 
