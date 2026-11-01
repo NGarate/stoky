@@ -14,6 +14,7 @@
 * La barra del móvil muestra dónde estás
 * Tu cuenta y cerrar sesión, a un toque
 * Escanea el producto donde lo eliges
+* Los tickets se leen mucho mejor
 
 ### Marca, categoría y unidad te sugieren lo que ya usas
 
@@ -124,6 +125,24 @@ tickets.
 de compra y el importe total cuando no se leyeron o se leyeron mal. La tienda
 se elige o se escribe como al subirlo. Importa sobre todo: sin tienda, los
 precios del ticket no se guardan. La revisión muestra ahora también el total.
+
+### Los tickets se leen mucho mejor
+
+La lectura automática de los tickets entiende ahora cómo imprimen las
+cadenas españolas sus líneas: el nombre en una línea y el precio en la
+siguiente (Costco), los productos a peso (Mercadona, Lidl, DIA), las
+cantidades como «2 x 0,89» encima o debajo del producto, los descuentos y
+las ofertas, y los tickets en catalán. Ya no apunta como producto nada de
+lo que va después del total —el pago, el desglose del IVA—, y el total se
+toma de donde el ticket coincide consigo mismo: la línea TOTAL, el pago con
+tarjeta o en efectivo, el desglose del IVA y la suma de los productos.
+Además, la foto se recorta al ticket antes de leerla, para que la mesa no
+se lea como texto, y se lee de dos maneras para quedarse con la que cuadra;
+una foto del revés se gira sola. Medido con 63 tickets reales de once
+cadenas leídos a mano: los productos leídos con nombre y precio correctos
+pasan del 34 % al 60 %, y el total correcto, del 13 % al 58 %. Leer un
+ticket tarda algo más, porque se lee dos veces. Lo que la lectura no
+acierte se sigue corrigiendo en la revisión.
 
 ## English
 
@@ -238,3 +257,21 @@ too.
 purchase date and the total when they were not read or were misread. The
 store is picked or typed as when uploading. It matters most: without a store,
 the receipt's prices are not kept. The review now shows the total as well.
+
+### Receipts are read much better
+
+The automatic reading of receipts now understands how Spanish chains print
+their lines: the name on one line and the price on the next (Costco),
+weighed products (Mercadona, Lidl, DIA), quantities like "2 x 0,89" above
+or below the product, discounts and offers, and receipts in Catalan.
+Nothing printed after the total — the payment, the VAT breakdown — is
+booked as a product any more, and the total is taken from where the
+receipt agrees with itself: the TOTAL line, the card or cash payment, the
+VAT breakdown and the sum of the products. The photo is also cropped to the
+receipt before it is read, so the table is not read as text, and it is read
+two ways to keep the one that adds up; an upside-down photo is turned on its
+own. Measured on 63 real receipts from eleven chains, read by hand: products
+read with the right name and price went from 34% to 60%, and the right
+total from 13% to 58%. Reading a receipt takes somewhat longer, because it is
+read twice. Whatever the reading gets wrong can still be corrected in the
+review.

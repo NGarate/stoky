@@ -286,9 +286,8 @@ Two environment traps on this machine:
 - The `docker` group exists and includes this user, but a session started
   before the group was granted will not have it. Re-login, or prefix with
   `sg docker -c "..."`.
-- Port 3000 is occupied by an unrelated application, and 3001 is routinely this
-  project's own `bun run dev`. The suite's default of 3100 avoids both; pass
-  `PLAYWRIGHT_PORT` if something has taken that too.
+- Port 3000 is this project's own `bun run dev`. The suite's default of 3100
+  avoids it; pass `PLAYWRIGHT_PORT` if something has taken that too.
 
 `test:components` must be run through the package.json script,
 `bun run test:components`. It passes

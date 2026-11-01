@@ -31,6 +31,7 @@
  */
 
 import libheif from "libheif-js/wasm-bundle";
+import { inflateSync } from "node:zlib";
 import { InvalidInputError } from "./errors";
 
 /** Past any phone camera, far short of what the byte cap cannot see. */
@@ -404,4 +405,268 @@ export function stripJpegMetadata(jpeg: Buffer): Buffer {
   }
 
   return Buffer.concat(kept);
+}
+
+/** The width the paper is looked for at: enough to see a receipt's edges. */
+const PAPER_PROBE_WIDTH = 400;
+
+/**
+ * Where the receipt is in a photograph, as a rectangle of `width` × `height`
+ * — or null when the paper fills the frame or cannot be told apart.
+ *
+ * A phone photograph of a ticket is mostly table: wood grain, a cloth, a
+ * hand. Tesseract reads that background as lines of letters — a Mercadona
+ * ticket on a wooden table came back with "MEN", "UA" and "ANETTE" around
+ * every article — and those letters break the article lines apart. The paper
+ * is what is bright and grey, so the rectangle is the longest run of columns
+ * where at least a third of the pixels are, and then the longest run of rows
+ * across those columns.
+ *
+ * **Bright and grey for this photograph, not in absolute terms.** The test
+ * was a fixed one — brightest channel over 140, channels within 45 of each
+ * other — and the light a ticket is photographed under moved the paper out of
+ * it: under a blue cast (an Aldi ticket, paper at R 137 G 184 B 241) nothing
+ * was grey and no paper was found; the shaded end of a Mercadona ticket fell
+ * under 140 and the crop cut off its last eight articles and the TOTAL; the
+ * darkened copies of the tickets lost their crops. So the channels are first
+ * white-balanced against the paper itself — each divided by its own 95th
+ * percentile, which on a photograph of a ticket is the paper — and then a
+ * pixel is paper when it is at least `PAPER_BRIGHTNESS` of that white and
+ * its channels are within `PAPER_CHROMA` of each other relative to its
+ * brightness, so a shadow keeps the grey it has. None of the five crops
+ * that analysts found cutting away articles or the total cuts now, and the
+ * shaded Mercadona ticket's parse score went from 70% to 84%. The average
+ * moved less than that suggests — 48.2% to 50.3% over 77 photographs, 42.2%
+ * to 39.2% over 34 more — because moving every crop edge by one pixel of the
+ * probe, and nothing else, moves those averages by up to 3 points: what
+ * Tesseract reads off a ticket is that sensitive to its margin.
+ *
+ * Measured on a downscaled copy, because a ticket's edges do not need detail
+ * and a 12 MP photograph decoded whole is 48 MB. `Bun.Image` encodes no raw
+ * format, so the copy is a PNG and its pixels are inflated here.
+ */
+export async function findPaper(
+  image: Buffer,
+  width: number,
+  height: number,
+): Promise<Region | null> {
+  const probe = await new Bun.Image(image, { maxPixels: MAX_PIXELS })
+    .resize(Math.min(PAPER_PROBE_WIDTH, width))
+    .png()
+    .toBuffer();
+  const rgb: Uint8Array[] = [];
+  const histograms = [0, 1, 2].map(() => new Uint32Array(256));
+  const { width: w, height: h } = decodePng(
+    Buffer.from(probe),
+    (_, row, channels) => {
+      const pixels = new Uint8Array((row.length / channels) * 3);
+      for (let x = 0; x < pixels.length / 3; x++) {
+        for (let c = 0; c < 3; c++) {
+          const value = row[x * channels + (channels < 3 ? 0 : c)];
+          pixels[x * 3 + c] = value;
+          histograms[c][value]++;
+        }
+      }
+      rgb.push(pixels);
+    },
+  );
+  const white = histograms.map((counts) => percentile(counts, 0.95) || 1);
+  const paper = new Uint8Array(w * h);
+  rgb.forEach((pixels, y) => {
+    for (let x = 0; x < w; x++) {
+      const r = Math.min(1, pixels[x * 3] / white[0]);
+      const g = Math.min(1, pixels[x * 3 + 1] / white[1]);
+      const b = Math.min(1, pixels[x * 3 + 2] / white[2]);
+      const max = Math.max(r, g, b);
+      paper[y * w + x] =
+        max > PAPER_BRIGHTNESS && max - Math.min(r, g, b) < PAPER_CHROMA * max
+          ? 1
+          : 0;
+    }
+  });
+
+  const columns = Array.from({ length: w }, (_, x) => {
+    let count = 0;
+    for (let y = 0; y < h; y++) count += paper[y * w + x];
+    return count / h;
+  });
+  const [x0, x1] = longestRun(columns, 0.35, Math.ceil(w * 0.02));
+  const rows = Array.from({ length: h }, (_, y) => {
+    let count = 0;
+    for (let x = x0; x <= x1; x++) count += paper[y * w + x];
+    return count / (x1 - x0 + 1);
+  });
+  const [y0, y1] = longestRun(rows, 0.35, Math.ceil(h * 0.03));
+
+  // Too little to be the ticket, or all of it: either way, read the frame.
+  const area = ((x1 - x0 + 1) * (y1 - y0 + 1)) / (w * h);
+  if (area < 0.15 || area > 0.92) return null;
+
+  const scale = width / w;
+  const pad = Math.round(w * 0.01);
+  const left = Math.max(0, Math.floor((x0 - pad) * scale));
+  const top = Math.max(0, Math.floor((y0 - pad) * scale));
+  return {
+    left,
+    top,
+    width: Math.min(width, Math.ceil((x1 + pad + 1) * scale)) - left,
+    height: Math.min(height, Math.ceil((y1 + pad + 1) * scale)) - top,
+  };
+}
+
+/**
+ * How bright, against the white-balanced paper, a pixel must be to be paper,
+ * and how far apart its channels may be as a fraction of its brightness.
+ * Loose on brightness on purpose: a background as bright and grey as paper
+ * only makes the rectangle the whole frame, which reads the photograph as it
+ * is, while a test too tight for a shadow cuts the ticket.
+ */
+const PAPER_BRIGHTNESS = 0.45;
+const PAPER_CHROMA = 0.22;
+
+/** The smallest value at or over `fraction` of a histogram's counts. */
+function percentile(counts: Uint32Array, fraction: number): number {
+  const total = counts.reduce((sum, count) => sum + count, 0);
+  let seen = 0;
+  for (let value = 0; value < counts.length; value++) {
+    seen += counts[value];
+    if (seen >= total * fraction) return value;
+  }
+  return counts.length - 1;
+}
+
+/**
+ * The first and last index of the longest run of values at or over `floor`,
+ * bridging dips of up to `gap` values: a line of bold print across the
+ * ticket is mostly ink, and must not cut the paper in two.
+ */
+function longestRun(
+  values: number[],
+  floor: number,
+  gap: number,
+): [number, number] {
+  let best: [number, number] = [0, values.length - 1];
+  let bestLength = 0;
+  let start = -1;
+  let lastHigh = -1;
+  for (let i = 0; i <= values.length; i++) {
+    const high = i < values.length && values[i] >= floor;
+    if (high) {
+      if (start < 0) start = i;
+      lastHigh = i;
+    } else if (start >= 0 && (i === values.length || i - lastHigh > gap)) {
+      if (lastHigh - start + 1 > bestLength) {
+        bestLength = lastHigh - start + 1;
+        best = [start, lastHigh];
+      }
+      start = -1;
+    }
+  }
+  return best;
+}
+
+/** A rectangle of an image, in its pixels. */
+export interface Region {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * `region` of `image` as a 32-bit BMP, which `Bun.Image` and Tesseract both
+ * read — `Bun.Image` has resize and rotate but no crop.
+ *
+ * Decoded a row at a time from a PNG of the whole image, so what is held is
+ * the crop and two rows, not the photograph.
+ */
+export async function cropImage(
+  image: Buffer,
+  region: Region,
+): Promise<Buffer> {
+  const png = await new Bun.Image(image, { maxPixels: MAX_PIXELS })
+    .png()
+    .toBuffer();
+  const bitmap = emptyBitmap(region.width, region.height);
+  const out = bitmap.subarray(BMP_HEADER_BYTES);
+  decodePng(Buffer.from(png), (y, row, channels) => {
+    if (y < region.top || y >= region.top + region.height) return;
+    const target = (y - region.top) * region.width * 4;
+    for (let x = 0; x < region.width; x++) {
+      const from = (region.left + x) * channels;
+      const to = target + x * 4;
+      const grey = channels < 3;
+      out[to] = row[from];
+      out[to + 1] = grey ? row[from] : row[from + 1];
+      out[to + 2] = grey ? row[from] : row[from + 2];
+      out[to + 3] = 255;
+    }
+  });
+  return bitmap;
+}
+
+/**
+ * The rows of an 8-bit, non-interlaced greyscale, RGB or RGBA PNG — what
+ * `Bun.Image` writes — handed to `onRow` one at a time, top to bottom. Not a
+ * general decoder: anything else throws. Returns the size and channel count.
+ */
+export function decodePng(
+  png: Buffer,
+  onRow: (y: number, row: Uint8Array, channels: number) => void,
+): { width: number; height: number; channels: number } {
+  let at = 8;
+  let width = 0;
+  let height = 0;
+  let channels = 0;
+  const data: Buffer[] = [];
+  while (at + 8 <= png.length) {
+    const length = png.readUInt32BE(at);
+    const type = png.toString("latin1", at + 4, at + 8);
+    const body = png.subarray(at + 8, at + 8 + length);
+    if (type === "IHDR") {
+      width = body.readUInt32BE(0);
+      height = body.readUInt32BE(4);
+      channels =
+        ({ 0: 1, 2: 3, 4: 2, 6: 4 } as Record<number, number>)[body[9]] ?? 0;
+      if (body[8] !== 8 || !channels || body[12] !== 0) {
+        // Only `Bun.Image`'s own output reaches here; anything else is an image
+        // this path cannot work with, and the receipt fails like one.
+        throw new InvalidInputError("Unsupported PNG layout");
+      }
+    } else if (type === "IDAT") {
+      data.push(body);
+    } else if (type === "IEND") {
+      break;
+    }
+    at += 12 + length;
+  }
+
+  const raw = inflateSync(Buffer.concat(data));
+  const stride = width * channels;
+  let previous = new Uint8Array(stride);
+  let current = new Uint8Array(stride);
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * (stride + 1)];
+    const line = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
+    for (let x = 0; x < stride; x++) {
+      const a = x >= channels ? current[x - channels] : 0;
+      const b = previous[x];
+      const c = x >= channels ? previous[x - channels] : 0;
+      let predicted = 0;
+      if (filter === 1) predicted = a;
+      else if (filter === 2) predicted = b;
+      else if (filter === 3) predicted = (a + b) >> 1;
+      else if (filter === 4) {
+        const p = a + b - c;
+        const pa = Math.abs(p - a);
+        const pb = Math.abs(p - b);
+        const pc = Math.abs(p - c);
+        predicted = pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+      }
+      current[x] = (line[x] + predicted) & 0xff;
+    }
+    onRow(y, current, channels);
+    [previous, current] = [current, previous];
+  }
+  return { width, height, channels };
 }

@@ -1677,16 +1677,25 @@ one-tap add-to-list. The per-journey evidence is in that file.
 
 - The `docker` group includes this user, but a login session started before that
   change will not have it. Re-login, or prefix with `sg docker -c "..."`.
-- Port 3000 is occupied on this machine by an unrelated application, and 3001
-  is routinely this project's own `bun run dev`. The browser suite defaults to
-  3100 and no longer conflicts with either — it may be run while a dev server
-  is up, and touches neither its port nor its data.
+- Port 3000 is this project's own `bun run dev`, and `tailscale serve`
+  proxies to it (`docs/LOCAL_BOOTSTRAP.md` §4). The browser suite defaults to
+  3100 and does not conflict with it — it may be run while a dev server is up,
+  and touches neither its port nor its data.
 - Next refuses a second dev server from the same directory — `next dev` only.
   The suite's standalone server takes no such lock, which is half of why the
   suite moved to it; the other half is `stoky_e2e`. Before the move, a suite
   and a developer's dev server could and did kill each other's.
 - If message catalogues appear stale, the running dev server has cached them —
   `touch next.config.ts` makes it reload.
+- **A page that reloads itself in a loop under `bun run dev`** — on a phone
+  through Tailscale or on `localhost`, signed in or not — is a stale
+  Turbopack development cache, not the network. Seen 2026-11-01 with a 1.6 GB
+  `.next/dev` whose client entry chunk was five days old: on every HMR connect
+  the server sent `{"type":"restart"}` for that chunk, and the browser reloaded
+  (13–24 navigations of `/login` in 15 s). Stop the dev server,
+  `rm -rf .next/dev`, start it again: two navigations in 15 s afterwards, the
+  load and one reload, then quiet. To tell it from a real reload, log the HMR
+  frames (Playwright `page.on("websocket")`) and look for `restart`.
 
 ---
 
