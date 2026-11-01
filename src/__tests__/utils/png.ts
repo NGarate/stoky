@@ -156,3 +156,22 @@ export function pngNoise(width: number, height: number, seed = 0x5eed): Buffer {
     before: [palette],
   });
 }
+
+/**
+ * A truecolour PNG whose every pixel `colour` decides — for a picture with
+ * something where a test needs it, like a sheet of paper on a table.
+ */
+export function pngPainted(
+  width: number,
+  height: number,
+  colour: (x: number, y: number) => [number, number, number],
+): Buffer {
+  const scanlines = Buffer.alloc(height * (1 + width * 3));
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const at = y * (1 + width * 3) + 1 + x * 3;
+      [scanlines[at], scanlines[at + 1], scanlines[at + 2]] = colour(x, y);
+    }
+  }
+  return assemble(width, height, deflateSync(scanlines));
+}

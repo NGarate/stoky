@@ -4,7 +4,7 @@ import { ReceiptStatus } from "@/generated/prisma/client";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { InvalidInputError, NotFoundError } from "./errors";
-import { readImageMetadata } from "./image";
+import { MAX_PIXELS, cropImage, findPaper, readImageMetadata } from "./image";
 
 /**
  * Where the Spanish traineddata is read from — ISSUES.md OCR-1.
@@ -208,6 +208,48 @@ export function timedRecogniser<W extends RecognisingWorker>(
   };
 }
 
+/**
+ * Text narrower than this many pixels across the ticket is upscaled to it.
+ *
+ * Tesseract's model is trained on text about 30 pixels high, and a phone
+ * photograph of a long ticket leaves its lines at half that: the whole ticket
+ * fits the frame by being small. Upscaling does not add detail, but it lets
+ * Tesseract's own binarisation keep the strokes it would otherwise merge.
+ */
+export const OCR_MIN_WIDTH = 1400;
+
+/** Upscaling stops here, whatever the width says: Tesseract's memory is per pixel. */
+const OCR_MAX_PIXELS = 20_000_000;
+
+/**
+ * The photograph as Tesseract should see it: the ticket alone, grey and wide
+ * enough to read.
+ *
+ * Cropped to the paper (`findPaper`) because the table around a ticket is
+ * read as text. The stored photograph is not changed — this is what is
+ * handed to the OCR, every time it runs.
+ */
+export async function prepareForOcr(image: Buffer): Promise<Buffer> {
+  const { width, height } = await readImageMetadata(image);
+  if (!width || !height) return image;
+  const paper = await findPaper(image, width, height);
+  const source = paper ? await cropImage(image, paper) : image;
+  const sourceWidth = paper?.width ?? width;
+  const sourceHeight = paper?.height ?? height;
+
+  const scale = Math.max(
+    1,
+    Math.min(
+      OCR_MIN_WIDTH / sourceWidth,
+      Math.sqrt(OCR_MAX_PIXELS / (sourceWidth * sourceHeight)),
+    ),
+  );
+  const prepared = new Bun.Image(source, { maxPixels: MAX_PIXELS })
+    .resize(Math.round(sourceWidth * scale))
+    .modulate({ saturation: 0 });
+  return Buffer.from(await prepared.png().toBuffer());
+}
+
 const ocrWorker = sharedWorker<Worker>(() =>
   createWorker("spa", undefined, workerOptions()),
 );
@@ -260,7 +302,7 @@ export async function processReceiptOcr(
     // than through the procedure that checked them.
     await readImageMetadata(imageBuffer);
 
-    const text = await recognise(imageBuffer);
+    const text = await recognise(await prepareForOcr(imageBuffer));
     if (text.trim().length === 0) {
       throw new InvalidInputError("No text recognised in the image");
     }
