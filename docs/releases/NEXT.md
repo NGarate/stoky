@@ -102,6 +102,14 @@ lectura automática sin buscar el papel. La ven quienes pueden revisar
 tickets; la cuenta de cocina no, porque la foto muestra lo que imprime el
 ticket, como la tarjeta o la tarjeta de cliente.
 
+### Corrige lo que se leyó mal en un ticket
+
+Cada línea del ticket tiene ahora **Corregir**: cambia el nombre, el
+importe o la cantidad cuando la lectura automática se equivoca, también en
+una línea ya confirmada. Si cambias el nombre de una línea que Stoky había
+reconocido sola, vuelve a quedar pendiente para que elijas el producto,
+porque lo reconoció por el nombre mal leído.
+
 ## English
 
 > [!CAUTION]
@@ -193,3 +201,10 @@ uploaded, so a misread price or a line the automatic reading skipped can be
 checked without finding the paper. Anyone who can review receipts sees it;
 the kitchen account does not, because the photo shows what the receipt
 prints, such as the card or the loyalty card.
+
+### Correct what was misread on a receipt
+
+Each receipt line now has **Correct**: change the name, the amount or the
+quantity when the automatic reading gets it wrong, on a confirmed line too.
+Renaming a line Stoky had recognised on its own sends it back to pending so
+you choose the product, because it was recognised from the misread name.

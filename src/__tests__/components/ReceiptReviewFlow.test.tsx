@@ -132,6 +132,9 @@ mock.module("@/lib/trpc/client", () => ({
           isPending: false,
         }),
       },
+      updateItem: {
+        useMutation: () => ({ mutate: () => {}, isPending: false }),
+      },
       confirmItem: {
         useMutation: (opts?: Callbacks) => ({
           mutate: () => {

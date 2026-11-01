@@ -79,6 +79,7 @@ mock.module("@/lib/trpc/client", () => ({
       getAppliedSummary: { useQuery: () => queryStub },
       confirmAll: { useMutation: () => idleMutation },
       confirmItem: { useMutation: () => idleMutation },
+      updateItem: { useMutation: () => idleMutation },
       applyReceipt: { useMutation: () => idleMutation },
     },
     price: {

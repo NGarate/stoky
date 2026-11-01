@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MAX_ID_LENGTH, MAX_NAME_LENGTH } from "./bounds";
+import { priceSchema, quantitySchema } from "./amounts";
 
 /**
  * The image types a receipt photograph may be.
@@ -100,3 +101,21 @@ export const receiptItemMatchSchema = z.discriminatedUnion("action", [
     action: z.literal("SKIP"),
   }),
 ]);
+
+/**
+ * A receipt line as a person states it: what OCR misread, corrected.
+ *
+ * `price` is the line's total, as `parsedPrice` is (`receiptParser.ts`): what
+ * the line cost, not each unit. Optional, because a line without one still
+ * books stock; it only records no price.
+ */
+export const receiptLineSchema = z.object({
+  name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
+  price: priceSchema.optional(),
+  quantity: quantitySchema,
+});
+
+/** Correcting a line the receipt already has. */
+export const receiptItemUpdateSchema = receiptLineSchema.extend({
+  receiptItemId: z.string().min(1).max(MAX_ID_LENGTH),
+});

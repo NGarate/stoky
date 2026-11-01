@@ -34,6 +34,7 @@ import {
   MAX_RECEIPT_BYTES,
   RECEIPT_IMAGE_TYPES,
   receiptItemMatchSchema,
+  receiptItemUpdateSchema,
 } from "@/lib/validations/receipt";
 
 const VALID_MIME_TYPES: readonly string[] = RECEIPT_IMAGE_TYPES;
@@ -210,6 +211,29 @@ function assertOpenForReview(status: ReceiptStatus): void {
       message: "Receipt is not open for review",
     });
   }
+}
+
+/**
+ * The receipt's status, read under its row lock.
+ *
+ * What every edit to a line re-checks inside its transaction: the status read
+ * before it can go stale, and an apply committing in between would leave the
+ * edit under an APPLIED receipt, disagreeing with the stock the apply booked.
+ * FOR UPDATE serialises the edit against the apply's claim whichever way the
+ * race goes — see `confirmItem`, where the window was first closed.
+ */
+async function lockReceiptStatus(
+  tx: Prisma.TransactionClient,
+  receiptId: string,
+): Promise<ReceiptStatus> {
+  const rows = await tx.$queryRaw<{ status: ReceiptStatus }[]>`
+    SELECT status FROM "Receipt" WHERE id = ${receiptId} FOR UPDATE
+  `;
+  const current = rows[0];
+  if (!current) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
+  }
+  return current.status;
 }
 
 export const receiptRouter = createTRPCRouter({
@@ -575,17 +599,7 @@ export const receiptRouter = createTRPCRouter({
         // an apply in flight holds the row, so this blocks and then refuses
         // on APPLIED; a settlement in flight holds it, so the apply's claim
         // waits and its line read sees the finished edit.
-        const rows = await tx.$queryRaw<{ status: ReceiptStatus }[]>`
-          SELECT status FROM "Receipt" WHERE id = ${item.receiptId} FOR UPDATE
-        `;
-        const current = rows[0];
-        if (!current) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Receipt not found",
-          });
-        }
-        assertOpenForReview(current.status);
+        assertOpenForReview(await lockReceiptStatus(tx, item.receiptId));
 
         // Narrowed by the discriminated union, so each branch reads only the
         // fields its action has — and SKIP falls through to a null product,
@@ -622,6 +636,65 @@ export const receiptRouter = createTRPCRouter({
 
         return { success: true };
       });
+    }),
+
+  /**
+   * Corrects what OCR read on one line: its name, its total, how many.
+   *
+   * Open while the receipt is, like settling a line, and re-checked under the
+   * same lock. The decision on the line stays — a confirmed milk at the wrong
+   * price is still the milk — except an automatic match when the *name*
+   * changes: that match was the machine's guess from the text the person has
+   * just said was wrong, so the line goes back to waiting for a decision.
+   */
+  updateItem: writeProcedure
+    .input(receiptItemUpdateSchema)
+    .mutation(async ({ ctx, input }) => {
+      const item = await ctx.db.receiptItem.findFirst({
+        where: {
+          id: input.receiptItemId,
+          receipt: { householdId: ctx.householdId },
+        },
+        select: {
+          receiptId: true,
+          parsedName: true,
+          matchStatus: true,
+          receipt: { select: { status: true } },
+        },
+      });
+
+      if (!item) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Receipt item not found",
+        });
+      }
+
+      assertOpenForReview(item.receipt.status);
+
+      const guessedFromOldName =
+        item.matchStatus === MatchStatus.AUTO_MATCHED &&
+        item.parsedName !== input.name;
+
+      await ctx.db.$transaction(async (tx) => {
+        assertOpenForReview(await lockReceiptStatus(tx, item.receiptId));
+
+        await tx.receiptItem.update({
+          where: { id: input.receiptItemId },
+          data: {
+            parsedName: input.name,
+            parsedPrice: input.price ?? null,
+            parsedQuantity: input.quantity,
+            ...(guessedFromOldName && {
+              matchedProductId: null,
+              matchConfidence: null,
+              matchStatus: MatchStatus.PENDING,
+            }),
+          },
+        });
+      });
+
+      return { success: true };
     }),
 
   /**

@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Check, Plus, ScanLine } from "lucide-react";
+import { Check, Pencil, Plus, ScanLine } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { isItemReviewed } from "@/lib/receipts";
 import { MatchSelector } from "./MatchSelector";
 import { CreateProductInline } from "./CreateProductInline";
+import { ReceiptLineForm, type ReceiptLine } from "./ReceiptLineForm";
 import {
   ScanProductDialog,
   type ScannedProduct,
@@ -44,14 +45,17 @@ interface ReviewCardProps {
     productId?: string,
     customName?: string,
   ) => void;
+  /** What OCR read, corrected: `receipt.updateItem`. */
+  onCorrect: (line: ReceiptLine) => void;
 }
 
-export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
+export function ReviewCard({ item, onConfirm, onCorrect }: ReviewCardProps) {
   const t = useTranslations("receipts");
   const tScan = useTranslations("products.scanPick");
   const locale = useLocale();
   const [isCreating, setIsCreating] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [isCorrecting, setIsCorrecting] = useState(false);
   /**
    * The product the packet in hand turned out to be. A receipt's words are
    * often not enough to match on ("LCH ENT 1L"), and the packet is usually
@@ -92,6 +96,31 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
 
   const isAutoMatched = item.matchStatus === "AUTO_MATCHED";
 
+  const lineName = item.parsedName || item.rawText;
+
+  const handleCorrect = (line: ReceiptLine) => {
+    // A new name sends an automatic match back to waiting (the server's
+    // rule), and the product picked here was picked from the old name.
+    if (line.name !== item.parsedName) setSelectedProductId(null);
+    onCorrect(line);
+    setIsCorrecting(false);
+  };
+
+  // Words, and the line's name in the accessible one, for the reason the
+  // skip button gives below.
+  const correctButton = (
+    <Button
+      aria-label={t("line.correctOf", { name: lineName })}
+      onClick={() => setIsCorrecting(true)}
+      size="sm"
+      type="button"
+      variant="outline"
+    >
+      <Pencil aria-hidden="true" className="mr-1 size-5" />
+      {t("line.correct")}
+    </Button>
+  );
+
   return (
     <div
       // Only a confirmed line is tinted, because only that is a state — and
@@ -105,9 +134,7 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
     >
       <div className="flex items-start justify-between mb-3">
         <div>
-          <p className="font-medium text-foreground">
-            {item.parsedName || item.rawText}
-          </p>
+          <p className="font-medium text-foreground">{lineName}</p>
           {item.parsedPrice !== null && (
             <p className="text-sm text-muted-foreground">
               {formatMoney(locale, item.parsedPrice, DEFAULT_CURRENCY)}
@@ -131,7 +158,20 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
         ) : null}
       </div>
 
-      {!isConfirmed && (
+      {isCorrecting ? (
+        <ReceiptLineForm
+          defaults={{
+            name: lineName,
+            price: item.parsedPrice?.toString() ?? "",
+            quantity: item.parsedQuantity?.toString() ?? "1",
+          }}
+          onCancel={() => setIsCorrecting(false)}
+          onSubmit={handleCorrect}
+          submitLabel={t("line.save")}
+        />
+      ) : isConfirmed ? (
+        correctButton
+      ) : (
         <div className="space-y-3">
           {isCreating ? (
             <CreateProductInline
@@ -166,7 +206,7 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
               <div className="flex flex-wrap gap-2">
                 <Button
                   aria-label={tScan("scanLineOf", {
-                    name: item.parsedName || item.rawText,
+                    name: lineName,
                   })}
                   type="button"
                   variant="outline"
@@ -207,7 +247,7 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
                 <Button
                   type="button"
                   aria-label={t("skipLineOf", {
-                    name: item.parsedName || item.rawText,
+                    name: lineName,
                   })}
                   variant="outline"
                   size="sm"
@@ -215,6 +255,7 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
                 >
                   {t("skipLine")}
                 </Button>
+                {correctButton}
               </div>
             </>
           )}

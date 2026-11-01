@@ -566,6 +566,16 @@
     "review": "Revisar ticket",
     "photo": "Ver la foto del ticket",
     "photoAlt": "Foto del ticket",
+    "line": {
+      "correct": "Corregir",
+      "correctOf": "Corregir la línea «{name}»",
+      "save": "Guardar corrección",
+      "nameLabel": "Producto",
+      "priceLabel": "Importe",
+      "priceHint": "Lo que costó la línea entera, no cada unidad. Déjalo vacío si no se lee.",
+      "quantityLabel": "Cantidad",
+      "saveFailed": "No se ha podido guardar la corrección. Vuelve a intentarlo."
+    },
     "store": "Tienda",
     "purchaseDate": "Fecha de compra",
     "uploadedAt": "Subido",

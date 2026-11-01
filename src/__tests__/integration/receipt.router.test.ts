@@ -30,7 +30,7 @@ import { num } from "../utils/amount";
 /**
  * The receipt router, procedure by procedure.
  *
- * It is the largest router in the project — nine procedures — and it was
+ * It is the largest router in the project — ten procedures — and it was
  * the least covered: 28.6% of its functions and 19.5% of its lines, against
  * 90% for the integration tier as a whole. The pipeline's *services* were
  * well tested and the browser suite walked the screens, so what was missing
@@ -944,6 +944,151 @@ describe("receipt.confirmItem", () => {
       where: { id: first.id },
     });
     expect(item?.matchStatus).toBe(MatchStatus.AUTO_MATCHED);
+  });
+});
+
+describe("receipt.updateItem", () => {
+  it("corrects what OCR read on a line", async () => {
+    const { second } = await seedReceipt({});
+
+    await caller.receipt.updateItem({
+      receiptItemId: second.id,
+      name: "Pan rústico",
+      price: 1.35,
+      quantity: 2,
+    });
+
+    const item = await prisma.receiptItem.findUniqueOrThrow({
+      where: { id: second.id },
+    });
+    expect(item.parsedName).toBe("Pan rústico");
+    expect(num(item.parsedPrice)).toBe(1.35);
+    expect(num(item.parsedQuantity)).toBe(2);
+    // What was printed stays what was printed.
+    expect(item.rawText).toBe("PAN RUSTICO 1,20");
+  });
+
+  it("clears a price the person leaves out, so applying records none", async () => {
+    const { second } = await seedReceipt({});
+
+    await caller.receipt.updateItem({
+      receiptItemId: second.id,
+      name: "Pan rustico",
+      quantity: 1,
+    });
+
+    const item = await prisma.receiptItem.findUniqueOrThrow({
+      where: { id: second.id },
+    });
+    expect(item.parsedPrice).toBeNull();
+  });
+
+  it("keeps a person's decision on the line", async () => {
+    const { first } = await seedReceipt({
+      matchStatus: MatchStatus.USER_CONFIRMED,
+    });
+
+    await caller.receipt.updateItem({
+      receiptItemId: first.id,
+      name: "Leche semidesnatada",
+      price: 2.6,
+      quantity: 2,
+    });
+
+    const item = await prisma.receiptItem.findUniqueOrThrow({
+      where: { id: first.id },
+    });
+    expect(item.matchStatus).toBe(MatchStatus.USER_CONFIRMED);
+    expect(item.matchedProductId).toBe(productId);
+  });
+
+  it("drops an automatic match guessed from a name that was wrong", async () => {
+    const { first } = await seedReceipt({});
+
+    await caller.receipt.updateItem({
+      receiptItemId: first.id,
+      name: "Leche de avena",
+      price: 2.5,
+      quantity: 2,
+    });
+
+    const item = await prisma.receiptItem.findUniqueOrThrow({
+      where: { id: first.id },
+    });
+    expect(item.matchStatus).toBe(MatchStatus.PENDING);
+    expect(item.matchedProductId).toBeNull();
+    expect(item.matchConfidence).toBeNull();
+  });
+
+  it("keeps an automatic match when only the price or quantity changes", async () => {
+    const { first } = await seedReceipt({});
+
+    await caller.receipt.updateItem({
+      receiptItemId: first.id,
+      name: "Leche entera",
+      price: 2.4,
+      quantity: 3,
+    });
+
+    const item = await prisma.receiptItem.findUniqueOrThrow({
+      where: { id: first.id },
+    });
+    expect(item.matchStatus).toBe(MatchStatus.AUTO_MATCHED);
+    expect(item.matchedProductId).toBe(productId);
+  });
+
+  it("is refused once the receipt is applied", async () => {
+    const { second } = await seedReceipt({ status: ReceiptStatus.APPLIED });
+
+    await expectCode(
+      () =>
+        caller.receipt.updateItem({
+          receiptItemId: second.id,
+          name: "Pan",
+          quantity: 1,
+        }),
+      "BAD_REQUEST",
+    );
+  });
+
+  it("is NOT_FOUND for another household's line and refused for a kitchen account", async () => {
+    const { second } = await seedReceipt({});
+    const correction = { receiptItemId: second.id, name: "Pan", quantity: 1 };
+
+    await expectCode(
+      () => outsider.receipt.updateItem(correction),
+      "NOT_FOUND",
+    );
+    await expectCode(() => kitchen.receipt.updateItem(correction), "FORBIDDEN");
+
+    const item = await prisma.receiptItem.findUniqueOrThrow({
+      where: { id: second.id },
+    });
+    expect(item.parsedName).toBe("Pan rustico");
+  });
+
+  it("refuses a quantity of zero and a price of zero", async () => {
+    const { second } = await seedReceipt({});
+
+    await expectCode(
+      () =>
+        caller.receipt.updateItem({
+          receiptItemId: second.id,
+          name: "Pan",
+          quantity: 0,
+        }),
+      "BAD_REQUEST",
+    );
+    await expectCode(
+      () =>
+        caller.receipt.updateItem({
+          receiptItemId: second.id,
+          name: "Pan",
+          price: 0,
+          quantity: 1,
+        }),
+      "BAD_REQUEST",
+    );
   });
 });
 

@@ -71,7 +71,11 @@ describe("leaving a line out", () => {
   it("is a worded button named for its line, not an X", () => {
     const skipped: string[] = [];
     renderWithIntl(
-      <ReviewCard item={line()} onConfirm={(action) => skipped.push(action)} />,
+      <ReviewCard
+        item={line()}
+        onConfirm={(action) => skipped.push(action)}
+        onCorrect={() => {}}
+      />,
       { locale: "es" },
     );
 
@@ -85,12 +89,93 @@ describe("leaving a line out", () => {
   });
 });
 
+describe("correcting what OCR read", () => {
+  it("opens the line as it was read and sends it back corrected", async () => {
+    const corrected: unknown[] = [];
+    renderWithIntl(
+      <ReviewCard
+        item={line({ parsedQuantity: new Decimal(2) })}
+        onConfirm={() => {}}
+        onCorrect={(fixed) => corrected.push(fixed)}
+      />,
+      { locale: "es" },
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Corregir la línea «Leche entera»",
+      }),
+    );
+    const name = screen.getByLabelText("Producto");
+    const price = screen.getByLabelText("Importe");
+    expect((name as HTMLInputElement).value).toBe("Leche entera");
+    expect((price as HTMLInputElement).value).toBe("1.19");
+    expect((screen.getByLabelText("Cantidad") as HTMLInputElement).value).toBe(
+      "2",
+    );
+
+    await userEvent.clear(name);
+    await userEvent.type(name, "Leche semidesnatada");
+    await userEvent.clear(price);
+    await userEvent.type(price, "2.38");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Guardar corrección" }),
+    );
+
+    expect(corrected).toEqual([
+      { name: "Leche semidesnatada", price: 2.38, quantity: 2 },
+    ]);
+    // Closed again, showing the line rather than the form.
+    expect(screen.queryByLabelText("Producto")).toBeAbsent();
+  });
+
+  it("sends an emptied price as no price, and nothing at all for no quantity", async () => {
+    const corrected: unknown[] = [];
+    renderWithIntl(
+      <ReviewCard
+        item={line()}
+        onConfirm={() => {}}
+        onCorrect={(fixed) => corrected.push(fixed)}
+      />,
+      { locale: "es" },
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /^Corregir la línea/ }),
+    );
+    await userEvent.clear(screen.getByLabelText("Importe"));
+    await userEvent.clear(screen.getByLabelText("Cantidad"));
+    const save = screen.getByRole("button", { name: "Guardar corrección" });
+    expect(save).toBeDisabled();
+
+    await userEvent.type(screen.getByLabelText("Cantidad"), "1");
+    await userEvent.click(save);
+    expect(corrected).toEqual([{ name: "Leche entera", quantity: 1 }]);
+  });
+
+  it("is offered on a line already confirmed: a right product at a wrong price", () => {
+    renderWithIntl(
+      <ReviewCard
+        item={line({ matchStatus: "USER_CONFIRMED" })}
+        onConfirm={() => {}}
+        onCorrect={() => {}}
+      />,
+      { locale: "es" },
+    );
+
+    expect(
+      screen.getByRole("button", { name: /^Corregir la línea/ }),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("ReviewCard status", () => {
   it("says an automatic match in a neutral pill, without a glyph or a tint", () => {
     const { container } = renderWithIntl(
       <ReviewCard
         item={line({ matchStatus: "AUTO_MATCHED", matchConfidence: 0.9 })}
         onConfirm={() => {}}
+        onCorrect={() => {}}
       />,
       { locale: "es" },
     );
@@ -110,6 +195,7 @@ describe("ReviewCard status", () => {
       <ReviewCard
         item={line({ matchStatus: "USER_CONFIRMED" })}
         onConfirm={() => {}}
+        onCorrect={() => {}}
       />,
       { locale: "es" },
     );
@@ -124,6 +210,7 @@ describe("ReviewCard status", () => {
       <ReviewCard
         item={line({ matchStatus: "SKIPPED" })}
         onConfirm={() => {}}
+        onCorrect={() => {}}
       />,
       { locale: "es" },
     );
@@ -147,6 +234,7 @@ describe("scanning the packet for a line", () => {
       <ReviewCard
         item={line({ matchedProductId: null, matchedProduct: null })}
         onConfirm={(...args) => confirmed.push(args)}
+        onCorrect={() => {}}
       />,
       { locale: "es" },
     );

@@ -100,6 +100,20 @@ export default function ReviewPage() {
       }),
   });
 
+  // A correction refetches like a settled line, and a refusal says so, for
+  // the same reasons as `confirmItem` above.
+  const updateItemMutation = api.receipt.updateItem.useMutation({
+    onSuccess: () => {
+      void utils.receipt.getReceiptWithItems.invalidate({ receiptId });
+    },
+    onError: () =>
+      snackbar.show({
+        kind: "confirm",
+        tone: "danger",
+        message: { key: "receipts.line.saveFailed" },
+      }),
+  });
+
   // "Not found" only when the server said so. Gated on `isLoading`, a query
   // paused offline or refused with a 500 fell through to this branch and
   // told somebody their receipt did not exist.
@@ -263,6 +277,9 @@ export default function ReviewPage() {
                 // it only emits MATCH from a selected candidate and CREATE
                 // from a non-empty trimmed name — so they are a type narrowing
                 // rather than a second opinion.
+                onCorrect={(line) =>
+                  updateItemMutation.mutate({ receiptItemId: item.id, ...line })
+                }
                 onConfirm={(action, productId, customName) => {
                   if (action === "MATCH" && productId) {
                     confirmItemMutation.mutate({

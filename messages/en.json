@@ -566,6 +566,16 @@
     "review": "Review receipt",
     "photo": "See the receipt photo",
     "photoAlt": "Receipt photo",
+    "line": {
+      "correct": "Correct",
+      "correctOf": "Correct the line “{name}”",
+      "save": "Save correction",
+      "nameLabel": "Product",
+      "priceLabel": "Amount",
+      "priceHint": "What the whole line cost, not each unit. Leave it empty if it cannot be read.",
+      "quantityLabel": "Quantity",
+      "saveFailed": "The correction could not be saved. Try again."
+    },
     "store": "Store",
     "purchaseDate": "Purchase date",
     "uploadedAt": "Uploaded",
