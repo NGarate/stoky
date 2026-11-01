@@ -1677,10 +1677,10 @@ one-tap add-to-list. The per-journey evidence is in that file.
 
 - The `docker` group includes this user, but a login session started before that
   change will not have it. Re-login, or prefix with `sg docker -c "..."`.
-- Port 3000 is occupied on this machine by an unrelated application, and 3001
-  is routinely this project's own `bun run dev`. The browser suite defaults to
-  3100 and no longer conflicts with either — it may be run while a dev server
-  is up, and touches neither its port nor its data.
+- Port 3000 is this project's own `bun run dev`, and `tailscale serve`
+  proxies to it (`docs/LOCAL_BOOTSTRAP.md` §4). The browser suite defaults to
+  3100 and does not conflict with it — it may be run while a dev server is up,
+  and touches neither its port nor its data.
 - Next refuses a second dev server from the same directory — `next dev` only.
   The suite's standalone server takes no such lock, which is half of why the
   suite moved to it; the other half is `stoky_e2e`. Before the move, a suite
