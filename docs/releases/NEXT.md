@@ -86,6 +86,14 @@ vuelven ahora a la pantalla desde la que entraste, y el enlace dice cuál:
 volvían siempre al mismo sitio. **Cancelar** en esos formularios hace lo
 mismo, y la lista a la que vuelves sigue donde la dejaste.
 
+### Las fotos HEIC del móvil ya se pueden subir
+
+Al subir un ticket ya puedes elegir las fotos HEIC, el formato en que
+guardan las fotos la cámara del iPhone y muchos Android, y que antes ni
+siquiera aparecían para elegir. Stoky las convierte a JPEG al recibirlas y
+el ticket se lee igual que cualquier otra foto. En algunos navegadores la
+vista previa de una foto HEIC no se muestra, pero la subida funciona.
+
 ## English
 
 > [!CAUTION]
@@ -161,3 +169,11 @@ screen you came from, and the link says which: **Back to the dashboard**,
 **Back to the product**, **Back to the list**. They used to go to the same
 place every time. **Cancel** on those forms does the same, and the list you
 return to is still where you left it.
+
+### Phone HEIC photos can be uploaded
+
+Uploading a receipt now takes HEIC photos, the format the iPhone camera and
+many Android phones save in, which used to be left out of the picker
+altogether. Stoky converts them to JPEG on arrival and the receipt is read
+like any other photo. Some browsers cannot show a HEIC photo's preview, but
+the upload works.

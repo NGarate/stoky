@@ -178,8 +178,12 @@ const nextConfig: NextConfig = {
    * Found by scanning a receipt inside the image, which is the one thing OCR-1
    * was closed without doing. The entry said so at the time; this is what that
    * caveat was hiding.
+   *
+   * `libheif-js` is two megabytes of Emscripten output with the WebAssembly
+   * inlined, which has nothing to gain from being bundled again; external, it
+   * is loaded from `node_modules` as `bun test` loads it.
    */
-  serverExternalPackages: ["tesseract.js"],
+  serverExternalPackages: ["tesseract.js", "libheif-js"],
 
   /**
    * The Image Optimization endpoint is off: `/_next/image` answers 404.

@@ -622,7 +622,7 @@
     "dropzoneLabel": "Choose a photo of the receipt",
     "dropActive": "Drop the photo here…",
     "dropPrompt": "Drag a photo of the receipt here, or choose one",
-    "dropHint": "JPG, PNG or WebP (max. {max} MB)",
+    "dropHint": "JPG, PNG, WebP or HEIC (max. {max} MB)",
     "cameraCapture": "Take a photo with the camera",
     "previewAlt": "Receipt preview",
     "clearPreview": "Remove the photo",

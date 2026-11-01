@@ -11,21 +11,18 @@ import { MAX_ID_LENGTH, MAX_NAME_LENGTH } from "./bounds";
  * a type the server refuses is a failure after the choosing rather than
  * before it, and the two lists drifting apart is how that happens.
  *
- * **HEIC is deliberately absent**, and it is the format both Android and iOS
- * save camera photos in, so its absence is what someone notices. The reason
- * is that `sharp`'s bundled libvips cannot decode one: measured against four
- * real phone photographs, two from each platform, all four refused before
- * reaching the codec — libheif's own security limits, `iloc box contains 50
- * items` on the Android pair and `Number of references` on the iPhone pair —
- * and the binary carries no `de265` decoder either. Alpine's packaged
- * `vips-heif` converts the same files without complaint, so the way in is a
- * libvips built with libheif rather than the one npm ships; that is a change
- * to the image and to every developer's machine, and it has not been made.
+ * HEIC is on it because it is what both Android and iOS save camera photos
+ * as: leaving it off hid most of a phone's photographs from the picker. The
+ * server decodes it itself (`src/server/services/image.ts`, `heifAsBitmap`)
+ * and stores a JPEG like any other upload. `image/heif` is the same container
+ * under its generic name.
  */
 export const RECEIPT_IMAGE_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
+  "image/heic",
+  "image/heif",
 ] as const;
 
 /**

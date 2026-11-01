@@ -40,7 +40,7 @@ describe("UploadZone", () => {
       screen.getByText("Arrastra una foto del ticket o pulsa para elegirla"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("JPG, PNG o WebP (máx. 10 MB)"),
+      screen.getByText("JPG, PNG, WebP o HEIC (máx. 10 MB)"),
     ).toBeInTheDocument();
   });
 

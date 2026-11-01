@@ -266,13 +266,15 @@ and an explicit list of what is still unknown. **All three stages have since
 landed** and the Bun migration was taken; the file records what each run
 established and what it did not, including the one thing the migration made
 worse (`ISSUES.md` RUNTIME-1). Read it before proposing anything about the
-image, the runtime, or HEIC — which is still shut.
+image, the runtime, or HEIC — opened on 2026-11-01 by neither of its doors
+(`STATUS.md`).
 
 **[`superpowers/plans/2026-08-27-finishing-the-bun-migration.md`](superpowers/plans/2026-08-27-finishing-the-bun-migration.md)**
 **Executed through step 4, plus step 7 — this index said "Not started" for
 days after PROGRESS.md D114 recorded otherwise.** Two steps remain, both
 decision- or investigation-shaped rather than commits: the HEIC door (the
-pre-plan's open decision 4) and RUNTIME-1's `AbortError` half. What the record
+pre-plan's open decision 4, since answered by neither door — `STATUS.md`) and
+RUNTIME-1's `AbortError` half. What the record
 holds: why `sharp` stays in `devDependencies` — deliberately now, as the
 cross-check two test files exist to disagree with, which corrected the plan's
 own "sharp becomes unreferenced" goal — why swapping it out of the tests was

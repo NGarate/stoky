@@ -622,7 +622,7 @@
     "dropzoneLabel": "Seleccionar una foto del ticket",
     "dropActive": "Suelta la foto aquí…",
     "dropPrompt": "Arrastra una foto del ticket o pulsa para elegirla",
-    "dropHint": "JPG, PNG o WebP (máx. {max} MB)",
+    "dropHint": "JPG, PNG, WebP o HEIC (máx. {max} MB)",
     "cameraCapture": "Hacer foto con la cámara",
     "previewAlt": "Vista previa del ticket",
     "clearPreview": "Quitar la foto",

@@ -1,5 +1,7 @@
 import { describe, it, expect } from "bun:test";
+import { readFile } from "node:fs/promises";
 import {
+  isHeif,
   MAX_LONG_EDGE,
   MAX_PIXELS,
   reencodeAsJpeg,
@@ -469,5 +471,49 @@ describe("stripJpegMetadata on its own", () => {
     ]);
 
     expect(() => stripJpegMetadata(jpeg)).toThrow(/scan before any frame/);
+  });
+});
+
+describe("a HEIC photograph", () => {
+  /**
+   * 120 × 64 of black, rotated a quarter turn by an `irot` box and cropped by
+   * a `clap` to 60 × 120 as displayed, carrying the EXIF block of a phone —
+   * make, model, GPS. Made by `heif-enc -q 50` (libheif 1.20, Alpine 3.22)
+   * from a JPEG built with `pngOf` and `withExif`: nothing in JavaScript
+   * encodes HEVC, so this is the one image fixture that is a file.
+   */
+  const heic = () =>
+    readFile(new URL("../fixtures/rotated-with-exif.heic", import.meta.url));
+
+  it("is recognised by its brand", async () => {
+    expect(isHeif(await heic())).toBe(true);
+    // An MP4 is the same container under another brand, and is not one.
+    expect(isHeif(Buffer.from("\0\0\0\x18ftypisom\0\0\0\0", "latin1"))).toBe(
+      false,
+    );
+  });
+
+  it("comes out a JPEG, turned in the pixels, with the phone's metadata gone", async () => {
+    const source = await heic();
+    // The premise: there is camera metadata to lose.
+    expect(source.includes("TestPhone")).toBe(true);
+
+    const output = await reencodeAsJpeg(source);
+
+    expect(isJpeg(output)).toBe(true);
+    expect(jpegDimensions(output)).toEqual({ width: 60, height: 120 });
+    expect(hasExif(output)).toBe(false);
+    expect(output.includes("TestPhone")).toBe(false);
+  });
+
+  it("is held to the pixel bound before it is decoded", async () => {
+    // The `ispe` box is where a HEIF declares its size; claiming 9000 × 9000
+    // is 81 megapixels in under a kilobyte, the PNG bomb above in HEIC form.
+    const bomb = await heic();
+    const ispe = bomb.indexOf("ispe");
+    bomb.writeUInt32BE(9000, ispe + 8);
+    bomb.writeUInt32BE(9000, ispe + 12);
+
+    expect(reencodeAsJpeg(bomb)).rejects.toThrow("maxPixels");
   });
 });

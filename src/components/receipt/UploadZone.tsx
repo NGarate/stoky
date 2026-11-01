@@ -79,8 +79,7 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
     //
     // Read from `RECEIPT_IMAGE_TYPES` rather than written out again: the
     // router refuses anything outside it, and offering a type the server
-    // refuses is a failure after the choosing rather than before it. That
-    // file also records why HEIC is not on it.
+    // refuses is a failure after the choosing rather than before it.
     accept: Object.fromEntries(
       RECEIPT_IMAGE_TYPES.map((type) => [type, [] as string[]]),
     ),

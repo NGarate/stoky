@@ -27,7 +27,7 @@ import {
 } from "@/server/services/productMatcher";
 import { uploadRateLimit } from "@/lib/rate-limit";
 import { enforceRateLimit } from "../throttle";
-import { reencodeAsJpeg } from "@/server/services/image";
+import { HEIF_BRANDS, reencodeAsJpeg } from "@/server/services/image";
 import { describeError } from "@/server/log-error";
 import {
   MAX_RECEIPT_BASE64_LENGTH,
@@ -275,7 +275,8 @@ export const receiptRouter = createTRPCRouter({
       if (!VALID_MIME_TYPES.includes(input.mimeType)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Invalid file type. Only JPEG, PNG, and WebP are allowed.",
+          message:
+            "Invalid file type. Only JPEG, PNG, WebP and HEIC are allowed.",
         });
       }
 
@@ -1020,6 +1021,16 @@ async function validateImageMagicBytes(
   // "WEBP". Checking "RIFF" alone admitted every RIFF file — WAV audio, AVI
   // video — as a WebP photograph, leaving the decoder as the only thing
   // between them and disk.
+  //
+  // HEIC is an ISO media file: a four-byte box size, "ftyp", then the major
+  // brand — and the brand is what says HEIF rather than an MP4 video.
+  const heifPatterns = HEIF_BRANDS.map((brand) => [
+    null, // box size
+    null,
+    null,
+    null,
+    ...Buffer.from(`ftyp${brand}`, "latin1"),
+  ]);
   const magicBytes: Record<string, (number | null)[][]> = {
     "image/jpeg": [[0xff, 0xd8, 0xff]],
     "image/png": [[0x89, 0x50, 0x4e, 0x47]],
@@ -1039,6 +1050,8 @@ async function validateImageMagicBytes(
         0x50, // WEBP
       ],
     ],
+    "image/heic": heifPatterns,
+    "image/heif": heifPatterns,
   };
 
   const patterns = magicBytes[mimeType];

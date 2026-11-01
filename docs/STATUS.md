@@ -1335,9 +1335,8 @@ serves with `bun server.js`, and image processing went from `sharp` to
 because the HEIC investigation in the pre-plan still needs it for comparison;
 `next.config.ts` excludes it and `@img/*` from output file tracing so it cannot
 reach the standalone artefact. Two consequences worth knowing before changing
-anything here: the application has left Next's supported runtime, and phone
-HEIC uploads are still refused — `Bun.Image` wants an OS codec Alpine does not
-carry.
+anything here: the application has left Next's supported runtime, and `Bun.Image` decodes no
+HEIC on Linux — phone HEIC uploads go through `libheif-js` first (2026-11-01).
 
 No known drift as of **2026-08-26** — every row re-read out of `package.json`,
 `.bun-version` and the `Dockerfile` today, not eyeballed. `CLAUDE.md`'s stale claims — tRPC as a release candidate,
@@ -1586,14 +1585,17 @@ Two things that sequence surfaced, both operational rather than defects:
   image, deliberately — it needs browsers, not this application's runtime. **The
   workflow wiring itself is unverified**: `actionlint` and `shellcheck` pass and
   the script was run here, but the first real pipeline run is the proof.
-- **Phone HEIC uploads are still refused, and the door is narrower than it was.**
-  Measured on four real files across both platforms: the bundled `sharp` binary
-  carries AV1 but no `de265`, and `Bun.Image` wants an OS codec Alpine does not
-  provide. Moving to `Bun.Image` closed the runtime gap and left this one open —
-  the remaining route, Alpine's `vips-heif`, now means reintroducing a library
-  this work just removed. It is the one question
-  `docs/superpowers/plans/2026-08-25-development-in-the-image-preplan.md` leaves
-  standing; nothing in that file chose a door.
+- ~~**Phone HEIC uploads are still refused.**~~ **Closed 2026-11-01.** Neither
+  door the pre-plan measured was taken: `Bun.Image` has no HEIC decoder on
+  Linux at all, and Tesseract cannot read one either (`pix not read`,
+  measured), so the upload decodes HEIC itself with `libheif-js` — libheif
+  and libde265 as WebAssembly, no change to the image or to anyone's machine
+  — and hands the pixels to the same `Bun.Image` re-encode every other upload
+  takes (`src/server/services/image.ts`, `heifAsBitmap`). Five sample files,
+  iPhone and others, convert; real Android camera photographs were not among
+  them. The pixel bound is read from the file's `ispe` boxes because libheif's
+  own limit is not enforced in that build; a HEVC stream lying about its size
+  is still bounded only by the WebAssembly heap (the `shortcut:` there).
 - **Bun raises unhandled rejections that Node consumes** — `ISSUES.md`
   RUNTIME-1, **half closed on 2026-08-26**. It was two causes filed as one. The
   prerender chain — every route calling `auth()`, Auth.js minting a CSRF token

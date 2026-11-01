@@ -8,7 +8,7 @@ import {
   beforeEach,
 } from "bun:test";
 import { TRPCError } from "@trpc/server";
-import { rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { pngClaiming, pngOf } from "../utils/png";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 import { MatchStatus, ReceiptStatus } from "@/generated/prisma/client";
@@ -437,6 +437,39 @@ describe("receipt.upload — what it refuses", () => {
 
     // Normalised to the JPEG every upload becomes, so it really went through.
     expect(receipt.imagePath).toEndWith(".jpg");
+    await rm(receipt.imagePath, { force: true });
+  });
+
+  it("refuses an MP4 on a HEIC declaration", async () => {
+    // The same ISO container as a HEIC, told apart only by the brand after
+    // "ftyp" — so it is the brand the magic-byte check has to read.
+    const mp4 = Buffer.concat([
+      Buffer.from([0, 0, 0, 0x18]),
+      Buffer.from("ftypisom"),
+      Buffer.alloc(32, 0),
+    ]);
+
+    await expect(
+      caller.receipt.upload({
+        fileBase64: mp4.toString("base64"),
+        mimeType: "image/heic",
+      }),
+    ).rejects.toThrow("Invalid image file");
+  });
+
+  it("accepts a phone's HEIC and stores it as a JPEG", async () => {
+    const heic = await readFile(
+      new URL("../fixtures/rotated-with-exif.heic", import.meta.url),
+    );
+
+    const receipt = await caller.receipt.upload({
+      fileBase64: heic.toString("base64"),
+      mimeType: "image/heic",
+    });
+
+    expect(receipt.imagePath).toEndWith(".jpg");
+    const stored = await readFile(receipt.imagePath);
+    expect(stored.subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
     await rm(receipt.imagePath, { force: true });
   });
 

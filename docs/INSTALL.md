@@ -856,7 +856,7 @@ migration again.
 | Somebody asks to be erased | The application cannot delete an account; see [Deleting somebody's account](#deleting-somebodys-account) |
 | `/register` says registration is closed, with no form | Expected once an account exists with `first-user`, or always with `closed`; an admin adds people from **Configuración → Personas del hogar**. See `STOKY_REGISTRATION` in step 2 |
 | App exits with `refusing to start: STOKY_REGISTRATION` | The value is not `open`, `first-user` or `closed`; fix `.env`, or remove the line for `first-user` |
-| Upload refused | JPEG/PNG/WebP only, maximum 10 MiB; HEIC/HEIF is unsupported |
+| Upload refused | JPEG/PNG/WebP/HEIC only, maximum 10 MiB |
 | A scanned code always opens the empty product form | Open Food Facts is not being asked: the app needs outbound HTTPS to `world.openfoodfacts.org`, Valkey must be healthy (a lookup that cannot be counted is not sent), and each account may send 60 lookups an hour for codes this instance has not looked up recently — past that the scan page says so. This bundle does not pass `RATE_LIMIT_PRODUCT_LOOKUP_*` to the app, so the default applies |
 | Empty inventory after moving directory | Check `-p`, `COMPOSE_PROJECT_NAME` and volume names before creating or deleting anything |
 

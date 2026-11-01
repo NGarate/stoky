@@ -30,6 +30,9 @@
  * limit", and an ordinary photograph is not.
  */
 
+import libheif from "libheif-js/wasm-bundle";
+import { InvalidInputError } from "./errors";
+
 /** Past any phone camera, far short of what the byte cap cannot see. */
 export const MAX_PIXELS = 50_000_000;
 
@@ -103,7 +106,8 @@ export async function readImageMetadata(
  * only what it needs to be a picture is kept.
  */
 export async function reencodeAsJpeg(buffer: Buffer): Promise<Buffer> {
-  const jpeg = await new Bun.Image(buffer, { maxPixels: MAX_PIXELS })
+  const source = isHeif(buffer) ? await heifAsBitmap(buffer) : buffer;
+  const jpeg = await new Bun.Image(source, { maxPixels: MAX_PIXELS })
     .resize(MAX_LONG_EDGE, MAX_LONG_EDGE, {
       fit: "inside",
       withoutEnlargement: true,
@@ -112,6 +116,169 @@ export async function reencodeAsJpeg(buffer: Buffer): Promise<Buffer> {
     .toBuffer();
 
   return stripJpegMetadata(Buffer.from(jpeg));
+}
+
+/**
+ * The `ftyp` major brands of a HEIF photograph: the HEVC ones a phone camera
+ * writes, and the generic `mif1`/`msf1` some files lead with instead — two of
+ * the five samples this was measured on did.
+ */
+export const HEIF_BRANDS = [
+  "heic",
+  "heix",
+  "heim",
+  "heis",
+  "hevc",
+  "hevx",
+  "mif1",
+  "msf1",
+] as const;
+
+/** A box size, then `ftyp`, then one of the brands above. */
+export function isHeif(buffer: Buffer): boolean {
+  return (
+    buffer.length >= 12 &&
+    buffer.toString("latin1", 4, 8) === "ftyp" &&
+    (HEIF_BRANDS as readonly string[]).includes(
+      buffer.toString("latin1", 8, 12),
+    )
+  );
+}
+
+/**
+ * A HEIC photograph as a bitmap `Bun.Image` can read.
+ *
+ * HEIC is what both iOS and Android save camera photographs as, and nothing
+ * else on this path reads it: `Bun.Image` has no HEIC decoder on Linux
+ * (`ERR_IMAGE_FORMAT_UNSUPPORTED` — it borrows the OS codec on macOS and
+ * Windows), and Tesseract's Leptonica refuses one with `pix not read`,
+ * measured. So it is decoded here, by `libheif-js` — libheif and libde265
+ * compiled to WebAssembly — and handed on as an uncompressed BMP, which
+ * `Bun.Image` decodes on every platform. Everything after that is the path a
+ * JPEG takes: the same bound, the same resize, the same re-encode and the same
+ * metadata strip. The orientation is libheif's to apply, and it does: `irot`
+ * and `imir` are honoured while decoding.
+ *
+ * WebAssembly rather than Alpine's `vips-heif`, which also converts these
+ * files (`docs/superpowers/plans/2026-08-25-development-in-the-image-preplan.md`,
+ * run 6): that is a change to the image and to every machine that runs the
+ * suites, and this is one package that behaves the same on all of them.
+ *
+ * `MAX_PIXELS` is checked before any pixel is decoded, as `Bun.Image` checks
+ * it for the other formats — see `largestDeclaredCanvas` for why it is read
+ * here rather than asked of libheif.
+ */
+async function heifAsBitmap(buffer: Buffer): Promise<Buffer> {
+  if (largestDeclaredCanvas(buffer) > MAX_PIXELS) {
+    throw new InvalidInputError("HEIF image exceeds maxPixels limit");
+  }
+
+  const decoder = new libheif.HeifDecoder();
+  const images = decoder.decode(buffer);
+  try {
+    const image = images.find((candidate) => candidate.is_primary());
+    if (!image)
+      throw new InvalidInputError("No primary image in the HEIF file");
+
+    const width = image.get_width();
+    const height = image.get_height();
+    const bitmap = emptyBitmap(width, height);
+    // libheif writes its RGBA straight into the bitmap, after the header.
+    const pixels = new Uint8ClampedArray(
+      bitmap.buffer,
+      bitmap.byteOffset + BMP_HEADER_BYTES,
+      width * height * 4,
+    );
+    await new Promise<void>((resolve, reject) =>
+      image.display({ data: pixels, width, height }, (result) =>
+        result
+          ? resolve()
+          : reject(new InvalidInputError("HEIF image could not be decoded")),
+      ),
+    );
+    return bitmap;
+  } finally {
+    for (const image of images) image.free();
+    if (decoder.decoder) libheif.heif_context_free(decoder.decoder);
+  }
+}
+
+/**
+ * The largest canvas any image in a HEIF file declares, in pixels.
+ *
+ * Read from the file because libheif would not say: in this build
+ * `heif_image_handle_get_ispe_width` answers 0, and a limit set with
+ * `heif_context_set_maximum_image_size_limit` is not enforced on read or on
+ * decode — measured, a 50 × 50 limit let the fixture's 120 × 64 through.
+ * The handle's own `get_width` is the size *displayed*, after a `clap` crop,
+ * and a crop can show 60 × 120 of a canvas of any size; it is the canvas that
+ * is decoded.
+ *
+ * Each image declares its canvas in an `ispe` box — size, `ispe`, version and
+ * flags, then width and height — and those live in the top-level `meta` box,
+ * which is the only place looked: four bytes spelling `ispe` turn up by chance
+ * in a few megabytes of compressed picture often enough to refuse a real
+ * photograph. libheif refuses a picture whose decoded size differs from its
+ * `ispe` ("Decoded image does not have the size signaled in the file").
+ *
+ * shortcut: the HEVC stream carries its own size, and libheif compares it with
+ * the `ispe` only after decoding, so a stream lying about it is bounded by the
+ * WebAssembly heap rather than by this; parse the `hvcC` SPS if that matters.
+ */
+function largestDeclaredCanvas(buffer: Buffer): number {
+  let largest = 0;
+  for (let at = 0; at + 8 <= buffer.length;) {
+    let size = buffer.readUInt32BE(at);
+    const type = buffer.toString("latin1", at + 4, at + 8);
+    if (size === 1 && at + 16 <= buffer.length) {
+      size = Number(buffer.readBigUInt64BE(at + 8));
+    } else if (size === 0) {
+      size = buffer.length - at;
+    }
+    if (size < 8) break;
+
+    if (type === "meta") {
+      const meta = buffer.subarray(at, Math.min(at + size, buffer.length));
+      for (let ispe = meta.indexOf("ispe"); ispe !== -1;) {
+        if (ispe + 16 > meta.length) break;
+        const pixels =
+          meta.readUInt32BE(ispe + 8) * meta.readUInt32BE(ispe + 12);
+        largest = Math.max(largest, pixels);
+        ispe = meta.indexOf("ispe", ispe + 4);
+      }
+    }
+    at += size;
+  }
+  return largest;
+}
+
+/** `BITMAPFILEHEADER` and `BITMAPV4HEADER`, the smallest that carries masks. */
+const BMP_HEADER_BYTES = 14 + 108;
+
+/**
+ * A 32-bit BMP for RGBA pixels, with the room for them left zeroed after the
+ * header. The channel masks say where each one sits, so libheif's bytes are
+ * the bitmap as they are, and a negative height says the rows run top-down as
+ * libheif writes them.
+ */
+function emptyBitmap(width: number, height: number): Buffer {
+  const pixelBytes = width * height * 4;
+  const bitmap = Buffer.alloc(BMP_HEADER_BYTES + pixelBytes);
+  bitmap.write("BM", 0, "latin1");
+  bitmap.writeUInt32LE(BMP_HEADER_BYTES + pixelBytes, 2);
+  bitmap.writeUInt32LE(BMP_HEADER_BYTES, 10);
+  bitmap.writeUInt32LE(108, 14);
+  bitmap.writeInt32LE(width, 18);
+  bitmap.writeInt32LE(-height, 22);
+  bitmap.writeUInt16LE(1, 26); // planes
+  bitmap.writeUInt16LE(32, 28); // bits per pixel
+  bitmap.writeUInt32LE(3, 30); // BI_BITFIELDS
+  bitmap.writeUInt32LE(pixelBytes, 34);
+  bitmap.writeUInt32LE(0x000000ff, 54); // red
+  bitmap.writeUInt32LE(0x0000ff00, 58); // green
+  bitmap.writeUInt32LE(0x00ff0000, 62); // blue
+  bitmap.writeUInt32LE(0xff000000, 66); // alpha
+  return bitmap;
 }
 
 /** Start of image, end of image, start of scan. */

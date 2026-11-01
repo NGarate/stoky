@@ -278,6 +278,9 @@ as asked; the answers are appended.
    OS codec Alpine does not carry (unknown 3), so the `vips-heif` door now
    means reintroducing a library this work just removed. Phone HEIC uploads
    still fail. This is the one question the whole document leaves standing.
+   **Answered 2026-11-01, by neither door:** the upload decodes HEIC with
+   `libheif-js`, libheif as WebAssembly, before the same `Bun.Image` re-encode
+   (`src/server/services/image.ts`). No image change, no `vips`.
 
 ---
 
