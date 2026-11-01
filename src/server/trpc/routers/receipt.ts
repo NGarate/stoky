@@ -33,6 +33,7 @@ import {
   MAX_RECEIPT_BASE64_LENGTH,
   MAX_RECEIPT_BYTES,
   RECEIPT_IMAGE_TYPES,
+  receiptItemAddSchema,
   receiptItemMatchSchema,
   receiptItemUpdateSchema,
 } from "@/lib/validations/receipt";
@@ -76,9 +77,11 @@ const RECEIPT_HEADER = {
  *
  * **A state machine, and the order is enforced rather than assumed.**
  * `ReceiptStatus` runs UPLOADING → PROCESSING → PARSED → NEEDS_REVIEW →
- * CONFIRMED → APPLIED, with FAILED reachable from the middle. Each procedure
- * below acts on one edge and refuses if the receipt is not on it, which is what
- * stops a half-parsed receipt being applied to the inventory.
+ * CONFIRMED → APPLIED, with FAILED reachable from the middle and left only
+ * for NEEDS_REVIEW, by a person typing the lines OCR could not read
+ * (`addItem`). Each procedure below acts on one edge and refuses if the
+ * receipt is not on it, which is what stops a half-parsed receipt being
+ * applied to the inventory.
  *
  * **A person sits in the middle on purpose.** OCR misreads receipts and fuzzy
  * matching picks the wrong tin; between PARSED and CONFIRMED a human looks at
@@ -184,6 +187,14 @@ async function assertOwnProduct(
   if (!product) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Product not found" });
   }
+}
+
+/**
+ * Refuse a receipt a line cannot be added to: open for review, or FAILED,
+ * whose lines a person types from the photograph (`addItem`).
+ */
+function assertOpenForAdding(status: ReceiptStatus): void {
+  if (status !== ReceiptStatus.FAILED) assertOpenForReview(status);
 }
 
 /**
@@ -695,6 +706,70 @@ export const receiptRouter = createTRPCRouter({
       });
 
       return { success: true };
+    }),
+
+  /**
+   * Adds a line OCR did not find — or, on a receipt it could not read at all,
+   * the lines themselves, typed from the photograph.
+   *
+   * FAILED is open to this and to nothing else: a failed read is not a lost
+   * receipt, and adding its first line is what moves it to NEEDS_REVIEW. A
+   * CONFIRMED receipt goes back there too, because the new line is undecided
+   * and finishing applies a CONFIRMED receipt straight away — without the
+   * step back, the line would be dropped unseen.
+   */
+  addItem: writeProcedure
+    .input(receiptItemAddSchema)
+    .mutation(async ({ ctx, input }) => {
+      const receipt = await ctx.db.receipt.findFirst({
+        where: { id: input.receiptId, householdId: ctx.householdId },
+        select: { id: true, status: true },
+      });
+
+      if (!receipt) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Receipt not found",
+        });
+      }
+
+      assertOpenForAdding(receipt.status);
+
+      return ctx.db.$transaction(async (tx) => {
+        assertOpenForAdding(await lockReceiptStatus(tx, receipt.id));
+
+        // The bound `confirmAll` takes: a receipt with more lines than that
+        // could not be submitted in one review.
+        const lines = await tx.receiptItem.count({
+          where: { receiptId: receipt.id },
+        });
+        if (lines >= MAX_RECEIPT_LINES) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Receipt has too many lines",
+          });
+        }
+
+        const created = await tx.receiptItem.create({
+          data: {
+            receiptId: receipt.id,
+            // Nothing was read: the empty raw text is what says so.
+            rawText: "",
+            parsedName: input.name,
+            parsedPrice: input.price ?? null,
+            parsedQuantity: input.quantity,
+            matchStatus: MatchStatus.PENDING,
+          },
+          select: { id: true },
+        });
+
+        await tx.receipt.update({
+          where: { id: receipt.id },
+          data: { status: ReceiptStatus.NEEDS_REVIEW },
+        });
+
+        return created;
+      });
     }),
 
   /**

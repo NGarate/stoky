@@ -26,11 +26,12 @@ import {
   generateTestEmail,
 } from "../utils/test-helpers";
 import { num } from "../utils/amount";
+import { MAX_RECEIPT_LINES } from "@/lib/validations/bounds";
 
 /**
  * The receipt router, procedure by procedure.
  *
- * It is the largest router in the project — ten procedures — and it was
+ * It is the largest router in the project — eleven procedures — and it was
  * the least covered: 28.6% of its functions and 19.5% of its lines, against
  * 90% for the integration tier as a whole. The pipeline's *services* were
  * well tested and the browser suite walked the screens, so what was missing
@@ -1087,6 +1088,90 @@ describe("receipt.updateItem", () => {
           price: 0,
           quantity: 1,
         }),
+      "BAD_REQUEST",
+    );
+  });
+});
+
+describe("receipt.addItem", () => {
+  const line = { name: "Huevos L", price: 2.95, quantity: 1 };
+
+  it("adds a line OCR missed, waiting for a decision", async () => {
+    const { receipt } = await seedReceipt({});
+
+    const { id } = await caller.receipt.addItem({
+      receiptId: receipt.id,
+      ...line,
+    });
+
+    const item = await prisma.receiptItem.findUniqueOrThrow({ where: { id } });
+    expect(item.receiptId).toBe(receipt.id);
+    expect(item.parsedName).toBe("Huevos L");
+    expect(num(item.parsedPrice)).toBe(2.95);
+    expect(item.matchStatus).toBe(MatchStatus.PENDING);
+    // Nothing was read off the paper for it.
+    expect(item.rawText).toBe("");
+  });
+
+  it("opens a receipt OCR could not read to review, line by typed line", async () => {
+    const { receipt } = await seedReceipt({ status: ReceiptStatus.FAILED });
+
+    await caller.receipt.addItem({ receiptId: receipt.id, ...line });
+
+    const after = await prisma.receipt.findUniqueOrThrow({
+      where: { id: receipt.id },
+    });
+    expect(after.status).toBe(ReceiptStatus.NEEDS_REVIEW);
+  });
+
+  it("takes a confirmed receipt back to review, so the new line is not applied unseen", async () => {
+    const { receipt } = await seedReceipt({ status: ReceiptStatus.CONFIRMED });
+
+    await caller.receipt.addItem({ receiptId: receipt.id, ...line });
+
+    const after = await prisma.receipt.findUniqueOrThrow({
+      where: { id: receipt.id },
+    });
+    expect(after.status).toBe(ReceiptStatus.NEEDS_REVIEW);
+  });
+
+  it("is refused on a receipt that is applied or still being read", async () => {
+    for (const status of [ReceiptStatus.APPLIED, ReceiptStatus.PROCESSING]) {
+      const { receipt } = await seedReceipt({ status });
+      await expectCode(
+        () => caller.receipt.addItem({ receiptId: receipt.id, ...line }),
+        "BAD_REQUEST",
+      );
+    }
+  });
+
+  it("is NOT_FOUND for another household's receipt and refused for a kitchen account", async () => {
+    const { receipt } = await seedReceipt({});
+
+    await expectCode(
+      () => outsider.receipt.addItem({ receiptId: receipt.id, ...line }),
+      "NOT_FOUND",
+    );
+    await expectCode(
+      () => kitchen.receipt.addItem({ receiptId: receipt.id, ...line }),
+      "FORBIDDEN",
+    );
+    expect(
+      await prisma.receiptItem.count({ where: { receiptId: receipt.id } }),
+    ).toBe(2);
+  });
+
+  it("stops at the most lines a review can submit", async () => {
+    const { receipt } = await seedReceipt({});
+    await prisma.receiptItem.createMany({
+      data: Array.from({ length: MAX_RECEIPT_LINES - 2 }, (_, i) => ({
+        receiptId: receipt.id,
+        rawText: `LINEA ${i}`,
+      })),
+    });
+
+    await expectCode(
+      () => caller.receipt.addItem({ receiptId: receipt.id, ...line }),
       "BAD_REQUEST",
     );
   });

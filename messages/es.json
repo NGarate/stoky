@@ -570,11 +570,15 @@
       "correct": "Corregir",
       "correctOf": "Corregir la línea «{name}»",
       "save": "Guardar corrección",
+      "add": "Añadir línea",
+      "byHand": "Añadir las líneas a mano",
+      "failedIntro": "No se ha podido leer este ticket. Abre la foto y añade sus líneas a mano.",
       "nameLabel": "Producto",
       "priceLabel": "Importe",
       "priceHint": "Lo que costó la línea entera, no cada unidad. Déjalo vacío si no se lee.",
       "quantityLabel": "Cantidad",
-      "saveFailed": "No se ha podido guardar la corrección. Vuelve a intentarlo."
+      "saveFailed": "No se ha podido guardar la corrección. Vuelve a intentarlo.",
+      "addFailed": "No se ha podido añadir la línea. Vuelve a intentarlo."
     },
     "store": "Tienda",
     "purchaseDate": "Fecha de compra",

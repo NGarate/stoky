@@ -110,6 +110,14 @@ una línea ya confirmada. Si cambias el nombre de una línea que Stoky había
 reconocido sola, vuelve a quedar pendiente para que elijas el producto,
 porque lo reconoció por el nombre mal leído.
 
+### Añade a mano lo que el ticket no leyó
+
+**Añadir línea**, al final de la revisión, añade un producto que la lectura
+automática se saltó. Y un ticket que no se pudo leer ya no hay que repetirlo:
+**Añadir las líneas a mano** lo abre con su foto para que escribas sus líneas
+y lo termines como cualquier otro. También se llega desde la lista de
+tickets.
+
 ## English
 
 > [!CAUTION]
@@ -208,3 +216,11 @@ Each receipt line now has **Correct**: change the name, the amount or the
 quantity when the automatic reading gets it wrong, on a confirmed line too.
 Renaming a line Stoky had recognised on its own sends it back to pending so
 you choose the product, because it was recognised from the misread name.
+
+### Add by hand what the receipt reading missed
+
+**Add line**, at the end of the review, adds a product the automatic
+reading skipped. And a receipt that could not be read no longer has to be
+uploaded again: **Add the lines by hand** opens it with its photo so you can
+type its lines and finish it like any other. The receipts list leads there
+too.

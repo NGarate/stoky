@@ -570,11 +570,15 @@
       "correct": "Correct",
       "correctOf": "Correct the line “{name}”",
       "save": "Save correction",
+      "add": "Add line",
+      "byHand": "Add the lines by hand",
+      "failedIntro": "This receipt could not be read. Open the photo and add its lines by hand.",
       "nameLabel": "Product",
       "priceLabel": "Amount",
       "priceHint": "What the whole line cost, not each unit. Leave it empty if it cannot be read.",
       "quantityLabel": "Quantity",
-      "saveFailed": "The correction could not be saved. Try again."
+      "saveFailed": "The correction could not be saved. Try again.",
+      "addFailed": "The line could not be added. Try again."
     },
     "store": "Store",
     "purchaseDate": "Purchase date",

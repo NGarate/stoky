@@ -21,9 +21,9 @@ interface ReceiptLineFormProps {
 }
 
 /**
- * A receipt line as a person reads it off the photograph, correcting one OCR
- * misread. The server's `receiptLineSchema` is the check; this only declines
- * to send what it would refuse.
+ * A receipt line as a person reads it off the photograph: correcting one OCR
+ * misread, or adding one it missed. The server's `receiptLineSchema` is the
+ * check; this only declines to send what it would refuse.
  */
 export function ReceiptLineForm({
   defaults = { name: "", price: "", quantity: "1" },

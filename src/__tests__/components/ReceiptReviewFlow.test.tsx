@@ -19,6 +19,7 @@ import es from "../../../messages/es.json";
  */ const pushes: string[] = [];
 const invalidated: string[] = [];
 const confirmAllCalls: unknown[] = [];
+const addItemCalls: unknown[] = [];
 let applyCalls = 0;
 
 /** When true, every mutation reports a failure instead of succeeding. */
@@ -34,7 +35,7 @@ interface Callbacks {
 
 const receipt = {
   id: "r1",
-  status: "REVIEWING",
+  status: "NEEDS_REVIEW",
   createdAt: new Date("2026-08-01T10:00:00.000Z"),
   totalAmount: 12.5,
   store: { id: "st1", name: "Mercadona" },
@@ -135,6 +136,15 @@ mock.module("@/lib/trpc/client", () => ({
       updateItem: {
         useMutation: () => ({ mutate: () => {}, isPending: false }),
       },
+      addItem: {
+        useMutation: (opts?: Callbacks) => ({
+          mutate: (input: unknown) => {
+            addItemCalls.push(input);
+            void opts?.onSuccess?.();
+          },
+          isPending: false,
+        }),
+      },
       confirmItem: {
         useMutation: (opts?: Callbacks) => ({
           mutate: () => {
@@ -181,6 +191,7 @@ beforeEach(() => {
   pushes.length = 0;
   invalidated.length = 0;
   confirmAllCalls.length = 0;
+  addItemCalls.length = 0;
   applyCalls = 0;
   failing = false;
   role = "MEMBER";
@@ -258,6 +269,56 @@ describe("finishing a receipt review", () => {
       expect(applyCalls).toBe(1);
     } finally {
       receipt.status = status;
+    }
+  });
+});
+
+describe("adding a line OCR missed", () => {
+  it("sends it for this receipt and closes the form", async () => {
+    render();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.line.add }),
+    );
+    await userEvent.type(
+      screen.getByLabelText(es.receipts.line.nameLabel),
+      "Huevos L",
+    );
+    await userEvent.type(
+      screen.getByLabelText(es.receipts.line.priceLabel),
+      "2.95",
+    );
+    // The submit button carries the same words as the one that opened it.
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.line.add }),
+    );
+
+    expect(addItemCalls).toEqual([
+      { receiptId: "r1", name: "Huevos L", price: 2.95, quantity: 1 },
+    ]);
+    expect(screen.queryByLabelText(es.receipts.line.nameLabel)).toBeAbsent();
+  });
+
+  it("is how a receipt OCR could not read gets its lines, with nothing to finish yet", () => {
+    const { status, items } = receipt;
+    receipt.status = "FAILED";
+    receipt.items = [];
+    try {
+      render();
+
+      expect(screen.getByRole("status").textContent).toBe(
+        es.receipts.line.failedIntro,
+      );
+      expect(
+        screen.getByRole("button", { name: es.receipts.line.add }),
+      ).toBeInTheDocument();
+      // No lines means nothing pending, which used to mean "finish".
+      expect(
+        screen.queryByRole("button", { name: es.receipts.applyToInventory }),
+      ).toBeAbsent();
+    } finally {
+      receipt.status = status;
+      receipt.items = items;
     }
   });
 });

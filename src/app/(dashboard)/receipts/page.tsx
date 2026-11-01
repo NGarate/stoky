@@ -35,7 +35,12 @@ interface Receipt {
  * that fires once and is never seen again.
  */
 function receiptHref(receipt: Receipt): string {
-  if (receipt.status === "NEEDS_REVIEW" || receipt.status === "CONFIRMED") {
+  // FAILED too: its lines can be typed from the photograph there.
+  if (
+    receipt.status === "NEEDS_REVIEW" ||
+    receipt.status === "CONFIRMED" ||
+    receipt.status === "FAILED"
+  ) {
     return `/receipts/${receipt.id}/review`;
   }
 

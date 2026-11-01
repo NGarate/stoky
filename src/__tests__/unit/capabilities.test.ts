@@ -155,6 +155,7 @@ const EXPECTED: Record<string, Record<string, string>> = {
     upload: "writeProcedure",
     confirmItem: "writeProcedure",
     updateItem: "writeProcedure",
+    addItem: "writeProcedure",
     confirmAll: "writeProcedure",
     applyReceipt: "writeProcedure",
   },

@@ -2,8 +2,9 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { Package } from "lucide-react";
+import { Package, Plus } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
 import { invalidateAfterReceiptApplied } from "@/lib/trpc/stale";
@@ -11,6 +12,7 @@ import { RouteState } from "@/components/household/RouteState";
 import { isItemReviewed } from "@/lib/receipts";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
+import { ReceiptLineForm } from "@/components/receipt/ReceiptLineForm";
 import { ReceiptPhoto } from "@/components/receipt/ReceiptPhoto";
 import { ReviewCard } from "@/components/receipt/ReviewCard";
 import { ReceiptStatusStep } from "@/components/receipt/ReceiptStatus";
@@ -25,6 +27,7 @@ export default function ReviewPage() {
   const receiptId = params.id as string;
 
   const utils = api.useUtils();
+  const [addingLine, setAddingLine] = useState(false);
   const receiptQuery = api.receipt.getReceiptWithItems.useQuery({
     receiptId,
   });
@@ -100,8 +103,8 @@ export default function ReviewPage() {
       }),
   });
 
-  // A correction refetches like a settled line, and a refusal says so, for
-  // the same reasons as `confirmItem` above.
+  // A correction and an added line refetch like a settled one, and a refusal
+  // says so, for the same reasons as `confirmItem` above.
   const updateItemMutation = api.receipt.updateItem.useMutation({
     onSuccess: () => {
       void utils.receipt.getReceiptWithItems.invalidate({ receiptId });
@@ -111,6 +114,19 @@ export default function ReviewPage() {
         kind: "confirm",
         tone: "danger",
         message: { key: "receipts.line.saveFailed" },
+      }),
+  });
+
+  const addItemMutation = api.receipt.addItem.useMutation({
+    onSuccess: () => {
+      setAddingLine(false);
+      void utils.receipt.getReceiptWithItems.invalidate({ receiptId });
+    },
+    onError: () =>
+      snackbar.show({
+        kind: "confirm",
+        tone: "danger",
+        message: { key: "receipts.line.addFailed" },
       }),
   });
 
@@ -179,7 +195,13 @@ export default function ReviewPage() {
   // Ready once nothing waits for a decision. A CONFIRMED receipt is ready
   // whatever its lines say: `confirmAll` accepts a subset, and applying is
   // the step left.
-  const canFinish = pendingItems === 0 || receipt.status === "CONFIRMED";
+  //
+  // And only a receipt open for review: a FAILED one with no lines has
+  // nothing pending either, and finishing it would be refused.
+  const failed = receipt.status === "FAILED";
+  const canFinish =
+    (pendingItems === 0 && receipt.status === "NEEDS_REVIEW") ||
+    receipt.status === "CONFIRMED";
 
   return (
     // No padding of its own: the dashboard `main` already pads every route, and
@@ -247,9 +269,11 @@ export default function ReviewPage() {
               className="text-muted-foreground"
               role="status"
             >
-              {pendingItems === 0
-                ? t("allReviewed")
-                : t("pendingItems", { count: pendingItems })}
+              {failed
+                ? t("line.failedIntro")
+                : pendingItems === 0
+                  ? t("allReviewed")
+                  : t("pendingItems", { count: pendingItems })}
             </p>
 
             {/* One button, offered once there is nothing left to decide.
@@ -310,6 +334,31 @@ export default function ReviewPage() {
                 }}
               />
             ))}
+          </div>
+
+          {/* A line OCR missed, or on a receipt it could not read at all,
+              every line: typed from the photograph above. */}
+          <div className="mt-4">
+            {addingLine ? (
+              <div className="rounded-lg border border-border bg-card p-4">
+                <ReceiptLineForm
+                  onCancel={() => setAddingLine(false)}
+                  onSubmit={(line) =>
+                    addItemMutation.mutate({ receiptId, ...line })
+                  }
+                  submitLabel={t("line.add")}
+                />
+              </div>
+            ) : (
+              <Button
+                onClick={() => setAddingLine(true)}
+                type="button"
+                variant="outline"
+              >
+                <Plus aria-hidden="true" className="mr-2 size-5" />
+                {t("line.add")}
+              </Button>
+            )}
           </div>
         </>
       )}

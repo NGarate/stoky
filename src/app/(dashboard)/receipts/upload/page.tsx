@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { UploadZone } from "@/components/receipt/UploadZone";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
@@ -197,14 +198,22 @@ export default function UploadPage() {
                   <p aria-hidden="true" className="text-danger-foreground">
                     {t("processingFailed")}
                   </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="mt-2"
-                    onClick={() => setUploadedReceiptId(null)}
-                  >
-                    {t("retry")}
-                  </Button>
+                  {/* Or keep this photo and type what it says: a failed
+                      read is not a lost receipt (`receipt.addItem`). */}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setUploadedReceiptId(null)}
+                    >
+                      {t("retry")}
+                    </Button>
+                    <Button asChild variant="outline">
+                      <Link href={`/receipts/${uploadedReceiptId}/review`}>
+                        {t("line.byHand")}
+                      </Link>
+                    </Button>
+                  </div>
                 </div>
               )}
 

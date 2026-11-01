@@ -103,7 +103,8 @@ export const receiptItemMatchSchema = z.discriminatedUnion("action", [
 ]);
 
 /**
- * A receipt line as a person states it: what OCR misread, corrected.
+ * A receipt line as a person states it: what OCR misread, corrected, or what
+ * it skipped, added.
  *
  * `price` is the line's total, as `parsedPrice` is (`receiptParser.ts`): what
  * the line cost, not each unit. Optional, because a line without one still
@@ -118,4 +119,9 @@ export const receiptLineSchema = z.object({
 /** Correcting a line the receipt already has. */
 export const receiptItemUpdateSchema = receiptLineSchema.extend({
   receiptItemId: z.string().min(1).max(MAX_ID_LENGTH),
+});
+
+/** Adding a line OCR did not find. */
+export const receiptItemAddSchema = receiptLineSchema.extend({
+  receiptId: z.string().min(1).max(MAX_ID_LENGTH),
 });

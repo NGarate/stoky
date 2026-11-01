@@ -80,6 +80,7 @@ mock.module("@/lib/trpc/client", () => ({
       confirmAll: { useMutation: () => idleMutation },
       confirmItem: { useMutation: () => idleMutation },
       updateItem: { useMutation: () => idleMutation },
+      addItem: { useMutation: () => idleMutation },
       applyReceipt: { useMutation: () => idleMutation },
     },
     price: {

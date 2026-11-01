@@ -1298,7 +1298,8 @@ Verified against the files named in each row.
   — a deploy, a restart, an OOM kill — used to stay in UPLOADING, PROCESSING
   or PARSED for good, with the upload screen polling it. At start the server
   now marks FAILED every receipt in those states created before it started;
-  the person re-uploads (ISSUES.md OCR-3). This assumes one application
+  the person re-uploads, or types its lines from the photograph
+  (`receipt.addItem`; ISSUES.md OCR-3). This assumes one application
   process per database, which is what the release bundle runs.
 - Files are written with a `randomUUID()` filename into a per-household
   directory on the `uploads` volume, so a filename cannot be guessed and cannot
@@ -2371,7 +2372,7 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 (`AppSession`) non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 74 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+and all 75 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
 pinning every one against the matrix rather than sampling, and failing when the
 count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the session, so a
