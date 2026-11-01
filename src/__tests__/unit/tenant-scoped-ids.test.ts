@@ -83,7 +83,8 @@ function inputSurface(body: string): string {
     if (seen.has(name)) continue;
     seen.add(name);
 
-    const schema = SCHEMAS[name];
+    // Own keys only: a body that says `toString` found Object.prototype's.
+    const schema = Object.hasOwn(SCHEMAS, name) ? SCHEMAS[name] : undefined;
     if (!schema) continue;
 
     surface += `\n${schema}`;
