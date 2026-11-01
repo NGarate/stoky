@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { withFrom } from "@/lib/back";
 import { syncStatus, isUrgent } from "@/lib/offline/status";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
@@ -32,6 +34,7 @@ import type { JSX } from "react";
  */
 export function SyncStatus(): JSX.Element {
   const t = useTranslations("offline");
+  const pathname = usePathname();
   // Op labels carry their full key — `offline.tickedOff`, `shopping.itemUpdated` —
   // and are rendered from the root, as the snackbar renders them. Read through
   // the `offline` namespace with the prefix stripped, any label from another
@@ -188,7 +191,10 @@ export function SyncStatus(): JSX.Element {
                 each one was made — which a banner cannot say. */}
             {state.failed.length > 0 ? (
               <Button asChild className="mt-3 mr-2" variant="outline">
-                <Link href="/settings/unsaved"> {t("seeUnsaved")} </Link>
+                <Link href={withFrom("/settings/unsaved", pathname)}>
+                  {" "}
+                  {t("seeUnsaved")}{" "}
+                </Link>
               </Button>
             ) : null}
 

@@ -1,16 +1,16 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { onlineManager } from "@tanstack/react-query";
-import { BackLink } from "@/components/ui/back-link";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { sectionHeading } from "@/components/ui/section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { BarcodeScanner } from "@/components/barcode/Scanner";
 import { useSnackbar } from "@/components/ui/snackbar";
+import { currentOrigin, withFrom } from "@/lib/back";
 import { api } from "@/lib/trpc/client";
 import { invalidateAfterProductCreated } from "@/lib/trpc/stale";
 import { useWriteQueue } from "@/lib/offline/queue-context";
@@ -111,7 +111,10 @@ export default function ScanPage() {
             values: { name: result.product.name },
           },
         });
-        router.push(`/products/${result.product.id}`);
+        // A scan is a step on the way somewhere: the way back passes on.
+        router.push(
+          withFrom(`/products/${result.product.id}`, currentOrigin()),
+        );
       } else {
         // Not found anywhere: the create form opens with the barcode filled
         // in, which is itself the answer and needs no sentence.
@@ -120,7 +123,10 @@ export default function ScanPage() {
         // manual field accepts anything, so "12&pendingScan=x" became a
         // second query parameter — and a `#` cut the code short.
         router.push(
-          `/products/new?barcode=${encodeURIComponent(variables.barcode)}`,
+          withFrom(
+            `/products/new?barcode=${encodeURIComponent(variables.barcode)}`,
+            currentOrigin(),
+          ),
         );
       }
     },
@@ -147,7 +153,10 @@ export default function ScanPage() {
           },
         });
         router.push(
-          `/products/new?barcode=${encodeURIComponent(variables.barcode)}`,
+          withFrom(
+            `/products/new?barcode=${encodeURIComponent(variables.barcode)}`,
+            currentOrigin(),
+          ),
         );
         return;
       } else {
@@ -194,20 +203,7 @@ export default function ScanPage() {
     // No padding of its own: the layout's `p-4` is the gutter, and a second
     // `p-6` cost 48px of a 390px screen (ISSUES UI-5).
     <PageShell width="form">
-      <PageHeader
-        back={
-          /* Its own Suspense boundary: reading the query string opts a
-             subtree out of prerendering, and this link is all that reads it. */
-          <Suspense
-            fallback={
-              <BackLink href="/products">{t("backToProducts")}</BackLink>
-            }
-          >
-            <ScanBackLink />
-          </Suspense>
-        }
-        title={t("title")}
-      />
+      <PageHeader back="/products" title={t("title")} />
 
       {isProcessing ? (
         <div className="p-8 bg-muted rounded-lg text-center">
@@ -292,24 +288,5 @@ export default function ScanPage() {
         </>
       )}
     </PageShell>
-  );
-}
-
-/**
- * The way back, to wherever scanning started.
- *
- * The shop's scan button (Screen A, `/shopping`) opens this page with
- * `?from=shopping`. The link always led to the product catalogue — a place
- * the person in the aisle had never been — so from there it goes back to the
- * shop. Anywhere else, the catalogue is the natural parent.
- */
-function ScanBackLink() {
-  const t = useTranslations("products.scan");
-  const fromShopping = useSearchParams().get("from") === "shopping";
-
-  return fromShopping ? (
-    <BackLink href="/shopping">{t("backToShopping")}</BackLink>
-  ) : (
-    <BackLink href="/products">{t("backToProducts")}</BackLink>
   );
 }

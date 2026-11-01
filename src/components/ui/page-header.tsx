@@ -1,6 +1,7 @@
 import { cva } from "class-variance-authority";
 
 import { BackLink } from "@/components/ui/back-link";
+import { WithBack } from "@/components/ui/use-back";
 import { cn } from "@/lib/utils";
 
 import type { JSX, ReactNode } from "react";
@@ -68,29 +69,14 @@ const titleVariants = cva("font-bold text-heading", {
   defaultVariants: { density: "default" },
 });
 
-export interface PageBack {
-  href: string;
-  /** Names the destination: "Volver a tus listas", not "Volver". */
-  label: string;
-}
-
-function isPageBack(back: PageBack | ReactNode): back is PageBack {
-  return (
-    typeof back === "object" &&
-    back !== null &&
-    "href" in back &&
-    "label" in back
-  );
-}
-
 export interface PageHeaderProps {
   title: ReactNode;
   /**
-   * The way back out of a sub-page. Above the title, always. A node only when
-   * the destination depends on how the person arrived (the scanner, reached
-   * from the shop or from the catalogue); it must render a `<BackLink>`.
+   * The way back out of a sub-page, above the title, always: the path of the
+   * page's own parent. A screen that linked here with `?from=` replaces it,
+   * and the words name wherever it leads (`useBack`).
    */
-  back?: PageBack | ReactNode;
+  back?: string;
   /** One sentence saying what this screen is for. */
   intro?: ReactNode;
   /**
@@ -133,11 +119,15 @@ export function PageHeader({
 }: PageHeaderProps): JSX.Element {
   return (
     <div className={cn("mb-6", className)}>
-      {isPageBack(back) ? (
-        <BackLink href={back.href}>{back.label}</BackLink>
-      ) : (
-        (back ?? null)
-      )}
+      {back ? (
+        <WithBack fallback={back}>
+          {({ href, label, onClick }) => (
+            <BackLink href={href} onClick={onClick}>
+              {label}
+            </BackLink>
+          )}
+        </WithBack>
+      ) : null}
       <div
         className={cn(
           "flex flex-col gap-4 md:flex-row md:items-start md:justify-between",

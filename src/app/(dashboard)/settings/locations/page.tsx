@@ -346,7 +346,7 @@ export default function LocationsPage(): JSX.Element {
   // Three states, not two. `if (isLoading)` alone falls through on a failed
   // query and renders the empty state below, so someone with ten locations is
   // told they have none (ISSUES.md UI-9).
-  const back = { href: "/settings", label: t("backToSettings") };
+  const back = "/settings";
 
   if (!locationsQuery.data) {
     return (

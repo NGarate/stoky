@@ -110,7 +110,7 @@ export default function StoresPage() {
     setFormData({ name: "", address: "" });
   };
 
-  const back = { href: "/settings", label: t("stores.backToSettings") };
+  const back = "/settings";
 
   // Three states, not two (ISSUES.md UI-9). Gated on `isLoading` alone, this
   // drew a bare "Cargando…" with no title and no way back while loading, and

@@ -80,7 +80,20 @@
     "moreTitle": "Más secciones",
     "kitchen": "Cocina",
     "account": "Tu cuenta",
-    "accountOf": "Tu cuenta: {name}"
+    "accountOf": "Tu cuenta: {name}",
+    "backTo": {
+      "dashboard": "Volver al panel",
+      "inventory": "Volver al inventario",
+      "kitchen": "Volver a la cocina",
+      "products": "Volver a productos",
+      "product": "Volver al producto",
+      "prices": "Volver a precios",
+      "receipts": "Volver a tickets",
+      "shopping": "Volver a la compra",
+      "shoppingLists": "Volver a tus listas",
+      "shoppingList": "Volver a la lista",
+      "settings": "Volver a configuración"
+    }
   },
   "dashboard": {
     "title": "Panel",
@@ -163,7 +176,6 @@
       "title": "Nuevo producto",
       "loading": "Cargando el formulario…",
       "intro": "Da de alta un producto en el catálogo de tu hogar. Solo el nombre es obligatorio; lo demás lo puedes completar más tarde.",
-      "backToProducts": "Volver a productos",
       "scanContextTitle": "Código de barras escaneado",
       "scanContextIntro": "Vas a crear el producto de este código. No lo teníamos en tu hogar, así que dinos al menos cómo se llama.",
       "nameLabel": "Nombre del producto",
@@ -206,9 +218,6 @@
     "detail": {
       "loadingTitle": "Producto",
       "notFoundTitle": "No encontramos este producto",
-      "backToProducts": "Volver a productos",
-      "backToDashboard": "Volver al panel",
-      "backToInventory": "Volver al inventario",
       "errorTitle": "No se ha podido mostrar el producto",
       "errorNotFound": "Este producto no está en el catálogo de tu hogar. Puede que se haya eliminado, o que el enlace apunte a otra parte. Vuelve a la lista y elígelo desde ahí.",
       "errorNoHousehold": "Tu cuenta todavía no pertenece a ningún hogar. Crea un hogar o pide que te inviten para poder ver los productos.",
@@ -266,8 +275,6 @@
     },
     "scan": {
       "title": "Escanear código de barras",
-      "backToProducts": "Volver a productos",
-      "backToShopping": "Volver a la compra",
       "processing": "Buscando el código…",
       "lookupFailed": "No se ha podido buscar el código {barcode}. Vuelve a escanearlo o escríbelo abajo.",
       "lookupThrottled": "Has buscado muchos códigos nuevos en poco tiempo. Rellena el producto {barcode} a mano; la búsqueda volverá a funcionar en un rato.",
@@ -368,8 +375,6 @@
     "history": {
       "title": "Historial de stock",
       "titleOf": "Historial de stock de «{name}»",
-      "backToProduct": "Volver al producto",
-      "backToProducts": "Volver a productos",
       "intro": "Cada movimiento que explica el número de hoy: compras, consumos, ajustes y traslados.",
       "currentTotal": "Ahora mismo: {stock} {unit}",
       "tableCaption": "Movimientos de stock, del más reciente al más antiguo",
@@ -392,8 +397,6 @@
     "adjust": {
       "title": "Ajustar stock",
       "titleOf": "Ajustar el stock de «{name}»",
-      "backToProduct": "Volver al producto",
-      "backToProducts": "Volver a productos",
       "intro": "Corrige el número cuando lo que hay en casa no coincide con lo apuntado. Se guarda como un ajuste, con su motivo.",
       "currentLabel": "Apuntado ahora mismo: {stock} {unit}",
       "actualLabel": "Lo que hay en realidad",
@@ -452,7 +455,6 @@
     "add": {
       "title": "Añadir stock",
       "intro": "Apunta lo que acabas de traer a casa. Elige el producto, di cuánto es y, si quieres, cuándo caduca y dónde lo has guardado.",
-      "backToInventory": "Volver al inventario",
       "productSelectHint": "Elige el producto al que quieres añadir stock.",
       "quantityLabel": "Cantidad",
       "quantityHint": "Cuánto añades, en la unidad de abajo. Por ejemplo: 2.",
@@ -494,7 +496,6 @@
     "consume": {
       "title": "Apuntar consumo",
       "intro": "Apunta lo que se ha usado. Elige el producto, mira cuánto queda y di cuánto has usado.",
-      "backToInventory": "Volver al inventario",
       "availableLabel": "Disponible ahora mismo",
       "availableNoProduct": "Elige un producto para ver cuánto queda.",
       "availableLoading": "Consultando lo que queda…",
@@ -592,7 +593,6 @@
     "reviewItems": "Revisar productos",
     "notFoundTitle": "Este ticket ya no existe",
     "notFoundBody": "Puede que se haya borrado o que el enlace sea antiguo. Vuelve a tus tickets para elegir otro.",
-    "backToList": "Volver a tickets",
     "alreadyApplied": "Este ticket ya está en el inventario",
     "viewApplied": "Ver qué añadió este ticket",
     "viewInventory": "Ver inventario",
@@ -629,7 +629,6 @@
     "applied": {
       "title": "Ticket añadido al inventario",
       "loadingTitle": "Resumen del ticket",
-      "backToReceipts": "Volver a tickets",
       "intro": "Esto es lo que este ticket ha cambiado en tu inventario.",
       "retry": "Volver a intentarlo",
       "pendingTitle": "Este ticket todavía no está en el inventario",
@@ -676,7 +675,6 @@
   },
   "shopping": {
     "title": "Listas de la compra",
-    "backToShop": "Volver a la compra",
     "listPageTitle": "Lista de la compra",
     "create": "Crear lista",
     "delete": "Eliminar lista",
@@ -701,7 +699,6 @@
     "days": "días",
     "year": "año",
     "shopTitle": "Compra",
-    "backToLists": "Volver a tus listas",
     "notFoundTitle": "Esta lista ya no existe",
     "notFoundBody": "Puede que alguien de tu hogar la haya eliminado. Vuelve a tus listas para elegir otra.",
     "scan": "Escanear",
@@ -764,7 +761,6 @@
       "legend": "Tiendas en la gráfica"
     },
     "noPrices": "No hay precios registrados",
-    "backToPrices": "Volver a precios",
     "comparisonSummary": "Media {average} en {count, plural, one {# tienda} other {# tiendas}}",
     "premiumOver": "{percent} más caro que el mejor",
     "recordedOn": "Visto el {date}",
@@ -774,7 +770,6 @@
   },
   "stores": {
     "title": "Tiendas",
-    "backToSettings": "Volver a configuración",
     "create": "Crear tienda",
     "edit": "Editar tienda",
     "delete": "Eliminar tienda",
@@ -793,7 +788,6 @@
   },
   "locations": {
     "title": "Ubicaciones de almacenamiento",
-    "backToSettings": "Volver a configuración",
     "intro": "Las ubicaciones dicen dónde guardas cada cosa. Una puede estar dentro de otra: «Nevera» y, dentro de ella, «Cajón de las verduras».",
     "create": "Crear ubicación",
     "edit": "Editar ubicación",
@@ -873,7 +867,6 @@
     "peopleTitle": "Personas del hogar",
     "peopleDescription": "Quién puede entrar, y qué puede hacer cada uno.",
     "peopleIntro": "Aquí se crean las cuentas del hogar. La cuenta de cocina sirve para la tablet: puede mirar el inventario, apuntar lo que se usa y añadir cosas a la lista de la compra.",
-    "backToSettings": "Volver a configuración",
     "roleOWNER": "Propietario",
     "roleADMIN": "Administración",
     "roleMEMBER": "Persona del hogar",
@@ -1057,7 +1050,6 @@
     "reasonGone": "Eso ya no existe.",
     "reasonInvalid": "Faltaban datos o no eran válidos.",
     "reasonExhausted": "Se intentó varias veces y no hubo manera.",
-    "backToSettings": "Volver a configuración",
     "seeUnsaved": "Ver los cambios sin guardar"
   },
   "offlinePage": {
@@ -1111,7 +1103,6 @@
     "currentSuffix": "(la que usas ahora)",
     "settingsTitle": "Pantalla de inicio",
     "settingsDescription": "La pantalla a la que llegas al abrir la aplicación en este dispositivo. En otros dispositivos puedes elegir otra.",
-    "backToSettings": "Volver a configuración",
     "settingsLink": "Pantalla de inicio",
     "settingsLinkDescription": "Elige con qué pantalla empieza este dispositivo.",
     "currentlyStartingAt": "Ahora mismo empiezas en: {screen}.",
@@ -1122,7 +1113,6 @@
     "title": "Seguridad y acceso",
     "hubDescription": "Mira en qué dispositivos tienes la sesión iniciada y cierra la de los que no reconozcas. Cambia tu contraseña, activa la verificación en dos pasos y gestiona tus llaves de acceso.",
     "intro": "Aquí ves dónde tienes la sesión iniciada. Si no reconoces un dispositivo, cierra su sesión.",
-    "backToSettings": "Volver a configuración",
     "devicesTitle": "Tus dispositivos",
     "devicesCap": "Puedes tener hasta 10 sesiones abiertas. Al iniciar la undécima se cierra la que lleva más tiempo sin usarse.",
     "deviceOn": "{browser} en {os}",

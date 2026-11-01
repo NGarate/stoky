@@ -291,7 +291,7 @@ describe("CompactNav", () => {
     expect(within(account).getByText("noa@example.com")).toBeInTheDocument();
     expect(
       within(account).getByRole("link", { name: "Seguridad y acceso" }),
-    ).toHaveAttribute("href", "/settings/security");
+    ).toHaveAttribute("href", "/settings/security?from=%2Fdashboard");
     expect(
       within(account).getByRole("button", { name: "Cerrar sesión" }),
     ).toBeInTheDocument();

@@ -10,6 +10,7 @@ import { ProductPicker } from "@/components/inventory/ProductPicker";
 import { ScanModeToggle, useScanMode } from "@/components/barcode/ScanMode";
 import { StoreSelector } from "@/components/store/StoreSelector";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { WithBack } from "@/components/ui/use-back";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
@@ -49,6 +50,7 @@ function serverErrorKey(message: string | undefined): string {
 
 export default function AddStockPage(): JSX.Element {
   const t = useTranslations("inventory.add");
+  const back = "/inventory";
   const units = useQuantityFormat();
   const envelope = useEnvelope();
   const router = useRouter();
@@ -288,11 +290,7 @@ export default function AddStockPage(): JSX.Element {
         title={t("successTitle")}
       />
 
-      <PageHeader
-        back={{ href: "/inventory", label: t("backToInventory") }}
-        intro={t("intro")}
-        title={t("title")}
-      />
+      <PageHeader back={back} intro={t("intro")} title={t("title")} />
 
       <form
         noValidate
@@ -569,9 +567,15 @@ export default function AddStockPage(): JSX.Element {
           <Button type="submit" disabled={addStock.isPending}>
             {t("submit")}
           </Button>
-          <Button asChild variant="outline">
-            <Link href="/inventory">{t("cancel")}</Link>
-          </Button>
+          <WithBack fallback={back}>
+            {({ href, onClick }) => (
+              <Button asChild variant="outline">
+                <Link href={href} onClick={onClick}>
+                  {t("cancel")}
+                </Link>
+              </Button>
+            )}
+          </WithBack>
           {/* Kept mounted so the message is announced when it appears, rather
               than the whole region arriving at once. */}
           <p

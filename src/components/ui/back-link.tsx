@@ -3,7 +3,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-import type { JSX, ReactNode } from "react";
+import type { JSX, MouseEventHandler, ReactNode } from "react";
 
 /**
  * The way back out of a sub-page.
@@ -31,10 +31,12 @@ export function BackLink({
   href,
   children,
   className,
+  onClick,
 }: {
   href: string;
   children: ReactNode;
   className?: string;
+  onClick?: MouseEventHandler<HTMLAnchorElement>;
 }): JSX.Element {
   return (
     <Link
@@ -43,6 +45,7 @@ export function BackLink({
         className,
       )}
       href={href}
+      onClick={onClick}
     >
       <ArrowLeft aria-hidden="true" className="h-5 w-5 shrink-0" />
       {children}

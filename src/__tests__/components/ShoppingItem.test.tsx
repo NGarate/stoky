@@ -6,6 +6,14 @@ import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
 import { Decimal } from "@prisma/client-runtime-utils";
 
+mock.module("next/navigation", () => ({
+  usePathname: () => "/shopping/list-1",
+  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: () => {}, replace: () => {}, refresh: () => {} }),
+  useParams: () => ({}),
+  redirect: () => {},
+}));
+
 const enqueue = mock((_op: unknown) => ({ ok: true as const, id: "op-1" }));
 const cancel = mock((_id: string) => true);
 
@@ -524,7 +532,10 @@ describe("ShoppingItem", () => {
     const link = screen.getByRole("link", {
       name: /Ver precios de «Leche entera»/,
     });
-    expect(link.getAttribute("href")).toBe("/prices/product-1");
+    // And back to the list it was opened from.
+    expect(link.getAttribute("href")).toBe(
+      "/prices/product-1?from=%2Fshopping%2Flist-1",
+    );
   });
 
   it("offers no price link when there is no product to price", () => {

@@ -178,7 +178,7 @@ describe("ExpiringItems", () => {
 
     // The title links to the product (ItemRow's title slot), not the whole row.
     const link = await screen.findByRole("link", { name: "Product 1" });
-    expect(link).toHaveAttribute("href", "/products/p-1?from=inventory");
+    expect(link).toHaveAttribute("href", "/products/p-1?from=/inventory");
     // The meta definition list carries quantity and the no-location fallback.
     expect(screen.getByText("Quantity")).toBeInTheDocument();
     expect(screen.getByText("No location")).toBeInTheDocument();

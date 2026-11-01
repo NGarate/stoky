@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { WithBack } from "@/components/ui/use-back";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
@@ -54,6 +55,7 @@ function serverErrorKey(message: string | undefined): string {
 
 export default function ConsumeStockPage(): JSX.Element {
   const t = useTranslations("inventory.consume");
+  const back = "/inventory";
   const units = useQuantityFormat();
   const envelope = useEnvelope();
   const router = useRouter();
@@ -283,11 +285,7 @@ export default function ConsumeStockPage(): JSX.Element {
         title={t("successTitle")}
       />
 
-      <PageHeader
-        back={{ href: "/inventory", label: t("backToInventory") }}
-        intro={t("intro")}
-        title={t("title")}
-      />
+      <PageHeader back={back} intro={t("intro")} title={t("title")} />
 
       <form
         noValidate
@@ -463,9 +461,16 @@ export default function ConsumeStockPage(): JSX.Element {
           <Button type="submit" disabled={consumeStock.isPending}>
             {t("submit")}
           </Button>
-          <Button asChild variant="outline">
-            <Link href="/inventory"> {t("cancel")} </Link>
-          </Button>
+          <WithBack fallback={back}>
+            {({ href, onClick }) => (
+              <Button asChild variant="outline">
+                <Link href={href} onClick={onClick}>
+                  {" "}
+                  {t("cancel")}{" "}
+                </Link>
+              </Button>
+            )}
+          </WithBack>
           {/* Kept mounted so the message is announced when it appears, rather
               than the whole region arriving at once. */}
           <p

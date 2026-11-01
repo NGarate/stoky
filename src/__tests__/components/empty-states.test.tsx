@@ -136,7 +136,10 @@ describe("a household with no products yet", () => {
     expect(
       within(box).getByText("Todavía no hay productos"),
     ).toBeInTheDocument();
-    expect(hrefs(box)).toEqual(["/products/new", "/products/scan"]);
+    expect(hrefs(box)).toEqual([
+      "/products/new?from=/inventory",
+      "/products/scan?from=/inventory",
+    ]);
   });
 
   it("/inventory keeps the search's own sentence when a search found nothing", () => {
@@ -161,7 +164,10 @@ describe("/prices with nothing recorded", () => {
     const box = emptyState();
     expect(within(box).getByText("Todavía no hay precios")).toBeInTheDocument();
     expect(within(box).getByText(/al añadir stock/)).toBeInTheDocument();
-    expect(hrefs(box)).toEqual(["/inventory/add", "/receipts/upload"]);
+    expect(hrefs(box)).toEqual([
+      "/inventory/add?from=/prices",
+      "/receipts/upload?from=/prices",
+    ]);
     // The screen has no way to register a price, so it must not ask for one.
     expect(screen.queryByText(/Registra tu primer precio/)).toBeAbsent();
   });

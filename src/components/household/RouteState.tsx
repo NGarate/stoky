@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import {
   PageHeader,
   PageShell,
-  type PageBack,
   type PageWidth,
 } from "@/components/ui/page-header";
 import type { FormEvent, JSX, ReactNode } from "react";
@@ -111,7 +110,7 @@ export function SectionState({
 interface RouteStateProps {
   title: string;
   /** The way back, as the loaded screen draws it. */
-  back?: PageBack;
+  back?: string;
   /** The screen's actions, when they do not depend on the data. */
   actions?: ReactNode;
   /** The loaded screen's width. Defaults to an index's. */
@@ -121,7 +120,7 @@ interface RouteStateProps {
    * What to say when the server answers NOT_FOUND. Without it, a NOT_FOUND
    * is treated as any other failure and offered a retry.
    */
-  notFound?: { title: string; body: string; back?: PageBack };
+  notFound?: { title: string; body: string; back?: string };
   /** The failing query, so this component can retry it. */
   isLoading: boolean;
   error: unknown;

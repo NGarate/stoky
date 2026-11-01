@@ -2,10 +2,12 @@
 
 import { useTranslations } from "next-intl";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useId } from "react";
 import { Trash2 } from "lucide-react";
 
 import { Select } from "@/components/ui/select";
+import { withFrom } from "@/lib/back";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { undoHoldMs } from "@/lib/snackbar-duration";
 import { Badge } from "@/components/ui/badge";
@@ -76,6 +78,7 @@ export function ShoppingItem({
   stores,
 }: ShoppingItemProps): JSX.Element {
   const t = useTranslations("shopping");
+  const pathname = usePathname();
   const units = useQuantityFormat();
   const { enqueue, cancel } = useWriteQueue();
   const snackbar = useSnackbar();
@@ -176,7 +179,7 @@ export function ShoppingItem({
               aisle, which is where the question is asked. */}
           {item.productId ? (
             <Button asChild size="sm" variant="outline">
-              <Link href={`/prices/${item.productId}`}>
+              <Link href={withFrom(`/prices/${item.productId}`, pathname)}>
                 <span aria-hidden="true">{t("seePricesShort")}</span>
                 <span className="sr-only">{t("seePrices", { name })}</span>
               </Link>

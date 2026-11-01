@@ -80,7 +80,20 @@
     "moreTitle": "More sections",
     "kitchen": "Kitchen",
     "account": "Your account",
-    "accountOf": "Your account: {name}"
+    "accountOf": "Your account: {name}",
+    "backTo": {
+      "dashboard": "Back to the dashboard",
+      "inventory": "Back to inventory",
+      "kitchen": "Back to the kitchen",
+      "products": "Back to products",
+      "product": "Back to the product",
+      "prices": "Back to prices",
+      "receipts": "Back to receipts",
+      "shopping": "Back to shopping",
+      "shoppingLists": "Back to your lists",
+      "shoppingList": "Back to the list",
+      "settings": "Back to settings"
+    }
   },
   "dashboard": {
     "title": "Dashboard",
@@ -163,7 +176,6 @@
       "title": "New product",
       "loading": "Loading the form…",
       "intro": "Add a product to your household catalogue. Only the name is required; you can fill in the rest later.",
-      "backToProducts": "Back to products",
       "scanContextTitle": "Scanned barcode",
       "scanContextIntro": "You are creating the product for this code. It was not in your household yet, so tell us at least what it is called.",
       "nameLabel": "Product name",
@@ -206,9 +218,6 @@
     "detail": {
       "loadingTitle": "Product",
       "notFoundTitle": "We can't find this product",
-      "backToProducts": "Back to products",
-      "backToDashboard": "Back to the dashboard",
-      "backToInventory": "Back to inventory",
       "errorTitle": "This product could not be shown",
       "errorNotFound": "This product is not in your household's catalogue. It may have been deleted, or the link may point somewhere else. Go back to the list and pick it from there.",
       "errorNoHousehold": "Your account does not belong to a household yet. Create one, or ask to be invited, before viewing products.",
@@ -266,8 +275,6 @@
     },
     "scan": {
       "title": "Scan barcode",
-      "backToProducts": "Back to products",
-      "backToShopping": "Back to shopping",
       "processing": "Looking up the code…",
       "lookupFailed": "The code {barcode} could not be looked up. Scan it again or type it below.",
       "lookupThrottled": "You have looked up a lot of new codes in a short time. Fill in product {barcode} by hand; looking codes up will work again shortly.",
@@ -368,8 +375,6 @@
     "history": {
       "title": "Stock history",
       "titleOf": "Stock history of “{name}”",
-      "backToProduct": "Back to the product",
-      "backToProducts": "Back to products",
       "intro": "Every movement that explains today's number: purchases, consumptions, adjustments and transfers.",
       "currentTotal": "Right now: {stock} {unit}",
       "tableCaption": "Stock movements, newest to oldest",
@@ -392,8 +397,6 @@
     "adjust": {
       "title": "Adjust stock",
       "titleOf": "Adjust the stock of “{name}”",
-      "backToProduct": "Back to the product",
-      "backToProducts": "Back to products",
       "intro": "Correct the number when what is at home does not match what is noted. It is saved as an adjustment, with its reason.",
       "currentLabel": "Noted right now: {stock} {unit}",
       "actualLabel": "What is actually there",
@@ -452,7 +455,6 @@
     "add": {
       "title": "Add stock",
       "intro": "Record what you have just brought home. Pick the product, say how much it is and, if you like, when it expires and where you put it.",
-      "backToInventory": "Back to inventory",
       "productSelectHint": "Choose the product you want to add stock to.",
       "quantityLabel": "Quantity",
       "quantityHint": "How much you are adding, in the unit below. For example: 2.",
@@ -494,7 +496,6 @@
     "consume": {
       "title": "Record use",
       "intro": "Record what has been used. Pick the product, see how much is left and say how much you used.",
-      "backToInventory": "Back to inventory",
       "availableLabel": "Available right now",
       "availableNoProduct": "Choose a product to see how much is left.",
       "availableLoading": "Checking how much is left…",
@@ -592,7 +593,6 @@
     "reviewItems": "Review items",
     "notFoundTitle": "This receipt no longer exists",
     "notFoundBody": "It may have been deleted, or the link may be old. Go back to your receipts to choose another.",
-    "backToList": "Back to receipts",
     "alreadyApplied": "This receipt is already in the inventory",
     "viewApplied": "See what this receipt added",
     "viewInventory": "View inventory",
@@ -629,7 +629,6 @@
     "applied": {
       "title": "Receipt added to the inventory",
       "loadingTitle": "Receipt summary",
-      "backToReceipts": "Back to receipts",
       "intro": "This is what this receipt changed in your inventory.",
       "retry": "Try again",
       "pendingTitle": "This receipt is not in the inventory yet",
@@ -676,7 +675,6 @@
   },
   "shopping": {
     "title": "Shopping lists",
-    "backToShop": "Back to shopping",
     "listPageTitle": "Shopping list",
     "create": "Create list",
     "delete": "Delete list",
@@ -701,7 +699,6 @@
     "days": "days",
     "year": "year",
     "shopTitle": "Shopping",
-    "backToLists": "Back to your lists",
     "notFoundTitle": "This list no longer exists",
     "notFoundBody": "Someone in your household may have deleted it. Go back to your lists to choose another.",
     "scan": "Scan",
@@ -764,7 +761,6 @@
       "legend": "Stores in the chart"
     },
     "noPrices": "No prices recorded",
-    "backToPrices": "Back to prices",
     "comparisonSummary": "Average {average} across {count, plural, one {# store} other {# stores}}",
     "premiumOver": "{percent} dearer than the best",
     "recordedOn": "Seen on {date}",
@@ -774,7 +770,6 @@
   },
   "stores": {
     "title": "Stores",
-    "backToSettings": "Back to settings",
     "create": "Create store",
     "edit": "Edit store",
     "delete": "Delete store",
@@ -793,7 +788,6 @@
   },
   "locations": {
     "title": "Storage locations",
-    "backToSettings": "Back to settings",
     "intro": "Locations say where you keep each thing. One can sit inside another: “Fridge”, and inside it “Vegetable drawer”.",
     "create": "Create location",
     "edit": "Edit location",
@@ -873,7 +867,6 @@
     "peopleTitle": "People in the household",
     "peopleDescription": "Who can get in, and what each of them can do.",
     "peopleIntro": "Household accounts are created here. The kitchen account is for the tablet: it can look at the inventory, record what is used and add things to the shopping list.",
-    "backToSettings": "Back to settings",
     "roleOWNER": "Owner",
     "roleADMIN": "Admin",
     "roleMEMBER": "Household member",
@@ -1057,7 +1050,6 @@
     "reasonGone": "That no longer exists.",
     "reasonInvalid": "Something was missing or not valid.",
     "reasonExhausted": "It was tried several times and never got through.",
-    "backToSettings": "Back to settings",
     "seeUnsaved": "See the unsaved changes"
   },
   "offlinePage": {
@@ -1111,7 +1103,6 @@
     "currentSuffix": "(the one you use now)",
     "settingsTitle": "Starting screen",
     "settingsDescription": "The screen you arrive at when you open the app on this device. You can choose a different one on other devices.",
-    "backToSettings": "Back to settings",
     "settingsLink": "Starting screen",
     "settingsLinkDescription": "Choose which screen this device starts on.",
     "currentlyStartingAt": "Right now you start at: {screen}.",
@@ -1122,7 +1113,6 @@
     "title": "Security and access",
     "hubDescription": "See which devices you are signed in on and sign out of any you do not recognise. Change your password, turn on two-step verification and manage your passkeys.",
     "intro": "This is where you are signed in. If you do not recognise a device, sign it out.",
-    "backToSettings": "Back to settings",
     "devicesTitle": "Your devices",
     "devicesCap": "You can have up to 10 sessions open. Signing in an eleventh ends the one unused for longest.",
     "deviceOn": "{browser} on {os}",

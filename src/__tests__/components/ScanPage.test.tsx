@@ -342,7 +342,7 @@ describe("the way back", () => {
   it("goes back to the shop when the shop is where scanning started", () => {
     // Screen A's scan button opens this page, and the way back led to the
     // product catalogue — a place the person in the aisle never was.
-    searchParams = new URLSearchParams("from=shopping");
+    searchParams = new URLSearchParams("from=/shopping");
     render();
 
     expect(

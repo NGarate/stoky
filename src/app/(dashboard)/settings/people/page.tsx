@@ -308,7 +308,7 @@ export default function PeoplePage(): JSX.Element {
   if (!members.data) {
     return (
       <RouteState
-        back={{ href: "/settings", label: t("backToSettings") }}
+        back="/settings"
         error={members.error}
         fetchStatus={members.fetchStatus}
         isLoading={members.isPending}
@@ -322,7 +322,7 @@ export default function PeoplePage(): JSX.Element {
   return (
     <PageShell width="form">
       <PageHeader
-        back={{ href: "/settings", label: t("backToSettings") }}
+        back="/settings"
         intro={t("peopleIntro")}
         title={t("peopleTitle")}
       />

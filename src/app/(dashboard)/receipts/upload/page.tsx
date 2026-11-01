@@ -135,10 +135,7 @@ export default function UploadPage() {
     // And a way back, which this was the one sub-page without — the list it
     // came from was reachable only through the navigation.
     <PageShell width="form">
-      <PageHeader
-        back={{ href: "/receipts", label: t("backToList") }}
-        title={t("upload")}
-      />
+      <PageHeader back="/receipts" title={t("upload")} />
 
       {!uploadedReceiptId ? (
         <div className="space-y-6">

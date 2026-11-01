@@ -64,9 +64,9 @@ describe("the catalogue's actions column", () => {
     // No "Editar": the catalogue fields are edited on the product itself now,
     // so a row action pointing at a second screen would point at a redirect.
     const wanted: Array<[RegExp, string]> = [
-      [/Ajustar de «Leche entera»/, "/products/p1/adjust"],
-      [/Historial de «Leche entera»/, "/products/p1/history"],
-      [/Precios de «Leche entera»/, "/prices/p1"],
+      [/Ajustar de «Leche entera»/, "/products/p1/adjust?from=/products"],
+      [/Historial de «Leche entera»/, "/products/p1/history?from=/products"],
+      [/Precios de «Leche entera»/, "/prices/p1?from=/products"],
     ];
     for (const [name, href] of wanted) {
       // Both tiers now offer them. The card tier — the phone and the kitchen

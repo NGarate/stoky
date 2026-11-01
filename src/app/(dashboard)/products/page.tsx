@@ -212,17 +212,17 @@ export default function ProductsPage(): JSX.Element {
                       example of failing. */}
                     <span className="flex flex-wrap items-center justify-center gap-1">
                       <RowAction
-                        href={`/products/${product.id}/adjust`}
+                        href={`/products/${product.id}/adjust?from=/products`}
                         label={t("actionAdjust")}
                         name={t("actionOf", { name: product.name })}
                       />
                       <RowAction
-                        href={`/products/${product.id}/history`}
+                        href={`/products/${product.id}/history?from=/products`}
                         label={t("actionHistory")}
                         name={t("actionOf", { name: product.name })}
                       />
                       <RowAction
-                        href={`/prices/${product.id}`}
+                        href={`/prices/${product.id}?from=/products`}
                         label={t("actionPrices")}
                         name={t("actionOf", { name: product.name })}
                       />
@@ -242,17 +242,17 @@ export default function ProductsPage(): JSX.Element {
             actions={
               <>
                 <RowAction
-                  href={`/products/${product.id}/adjust`}
+                  href={`/products/${product.id}/adjust?from=/products`}
                   label={t("actionAdjust")}
                   name={t("actionOf", { name: product.name })}
                 />
                 <RowAction
-                  href={`/products/${product.id}/history`}
+                  href={`/products/${product.id}/history?from=/products`}
                   label={t("actionHistory")}
                   name={t("actionOf", { name: product.name })}
                 />
                 <RowAction
-                  href={`/prices/${product.id}`}
+                  href={`/prices/${product.id}?from=/products`}
                   label={t("actionPrices")}
                   name={t("actionOf", { name: product.name })}
                 />

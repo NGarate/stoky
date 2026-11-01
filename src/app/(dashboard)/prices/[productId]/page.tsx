@@ -39,7 +39,7 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
         error={query.error}
         fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
-        back={{ href: "/prices", label: t("prices.backToPrices") }}
+        back="/prices"
         onRetry={() => void query.refetch()}
         title={t("prices.history")}
       />
@@ -52,10 +52,7 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
 
   return (
     <PageShell width="index">
-      <PageHeader
-        back={{ href: "/prices", label: t("prices.backToPrices") }}
-        title={t("prices.history")}
-      />
+      <PageHeader back="/prices" title={t("prices.history")} />
       <div className="space-y-6">
         <div className="flex flex-wrap items-center gap-4">
           <label

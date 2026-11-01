@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { WithBack } from "@/components/ui/use-back";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, useDeferredValue, useId, useState } from "react";
@@ -68,10 +69,7 @@ function NewProductFallback(): JSX.Element {
 
   return (
     <PageShell width="form">
-      <PageHeader
-        back={{ href: "/products", label: t("backToProducts") }}
-        title={t("title")}
-      />
+      <PageHeader back="/products" title={t("title")} />
       <p role="status" aria-live="polite" className="text-muted-foreground">
         {t("loading")}
       </p>
@@ -81,6 +79,7 @@ function NewProductFallback(): JSX.Element {
 
 function NewProductForm(): JSX.Element {
   const t = useTranslations("products.new");
+  const back = "/products";
   const tSuggestions = useTranslations("products.suggestions");
   const searchParams = useSearchParams();
   const utils = api.useUtils();
@@ -343,11 +342,7 @@ function NewProductForm(): JSX.Element {
         title={t("successTitle")}
       />
 
-      <PageHeader
-        back={{ href: "/products", label: t("backToProducts") }}
-        intro={t("intro")}
-        title={t("title")}
-      />
+      <PageHeader back={back} intro={t("intro")} title={t("title")} />
 
       {showScanContext ? (
         <div className="mb-6 rounded border border-border bg-muted p-4">
@@ -593,9 +588,16 @@ function NewProductForm(): JSX.Element {
           <Button type="submit" disabled={createProduct.isPending}>
             {t("submit")}
           </Button>
-          <Button asChild variant="outline">
-            <Link href="/products"> {t("cancel")} </Link>
-          </Button>
+          <WithBack fallback={back}>
+            {({ href, onClick }) => (
+              <Button asChild variant="outline">
+                <Link href={href} onClick={onClick}>
+                  {" "}
+                  {t("cancel")}{" "}
+                </Link>
+              </Button>
+            )}
+          </WithBack>
           {/* Kept mounted so the message is announced when it appears, rather
               than the whole region arriving at once. */}
           <p

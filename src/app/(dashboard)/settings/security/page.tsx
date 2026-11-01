@@ -46,11 +46,7 @@ export default function SecurityPage(): JSX.Element {
 
   return (
     <PageShell width="form">
-      <PageHeader
-        back={{ href: "/settings", label: t("backToSettings") }}
-        intro={t("intro")}
-        title={t("title")}
-      />
+      <PageHeader back="/settings" intro={t("intro")} title={t("title")} />
 
       <Section id="devices" title={t("devicesTitle")}>
         <DeviceList />

@@ -138,6 +138,12 @@ wear two different words (ISSUES UI-11).
   is `<BackLink>` (`src/components/ui/back-link.tsx`), which carries the arrow
   as an `aria-hidden` icon. Never put an arrow in a message string: it is a
   layout decision in a translation file and the screen reader pronounces it.
+- **Where back goes is `useBack`** (`src/components/ui/use-back.tsx`). A page
+  gives `PageHeader` its parent's path (`back="/inventory"`); a screen that
+  links to it from elsewhere adds `?from=<its path>`, and the link follows it
+  with the words for it, popping history instead when the entry before is
+  that origin. Destinations and their words live in one table,
+  `src/lib/back.ts` — never a `backTo…` message per page.
 
 ### Sizes and tokens
 

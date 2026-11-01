@@ -61,7 +61,7 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
     [entries, product],
   );
 
-  const back = { href: `/products/${id}`, label: t("backToProduct") };
+  const back = `/products/${id}`;
 
   // Two questions, one screen: whichever has not answered is the one the
   // screen is waiting on, and the product's first, because a product that
@@ -77,7 +77,7 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
         notFound={{
           title: tDetail("notFoundTitle"),
           body: t("errorNotFound"),
-          back: { href: "/products", label: tDetail("backToProducts") },
+          back: "/products",
         }}
         onRetry={() => {
           void detail.refetch();

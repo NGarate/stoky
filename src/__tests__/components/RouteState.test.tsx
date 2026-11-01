@@ -23,6 +23,14 @@ const invalidate = mock(() => Promise.resolve());
 let createPending = false;
 let createOptions: { onError?: () => void; onSuccess?: () => void } = {};
 
+mock.module("next/navigation", () => ({
+  usePathname: () => "/shopping/list-1",
+  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: () => {}, replace: () => {}, refresh: () => {} }),
+  useParams: () => ({}),
+  redirect: () => {},
+}));
+
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({ invalidate }),
@@ -381,7 +389,7 @@ describe("what a screen reader is told", () => {
 });
 
 describe("the page around the state", () => {
-  const back = { href: "/shopping/lists", label: "Volver a tus listas" };
+  const back = "/shopping/lists";
 
   it("keeps the way back and the primary action on screen while loading", () => {
     // Loading used to draw a bare title and nothing else, so the screen's

@@ -44,10 +44,12 @@ const idleMutation = {
   isPending: false,
 };
 
+let searchParams = new URLSearchParams();
+
 mock.module("next/navigation", () => ({
   useParams: () => ({ id: "r1" }),
   useRouter: () => ({ push: noop, replace: noop, refresh: noop }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParams,
   usePathname: () => "/receipts/r1/review",
   redirect: noop,
 }));
@@ -183,7 +185,10 @@ const DETAIL_ROUTES = [
   },
   {
     name: "/products/[id] from the overview",
-    render: () => <ProductDetailView from="dashboard" id="p1" />,
+    render: () => {
+      searchParams = new URLSearchParams("from=/dashboard");
+      return <ProductDetailView id="p1" />;
+    },
     back: "/dashboard",
   },
   {
@@ -212,6 +217,7 @@ function mount(ui: React.ReactElement): void {
 }
 
 beforeEach(() => {
+  searchParams = new URLSearchParams();
   queryStub = {
     data: undefined,
     isPending: true,

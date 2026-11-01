@@ -84,7 +84,7 @@ export function ExpiryRow({
   from,
 }: {
   /** The screen it sits on, so the product page leads back to it. */
-  from: "dashboard" | "inventory";
+  from: "/dashboard" | "/inventory";
   batch: {
     product: { id: string; name: string };
     location: { name: string } | null;

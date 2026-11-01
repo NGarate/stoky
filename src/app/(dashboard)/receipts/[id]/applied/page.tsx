@@ -53,7 +53,7 @@ export default function ReceiptAppliedPage({
   );
   const summary = query.data;
 
-  const back = { href: "/receipts", label: t("backToReceipts") };
+  const back = "/receipts";
 
   /**
    * Every state without a summary, through the one component that tells them

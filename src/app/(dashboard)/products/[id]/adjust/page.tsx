@@ -10,7 +10,9 @@ import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { useBack } from "@/components/ui/use-back";
 import { RouteState } from "@/components/household/RouteState";
+import { popTo } from "@/lib/back";
 import { api } from "@/lib/trpc/client";
 import { Decimal } from "@prisma/client-runtime-utils";
 import type { FormEvent, JSX } from "react";
@@ -75,6 +77,8 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
   const reasonErrorId = useId();
 
   const router = useRouter();
+  // Leaving — cancelled or saved — returns to wherever the adjustment began.
+  const leaveTo = useBack(`/products/${id}`);
 
   /**
    * Saved: back to the product, which is where the new number is, with the
@@ -99,7 +103,7 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
           },
         },
       });
-      router.replace(`/products/${id}`);
+      if (!popTo(leaveTo.href)) router.replace(leaveTo.href);
       await utils.invalidate();
     },
     onError: (error) => {
@@ -149,7 +153,7 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
     });
   }
 
-  const back = { href: `/products/${id}`, label: t("backToProduct") };
+  const back = `/products/${id}`;
 
   // Only while there is no product. A refetch that fails after a refused
   // adjustment used to replace the whole form — and what had been typed in
@@ -165,7 +169,7 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
         notFound={{
           title: tDetail("notFoundTitle"),
           body: t("errorNotFound"),
-          back: { href: "/products", label: tDetail("backToProducts") },
+          back: "/products",
         }}
         onRetry={() => void query.refetch()}
         title={t("title")}
@@ -280,7 +284,9 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
               looked like two different controls for one job. `Cancelar` is
               what the two other forms in settings call this. */}
           <Button asChild variant="outline">
-            <Link href={`/products/${id}`}>{tCommon("cancel")}</Link>
+            <Link href={leaveTo.href} onClick={leaveTo.onClick}>
+              {tCommon("cancel")}
+            </Link>
           </Button>
           {/* Reduced to the pending state, which is what it was always for.
               An adjustment is an event and now says so in the snackbar. */}

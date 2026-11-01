@@ -77,6 +77,15 @@ guarda escaneando.
 Al crear o editar un producto, el campo **Código de barras** tiene también
 **Escanear**: la cámara lo rellena con el código que lee.
 
+### «Volver» te lleva a donde estabas
+
+Las pantallas a las que se llega desde varios sitios (añadir o gastar stock,
+subir un ticket, los precios de un producto, su historial, el escáner…)
+vuelven ahora a la pantalla desde la que entraste, y el enlace dice cuál:
+**Volver al panel**, **Volver al producto**, **Volver a la lista**. Antes
+volvían siempre al mismo sitio. **Cancelar** en esos formularios hace lo
+mismo, y la lista a la que vuelves sigue donde la dejaste.
+
 ## English
 
 > [!CAUTION]
@@ -143,3 +152,12 @@ camera again for the next: a bag of shopping is put away scan by scan.
 
 Creating or editing a product, the **Barcode** field has **Scan** too: the
 camera fills it in with the code it reads.
+
+### "Back" takes you where you were
+
+Screens reached from more than one place (adding or using stock, uploading
+a receipt, a product's prices, its history, the scanner…) now go back to the
+screen you came from, and the link says which: **Back to the dashboard**,
+**Back to the product**, **Back to the list**. They used to go to the same
+place every time. **Cancel** on those forms does the same, and the list you
+return to is still where you left it.

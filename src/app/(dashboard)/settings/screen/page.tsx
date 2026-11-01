@@ -63,7 +63,7 @@ export default async function ScreenSettingsPage(): Promise<JSX.Element> {
   return (
     <PageShell width="form">
       <PageHeader
-        back={{ href: "/settings", label: t("backToSettings") }}
+        back="/settings"
         className="mb-0"
         intro={t("settingsDescription")}
         title={t("settingsTitle")}

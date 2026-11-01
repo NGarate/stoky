@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { withFrom } from "@/lib/back";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { SignOutButton } from "@/components/session/SignOutButton";
@@ -28,6 +30,7 @@ export interface Account {
  */
 export function AccountPanel({ account }: { account: Account }): JSX.Element {
   const t = useTranslations("navigation");
+  const pathname = usePathname();
   const tSecurity = useTranslations("security");
 
   return (
@@ -42,7 +45,7 @@ export function AccountPanel({ account }: { account: Account }): JSX.Element {
         </div>
       </div>
       <Button asChild className="w-full justify-start gap-2" variant="outline">
-        <Link href="/settings/security">
+        <Link href={withFrom("/settings/security", pathname)}>
           <ShieldCheck aria-hidden="true" className="size-5" />
           {tSecurity("title")}
         </Link>

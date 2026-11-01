@@ -77,7 +77,7 @@ export default function UnsavedPage(): JSX.Element {
   return (
     <PageShell width="form">
       <PageHeader
-        back={{ href: "/settings", label: t("backToSettings") }}
+        back="/settings"
         intro={failed.length > 0 ? t("unsavedIntro") : undefined}
         title={t("unsavedTitle")}
       />

@@ -108,7 +108,7 @@ export default function ReviewPage() {
   if (!receipt) {
     return (
       <RouteState
-        back={{ href: "/receipts", label: t("backToList") }}
+        back="/receipts"
         error={receiptQuery.error}
         fetchStatus={receiptQuery.fetchStatus}
         isLoading={receiptQuery.isPending}
@@ -178,7 +178,7 @@ export default function ReviewPage() {
           a `BackLink`, so this screen alone spelled "back" as an icon while
           eleven others spelled it as an arrow and a sentence. */}
       <PageHeader
-        back={{ href: "/receipts", label: t("backToList") }}
+        back="/receipts"
         intro={
           <>
             {receipt.store?.name || t("storeUnknown")}

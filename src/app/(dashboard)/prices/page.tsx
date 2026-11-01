@@ -110,10 +110,14 @@ export default function PricesPage() {
               action={
                 <>
                   <Button asChild>
-                    <Link href="/inventory/add">{t("inventory.addStock")}</Link>
+                    <Link href="/inventory/add?from=/prices">
+                      {t("inventory.addStock")}
+                    </Link>
                   </Button>
                   <Button asChild variant="outline">
-                    <Link href="/receipts/upload">{t("receipts.upload")}</Link>
+                    <Link href="/receipts/upload?from=/prices">
+                      {t("receipts.upload")}
+                    </Link>
                   </Button>
                 </>
               }

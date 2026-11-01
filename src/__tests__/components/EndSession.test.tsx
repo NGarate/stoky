@@ -91,6 +91,13 @@ let changeRefusal: unknown = null;
 let changeInputs: unknown[] = [];
 
 mock.module("@/lib/auth/actions", () => ({ signOutAction }));
+mock.module("next/navigation", () => ({
+  usePathname: () => "/inventory",
+  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: () => {}, replace: () => {}, refresh: () => {} }),
+  useParams: () => ({}),
+  redirect: () => {},
+}));
 /**
  * `@/lib/sw/register` is deliberately **not** mocked.
  *
@@ -580,7 +587,7 @@ describe("with changes the server refused", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Ver los cambios sin guardar" }),
-    ).toHaveAttribute("href", "/settings/unsaved");
+    ).toHaveAttribute("href", "/settings/unsaved?from=%2Finventory");
   });
 
   it("does not offer to send them, which cannot help", async () => {

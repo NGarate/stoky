@@ -2,7 +2,9 @@
 
 import { useTranslations } from "next-intl";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
+import { withFrom } from "@/lib/back";
 import { Button } from "@/components/ui/button";
 import {
   useEndSession,
@@ -33,6 +35,7 @@ import type { JSX } from "react";
 export function SignOutButton(): JSX.Element {
   const t = useTranslations("session");
   const tOffline = useTranslations("offline");
+  const pathname = usePathname();
   // No `before`: signing out of this device asks the server for nothing. The
   // purge sequence is shared with "end every session" — see `useEndSession`.
   const { pending, unsaved, working, leave, sendThenLeave } = useEndSession();
@@ -117,7 +120,9 @@ export function SignOutButton(): JSX.Element {
         // Somewhere to look at them before they go, rather than a warning
         // with no way to act on it.
         <Button asChild className="px-0 text-warn-foreground" variant="link">
-          <Link href="/settings/unsaved">{tOffline("seeUnsaved")}</Link>
+          <Link href={withFrom("/settings/unsaved", pathname)}>
+            {tOffline("seeUnsaved")}
+          </Link>
         </Button>
       ) : null}
 

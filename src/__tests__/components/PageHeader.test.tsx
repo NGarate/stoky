@@ -1,10 +1,24 @@
 import "../setup/matchers";
-import { describe, it, expect, afterEach } from "bun:test";
-import { render, screen, cleanup } from "@testing-library/react";
+import { describe, it, expect, afterEach, mock, spyOn } from "bun:test";
+import { screen, cleanup, fireEvent } from "@testing-library/react";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
+import { renderWithIntl as render } from "../utils/render";
 
-afterEach(cleanup);
+let searchParams = new URLSearchParams();
+
+mock.module("next/navigation", () => ({
+  useSearchParams: () => searchParams,
+  usePathname: () => "/inventory/add",
+  useRouter: () => ({ push: () => {}, replace: () => {}, refresh: () => {} }),
+  useParams: () => ({}),
+  redirect: () => {},
+}));
+
+afterEach(() => {
+  cleanup();
+  searchParams = new URLSearchParams();
+});
 
 /**
  * The page grammar, pinned where it is decided.
@@ -28,7 +42,7 @@ describe("PageHeader", () => {
     render(
       <PageHeader
         actions={<Button type="button">Crear lista</Button>}
-        back={{ href: "/settings", label: "Volver a configuración" }}
+        back="/settings"
         intro="Las tiendas donde compras."
         title="Tiendas"
       />,
@@ -45,23 +59,102 @@ describe("PageHeader", () => {
     expect(back.getAttribute("href")).toBe("/settings");
   });
 
-  it("takes a back link chosen at runtime, above the title like any other", () => {
-    // The scanner's way back depends on whether the person came from the
-    // shop or the catalogue, so the page passes the link itself.
-    const { container } = render(
-      <PageHeader
-        back={<a href="/shopping">Volver a la compra</a>}
-        title="Escanear código de barras"
-      />,
-    );
+  it("goes back to the screen that linked here, named for it", () => {
+    // Adding stock is reached from the overview, the inventory, the prices
+    // page and the product itself; a link fixed to the inventory sent three
+    // of the four somewhere they had never been.
+    searchParams = new URLSearchParams("from=/dashboard");
+    render(<PageHeader back="/inventory" title="Añadir stock" />);
 
-    const link = screen.getByRole("link", { name: "Volver a la compra" });
-    expect(link.getAttribute("href")).toBe("/shopping");
-    const heading = screen.getByRole("heading", { level: 1 });
     expect(
-      link.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(container.querySelectorAll("a")).toHaveLength(1);
+      screen.getByRole("link", { name: "Volver al panel" }),
+    ).toHaveAttribute("href", "/dashboard");
+  });
+
+  it("keeps its own parent when the origin is not one it follows", () => {
+    searchParams = new URLSearchParams("from=//evil.example/dashboard");
+    render(<PageHeader back="/inventory" title="Añadir stock" />);
+
+    expect(
+      screen.getByRole("link", { name: "Volver al inventario" }),
+    ).toHaveAttribute("href", "/inventory");
+  });
+
+  describe("going back", () => {
+    /** The Navigation API, saying which entry came before this one. */
+    function previousEntry(url: string | null): void {
+      const entries = [
+        ...(url ? [{ url }] : []),
+        { url: "http://stoky.test/inventory/add" },
+      ];
+      Object.defineProperty(window, "navigation", {
+        configurable: true,
+        value: {
+          currentEntry: { index: entries.length - 1 },
+          entries: () => entries,
+        },
+      });
+    }
+
+    function clickBack(
+      init?: MouseEventInit,
+      from = "/dashboard",
+    ): { followed: boolean; popped: boolean } {
+      const back = spyOn(window.history, "back").mockImplementation(() => {});
+      searchParams = new URLSearchParams({ from });
+      render(<PageHeader back="/inventory" title="Añadir stock" />);
+      const followed = fireEvent.click(
+        screen.getByRole("link", { name: /^Volver/ }),
+        init,
+      );
+      const popped = back.mock.calls.length === 1;
+      back.mockRestore();
+      return { followed, popped };
+    }
+
+    afterEach(() => {
+      Reflect.deleteProperty(window, "navigation");
+    });
+
+    it("pops history when the entry before this one is where it leads", () => {
+      // A pushed link brought the list back scrolled to the top, and the
+      // system's back then returned to the screen just left.
+      previousEntry("http://stoky.test/dashboard");
+      expect(clickBack()).toEqual({ followed: false, popped: true });
+    });
+
+    it("knows the entry before however its query was written", () => {
+      // The overview links with `?from=/dashboard`; the product passes its
+      // own address on encoded. Both are the same page.
+      previousEntry("http://stoky.test/products/p1?from=/dashboard");
+      expect(clickBack(undefined, "/products/p1?from=%2Fdashboard")).toEqual({
+        followed: false,
+        popped: true,
+      });
+    });
+
+    it("follows the link when the entry before is somewhere else", () => {
+      // Opened from a shared link: popping would leave the app.
+      previousEntry("http://stoky.test/kitchen");
+      expect(clickBack()).toEqual({ followed: true, popped: false });
+    });
+
+    it("follows the link when this is the first entry", () => {
+      previousEntry(null);
+      expect(clickBack()).toEqual({ followed: true, popped: false });
+    });
+
+    it("follows the link where the Navigation API is missing", () => {
+      expect(clickBack()).toEqual({ followed: true, popped: false });
+    });
+
+    it("leaves a modified click to the browser, for a new tab", () => {
+      previousEntry("http://stoky.test/dashboard");
+      expect(clickBack({ metaKey: true })).toEqual({
+        followed: true,
+        popped: false,
+      });
+    });
   });
 
   it("renders exactly one h1 and nothing it was not given", () => {

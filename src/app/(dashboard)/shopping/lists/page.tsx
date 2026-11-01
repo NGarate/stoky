@@ -91,7 +91,7 @@ export default function ShoppingListsPage() {
   };
 
   // Back to the screen this used to be. Filing is not shopping.
-  const back = { href: "/shopping", label: t("shopping.backToShop") };
+  const back = "/shopping";
 
   // One primary. Both used to be filled, so the screen offered two equal
   // answers to "what do I do here" — and at 390px the pair beside the title

@@ -325,10 +325,14 @@ export function InventoryView(): JSX.Element {
           action={
             <>
               <Button asChild>
-                <Link href="/products/new">{tProducts("list.new")}</Link>
+                <Link href="/products/new?from=/inventory">
+                  {tProducts("list.new")}
+                </Link>
               </Button>
               <Button asChild variant="outline">
-                <Link href="/products/scan">{tProducts("list.scan")}</Link>
+                <Link href="/products/scan?from=/inventory">
+                  {tProducts("list.scan")}
+                </Link>
               </Button>
             </>
           }
@@ -384,7 +388,7 @@ export function InventoryView(): JSX.Element {
                 >
                   <td className="px-4 py-3">
                     <Button asChild variant="link">
-                      <Link href={`/products/${product.id}?from=inventory`}>
+                      <Link href={`/products/${product.id}?from=/inventory`}>
                         {" "}
                         {product.name}{" "}
                       </Link>
@@ -420,7 +424,7 @@ export function InventoryView(): JSX.Element {
       <ul className="space-y-3 lg:hidden">
         {products.map((product) => (
           <ItemRow
-            href={`/products/${product.id}?from=inventory`}
+            href={`/products/${product.id}?from=/inventory`}
             key={product.id}
             meta={[
               {
