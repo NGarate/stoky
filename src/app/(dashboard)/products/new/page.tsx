@@ -5,6 +5,7 @@ import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, useDeferredValue, useId, useState } from "react";
+import { ScanCodeButton } from "@/components/barcode/ScanCodeButton";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
@@ -235,6 +236,12 @@ function NewProductForm(): JSX.Element {
         ? t("lookupFailed")
         : "";
 
+  function handleBarcodeChange(value: string): void {
+    setBarcode(value);
+    setLookupOutcome(null);
+    setFieldErrors((errors) => ({ ...errors, barcode: undefined }));
+  }
+
   function handleLookup(): void {
     if (trimmedBarcode === "") return;
 
@@ -403,25 +410,24 @@ function NewProductForm(): JSX.Element {
           >
             {t("barcodeLabel")}
           </label>
-          <Input
-            id={barcodeId}
-            name="barcode"
-            type="text"
-            inputMode="numeric"
-            autoComplete="off"
-            value={barcode}
-            onChange={(event) => {
-              setBarcode(event.target.value);
-              setLookupOutcome(null);
-              setFieldErrors((errors) => ({ ...errors, barcode: undefined }));
-            }}
-            aria-invalid={fieldErrors.barcode || takenBy ? true : undefined}
-            aria-describedby={
-              fieldErrors.barcode
-                ? `${barcodeHintId} ${barcodeTakenId} ${barcodeErrorId}`
-                : `${barcodeHintId} ${barcodeTakenId}`
-            }
-          />
+          <div className="flex gap-2">
+            <Input
+              id={barcodeId}
+              name="barcode"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={barcode}
+              onChange={(event) => handleBarcodeChange(event.target.value)}
+              aria-invalid={fieldErrors.barcode || takenBy ? true : undefined}
+              aria-describedby={
+                fieldErrors.barcode
+                  ? `${barcodeHintId} ${barcodeTakenId} ${barcodeErrorId}`
+                  : `${barcodeHintId} ${barcodeTakenId}`
+              }
+            />
+            <ScanCodeButton onScan={handleBarcodeChange} />
+          </div>
           <p id={barcodeHintId} className="mt-1 text-sm text-muted-foreground">
             {t("barcodeHint")}
           </p>

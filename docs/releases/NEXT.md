@@ -74,6 +74,9 @@ producto en cuanto lo escaneas, con la cantidad que pongas (1 si la dejas vacía
 y vuelve a abrir la cámara para el siguiente: una bolsa de la compra se
 guarda escaneando.
 
+Al crear o editar un producto, el campo **Código de barras** tiene también
+**Escanear**: la cámara lo rellena con el código que lee.
+
 ## English
 
 > [!CAUTION]
@@ -137,3 +140,6 @@ chosen.
 **Scan mode**, on Add stock and Record use, saves each product as soon as
 it is scanned, with the quantity given (1 if left empty), and opens the
 camera again for the next: a bag of shopping is put away scan by scan.
+
+Creating or editing a product, the **Barcode** field has **Scan** too: the
+camera fills it in with the code it reads.

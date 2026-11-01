@@ -3,6 +3,7 @@
 import { useDeferredValue, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { ScanCodeButton } from "@/components/barcode/ScanCodeButton";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
@@ -371,12 +372,15 @@ function Fields({
         />
       </Field>
       <Field id={barcodeId} label={t("barcodeLabel")}>
-        <Input
-          id={barcodeId}
-          inputMode="numeric"
-          onChange={(e) => setBarcode(e.target.value)}
-          value={barcode}
-        />
+        <div className="flex gap-2">
+          <Input
+            id={barcodeId}
+            inputMode="numeric"
+            onChange={(e) => setBarcode(e.target.value)}
+            value={barcode}
+          />
+          <ScanCodeButton onScan={setBarcode} />
+        </div>
         {/* Always mounted, empty when silent. */}
         <p
           aria-live="polite"
