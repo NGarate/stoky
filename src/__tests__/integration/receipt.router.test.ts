@@ -8,7 +8,8 @@ import {
   beforeEach,
 } from "bun:test";
 import { TRPCError } from "@trpc/server";
-import { readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { pngClaiming, pngOf } from "../utils/png";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 import { MatchStatus, ReceiptStatus } from "@/generated/prisma/client";
@@ -29,7 +30,7 @@ import { num } from "../utils/amount";
 /**
  * The receipt router, procedure by procedure.
  *
- * It is the largest router in the project — eight procedures — and it was
+ * It is the largest router in the project — nine procedures — and it was
  * the least covered: 28.6% of its functions and 19.5% of its lines, against
  * 90% for the integration tier as a whole. The pipeline's *services* were
  * well tested and the browser suite walked the screens, so what was missing
@@ -717,6 +718,58 @@ describe("receipt.getStatus", () => {
 
     await expectCode(
       () => outsider.receipt.getStatus({ receiptId: receipt.id }),
+      "NOT_FOUND",
+    );
+  });
+});
+
+describe("receipt.getImage", () => {
+  const bytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+
+  /** A receipt whose photograph is on disk, removed again by `finally`. */
+  async function withPhoto(test: (receiptId: string) => Promise<void>) {
+    const { receipt } = await seedReceipt({});
+    await mkdir(dirname(receipt.imagePath), { recursive: true });
+    await writeFile(receipt.imagePath, bytes);
+    try {
+      await test(receipt.id);
+    } finally {
+      await rm(receipt.imagePath, { force: true });
+    }
+  }
+
+  it("returns the stored photograph as a JPEG data URL", () =>
+    withPhoto(async (receiptId) => {
+      const url = await caller.receipt.getImage({ receiptId });
+      expect(url).toBe(`data:image/jpeg;base64,${bytes.toString("base64")}`);
+    }));
+
+  it("is NOT_FOUND for another household's receipt, though its file is there", () =>
+    withPhoto(async (receiptId) => {
+      await expectCode(
+        () => outsider.receipt.getImage({ receiptId }),
+        "NOT_FOUND",
+      );
+    }));
+
+  it("is refused for a kitchen account, which never sees what the ticket prints", () =>
+    withPhoto(async (receiptId) => {
+      await expectCode(
+        () => kitchen.receipt.getImage({ receiptId }),
+        "FORBIDDEN",
+      );
+    }));
+
+  it("is NOT_FOUND when the file is gone or the receipt does not exist", async () => {
+    const { receipt } = await seedReceipt({});
+    await rm(receipt.imagePath, { force: true });
+
+    await expectCode(
+      () => caller.receipt.getImage({ receiptId: receipt.id }),
+      "NOT_FOUND",
+    );
+    await expectCode(
+      () => caller.receipt.getImage({ receiptId: "does-not-exist" }),
       "NOT_FOUND",
     );
   });

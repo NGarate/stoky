@@ -1304,12 +1304,16 @@ Verified against the files named in each row.
   directory on the `uploads` volume, so a filename cannot be guessed and cannot
   be used for path traversal.
 - No HTTP route serves the uploads directory. Nothing in `src/app` reads it, and
-  it is not inside `public/`. Whatever one day serves a receipt image checks
-  the household first, and the response that carries the bytes declares
-  `Content-Type: image/jpeg`, `X-Content-Type-Options: nosniff`, a
-  `Content-Disposition` with a fixed filename and `Cache-Control: private,
-  no-store` — the walk above narrows what a stored file can carry, it does not
-  make serving it any less careful.
+  it is not inside `public/`. The one reader is `receipt.getImage`, a
+  `writeProcedure` query (KITCHEN is refused: the photograph prints what
+  `rawOcrText` holds, below) that finds the receipt by id *and* household,
+  reads the path the row names — never one the caller sends — and returns the
+  bytes as a `data:image/jpeg;base64,` URL inside the tRPC JSON. The type is
+  fixed by the server, not taken from the file, so nothing is sniffed; the
+  response is `Cache-Control: no-store` like every tRPC answer
+  (`src/server/http/trpc-handler.ts`); and the query is not among the
+  persisted offline reads (`src/lib/offline/persist.ts`), so the photograph is
+  never written to the device.
 
 ### Data minimisation — receipt reads
 
@@ -2367,7 +2371,7 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 (`AppSession`) non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 72 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+and all 73 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
 pinning every one against the matrix rather than sampling, and failing when the
 count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the session, so a

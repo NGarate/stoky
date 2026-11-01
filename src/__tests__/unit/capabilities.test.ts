@@ -146,6 +146,9 @@ const EXPECTED: Record<string, Record<string, string>> = {
   },
   "receipt.ts": {
     getStatus: "householdProcedure",
+    // The photograph carries what rawOcrText does, which the kitchen never
+    // receives: only someone who may review a receipt sees it.
+    getImage: "writeProcedure",
     getReceiptWithItems: "householdProcedure",
     getAppliedSummary: "householdProcedure",
     list: "householdProcedure",

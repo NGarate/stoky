@@ -24,6 +24,9 @@ let applyCalls = 0;
 /** When true, every mutation reports a failure instead of succeeding. */
 let failing = false;
 
+/** The signed-in account's role, which decides whether the photograph is asked for. */
+let role = "MEMBER";
+
 interface Callbacks {
   onSuccess?: () => void | Promise<void>;
   onError?: () => void;
@@ -92,6 +95,7 @@ mock.module("@/lib/offline/queue-context", () => ({
 
 mock.module("@/lib/trpc/client", () => ({
   api: {
+    auth: { me: { useQuery: () => ({ data: { role } }) } },
     useUtils: () => ({
       receipt: {
         invalidate: async () => void invalidated.push("receipt"),
@@ -107,6 +111,12 @@ mock.module("@/lib/trpc/client", () => ({
     receipt: {
       getReceiptWithItems: {
         useQuery: () => ({ data: receipt, isLoading: false }),
+      },
+      // Answers only when asked: a disabled query has no data.
+      getImage: {
+        useQuery: (_input: unknown, opts?: { enabled?: boolean }) => ({
+          data: opts?.enabled ? "data:image/jpeg;base64,/9j/" : undefined,
+        }),
       },
       confirmAll: {
         useMutation: (opts?: Callbacks) => ({
@@ -170,6 +180,7 @@ beforeEach(() => {
   confirmAllCalls.length = 0;
   applyCalls = 0;
   failing = false;
+  role = "MEMBER";
 });
 
 afterEach(cleanup);
@@ -245,6 +256,25 @@ describe("finishing a receipt review", () => {
     } finally {
       receipt.status = status;
     }
+  });
+});
+
+describe("the receipt photograph", () => {
+  it("is there to check the lines against, folded away until asked for", () => {
+    render();
+
+    const photo = screen.getByRole("img", { name: es.receipts.photoAlt });
+    expect(photo.getAttribute("src")).toStartWith("data:image/jpeg;base64,");
+    expect(photo.closest("details")?.hasAttribute("open")).toBe(false);
+  });
+
+  it("is not asked for on a kitchen account, which the server would refuse", () => {
+    role = "KITCHEN";
+    render();
+
+    expect(
+      screen.queryByRole("img", { name: es.receipts.photoAlt }),
+    ).toBeAbsent();
   });
 });
 

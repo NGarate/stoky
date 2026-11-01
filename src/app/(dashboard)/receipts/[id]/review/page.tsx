@@ -11,6 +11,7 @@ import { RouteState } from "@/components/household/RouteState";
 import { isItemReviewed } from "@/lib/receipts";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
+import { ReceiptPhoto } from "@/components/receipt/ReceiptPhoto";
 import { ReviewCard } from "@/components/receipt/ReviewCard";
 import { ReceiptStatusStep } from "@/components/receipt/ReceiptStatus";
 import { formatDate } from "@/lib/dates";
@@ -192,6 +193,8 @@ export default function ReviewPage() {
       <div className="mb-6">
         <ReceiptStatusStep status={receipt.status} />
       </div>
+
+      <ReceiptPhoto receiptId={receiptId} />
 
       {receipt.status === "APPLIED" ? (
         <div className="text-center py-8 rounded-lg border border-ok-foreground bg-ok mb-6">

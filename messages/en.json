@@ -564,6 +564,8 @@
     "title": "Receipts",
     "upload": "Upload receipt",
     "review": "Review receipt",
+    "photo": "See the receipt photo",
+    "photoAlt": "Receipt photo",
     "store": "Store",
     "purchaseDate": "Purchase date",
     "uploadedAt": "Uploaded",

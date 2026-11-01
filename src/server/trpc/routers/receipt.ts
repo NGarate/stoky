@@ -425,6 +425,49 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   /**
+   * The photograph, as a `data:` URL the review screen draws beside the lines,
+   * so a misread price or a line OCR skipped can be checked against the paper.
+   *
+   * This is the "served only through an authenticated query" half of the
+   * upload's promise: the file is read from the path the row names, never
+   * from anything the caller sends. `writeProcedure` rather than the
+   * household tier of the reads above, because the photograph shows
+   * everything `rawOcrText` holds — the masked card, the loyalty number, the
+   * cashier — which those reads keep from the kitchen (see `RECEIPT_HEADER`),
+   * and only someone who may review a receipt needs to see it.
+   */
+  getImage: writeProcedure
+    .input(z.object({ receiptId: z.string().max(MAX_ID_LENGTH) }))
+    .query(async ({ ctx, input }) => {
+      const receipt = await ctx.db.receipt.findFirst({
+        where: { id: input.receiptId, householdId: ctx.householdId },
+        select: { imagePath: true },
+      });
+
+      if (!receipt) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Receipt not found",
+        });
+      }
+
+      const fs = await import("node:fs");
+      let bytes: Buffer;
+      try {
+        bytes = await fs.promises.readFile(receipt.imagePath);
+      } catch {
+        // The row outlived its file: a volume restored without its photos.
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Receipt image not found",
+        });
+      }
+
+      // Every stored photograph is a JPEG `upload` re-encoded itself.
+      return `data:image/jpeg;base64,${bytes.toString("base64")}`;
+    }),
+
+  /**
    * A receipt with its lines and each line's candidates — the review screen.
    *
    * The one read here that assembles rather than fetches: candidates come from

@@ -94,6 +94,14 @@ siquiera aparecían para elegir. Stoky las convierte a JPEG al recibirlas y
 el ticket se lee igual que cualquier otra foto. En algunos navegadores la
 vista previa de una foto HEIC no se muestra, pero la subida funciona.
 
+### Revisa el ticket con su foto delante
+
+Al revisar un ticket, **Ver la foto del ticket** despliega la foto que
+subiste, para comprobar un precio mal leído o un producto que se saltó la
+lectura automática sin buscar el papel. La ven quienes pueden revisar
+tickets; la cuenta de cocina no, porque la foto muestra lo que imprime el
+ticket, como la tarjeta o la tarjeta de cliente.
+
 ## English
 
 > [!CAUTION]
@@ -177,3 +185,11 @@ many Android phones save in, which used to be left out of the picker
 altogether. Stoky converts them to JPEG on arrival and the receipt is read
 like any other photo. Some browsers cannot show a HEIC photo's preview, but
 the upload works.
+
+### Review a receipt with its photo in front of you
+
+When reviewing a receipt, **See the receipt photo** opens the photo you
+uploaded, so a misread price or a line the automatic reading skipped can be
+checked without finding the paper. Anyone who can review receipts sees it;
+the kitchen account does not, because the photo shows what the receipt
+prints, such as the card or the loyalty card.

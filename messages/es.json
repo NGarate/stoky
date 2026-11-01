@@ -564,6 +564,8 @@
     "title": "Tickets",
     "upload": "Subir ticket",
     "review": "Revisar ticket",
+    "photo": "Ver la foto del ticket",
+    "photoAlt": "Foto del ticket",
     "store": "Tienda",
     "purchaseDate": "Fecha de compra",
     "uploadedAt": "Subido",
