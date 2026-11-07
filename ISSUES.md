@@ -491,12 +491,16 @@ it. `workerOptions()` in `ocr.ts` supplies `langPath`, `cachePath` and
 makes tesseract.js look for `spa.traineddata.gz`, find nothing, and go back to
 the network.
 
-**A different model, deliberately.** tesseract.js defaults to
-`@tesseract.js-data/spa/4.0.0` — over 12 MB on disk, carrying the legacy
-engine's data. This bakes in `tessdata_fast` at 2.3 MB, the LSTM model Tesseract
-recommends for printed text. Nothing here measures OCR accuracy: the parser
-tests run against fixed strings rather than OCR output. The trade is reasoned,
-not measured, and is the first thing to look at if receipt parsing degrades.
+**The model, measured (2026-11-07).** This first baked `tessdata_fast` at
+2.3 MB, a reasoned rather than measured trade. Measured on 40 receipt photos
+(`docs/superpowers/plans/2026-11-06-long-receipts-in-parts.md` §0, "the
+model"), it scored 0.891 against 0.929 for `@tesseract.js-data/spa`
+`4.0.0_best_int` (3.4 MB, LSTM only) — the model tesseract.js itself
+downloads in development, which every OCR setting had been tuned with — and
+read a pharmacy ticket at 0.05 against 0.95. The image now bakes `best_int`.
+`tessdata_best` (13.6 MB) scored 0.919; the full `tessdata` scored the same as
+`best_int` with the same network at five times the file, and its legacy
+engine scored 0.811 and is not deterministic across workers.
 
 **Development is unaffected**: with no model present, `workerOptions()` returns
 nothing and tesseract.js behaves as before. Pointing `langPath` at a directory

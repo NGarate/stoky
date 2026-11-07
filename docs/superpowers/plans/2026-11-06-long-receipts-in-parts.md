@@ -112,7 +112,8 @@ is the application as it is.
   measured trade, and it is pinned in `ocr-prepare.test.ts`.
 - **Costco's `4` read as `9`** remains (§1b): Costco 0.73 and 0.87, the rest
   0.95–1.
-- **The model.** Development reads with `@tesseract.js-data/spa` 4.0.0
+- ~~**The model.**~~ Resolved 2026-11-07: the image bakes `best_int`.
+  Development reads with `@tesseract.js-data/spa` 4.0.0
   `best_int`, which tesseract.js downloads by default and is the
   `spa.traineddata` at the repository root (SHA-256 `00623777…`). The
   production image bakes `tessdata_fast` 4.1.0 (`6f2e04d0…`). Every setting
@@ -120,8 +121,29 @@ is the application as it is.
   with it and 0.891 with the second, and the two models misread different
   digits (`4`→`9` with one, `5`→`3` with the other). Baking `best_int` would
   give production what was measured, at 3.4 MB against 2.3 MB and somewhat
-  slower readings (16 s against 12 s a ticket). That is the owner's call,
-  and a `Dockerfile` change of its own.
+  slower readings. That is the owner's call, and a `Dockerfile` change of its
+  own. Every Spanish model there is, measured on 2026-11-07 (the application
+  as committed, 40 photos; seconds for six readings of the long Costco photo
+  on an idle 8-core host; memory is RSS):
+
+  | Model | File | Score (40) | Real / validation / degraded | Six readings, 1 → 2 workers | Memory per worker |
+  |---|---|---|---|---|---|
+  | `tessdata_fast` 4.1.0 (baked until 2026-11-07) | 2.3 MB | 0.891 | 0.91 / 0.53 / 0.91 | 26 → 14 s | ~120 MB |
+  | `@tesseract.js-data/spa` 4.0.0 `best_int` (**baked since 2026-11-07**) | 3.4 MB | **0.929** | 0.94 / 0.97 / 0.92 | 41 → 22 s | ~125 MB |
+  | `tessdata_best` (float) | 13.6 MB | 0.919 | 0.89 / 0.97 / 0.92 | 60 → 32 s | ~150 MB |
+  | `tessdata` 4.0.0, LSTM engine | 18.3 MB | 0.929 | 0.94 / 0.97 / 0.92 | 40 → 22 s | ~135 MB |
+  | `tessdata` 4.0.0, legacy engine | 18.3 MB | 0.811 | 0.82 / 0.59 / 0.82 | 72 → 41 s | ~160 MB |
+  | `tessdata` 4.0.0, both engines | 18.3 MB | 0.920 | 0.92 / 0.97 / 0.92 | 42 → 23 s | ~150 MB |
+
+  `tessdata`'s LSTM engine scores exactly as `best_int` does, at five times
+  the file: it is the same network (the weights are identical; `best_int`
+  stores its scale factors at single precision), plus the legacy engine's
+  data. The legacy engine is worse, slower, and **not deterministic**: two
+  workers gave different text for the same images, because it adapts to what
+  it has already read. By ticket, `best_int` against `fast`: better on the
+  pharmacy (0.05 → 0.95) and on 8875 and its copies (0.65 → 1); worse on the
+  old Costco crop and most of its copies (0.87 → 0.73, its small and
+  shadowed copies 0.83 → 0.60); the rest within 0.05.
 
 ---
 

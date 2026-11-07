@@ -298,9 +298,9 @@ export interface OcrReading {
  * wrong ones agree. **Only on a prepared ticket**: on a plain crop the same six
  * scored 0.29 against 0.35 for two passes, losing faint text the flattening
  * restores. End to end, preparation and all, over those 10 tickets and 30
- * copies of them turned, darkened, shrunk and shadowed: 0.321 before, 0.891
- * now with the model the image bakes, 0.929 with the development model the
- * subsets were chosen with. Re-measure when tickets are added: ten tickets
+ * copies of them turned, darkened, shrunk and shadowed: 0.321 before (with
+ * `tessdata_fast`), 0.929 now with the `best_int` model the image bakes and
+ * the subsets were chosen with (0.891 with `tessdata_fast`). Re-measure when tickets are added: ten tickets
  * choose six, they do not prove it.
  */
 // In this order, the one measured: `bestReading` keeps the first of equals,
@@ -613,8 +613,8 @@ export const DEFAULT_OCR_WORKERS = 2;
  *
  * Each worker is a thread with its own copy of the model, about 120 MB, and
  * reads one image at a time. Measured with six readings of one long ticket on
- * an 8-core machine, with the model the image bakes: 1 worker 22.4 s, 2
- * 12.6 s, 3 10.1 s; past three, the slowest single reading is what is left.
+ * an 8-core machine, with the model the image bakes: 1 worker 37.9 s, 2
+ * 20.7 s, 3 15.7 s; past three, the slowest single reading is what is left.
  * Two by default, because the release bundle gives the application 1 GiB.
  */
 export function ocrWorkers(
