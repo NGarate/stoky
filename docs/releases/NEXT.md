@@ -136,9 +136,12 @@ las ofertas, y los tickets en catalán. Ya no apunta como producto nada de
 lo que va después del total —el pago, el desglose del IVA—, y el total se
 toma de donde el ticket coincide consigo mismo: la línea TOTAL, el pago con
 tarjeta o en efectivo, el desglose del IVA y la suma de los productos.
-Además, la foto se recorta al ticket antes de leerla, para que la mesa no
-se lea como texto, y se lee de dos maneras para quedarse con la que cuadra;
-una foto del revés se gira sola. Medido con 63 tickets reales de once
+Además, antes de leer la foto se endereza el ticket (si está inclinado o
+torcido se convierte en un rectángulo), se recorta para que la mesa no se lea
+como texto, se igualan la luz, las sombras y los pliegues, se gira solo
+(de lado o del revés, según la forma del ticket y lo legible del texto) y se
+estiran las líneas curvadas; luego se lee de dos maneras para quedarse con la
+que cuadra. Medido con 63 tickets reales de once
 cadenas leídos a mano: los productos leídos con nombre y precio correctos
 pasan del 34 % al 60 %, y el total correcto, del 13 % al 58 %. Leer un
 ticket tarda algo más, porque se lee dos veces. Lo que la lectura no
@@ -268,9 +271,11 @@ Nothing printed after the total — the payment, the VAT breakdown — is
 booked as a product any more, and the total is taken from where the
 receipt agrees with itself: the TOTAL line, the card or cash payment, the
 VAT breakdown and the sum of the products. The photo is also cropped to the
-receipt before it is read, so the table is not read as text, and it is read
-two ways to keep the one that adds up; an upside-down photo is turned on its
-own. Measured on 63 real receipts from eleven chains, read by hand: products
+receipt before it is read — straightened into a rectangle when it is tilted
+or skewed, cropped so the table is not read as text, its light, shadows and
+folds evened out, turned the right way up (on its side or upside down, by its
+shape and by how legible its text is) and its curled lines straightened —
+and then read two ways to keep the one that adds up. Measured on 63 real receipts from eleven chains, read by hand: products
 read with the right name and price went from 34% to 60%, and the right
 total from 13% to 58%. Reading a receipt takes somewhat longer, because it is
 read twice. Whatever the reading gets wrong can still be corrected in the

@@ -670,3 +670,958 @@ export function decodePng(
   }
   return { width, height, channels };
 }
+
+// ---------------------------------------------------------------------------
+// Preparing a receipt photograph for OCR.
+//
+// Everything below works on a copy held in memory and hands Tesseract a PNG;
+// the stored photograph is never changed. The steps, their order and their
+// numbers come from the bench in `test-tickets/bench/` (its README and
+// `docs/superpowers/plans/2026-11-06-long-receipts-in-parts.md` §0): on 9 real
+// tickets and 30 degraded copies of them, the parse score went from 27% with
+// a crop alone to 89% with these steps. `ocr.ts` runs them in order:
+// `ticketInGrey` → `flattenedLight` → turned upright → `dewarped`.
+// ---------------------------------------------------------------------------
+
+/** An 8-bit greyscale image, row by row. */
+export interface Grey {
+  width: number;
+  height: number;
+  pixels: Uint8Array;
+}
+
+/** `image` at `width` pixels across as rows, in grey when asked. Rows are copies. */
+async function decodedRows(image: Buffer, width: number, grey: boolean) {
+  let resized = new Bun.Image(image, { maxPixels: MAX_PIXELS }).resize(width);
+  if (grey) resized = resized.modulate({ saturation: 0 });
+  const png = Buffer.from(await resized.png().toBuffer());
+  const rows: Uint8Array[] = [];
+  const size = decodePng(png, (_, row) => rows.push(Uint8Array.from(row)));
+  return { ...size, rows };
+}
+
+/** At most this many pixels in a prepared ticket: Tesseract's memory is per pixel. */
+const TICKET_MAX_PIXELS = 20_000_000;
+
+/**
+ * The ticket cropped to its paper (`findPaper`), turned by `turn`, grey, and
+ * scaled up to at least `width` across — never down. The crop is the
+ * fallback when the corners cannot be trusted (`straightenedTicket`).
+ */
+export async function croppedTicket(
+  image: Buffer,
+  width: number,
+  turn: 0 | 90 = 0,
+): Promise<Grey> {
+  const { width: photoWidth, height: photoHeight } =
+    await readImageMetadata(image);
+  if (!photoWidth || !photoHeight) {
+    throw new InvalidInputError("Image has no dimensions");
+  }
+  const paper = await findPaper(image, photoWidth, photoHeight);
+  const source = paper ? await cropImage(image, paper) : image;
+  const paperWidth = paper?.width ?? photoWidth;
+  const paperHeight = paper?.height ?? photoHeight;
+  const across = turn === 90 ? paperHeight : paperWidth;
+  const down = turn === 90 ? paperWidth : paperHeight;
+  const scale = Math.max(
+    1,
+    Math.min(width / across, Math.sqrt(TICKET_MAX_PIXELS / (across * down))),
+  );
+  const png = await new Bun.Image(source, { maxPixels: MAX_PIXELS })
+    .rotate(turn)
+    .resize(Math.round(across * scale))
+    .modulate({ saturation: 0 })
+    .png()
+    .toBuffer();
+  return greyOfPng(Buffer.from(png));
+}
+
+/** A PNG's first channel as `Grey`. */
+function greyOfPng(png: Buffer): Grey {
+  const rows: Uint8Array[] = [];
+  const { width, height } = decodePng(png, (_, row, channels) => {
+    const grey = new Uint8Array(row.length / channels);
+    for (let x = 0; x < grey.length; x++) grey[x] = row[x * channels]!;
+    rows.push(grey);
+  });
+  const pixels = new Uint8Array(width * height);
+  rows.forEach((row, y) => pixels.set(row, y * width));
+  return { width, height, pixels };
+}
+
+/**
+ * `grey` as a PNG, scaled to `width` pixels across when given.
+ *
+ * A PNG and not a BMP: Tesseract took over 40 s on a large 32-bit BMP that it
+ * read in 1.8 s as a PNG.
+ */
+export async function greyPng(grey: Grey, width?: number): Promise<Buffer> {
+  const bitmap = emptyBitmap(grey.width, grey.height);
+  const out = bitmap.subarray(BMP_HEADER_BYTES);
+  for (let i = 0; i < grey.pixels.length; i++) {
+    const to = i * 4;
+    out[to] = out[to + 1] = out[to + 2] = grey.pixels[i]!;
+    out[to + 3] = 255;
+  }
+  let image = new Bun.Image(bitmap, { maxPixels: MAX_PIXELS });
+  if (width !== undefined) image = image.resize(width);
+  return Buffer.from(await image.png().toBuffer());
+}
+
+/** Half a turn. */
+export function turnedHalf(grey: Grey): Grey {
+  return { ...grey, pixels: grey.pixels.slice().reverse() };
+}
+
+/** A quarter turn clockwise. */
+export function turnedQuarter(grey: Grey): Grey {
+  const { width, height, pixels } = grey;
+  const out = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      out[x * height + (height - 1 - y)] = pixels[y * width + x]!;
+    }
+  }
+  return { width: height, height: width, pixels: out };
+}
+
+/** The middle `fraction` of the rows: enough lines to judge, at a fraction of the cost. */
+export function middleBand(grey: Grey, fraction = 0.3): Grey {
+  const rows = Math.max(1, Math.round(grey.height * fraction));
+  const top = Math.round((grey.height - rows) / 2);
+  return {
+    width: grey.width,
+    height: rows,
+    pixels: grey.pixels.slice(top * grey.width, (top + rows) * grey.width),
+  };
+}
+
+/** One value per block of a block grid, and the grid's size. */
+interface Blocks {
+  across: number;
+  down: number;
+  values: Float32Array;
+}
+
+/** Each block replaced by `pick` over the blocks within `radius` of it. */
+function overNeighbours(
+  blocks: Blocks,
+  radius: number,
+  pick: (values: number[]) => number,
+): Blocks {
+  const { across, down, values } = blocks;
+  const out = new Float32Array(across * down);
+  for (let y = 0; y < down; y++) {
+    for (let x = 0; x < across; x++) {
+      const near: number[] = [];
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const yy = y + dy;
+          const xx = x + dx;
+          if (yy >= 0 && yy < down && xx >= 0 && xx < across) {
+            near.push(values[yy * across + xx]!);
+          }
+        }
+      }
+      out[y * across + x] = pick(near);
+    }
+  }
+  return { across, down, values: out };
+}
+
+const largest = (values: number[]) => Math.max(...values);
+const smallest = (values: number[]) => Math.min(...values);
+const mean = (values: number[]) =>
+  values.reduce((total, value) => total + value, 0) / values.length;
+
+/** A block grid's value at pixel (x, y), interpolated between block centres. */
+function blockValueAt(blocks: Blocks, block: number, x: number, y: number) {
+  const { across, down, values } = blocks;
+  const fy = Math.min(down - 1, Math.max(0, (y + 0.5) / block - 0.5));
+  const fx = Math.min(across - 1, Math.max(0, (x + 0.5) / block - 0.5));
+  const y0 = Math.floor(fy);
+  const x0 = Math.floor(fx);
+  const y1 = Math.min(down - 1, y0 + 1);
+  const x1 = Math.min(across - 1, x0 + 1);
+  const ty = fy - y0;
+  const tx = fx - x0;
+  return (
+    (values[y0 * across + x0]! * (1 - tx) + values[y0 * across + x1]! * tx) *
+      (1 - ty) +
+    (values[y1 * across + x0]! * (1 - tx) + values[y1 * across + x1]! * tx) * ty
+  );
+}
+
+/**
+ * The paper made evenly white and the ink evenly black: shadows, folds,
+ * wrinkles and faint print undone.
+ *
+ * - **The paper's own brightness is divided out.** It is estimated per block
+ *   (the 90th percentile, so one glint does not make a block white), spread
+ *   over its neighbours so bold print and black boxes do not count as
+ *   shadow, and smoothed. A pixel as bright as its paper is white whatever
+ *   the light on it.
+ * - **Table or cloth at the crop's edge is blanked**: a block far darker than
+ *   the paper within two blocks of the edge. Only there — a shadow across the
+ *   ticket is dark too, and blanking it erased the text under it.
+ * - **The ink is stretched per neighbourhood**, to how dark the darkest ink
+ *   around it is (never lighter than 0.7 of the paper, or the grain of empty
+ *   paper would be stretched too), so faint blue print comes out as firmly as
+ *   black. Then a gamma of 1.6, and anything above 0.88 of the paper is white.
+ */
+export function flattenedLight(grey: Grey): Grey {
+  const { width, height, pixels } = grey;
+  const block = Math.max(8, Math.round(width / 90));
+  const across = Math.ceil(width / block);
+  const down = Math.ceil(height / block);
+  const raw = new Float32Array(across * down);
+  const histogram = new Uint32Array(256);
+  for (let by = 0; by < down; by++) {
+    for (let bx = 0; bx < across; bx++) {
+      histogram.fill(0);
+      let count = 0;
+      for (let y = by * block; y < Math.min(height, (by + 1) * block); y++) {
+        for (let x = bx * block; x < Math.min(width, (bx + 1) * block); x++) {
+          histogram[pixels[y * width + x]!]!++;
+          count++;
+        }
+      }
+      let seen = 0;
+      let value = 255;
+      for (; value > 0; value--) {
+        seen += histogram[value]!;
+        if (seen >= count * 0.1) break;
+      }
+      raw[by * across + bx] = value;
+    }
+  }
+  let paper: Blocks = { across, down, values: raw.slice() };
+  paper = overNeighbours(paper, 2, largest);
+  paper = overNeighbours(paper, 1, mean);
+  paper = overNeighbours(paper, 1, mean);
+
+  const sorted = Float32Array.from(raw).sort();
+  const paperWhite = sorted[Math.floor(sorted.length * 0.95)]!;
+  const cloth = raw.map((value, index) => {
+    const x = index % across;
+    const y = Math.floor(index / across);
+    const nearEdge = x < 2 || y < 2 || x >= across - 2 || y >= down - 2;
+    return value < paperWhite * 0.6 && nearEdge ? 1 : 0;
+  });
+
+  // Each pixel over its paper: 1 is paper.
+  const ratio = new Float32Array(width * height);
+  for (let y = 0; y < height; y++) {
+    const blockRow = Math.min(down - 1, Math.floor(y / block)) * across;
+    for (let x = 0; x < width; x++) {
+      const background = blockValueAt(paper, block, x, y);
+      const isCloth =
+        cloth[blockRow + Math.min(across - 1, Math.floor(x / block))];
+      ratio[y * width + x] = isCloth
+        ? 1
+        : Math.min(1, pixels[y * width + x]! / Math.max(1, background));
+    }
+  }
+
+  const darkest = new Float32Array(across * down);
+  for (let by = 0; by < down; by++) {
+    for (let bx = 0; bx < across; bx++) {
+      const values: number[] = [];
+      for (let y = by * block; y < Math.min(height, (by + 1) * block); y += 2) {
+        for (
+          let x = bx * block;
+          x < Math.min(width, (bx + 1) * block);
+          x += 2
+        ) {
+          values.push(ratio[y * width + x]!);
+        }
+      }
+      values.sort((a, b) => a - b);
+      darkest[by * across + bx] = Math.min(
+        0.7,
+        values[Math.floor(values.length * 0.02)] ?? 0.7,
+      );
+    }
+  }
+  let ink: Blocks = { across, down, values: darkest };
+  ink = overNeighbours(ink, 2, smallest);
+  ink = overNeighbours(ink, 1, mean);
+
+  const white = 0.88;
+  const out = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const value = ratio[y * width + x]!;
+      if (value >= white) {
+        out[y * width + x] = 255;
+        continue;
+      }
+      const floor = blockValueAt(ink, block, x, y);
+      const stretched = Math.max(0, (value - floor) / (white - floor));
+      out[y * width + x] = Math.round(255 * Math.pow(stretched, 1.6));
+    }
+  }
+  return { width, height, pixels: out };
+}
+
+type Point = [number, number];
+
+/** The brightest value within `radius` pixels of each pixel. */
+function windowMax(
+  values: Uint8Array,
+  width: number,
+  height: number,
+  radius: number,
+): Uint8Array {
+  const across = new Uint8Array(width * height);
+  const out = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let best = 0;
+      for (
+        let d = Math.max(0, x - radius);
+        d <= Math.min(width - 1, x + radius);
+        d++
+      ) {
+        best = Math.max(best, values[y * width + d]!);
+      }
+      across[y * width + x] = best;
+    }
+  }
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let best = 0;
+      for (
+        let d = Math.max(0, y - radius);
+        d <= Math.min(height - 1, y + radius);
+        d++
+      ) {
+        best = Math.max(best, across[d * width + x]!);
+      }
+      out[y * width + x] = best;
+    }
+  }
+  return out;
+}
+
+/**
+ * Which pixels of a small probe are paper, and how much brighter paper is
+ * than what is around it.
+ *
+ * Paper is grey (white-balanced, little colour) and bright **against its own
+ * neighbourhood**: at least 0.7 of the brightest pixel within a twelfth of the
+ * probe, and never darker than 70 of 255. Against its neighbourhood rather
+ * than the whole photograph because a ticket half in shadow is darker than
+ * the lit table beside its other half. `separation` is paper over background
+ * brightness at the photograph's Otsu cut: near 1, nothing stands out.
+ */
+function paperMask(
+  rows: Uint8Array[],
+  width: number,
+  height: number,
+  channels: number,
+) {
+  const histograms = [0, 1, 2].map(() => new Uint32Array(256));
+  const channel = (row: Uint8Array, x: number, c: number) =>
+    row[x * channels + (channels < 3 ? 0 : c)]!;
+  for (const row of rows) {
+    for (let x = 0; x < width; x++) {
+      for (let c = 0; c < 3; c++) histograms[c]![channel(row, x, c)]!++;
+    }
+  }
+  const whites = histograms.map((histogram) => {
+    const target = width * height * 0.95;
+    let seen = 0;
+    for (let value = 0; value < 256; value++) {
+      seen += histogram[value]!;
+      if (seen >= target) return value || 1;
+    }
+    return 255;
+  });
+  const bright = new Uint8Array(width * height);
+  const grey = new Uint8Array(width * height);
+  const brightness = new Uint32Array(256);
+  rows.forEach((row, y) => {
+    for (let x = 0; x < width; x++) {
+      const balanced = [0, 1, 2].map((c) =>
+        Math.min(1, channel(row, x, c) / whites[c]!),
+      );
+      const max = Math.max(...balanced);
+      bright[y * width + x] = Math.round(max * 255);
+      grey[y * width + x] = max - Math.min(...balanced) < 0.22 * max ? 1 : 0;
+      brightness[bright[y * width + x]!]!++;
+    }
+  });
+  const total = width * height;
+  let sumAll = 0;
+  for (let value = 0; value < 256; value++)
+    sumAll += value * brightness[value]!;
+  let below = 0;
+  let sumBelow = 0;
+  let bestBetween = 0;
+  let separation = 0;
+  for (let value = 0; value < 256; value++) {
+    below += brightness[value]!;
+    if (!below || below === total) continue;
+    sumBelow += value * brightness[value]!;
+    const meanBelow = sumBelow / below;
+    const meanAbove = (sumAll - sumBelow) / (total - below);
+    const between = below * (total - below) * (meanBelow - meanAbove) ** 2;
+    if (between > bestBetween) {
+      bestBetween = between;
+      separation = meanAbove / Math.max(1, meanBelow);
+    }
+  }
+  const near = windowMax(bright, width, height, Math.round(width / 12));
+  const mask = new Uint8Array(width * height);
+  for (let i = 0; i < total; i++) {
+    mask[i] = grey[i] && bright[i]! >= Math.max(70, 0.7 * near[i]!) ? 1 : 0;
+  }
+  return { mask, separation };
+}
+
+/** The mask closed (the text's holes filled) and cut to its largest connected part. */
+function largestPart(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+): Uint8Array {
+  const morph = (source: Uint8Array, radius: number, grow: boolean) => {
+    const across = new Uint8Array(width * height);
+    const out = new Uint8Array(width * height);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let value = grow ? 0 : 1;
+        for (let d = -radius; d <= radius; d++) {
+          const xx = x + d;
+          const s = xx < 0 || xx >= width ? 0 : source[y * width + xx]!;
+          value = grow ? value | s : value & s;
+        }
+        across[y * width + x] = value;
+      }
+    }
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let value = grow ? 0 : 1;
+        for (let d = -radius; d <= radius; d++) {
+          const yy = y + d;
+          const s = yy < 0 || yy >= height ? 0 : across[yy * width + x]!;
+          value = grow ? value | s : value & s;
+        }
+        out[y * width + x] = value;
+      }
+    }
+    return out;
+  };
+  const closed = morph(morph(mask, 3, true), 3, false);
+  const label = new Int32Array(width * height).fill(-1);
+  let best = -1;
+  let bestSize = 0;
+  const stack: number[] = [];
+  for (let i = 0; i < width * height; i++) {
+    if (!closed[i] || label[i]! >= 0) continue;
+    let size = 0;
+    stack.push(i);
+    label[i] = i;
+    while (stack.length) {
+      const j = stack.pop()!;
+      size++;
+      const x = j % width;
+      const y = (j / width) | 0;
+      for (const k of [
+        x > 0 ? j - 1 : -1,
+        x < width - 1 ? j + 1 : -1,
+        y > 0 ? j - width : -1,
+        y < height - 1 ? j + width : -1,
+      ]) {
+        if (k >= 0 && closed[k] && label[k]! < 0) {
+          label[k] = i;
+          stack.push(k);
+        }
+      }
+    }
+    if (size > bestSize) {
+      bestSize = size;
+      best = i;
+    }
+  }
+  const out = new Uint8Array(width * height);
+  for (let i = 0; i < width * height; i++) out[i] = label[i] === best ? 1 : 0;
+  return out;
+}
+
+/** The convex hull, counter-clockwise. */
+function convexHull(points: Point[]): Point[] {
+  const sorted = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o: Point, a: Point, b: Point) =>
+    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower: Point[] = [];
+  const upper: Point[] = [];
+  for (const q of sorted) {
+    while (lower.length >= 2 && cross(lower.at(-2)!, lower.at(-1)!, q) <= 0)
+      lower.pop();
+    lower.push(q);
+  }
+  for (const q of sorted.reverse()) {
+    while (upper.length >= 2 && cross(upper.at(-2)!, upper.at(-1)!, q) <= 0)
+      upper.pop();
+    upper.push(q);
+  }
+  return lower.slice(0, -1).concat(upper.slice(0, -1));
+}
+
+const doubleArea = (a: Point, b: Point, c: Point) =>
+  Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
+
+/** The largest quadrilateral with its corners on the hull. */
+function largestQuad(hull: Point[]): Point[] {
+  const n = hull.length;
+  let best = 0;
+  let quad = hull.slice(0, 4);
+  for (let i = 0; i < n; i++) {
+    for (let k = i + 2; k < n; k++) {
+      let areaOne = 0;
+      let one = -1;
+      let areaTwo = 0;
+      let two = -1;
+      for (let j = i + 1; j < k; j++) {
+        const area = doubleArea(hull[i]!, hull[j]!, hull[k]!);
+        if (area > areaOne) {
+          areaOne = area;
+          one = j;
+        }
+      }
+      for (let l = k + 1; l < n + i; l++) {
+        const area = doubleArea(hull[i]!, hull[l % n]!, hull[k]!);
+        if (area > areaTwo) {
+          areaTwo = area;
+          two = l % n;
+        }
+      }
+      if (one >= 0 && two >= 0 && areaOne + areaTwo > best) {
+        best = areaOne + areaTwo;
+        quad = [hull[i]!, hull[one]!, hull[k]!, hull[two]!];
+      }
+    }
+  }
+  return quad;
+}
+
+/** Corners from the top-left one round. */
+function inOrder(quad: Point[]): Point[] {
+  const cx = quad.reduce((total, p) => total + p[0], 0) / 4;
+  const cy = quad.reduce((total, p) => total + p[1], 0) / 4;
+  const sorted = quad
+    .slice()
+    .sort(
+      (a, b) =>
+        Math.atan2(a[1] - cy, a[0] - cx) - Math.atan2(b[1] - cy, b[0] - cx),
+    );
+  let start = 0;
+  sorted.forEach((p, i) => {
+    if (p[0] + p[1] < sorted[start]![0] + sorted[start]![1]) start = i;
+  });
+  return [0, 1, 2, 3].map((i) => sorted[(start + i) % 4]!);
+}
+
+/** The 3 × 3 homography taking `from[i]` to `to[i]`, as its 8 free numbers. */
+function homography(from: Point[], to: Point[]): number[] {
+  const rows: number[][] = [];
+  for (let i = 0; i < 4; i++) {
+    const [x, y] = from[i]!;
+    const [u, v] = to[i]!;
+    rows.push([x, y, 1, 0, 0, 0, -u * x, -u * y, u]);
+    rows.push([0, 0, 0, x, y, 1, -v * x, -v * y, v]);
+  }
+  for (let c = 0; c < 8; c++) {
+    let pivot = c;
+    for (let r = c + 1; r < 8; r++) {
+      if (Math.abs(rows[r]![c]!) > Math.abs(rows[pivot]![c]!)) pivot = r;
+    }
+    [rows[c], rows[pivot]] = [rows[pivot]!, rows[c]!];
+    for (let r = 0; r < 8; r++) {
+      if (r === c) continue;
+      const factor = rows[r]![c]! / rows[c]![c]!;
+      for (let k = c; k < 9; k++) rows[r]![k]! -= factor * rows[c]![k]!;
+    }
+  }
+  return rows.map((row, i) => row[8]! / row[i]!);
+}
+
+/** Pixels across the probe the corners are found on. */
+const CORNER_PROBE_WIDTH = 600;
+
+/**
+ * The ticket warped to an upright rectangle from its four corners, its short
+ * side at `width` pixels — or null when the warp should not be trusted or is
+ * not needed, and the crop (`croppedTicket`) does as well.
+ *
+ * The corners are those of the largest quadrilateral inside the paper's
+ * outline on a 600-pixel probe, grown 1.5% because that quadrilateral clips
+ * curled corners. Every output pixel is then sampled from a grey copy of the
+ * photograph at the resolution the output needs.
+ *
+ * **Trusted only when they look like a ticket's**: no corner more than 15°
+ * from square, the paper filling the quadrilateral to within 10%, and paper
+ * at least three times as bright as what is around it. On a light table or
+ * under a shadow the outline found was the table's, skewed 22–74°, and the
+ * warp turned a readable ticket into a smear; a wrong warp is worse than
+ * none. **Needed only when the ticket is tilted or skewed 1.5° or more.**
+ */
+export async function straightenedTicket(
+  image: Buffer,
+  width: number,
+): Promise<Grey | null> {
+  const { width: photoWidth } = await new Bun.Image(image, {
+    maxPixels: MAX_PIXELS,
+  }).metadata();
+  const probe = await decodedRows(image, CORNER_PROBE_WIDTH, false);
+  const w = probe.width;
+  const h = probe.height;
+  const { mask: rawMask, separation } = paperMask(
+    probe.rows,
+    w,
+    h,
+    probe.channels,
+  );
+  const mask = largestPart(rawMask, w, h);
+  let count = 0;
+  const edge: Point[] = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!mask[y * w + x]) continue;
+      count++;
+      if (
+        x === 0 ||
+        y === 0 ||
+        x === w - 1 ||
+        y === h - 1 ||
+        !mask[y * w + x - 1] ||
+        !mask[y * w + x + 1] ||
+        !mask[(y - 1) * w + x] ||
+        !mask[(y + 1) * w + x]
+      ) {
+        edge.push([x, y]);
+      }
+    }
+  }
+  if (count < w * h * 0.1 || count > w * h * 0.95) return null;
+  const quad = inOrder(largestQuad(convexHull(edge)));
+  const quadArea =
+    Math.abs(
+      quad.reduce((total, p, i) => {
+        const q = quad[(i + 1) % 4]!;
+        return total + p[0] * q[1] - q[0] * p[1];
+      }, 0),
+    ) / 2;
+  const fill = count / quadArea;
+
+  const length = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const sides = [0, 1, 2, 3].map(
+    (i) => [quad[i]!, quad[(i + 1) % 4]!] as const,
+  );
+  const longest = sides.reduce((a, b) =>
+    length(b[0], b[1]) > length(a[0], a[1]) ? b : a,
+  );
+  let tilt =
+    (Math.atan2(longest[1][1] - longest[0][1], longest[1][0] - longest[0][0]) *
+      180) /
+    Math.PI;
+  tilt = ((tilt % 90) + 90) % 90;
+  const rotationDeg = Math.min(tilt, 90 - tilt);
+  const skewDeg = Math.max(
+    ...[0, 1, 2, 3].map((i) => {
+      const a = quad[(i + 3) % 4]!;
+      const b = quad[i]!;
+      const c = quad[(i + 1) % 4]!;
+      const one = [a[0] - b[0], a[1] - b[1]] as const;
+      const two = [c[0] - b[0], c[1] - b[1]] as const;
+      const cosine =
+        (one[0] * two[0] + one[1] * two[1]) /
+        (Math.hypot(...one) * Math.hypot(...two));
+      return Math.abs((Math.acos(cosine) * 180) / Math.PI - 90);
+    }),
+  );
+  const trusted =
+    skewDeg <= 15 && fill <= 1.1 && fill >= 1 / 1.1 && separation >= 3;
+  if (!trusted || Math.max(rotationDeg, skewDeg) < 1.5) return null;
+
+  const cx = quad.reduce((total, p) => total + p[0], 0) / 4;
+  const cy = quad.reduce((total, p) => total + p[1], 0) / 4;
+  const grown = quad.map(
+    ([x, y]) => [cx + (x - cx) * 1.015, cy + (y - cy) * 1.015] as Point,
+  );
+  const [tl, tr, br, bl] = grown as [Point, Point, Point, Point];
+  const quadWidth = (length(tl, tr) + length(bl, br)) / 2;
+  const quadHeight = (length(tl, bl) + length(tr, br)) / 2;
+  // The text runs along the short side; that is what `width` is.
+  const scale = Math.min(
+    width / Math.min(quadWidth, quadHeight),
+    Math.sqrt(TICKET_MAX_PIXELS / (quadWidth * quadHeight)),
+  );
+  const outWidth = Math.round(quadWidth * scale);
+  const outHeight = Math.round(quadHeight * scale);
+  // One output pixel to about one source pixel.
+  const source = await decodedRows(
+    image,
+    Math.min(photoWidth, Math.round(CORNER_PROBE_WIDTH * scale)),
+    true,
+  );
+  const k = source.width / CORNER_PROBE_WIDTH;
+  const m = homography(
+    [
+      [0, 0],
+      [outWidth, 0],
+      [outWidth, outHeight],
+      [0, outHeight],
+    ],
+    grown.map(([x, y]) => [x * k, y * k] as Point),
+  );
+  const out = new Uint8Array(outWidth * outHeight);
+  const channels = source.channels;
+  for (let y = 0; y < outHeight; y++) {
+    for (let x = 0; x < outWidth; x++) {
+      const d = m[6]! * x + m[7]! * y + 1;
+      const u = (m[0]! * x + m[1]! * y + m[2]!) / d;
+      const v = (m[3]! * x + m[4]! * y + m[5]!) / d;
+      const x0 = Math.floor(u);
+      const y0 = Math.floor(v);
+      if (
+        x0 < 0 ||
+        y0 < 0 ||
+        x0 >= source.width - 1 ||
+        y0 >= source.height - 1
+      ) {
+        out[y * outWidth + x] = 255;
+        continue;
+      }
+      const fx = u - x0;
+      const fy = v - y0;
+      const r0 = source.rows[y0]!;
+      const r1 = source.rows[y0 + 1]!;
+      const a = r0[x0 * channels]!;
+      const b = r0[(x0 + 1) * channels]!;
+      const c = r1[x0 * channels]!;
+      const e = r1[(x0 + 1) * channels]!;
+      out[y * outWidth + x] = Math.round(
+        (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + e * fx) * fy,
+      );
+    }
+  }
+  return { width: outWidth, height: outHeight, pixels: out };
+}
+
+/** Least squares `y = c₀ + c₁x + c₂x²` up to `degree`; all zero when it cannot be solved. */
+function polynomialFit(
+  points: { x: number; y: number }[],
+  degree: number,
+): number[] {
+  const n = degree + 1;
+  const rows = Array.from({ length: n }, () =>
+    Array.from({ length: n + 1 }, () => 0),
+  );
+  for (const { x, y } of points) {
+    const powers = Array.from({ length: n }, (_, i) => x ** i);
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) rows[r]![c]! += powers[r]! * powers[c]!;
+      rows[r]![n]! += powers[r]! * y;
+    }
+  }
+  for (let c = 0; c < n; c++) {
+    let pivot = c;
+    for (let r = c + 1; r < n; r++) {
+      if (Math.abs(rows[r]![c]!) > Math.abs(rows[pivot]![c]!)) pivot = r;
+    }
+    [rows[c], rows[pivot]] = [rows[pivot]!, rows[c]!];
+    if (Math.abs(rows[c]![c]!) < 1e-12)
+      return Array.from({ length: n }, () => 0);
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const factor = rows[r]![c]! / rows[c]![c]!;
+      for (let k = c; k <= n; k++) rows[r]![k]! -= factor * rows[c]![k]!;
+    }
+  }
+  return rows.map((row, i) => row[n]! / row[i]!);
+}
+
+const polynomialAt = (coefficients: number[], x: number) =>
+  coefficients.reduce((total, c, i) => total + c * x ** i, 0);
+
+/**
+ * The text lines' centres in each of `strips` vertical strips: the runs of
+ * rows whose ink in the strip passes 4%, each run's ink-weighted middle.
+ */
+function stripCentres(grey: Grey, strips: number) {
+  const { width, height, pixels } = grey;
+  const stripWidth = Math.floor(width / strips);
+  return Array.from({ length: strips }, (_, s) => {
+    const x0 = s * stripWidth;
+    const x1 = s === strips - 1 ? width : x0 + stripWidth;
+    const profile = new Float32Array(height);
+    for (let y = 0; y < height; y++) {
+      let ink = 0;
+      for (let x = x0; x < x1; x++) if (pixels[y * width + x]! < 140) ink++;
+      profile[y] = ink / (x1 - x0);
+    }
+    const ys: number[] = [];
+    const heights: number[] = [];
+    let start = -1;
+    let mass = 0;
+    let moment = 0;
+    for (let y = 0; y <= height; y++) {
+      if (y < height && profile[y]! > 0.04) {
+        if (start < 0) {
+          start = y;
+          mass = 0;
+          moment = 0;
+        }
+        mass += profile[y]!;
+        moment += profile[y]! * y;
+      } else if (start >= 0) {
+        if (y - start >= 6 && mass > 0) {
+          ys.push(moment / mass);
+          heights.push(y - start);
+        }
+        start = -1;
+      }
+    }
+    return { x: (x0 + x1) / 2, ys, heights };
+  });
+}
+
+/**
+ * The ticket with its text lines straightened, when they curve by half a
+ * line or more; otherwise `grey` itself.
+ *
+ * Leptonica's vertical disparity: the line centres found in 20 strips are
+ * linked across them, each line is fitted with a curve, and the curves'
+ * slope and bend are modelled as smooth functions of the height on the page
+ * (refitted three times without the lines that disagree, so one badly linked
+ * line cannot bend the page). Every column is then shifted up or down by the
+ * model. Under half a line of curvature it does more harm than good, and with
+ * fewer than three lines there is nothing to model.
+ */
+export function dewarped(grey: Grey, strips = 20): Grey {
+  const { width, height, pixels } = grey;
+  const columns = stripCentres(grey, strips);
+  const allHeights = columns.flatMap((c) => c.heights).sort((a, b) => a - b);
+  const lineHeight = allHeights[Math.floor(allHeights.length / 2)] ?? 30;
+  const tolerance = lineHeight * 0.6;
+
+  // Linked outward from the middle strip, each line's next centre predicted
+  // from its trend so far.
+  const mid = Math.floor(strips / 2);
+  type Line = { x: number; y: number }[];
+  const lines: Line[] = columns[mid]!.ys.map((y) => [
+    { x: columns[mid]!.x, y },
+  ]);
+  const extend = (from: number, to: number, step: number) => {
+    for (let s = from; s !== to; s += step) {
+      const column = columns[s]!;
+      const taken = new Set<number>();
+      for (const line of lines) {
+        const end =
+          step > 0
+            ? line.reduce((a, b) => (b.x > a.x ? b : a))
+            : line.reduce((a, b) => (b.x < a.x ? b : a));
+        const side = line
+          .filter((p) =>
+            step > 0 ? p.x >= columns[mid]!.x : p.x <= columns[mid]!.x,
+          )
+          .sort((a, b) => a.x - b.x);
+        let slope = 0;
+        if (side.length >= 2) {
+          const [p, q] = step > 0 ? side.slice(-2) : side.slice(0, 2);
+          slope = (q!.y - p!.y) / (q!.x - p!.x);
+        }
+        // Past a gap of four strips the trend means nothing.
+        if (Math.abs(column.x - end.x) > (width / strips) * 4) continue;
+        const predicted = end.y + slope * (column.x - end.x);
+        let best = -1;
+        let bestDistance = tolerance;
+        column.ys.forEach((y, i) => {
+          const distance = Math.abs(y - predicted);
+          if (distance < bestDistance && !taken.has(i)) {
+            bestDistance = distance;
+            best = i;
+          }
+        });
+        if (best >= 0) {
+          taken.add(best);
+          line.push({ x: column.x, y: column.ys[best]! });
+        }
+      }
+      // A centre no line took starts a line that begins away from the middle.
+      column.ys.forEach((y, i) => {
+        if (!taken.has(i)) lines.push([{ x: column.x, y }]);
+      });
+    }
+  };
+  extend(mid + 1, strips, 1);
+  extend(mid - 1, -1, -1);
+
+  const xc = width / 2;
+  const fitted: { coefficients: number[]; at: number }[] = [];
+  for (const line of lines) {
+    if (line.length < 4) continue;
+    const xs = line.map((p) => p.x);
+    const span = (Math.max(...xs) - Math.min(...xs)) / width;
+    if (span < 0.35) continue;
+    const points = line.map((p) => ({ x: (p.x - xc) / xc, y: p.y }));
+    const coefficients = polynomialFit(
+      points,
+      span > 0.6 && line.length >= 6 ? 2 : 1,
+    );
+    // Points far from their curve: two lines linked into one.
+    const residual = Math.max(
+      ...points.map((p) => Math.abs(polynomialAt(coefficients, p.x) - p.y)),
+    );
+    if (residual > lineHeight * 0.5) continue;
+    fitted.push({ coefficients, at: polynomialAt(coefficients, 0) });
+  }
+  fitted.sort((a, b) => a.at - b.at);
+  if (fitted.length < 3) return grey;
+
+  const at = fitted.map((f) => f.at / height);
+  const slopes = fitted.map((f) => f.coefficients[1] ?? 0);
+  const bends = fitted.map((f) => f.coefficients[2] ?? 0);
+  let keep = fitted.map(() => true);
+  let slopeModel = [0];
+  let bendModel = [0];
+  for (let round = 0; round < 3; round++) {
+    const kept = (values: number[]) =>
+      at.flatMap((y, i) => (keep[i] ? [{ x: y, y: values[i]! }] : []));
+    slopeModel = polynomialFit(kept(slopes), 2);
+    bendModel = polynomialFit(kept(bends), 2);
+    const misfit = at.map(
+      (y, i) =>
+        Math.abs(polynomialAt(slopeModel, y) - slopes[i]!) +
+        Math.abs(polynomialAt(bendModel, y) - bends[i]!),
+    );
+    const sorted = misfit.filter((_, i) => keep[i]).sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)] || 1e-9;
+    keep = misfit.map((value) => value <= median * 3);
+  }
+
+  const out = new Uint8Array(width * height).fill(255);
+  let maxShift = 0;
+  for (let y = 0; y < height; y++) {
+    const slope = polynomialAt(slopeModel, y / height);
+    const bend = polynomialAt(bendModel, y / height);
+    for (let x = 0; x < width; x++) {
+      const u = (x - xc) / xc;
+      const from = y + slope * u + bend * u * u;
+      maxShift = Math.max(maxShift, Math.abs(from - y));
+      const y0 = Math.floor(from);
+      const f = from - y0;
+      if (y0 < 0 || y0 >= height - 1) continue;
+      out[y * width + x] = Math.round(
+        pixels[y0 * width + x]! * (1 - f) + pixels[(y0 + 1) * width + x]! * f,
+      );
+    }
+  }
+  return Math.round(maxShift) / (lineHeight || 1) >= 0.5
+    ? { width, height, pixels: out }
+    : grey;
+}

@@ -1,7 +1,17 @@
 import { describe, it, expect } from "bun:test";
-import { cropImage, decodePng, findPaper } from "@/server/services/image";
 import {
-  OCR_MIN_WIDTH,
+  type Grey,
+  croppedTicket,
+  cropImage,
+  decodePng,
+  dewarped,
+  findPaper,
+  flattenedLight,
+  straightenedTicket,
+} from "@/server/services/image";
+import {
+  type Confidence,
+  OCR_TICKET_WIDTH,
   OCR_PASSES,
   bestReading,
   prepareForOcr,
@@ -115,63 +125,283 @@ describe("cropImage", () => {
   });
 });
 
-describe("prepareForOcr", () => {
-  it("hands the OCR the ticket alone, grey, at a readable width", async () => {
-    const prepared = await pixelsOf(await prepareForOcr(ticketOnATable()));
+/** What share of a grey image's pixels are ink (below half brightness). */
+function inkShare(grey: Grey, from = 0, to = grey.width): number {
+  let ink = 0;
+  for (let y = 0; y < grey.height; y++) {
+    for (let x = from; x < to; x++)
+      if (grey.pixels[y * grey.width + x]! < 128) ink++;
+  }
+  return ink / (grey.height * (to - from));
+}
+
+/** A grey image painted pixel by pixel. */
+function greyPainted(
+  width: number,
+  height: number,
+  paint: (x: number, y: number) => number,
+): Grey {
+  const pixels = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) pixels[y * width + x] = paint(x, y);
+  }
+  return { width, height, pixels };
+}
+
+/**
+ * A 100 × 240 ticket on a table whose printed lines start at the left margin
+ * and stop short of the right one, the way a ticket's article names do. Its
+ * left and right are therefore told apart, and so is which way up it is.
+ */
+function leftAlignedTicket(turn: 0 | 90 | 180 = 0): Buffer {
+  const W = turn === 90 ? 300 : 400;
+  const H = turn === 90 ? 400 : 300;
+  return pngPainted(W, H, (px, py) => {
+    // The upright ticket's own coordinates for this pixel.
+    let [x, y] = [px, py];
+    if (turn === 180) [x, y] = [399 - px, 299 - py];
+    if (turn === 90) [x, y] = [py, 299 - px];
+    if (x < 150 || x >= 250 || y < 30 || y >= 270) return WOOD;
+    return y % 12 < 3 && x > 160 && x < 210 ? INK : PAPER;
+  });
+}
+
+describe("croppedTicket", () => {
+  it("hands back the ticket alone, grey, at the width it is prepared at", async () => {
+    const grey = await croppedTicket(ticketOnATable(), OCR_TICKET_WIDTH);
 
     // The 100-pixel-wide ticket, upscaled; none of the table is left.
-    expect(prepared.width).toBe(OCR_MIN_WIDTH);
-    expect(prepared.height / prepared.width).toBeCloseTo(
+    expect(grey.width).toBe(OCR_TICKET_WIDTH);
+    expect(grey.height / grey.width).toBeCloseTo(
       (240 + 2 * 4) / (100 + 2 * 4),
       0,
     );
-    const [r, g, b] = prepared.at(prepared.width >> 1, 2);
-    expect(r).toBe(g);
-    expect(g).toBe(b);
   });
 
-  it("does not shrink a photograph already wide enough", async () => {
-    const wide = pngPainted(1600, 200, (_, y) => (y % 12 < 3 ? INK : PAPER));
+  it("does not shrink a ticket already wide enough", async () => {
+    const wide = pngPainted(1600, 4000, (_, y) => (y % 12 < 3 ? INK : PAPER));
 
-    expect((await pixelsOf(await prepareForOcr(wide))).width).toBe(1600);
+    expect((await croppedTicket(wide, OCR_TICKET_WIDTH)).width).toBe(1600);
+  });
+});
+
+describe("straightenedTicket", () => {
+  /**
+   * A 300 × 700 ticket turned `degrees` on a dark table, in a 1000 × 1000
+   * photo. Darker than `WOOD`: paper must be three times as bright as its
+   * table for the corners to be trusted, and `WOOD` is only twice.
+   */
+  function tiltedTicket(
+    degrees: number,
+    table: [number, number, number] = [50, 35, 20],
+  ): Buffer {
+    const t = (degrees * Math.PI) / 180;
+    return pngPainted(1000, 1000, (px, py) => {
+      const dx = px - 500;
+      const dy = py - 500;
+      const x = dx * Math.cos(t) + dy * Math.sin(t);
+      const y = -dx * Math.sin(t) + dy * Math.cos(t);
+      if (Math.abs(x) > 150 || Math.abs(y) > 350) return table;
+      return (y + 350) % 24 < 6 && Math.abs(x) < 120 ? INK : PAPER;
+    });
+  }
+
+  it("turns a tilted ticket into an upright rectangle", async () => {
+    const grey = await straightenedTicket(tiltedTicket(8), OCR_TICKET_WIDTH);
+
+    expect(grey).not.toBeNull();
+    expect(grey!.width).toBe(OCR_TICKET_WIDTH);
+    expect(grey!.height / grey!.width).toBeCloseTo(700 / 300, 1);
+    // Straight: a printed line runs level across the rectangle, so some row
+    // is inked across most of its middle.
+    const middle = (y: number) => {
+      let ink = 0;
+      for (let x = 300; x < 1100; x++)
+        if (grey!.pixels[y * grey!.width + x]! < 128) ink++;
+      return ink / 800;
+    };
+    let best = 0;
+    for (let y = 0; y < grey!.height; y++) best = Math.max(best, middle(y));
+    expect(best).toBeGreaterThan(0.9);
+  });
+
+  it("leaves a ticket that is already square to the frame to the crop", async () => {
+    expect(
+      await straightenedTicket(tiltedTicket(0), OCR_TICKET_WIDTH),
+    ).toBeNull();
+  });
+
+  it("does not trust corners when the paper is not three times as bright as the table", async () => {
+    // WOOD is about twice as dark as the paper: the outline found on such a
+    // table was the table's often enough that a warp did more harm than good.
+    expect(
+      await straightenedTicket(tiltedTicket(8, WOOD), OCR_TICKET_WIDTH),
+    ).toBeNull();
+  });
+
+  it("does not trust corners when the table is as light as the paper", async () => {
+    const light: [number, number, number] = [200, 200, 195];
+
+    expect(
+      await straightenedTicket(tiltedTicket(8, light), OCR_TICKET_WIDTH),
+    ).toBeNull();
+  });
+});
+
+describe("flattenedLight", () => {
+  it("makes paper white and ink black on both sides of a shadow", () => {
+    // The left half in shadow: its paper is darker than the right half's ink
+    // is light, so no single cut could separate both.
+    const shaded = greyPainted(900, 600, (x, y) => {
+      const paper = x < 450 ? 110 : 235;
+      return y % 30 < 6 && x % 450 > 60 && x % 450 < 390 ? paper * 0.3 : paper;
+    });
+    const flat = flattenedLight(shaded);
+    const at = (x: number, y: number) => flat.pixels[y * flat.width + x]!;
+
+    // Away from the top edge: a dark block within two blocks of the crop's
+    // edge is taken for the table and blanked, by design.
+    for (const x of [200, 700]) {
+      expect(at(x, 315)).toBe(255); // paper between lines
+      expect(at(x, 303)).toBeLessThan(60); // a line
+    }
+  });
+
+  it("brings faint ink out as firmly as dark ink", () => {
+    const faint = greyPainted(900, 600, (x, y) =>
+      y % 30 < 6 && x > 60 && x < 840 ? (x < 450 ? 40 : 170) : 235,
+    );
+    const flat = flattenedLight(faint);
+
+    expect(flat.pixels[303 * flat.width + 700]!).toBeLessThan(60);
+  });
+});
+
+describe("dewarped", () => {
+  /** Lines bowed down by `bow` pixels at the edges, as on a ticket that curls. */
+  function curled(bow: number): Grey {
+    return greyPainted(1400, 1200, (x, y) => {
+      const u = (x - 700) / 700;
+      const lineY = (y - bow * u * u) % 40;
+      return lineY >= 0 && lineY < 8 && x > 40 && x < 1360 && y > 80 && y < 1120
+        ? 20
+        : 240;
+    });
+  }
+
+  /** How far the ink at the edge sits from the ink in the middle, in rows. */
+  function bowOf(grey: Grey): number {
+    const firstInk = (x: number) => {
+      for (let y = 200; y < grey.height; y++) {
+        if (grey.pixels[y * grey.width + x]! < 128) return y;
+      }
+      return -1;
+    };
+    // The same line: the first ink at or below row 200 in the middle, and the
+    // ink nearest that row at the edge.
+    const middle = firstInk(700);
+    const edge = firstInk(80);
+    return Math.min(Math.abs(edge - middle), Math.abs(edge - middle - 40));
+  }
+
+  it("brings a curled ticket's lines level", () => {
+    const before = curled(16);
+    const after = dewarped(before);
+
+    expect(bowOf(before)).toBeGreaterThanOrEqual(10);
+    expect(bowOf(after)).toBeLessThanOrEqual(3);
+  });
+
+  it("leaves straight lines alone", () => {
+    const straight = curled(0);
+
+    expect(dewarped(straight)).toBe(straight);
+  });
+});
+
+describe("prepareForOcr", () => {
+  /** Tesseract's confidence, as far as these tests need it: sure of text that starts on the left. */
+  const likesLeftText: Confidence = async (png) => {
+    const band = await pixelsOf(png);
+    const grey: Grey = greyPainted(
+      band.width,
+      band.height,
+      (x, y) => band.at(x, y)[0]!,
+    );
+    const half = grey.width >> 1;
+    return inkShare(grey, 0, half) > inkShare(grey, half) ? 90 : 20;
+  };
+
+  it("hands back the ticket upright, by its text", async () => {
+    for (const turn of [0, 180] as const) {
+      const prepared = await prepareForOcr(
+        leftAlignedTicket(turn),
+        likesLeftText,
+      );
+      const half = prepared.width >> 1;
+
+      expect(inkShare(prepared, 0, half)).toBeGreaterThan(
+        inkShare(prepared, half),
+      );
+    }
+  });
+
+  it("stands a ticket photographed on its side the long way up", async () => {
+    const prepared = await prepareForOcr(leftAlignedTicket(90), likesLeftText);
+    const half = prepared.width >> 1;
+
+    expect(prepared.height).toBeGreaterThan(prepared.width);
+    expect(inkShare(prepared, 0, half)).toBeGreaterThan(
+      inkShare(prepared, half),
+    );
+  });
+
+  it("with no judge of text, goes by the proportions alone", async () => {
+    const prepared = await prepareForOcr(leftAlignedTicket(180));
+    const half = prepared.width >> 1;
+
+    // Upside down as photographed: nothing said otherwise.
+    expect(inkShare(prepared, half)).toBeGreaterThan(
+      inkShare(prepared, 0, half),
+    );
+  });
+});
+
+describe("prepareForOcr on a straightened ticket", () => {
+  it("stands a tilted ticket lying on its side the long way up", async () => {
+    // 700 × 300, long side across, tilted 8°, on a dark table.
+    const t = (8 * Math.PI) / 180;
+    const lying = pngPainted(1000, 1000, (px, py) => {
+      const dx = px - 500;
+      const dy = py - 500;
+      const x = dx * Math.cos(t) + dy * Math.sin(t);
+      const y = -dx * Math.sin(t) + dy * Math.cos(t);
+      if (Math.abs(x) > 350 || Math.abs(y) > 150) return [50, 35, 20];
+      return (x + 350) % 24 < 6 && Math.abs(y) < 120 ? INK : PAPER;
+    });
+    const prepared = await prepareForOcr(lying);
+
+    expect(prepared.height / prepared.width).toBeCloseTo(700 / 300, 1);
   });
 });
 
 describe("readReceiptPhoto", () => {
   const READ = "LECHE ENTERA 1,00\nPAN 0,50\nTOTAL 1,50";
 
-  it("reads an ordinary ticket once per pass", async () => {
-    const seen: Buffer[] = [];
-    const text = await readReceiptPhoto(ticketOnATable(), async (image) => {
-      seen.push(image);
-      return READ;
-    });
+  it("reads the prepared ticket once per pass, at the width it was prepared at", async () => {
+    const seen: { width: number; options: unknown }[] = [];
+    const text = await readReceiptPhoto(
+      ticketOnATable(),
+      async (image, options) => {
+        seen.push({ width: (await pixelsOf(image)).width, options });
+        return READ;
+      },
+    );
 
     expect(text).toBe(READ);
-    expect(seen).toHaveLength(OCR_PASSES.length);
-  });
-
-  it("turns a ticket that gave no article upside down and reads it again", async () => {
-    const seen: Buffer[] = [];
-    const text = await readReceiptPhoto(ticketOnATable(), async (image) => {
-      seen.push(image);
-      return seen.length > OCR_PASSES.length ? READ : "05,1 LATOT";
-    });
-
-    expect(text).toBe(READ);
-    expect(seen).toHaveLength(2 * OCR_PASSES.length);
-    // The same picture, half a turn round: its first row is the last one.
-    const upright = await pixelsOf(seen[0]!);
-    const turned = await pixelsOf(seen[OCR_PASSES.length]!);
-    expect([turned.width, turned.height]).toEqual([
-      upright.width,
-      upright.height,
-    ]);
-    for (const y of [0, 5, upright.height >> 1]) {
-      expect(turned.at(3, upright.height - 1 - y)).toEqual(
-        upright.at(upright.width - 4, y),
-      );
-    }
+    expect(seen).toEqual(
+      OCR_PASSES.map((options) => ({ width: OCR_TICKET_WIDTH, options })),
+    );
   });
 });
 
