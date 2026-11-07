@@ -797,6 +797,43 @@ export function middleBand(grey: Grey, fraction = 0.3): Grey {
   };
 }
 
+/**
+ * The ink one pixel thinner on every side: each pixel becomes the lightest
+ * of the 3 × 3 around it.
+ *
+ * A receipt printer's strokes are thick enough to close a digit's gaps, and
+ * Tesseract then reads a `4` as a `9`. The same ticket read again with thinner
+ * strokes misreads differently, which is what lets the readings outvote each
+ * other (`OCR_READINGS` in `ocr.ts`).
+ */
+export function thinned(grey: Grey): Grey {
+  const { width, height, pixels } = grey;
+  const across = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const at = y * width;
+      across[at + x] = Math.max(
+        pixels[at + Math.max(0, x - 1)]!,
+        pixels[at + x]!,
+        pixels[at + Math.min(width - 1, x + 1)]!,
+      );
+    }
+  }
+  const out = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    const above = Math.max(0, y - 1) * width;
+    const below = Math.min(height - 1, y + 1) * width;
+    for (let x = 0; x < width; x++) {
+      out[y * width + x] = Math.max(
+        across[above + x]!,
+        across[y * width + x]!,
+        across[below + x]!,
+      );
+    }
+  }
+  return { width, height, pixels: out };
+}
+
 /** One value per block of a block grid, and the grid's size. */
 interface Blocks {
   across: number;

@@ -140,12 +140,14 @@ Además, antes de leer la foto se endereza el ticket (si está inclinado o
 torcido se convierte en un rectángulo), se recorta para que la mesa no se lea
 como texto, se igualan la luz, las sombras y los pliegues, se gira solo
 (de lado o del revés, según la forma del ticket y lo legible del texto) y se
-estiran las líneas curvadas; luego se lee de dos maneras para quedarse con la
-que cuadra. Medido con 63 tickets reales de once
+estiran las líneas curvadas. Luego se lee de seis maneras y se queda la
+lectura en la que coinciden las demás. Medido con 63 tickets reales de once
 cadenas leídos a mano: los productos leídos con nombre y precio correctos
-pasan del 34 % al 60 %, y el total correcto, del 13 % al 58 %. Leer un
-ticket tarda algo más, porque se lee dos veces. Lo que la lectura no
-acierte se sigue corrigiendo en la revisión.
+pasan del 34 % al 60 %, y el total correcto, del 13 % al 58 %. Con diez
+tickets más y treinta copias suyas giradas, oscurecidas, reducidas y con
+sombra, la nota (precios de los artículos, total y fecha) pasa del 32 % al
+89 %. Leer un ticket tarda algo más, porque se lee seis veces. Lo que la
+lectura no acierte se sigue corrigiendo en la revisión.
 
 ## English
 
@@ -275,8 +277,10 @@ receipt before it is read — straightened into a rectangle when it is tilted
 or skewed, cropped so the table is not read as text, its light, shadows and
 folds evened out, turned the right way up (on its side or upside down, by its
 shape and by how legible its text is) and its curled lines straightened —
-and then read two ways to keep the one that adds up. Measured on 63 real receipts from eleven chains, read by hand: products
-read with the right name and price went from 34% to 60%, and the right
-total from 13% to 58%. Reading a receipt takes somewhat longer, because it is
-read twice. Whatever the reading gets wrong can still be corrected in the
-review.
+and it is read six ways, keeping the reading the others agree with. Measured
+on 63 real receipts from eleven chains, read by hand: products read with the
+right name and price went from 34% to 60%, and the right total from 13% to
+58%. On ten more receipts and thirty copies of them turned, darkened, shrunk
+and shadowed, the score (article prices, total and date) goes from 32% to
+89%. Reading a receipt takes somewhat longer, because it is read six times.
+Whatever the reading gets wrong can still be corrected in the review.

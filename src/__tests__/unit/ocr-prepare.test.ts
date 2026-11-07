@@ -8,11 +8,13 @@ import {
   findPaper,
   flattenedLight,
   straightenedTicket,
+  thinned,
 } from "@/server/services/image";
 import {
   type Confidence,
+  OCR_OPTIONS,
   OCR_TICKET_WIDTH,
-  OCR_PASSES,
+  OCR_READINGS,
   bestReading,
   prepareForOcr,
   readReceiptPhoto,
@@ -319,6 +321,26 @@ describe("dewarped", () => {
   });
 });
 
+describe("thinned", () => {
+  it("narrows the ink by a pixel on every side and keeps the size", () => {
+    // A block of ink 5 × 5, columns 10–14 and rows 6–10, on white.
+    const block = greyPainted(30, 20, (x, y) =>
+      x >= 10 && x < 15 && y >= 6 && y < 11 ? 20 : 255,
+    );
+    const thin = thinned(block);
+    const inked = (x: number, y: number) =>
+      thin.pixels[y * thin.width + x]! < 128;
+
+    expect([thin.width, thin.height]).toEqual([30, 20]);
+    expect(
+      Array.from({ length: 30 }, (_, x) => x).filter((x) => inked(x, 8)),
+    ).toEqual([11, 12, 13]);
+    expect(
+      Array.from({ length: 20 }, (_, y) => y).filter((y) => inked(12, y)),
+    ).toEqual([7, 8, 9]);
+  });
+});
+
 describe("prepareForOcr", () => {
   /** Tesseract's confidence, as far as these tests need it: sure of text that starts on the left. */
   const likesLeftText: Confidence = async (png) => {
@@ -388,7 +410,7 @@ describe("prepareForOcr on a straightened ticket", () => {
 describe("readReceiptPhoto", () => {
   const READ = "LECHE ENTERA 1,00\nPAN 0,50\nTOTAL 1,50";
 
-  it("reads the prepared ticket once per pass, at the width it was prepared at", async () => {
+  it("reads the prepared ticket once for each of the readings, at their sizes", async () => {
     const seen: { width: number; options: unknown }[] = [];
     const text = await readReceiptPhoto(
       ticketOnATable(),
@@ -399,9 +421,44 @@ describe("readReceiptPhoto", () => {
     );
 
     expect(text).toBe(READ);
-    expect(seen).toEqual(
-      OCR_PASSES.map((options) => ({ width: OCR_TICKET_WIDTH, options })),
+    expect(seen.map(({ width }) => width).sort()).toEqual(
+      OCR_READINGS.map(({ scale }) =>
+        Math.round(OCR_TICKET_WIDTH * scale),
+      ).sort(),
     );
+    for (const { options } of seen) expect(options).toEqual(OCR_OPTIONS);
+  });
+
+  it("asks for every reading before the first one answers", async () => {
+    let asked = 0;
+    let answer!: () => void;
+    const answered = new Promise<void>((resolve) => (answer = resolve));
+    const reading = readReceiptPhoto(ticketOnATable(), async () => {
+      if (++asked === OCR_READINGS.length) answer();
+      await answered;
+      return READ;
+    });
+
+    expect(await reading).toBe(READ);
+    expect(asked).toBe(OCR_READINGS.length);
+  });
+
+  it("reads the ticket with its ink thinned as well as as it is", async () => {
+    const inkAt = new Map<number, number[]>();
+    await readReceiptPhoto(ticketOnATable(), async (image) => {
+      const { width, height, at } = await pixelsOf(image);
+      let ink = 0;
+      for (let y = 0; y < height; y++)
+        for (let x = 0; x < width; x++) if (at(x, y)[0]! < 128) ink++;
+      inkAt.set(width, [...(inkAt.get(width) ?? []), ink]);
+      return READ;
+    });
+
+    // Each size is read twice, and one of the two has visibly less ink.
+    expect(inkAt.size).toBe(3);
+    for (const [, [one, two]] of inkAt) {
+      expect(Math.min(one!, two!)).toBeLessThan(Math.max(one!, two!) * 0.99);
+    }
   });
 });
 
@@ -432,5 +489,28 @@ describe("bestReading", () => {
     const misread = good.replace("LECHE 2,00", "LECHE 1,50");
 
     expect(bestReading([misread, good])).toBe(good);
+  });
+
+  it("keeps, of the readings that add up, the one the others agree with", () => {
+    // Both add up; the second has misread two prices in a way that still
+    // sums, and the other readings, which do not add up, side with the first.
+    const right = "PAN 1,49\nLECHE 2,99\nTOTAL 4,48";
+    const lucky = "PAN 1,99\nLECHE 2,49\nTOTAL 4,48";
+    const others = [
+      "PAN 1,49\nLECHE 2,93\nTOTAL 4,48",
+      "PAN 1,49\nLECHE 2,99\nHUEVOS 9,99\nTOTAL 4,48",
+    ];
+
+    expect(bestReading([lucky, right, ...others])).toBe(right);
+    expect(bestReading([right, lucky, ...others])).toBe(right);
+  });
+
+  it("keeps the one the others agree with when none adds up", () => {
+    const agreed = "PAN 1,49\nLECHE 2,99\nTOTAL 9,00";
+    const alone = "PAN 7,77\nLECHE 8,88\nTOTAL 9,00";
+
+    expect(
+      bestReading([alone, agreed, "PAN 1,49\nLECHE 2,99\nTOTAL 8,00"]),
+    ).toBe(agreed);
   });
 });

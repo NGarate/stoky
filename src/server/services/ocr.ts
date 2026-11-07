@@ -14,6 +14,7 @@ import {
   middleBand,
   readImageMetadata,
   straightenedTicket,
+  thinned,
   turnedHalf,
   turnedQuarter,
 } from "./image";
@@ -265,25 +266,59 @@ export function timedReader<W extends RecognisingWorker>(
  * ticket, the width of a cropped one (which is only ever scaled up to it).
  *
  * Every number of the preparation was measured at this width, and the
- * readings are taken of it.
+ * readings are scaled from it (`OCR_READINGS`).
  */
 export const OCR_TICKET_WIDTH = 1400;
 
+/** One of the readings taken of every photograph. */
+export interface OcrReading {
+  /** The prepared ticket's width this reading is scaled to. */
+  scale: number;
+  /** Read with the ink thinned (`thinned`) rather than as it is. */
+  thin: boolean;
+}
+
 /**
- * The readings taken of every prepared photograph; the most consistent one
- * is kept (`bestReading`).
+ * The readings taken of every photograph; the one the others agree with is
+ * kept (`bestReading`).
  *
- * Two, because no single way of reading wins on every ticket: Sauvola
- * (`thresholding_method: 2`) picks the black/white cut per neighbourhood and
- * Otsu (`0`) one cut for the page, and each wins on tickets the other loses.
- * Both at 300 dpi, the resolution the preparation was measured at; left to
- * guess, Tesseract guesses from the image. `rotateAuto` straightens what is
- * left of a tilt.
+ * **Six, at three sizes, with the ink as it is and thinned.** Tesseract reads
+ * the same ticket differently at different sizes and stroke widths, and a
+ * misread digit is rarely misread the same way in all of them, so the
+ * readings outvote each other's mistakes. All are smaller than the prepared
+ * ticket: most tickets read best at 0.4–0.7 of `OCR_TICKET_WIDTH`, 560–980
+ * pixels across. All use Sauvola (`thresholding_method: 2`), which picks the
+ * black/white cut per neighbourhood; Otsu's single cut added nothing once
+ * Sauvola was read at several sizes. `rotateAuto` straightens what is left of
+ * a tilt.
+ *
+ * Measured on 10 real tickets prepared by `prepareForOcr`
+ * (`test-tickets/bench`, `subsets.ts`), with every subset of 24 readings
+ * scored and each size of subset also chosen on nine tickets and scored on the
+ * tenth: 2 readings 0.82, 4 0.92, **6 0.945**, 8 0.93, all 24 0.90, against
+ * 0.876 for the two whole-size passes this replaced. More readings let more
+ * wrong ones agree. **Only on a prepared ticket**: on a plain crop the same six
+ * scored 0.29 against 0.35 for two passes, losing faint text the flattening
+ * restores. End to end, preparation and all, over those 10 tickets and 30
+ * copies of them turned, darkened, shrunk and shadowed: 0.321 before, 0.891
+ * now with the model the image bakes, 0.929 with the development model the
+ * subsets were chosen with. Re-measure when tickets are added: ten tickets
+ * choose six, they do not prove it.
  */
-export const OCR_PASSES: readonly RecogniseOptions[] = [
-  { rotateAuto: true, thresholding_method: "0", user_defined_dpi: "300" },
-  { rotateAuto: true, thresholding_method: "2", user_defined_dpi: "300" },
-];
+// In this order, the one measured: `bestReading` keeps the first of equals,
+// and the order decided the pharmacy ticket's (0.95 in it, 0.65 interleaved).
+export const OCR_READINGS: readonly OcrReading[] = [false, true].flatMap(
+  (thin) => [0.4, 0.6, 0.7].map((scale) => ({ scale, thin })),
+);
+
+/** What Tesseract is asked for each of `OCR_READINGS`. */
+export const OCR_OPTIONS: RecogniseOptions = {
+  rotateAuto: true,
+  thresholding_method: "2",
+  // The resolution the readings were measured at; left to guess, Tesseract
+  // guesses differently at each size.
+  user_defined_dpi: "300",
+};
 
 /** Confidences closer than this say nothing about which way up a ticket is. */
 const ORIENTATION_MARGIN = 10;
@@ -377,8 +412,31 @@ export function readingScore(text: string): number {
   return count * (1 + agreement);
 }
 
+/** How many of `a`'s values `b` has too, each counted once. */
+function shared(a: readonly number[], b: readonly number[]): number {
+  const left = [...b];
+  let count = 0;
+  for (const value of a) {
+    const at = left.indexOf(value);
+    if (at >= 0) {
+      count++;
+      left.splice(at, 1);
+    }
+  }
+  return count;
+}
+
 /**
- * The reading `readingScore` believes most; the first of equals.
+ * The reading the others agree with.
+ *
+ * **The readings whose articles add up to their total, if any do**, less the
+ * discounts they found: a misread digit or a lost line breaks that sum.
+ * **Among those, the one whose prices the other readings share most**, every
+ * reading counting, so that six readings outvote one that went wrong in its
+ * own way. Measured on the bench of `OCR_READINGS`: picking instead the
+ * reading `readingScore` rated highest scored 0.861 of 24 readings, against
+ * 0.901 for this, because that score rewards a reading for finding more
+ * lines, including lines that are not articles. The first of equals.
  *
  * **With a date from another reading when it has none.** The date is one
  * short line, and which pass reads it is close to chance; the score cannot
@@ -388,10 +446,38 @@ export function readingScore(text: string): number {
  * their date and no score fell.
  */
 export function bestReading(readings: readonly string[]): string {
-  let best = readings[0] ?? "";
-  for (const reading of readings.slice(1)) {
-    if (readingScore(reading) > readingScore(best)) best = reading;
+  const parsed = readings.map((reading) => parseReceiptText(reading));
+  const prices = parsed.map(({ items }) =>
+    items.map((item) => Math.round(item.parsedPrice * 100)),
+  );
+  const addsUp = parsed.map(({ items, totalAmount, discountAmount = 0 }) => {
+    if (!totalAmount) return false;
+    const sum =
+      items.reduce((total, item) => total + item.parsedPrice, 0) -
+      discountAmount;
+    return Math.abs(sum - totalAmount) / totalAmount < 0.005;
+  });
+  const candidates = readings
+    .map((_, index) => index)
+    .filter((index) => addsUp[index] || !addsUp.includes(true));
+  // Prices both readings have, less the ones only one of them has: two
+  // readings that agree on everything score their length twice.
+  const agreement = (index: number) =>
+    prices.reduce(
+      (total, other, at) =>
+        at === index
+          ? total
+          : total +
+            2 * shared(prices[index]!, other) -
+            other.length -
+            prices[index]!.length,
+      0,
+    );
+  let bestIndex = candidates[0] ?? 0;
+  for (const index of candidates.slice(1)) {
+    if (agreement(index) > agreement(bestIndex)) bestIndex = index;
   }
+  const best = readings[bestIndex] ?? "";
   if (parseReceiptText(best).purchaseDate) return best;
   for (const reading of readings) {
     if (reading === best) continue;
@@ -403,20 +489,23 @@ export function bestReading(readings: readonly string[]): string {
   return best;
 }
 
-/** `prepared` read with every one of `OCR_PASSES`. */
+/** `prepared` read every way `OCR_READINGS` lists, all at once. */
 async function readEveryWay(
   prepared: Grey,
   recognise: Recognise,
 ): Promise<string[]> {
-  const image = await greyPng(prepared);
-  const readings: string[] = [];
-  for (const options of OCR_PASSES)
-    readings.push(await recognise(image, options));
-  return readings;
+  const thinnedInk = thinned(prepared);
+  const images = await Promise.all(
+    OCR_READINGS.map(({ scale, thin }) =>
+      greyPng(thin ? thinnedInk : prepared, Math.round(prepared.width * scale)),
+    ),
+  );
+  // All asked for at once: the recogniser decides how many run together.
+  return Promise.all(images.map((one) => recognise(one, OCR_OPTIONS)));
 }
 
 /**
- * Every pass of `OCR_PASSES` over the prepared photograph, and the reading
+ * Every reading of `OCR_READINGS` of the prepared photograph, and the one
  * kept.
  *
  * A photograph taken upside down no longer needs a second round: the
