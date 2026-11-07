@@ -51,6 +51,7 @@ and the bench are not in git: they are the owner's receipts.
 | 19 | The application with #18 + #12, 2 workers, against the application before | 10 real + 30 degraded | **0.350 → 0.929**, 33 s → 16 s a ticket; real 0.48 → 0.94, validation 0.83 → 0.97, rotated 0.22 → 0.92, dark 0.34 → 0.94, small 0.36 → 0.92, shadowed 0.28 → 0.92; **no ticket worse** (`prod6.ts`, `app-final.log`) | **Yes** |
 | 20 | The six readings interleaved (ink 0.4, thin 0.4, …) instead of in the measured order | same | 0.918: the pharmacy 0.95 → 0.65, because `bestReading` keeps the first of equals | Measured order kept; **fragile**, see below |
 | 22 | The same, with the model the production image bakes (`tessdata_fast` 4.1.0) instead of the development one (`@tesseract.js-data/spa` 4.0.0 `best_int`, which every row above used) | 10 real + 30 degraded | Before 0.321 (23 s) → now **0.891** (12 s). Worse than before on two: the pharmacy 0.50 → 0.05 (reads `16,05` as `16,03` in all six), new Costco 0.95 → 0.86 | Yes; see "the model" below |
+| 24 | A new pharmacy ticket on a light floral cloth (`test-tickets/1794088010070.HEIC`, bench id `0070`) | 1 photo | 0.50 with `best_int`, 0.55 with `tessdata_fast`. The article lines read nearly right, but the corners were not trusted and the crop kept the cloth, whose flowers read as junk beside every line and swallowed the large-print total. The parser also misses the negative line (a returned item, −6,15) and books the card payment (13,01) and the phone number (0,04) as articles | Open: light backgrounds, and the parser (HALLAZGOS #1) |
 | 21 | How long preparing blocks the server's event loop (`block-time.ts`, `block-old.ts`) | 4 photos | Longest stall 0.73–2.46 s, 1.0–3.1 s in all per photo; before, 0.02–0.64 s and 0–1.3 s | Led to #23 |
 | 23 | The preparation's pixel work on a thread of its own (`prepare-worker.ts`); orientation stays on the server's thread | 4 photos | Longest stall **0.06–0.09 s**. The bundled worker chunk ran under Bun in a production build's standalone output | **Yes** |
 
@@ -110,6 +111,10 @@ is the application as it is.
 - **A dark area touching the crop's edge is blanked as table**: shadowed text
   in the first or last two blocks of the ticket can be lost. This was a
   measured trade, and it is pinned in `ocr-prepare.test.ts`.
+- **A light or patterned background** (#24, and the first pharmacy ticket
+  before the six readings): the paper is not told apart from it, so the crop
+  keeps it and it reads as junk. Cropping to the text's extent instead of the
+  paper's is the idea not yet tried.
 - **Costco's `4` read as `9`** remains (§1b): Costco 0.73 and 0.87, the rest
   0.95–1.
 - ~~**The model.**~~ Resolved 2026-11-07: the image bakes `best_int`.
