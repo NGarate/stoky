@@ -679,8 +679,9 @@ export function decodePng(
 // numbers come from the bench in `test-tickets/bench/` (its README and
 // `docs/superpowers/plans/2026-11-06-long-receipts-in-parts.md` §0): on 9 real
 // tickets and 30 degraded copies of them, the parse score went from 27% with
-// a crop alone to 89% with these steps. `ocr.ts` runs them in order:
-// `ticketInGrey` → `flattenedLight` → turned upright → `dewarped`.
+// a crop alone to 89% with these steps. `prepareForOcr` in `ocr.ts` runs
+// them in order on a thread of their own (`prepare-worker.ts`): straightened
+// or cropped → `flattenedLight` → turned upright → `dewarped`.
 // ---------------------------------------------------------------------------
 
 /** An 8-bit greyscale image, row by row. */

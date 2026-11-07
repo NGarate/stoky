@@ -3,22 +3,19 @@ import { prisma } from "@/lib/prisma";
 import { ReceiptStatus } from "@/generated/prisma/client";
 import { existsSync } from "node:fs";
 import { availableParallelism } from "node:os";
+import { Worker as Thread } from "node:worker_threads";
 import { join } from "node:path";
-import { InvalidInputError, NotFoundError } from "./errors";
+import { InvalidInputError, NotFoundError, UpstreamError } from "./errors";
 import { parseReceiptText } from "./receiptParser";
 import {
   type Grey,
-  croppedTicket,
-  dewarped,
-  flattenedLight,
   greyPng,
   middleBand,
   readImageMetadata,
-  straightenedTicket,
-  thinned,
   turnedHalf,
   turnedQuarter,
 } from "./image";
+import type { PreparationReply, PreparationRequest } from "./prepare-worker";
 
 /**
  * Where the Spanish traineddata is read from — ISSUES.md OCR-1.
@@ -361,6 +358,79 @@ async function upright(grey: Grey, confidence: Confidence): Promise<Grey> {
   return best;
 }
 
+/** Requests the preparation thread has not answered yet, by id. */
+type Waiting = Map<
+  number,
+  { resolve: (reply: PreparationReply) => void; reject: (error: Error) => void }
+>;
+
+/** The thread the preparation's pixel work runs on, while there is one. */
+let preparationThread: { thread: Thread; waiting: Waiting } | null = null;
+let nextRequest = 0;
+
+/**
+ * `request` answered by the preparation thread (`prepare-worker.ts`), which
+ * is started on first use and again after it fails.
+ *
+ * A thread that dies fails what it was asked; the next request starts a new
+ * one. An image the preparation cannot work with comes back as the
+ * `InvalidInputError` it was; anything else that goes wrong over there is an
+ * `UpstreamError` here, the thread being something this service depends on.
+ */
+function onPreparationThread(
+  request: DistributiveOmit<PreparationRequest, "id">,
+): Promise<PreparationReply> {
+  if (!preparationThread) {
+    const thread = new Thread(new URL("./prepare-worker.ts", import.meta.url));
+    const waiting: Waiting = new Map();
+    const fail = (error: Error) => {
+      for (const { reject } of waiting.values()) reject(error);
+      waiting.clear();
+      if (preparationThread?.thread === thread) preparationThread = null;
+    };
+    thread.on("message", (reply: PreparationReply) => {
+      const asked = waiting.get(reply.id);
+      waiting.delete(reply.id);
+      // Idle, the thread must not keep the process alive.
+      if (waiting.size === 0) thread.unref();
+      if (!asked) return;
+      if ("error" in reply) {
+        asked.reject(
+          reply.error.name === "InvalidInputError"
+            ? new InvalidInputError(reply.error.message)
+            : new UpstreamError(reply.error.message),
+        );
+      } else {
+        asked.resolve(reply);
+      }
+    });
+    thread.on("error", fail);
+    thread.on("exit", (code) =>
+      fail(new UpstreamError(`The image preparation thread stopped (${code})`)),
+    );
+    preparationThread = { thread, waiting };
+  }
+  const { thread, waiting } = preparationThread;
+  const id = nextRequest++;
+  return new Promise((resolve, reject) => {
+    waiting.set(id, { resolve, reject });
+    thread.ref();
+    thread.postMessage({ ...request, id });
+  });
+}
+
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
+  ? Omit<T, K>
+  : never;
+
+/** The grey image a preparation step answered with. */
+function greyOf(reply: PreparationReply): Grey {
+  if (!("grey" in reply)) {
+    throw new UpstreamError("The preparation thread sent no image back");
+  }
+  return reply.grey;
+}
+
 /**
  * The photograph as the readings start from: the ticket alone, square to the
  * frame, evenly lit, the right way up and with its lines straight. The stored
@@ -381,14 +451,17 @@ export async function prepareForOcr(
   image: Buffer,
   confidence: Confidence = noConfidence,
 ): Promise<Grey> {
-  let grey = await straightenedTicket(image, OCR_TICKET_WIDTH);
-  if (!grey) {
-    grey = await croppedTicket(image, OCR_TICKET_WIDTH);
-    if (grey.width > grey.height) {
-      grey = await croppedTicket(image, OCR_TICKET_WIDTH, 90);
-    }
-  }
-  return dewarped(await upright(flattenedLight(grey), confidence));
+  const ticket = greyOf(
+    await onPreparationThread({
+      step: "ticket",
+      image,
+      width: OCR_TICKET_WIDTH,
+    }),
+  );
+  const standing = await upright(ticket, confidence);
+  return greyOf(
+    await onPreparationThread({ step: "dewarped", grey: standing }),
+  );
 }
 
 /**
@@ -495,14 +568,23 @@ async function readEveryWay(
   prepared: Grey,
   recognise: Recognise,
 ): Promise<string[]> {
-  const thinnedInk = thinned(prepared);
-  const images = await Promise.all(
-    OCR_READINGS.map(({ scale, thin }) =>
-      greyPng(thin ? thinnedInk : prepared, Math.round(prepared.width * scale)),
+  const reply = await onPreparationThread({
+    step: "readings",
+    grey: prepared,
+    readings: OCR_READINGS,
+  });
+  if (!("images" in reply)) {
+    throw new UpstreamError("The preparation thread sent no images back");
+  }
+  // In parallel: the recogniser spreads them over its workers.
+  return Promise.all(
+    reply.images.map((image) =>
+      recognise(
+        Buffer.from(image.buffer, image.byteOffset, image.byteLength),
+        OCR_OPTIONS,
+      ),
     ),
   );
-  // In parallel: the recogniser spreads them over its workers.
-  return Promise.all(images.map((one) => recognise(one, OCR_OPTIONS)));
 }
 
 /**
@@ -661,5 +743,10 @@ export async function processReceiptOcr(
 }
 
 export async function terminateWorker(): Promise<void> {
-  await Promise.all(ocrWorkerPool.map((worker) => worker.terminate()));
+  const preparation = preparationThread;
+  preparationThread = null;
+  await Promise.all([
+    ...ocrWorkerPool.map((worker) => worker.terminate()),
+    preparation?.thread.terminate(),
+  ]);
 }

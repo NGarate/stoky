@@ -1296,6 +1296,13 @@ Verified against the files named in each row.
   shorten the queue: each image that runs out the limit costs everyone behind
   it 120 s, and the 30 uploads an account may make in an hour can fill an hour
   of OCR.
+- **Preparing a photo cannot stall the server** (`src/server/services/prepare-worker.ts`):
+  straightening, flattening and dewarping are pixel loops in JavaScript, and
+  on the server's thread they held every request for up to 2.5 s per photo.
+  They run on one thread of their own, which receipts share in turn; the
+  longest stall left on the server's thread was measured at 0.09 s. That
+  thread has no time limit of its own: its work is bounded by the pixel caps,
+  `MAX_PIXELS` on decode and 20 megapixels for a prepared ticket.
 - **A restart does not strand a receipt** (`src/server/services/receipt-recovery.ts`,
   called from `src/instrumentation.ts`). A receipt is read inside the process
   that took its upload, so one that process was still reading when it stopped

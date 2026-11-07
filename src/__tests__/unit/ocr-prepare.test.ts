@@ -20,6 +20,7 @@ import {
   pooledRecogniser,
   prepareForOcr,
   readReceiptPhoto,
+  terminateWorker,
 } from "@/server/services/ocr";
 import { parseReceiptText } from "@/server/services/receiptParser";
 import { pngPainted } from "../utils/png";
@@ -128,6 +129,9 @@ describe("cropImage", () => {
     expect(cropped.at(19, 14)).toEqual([145, 133, 99]);
   });
 });
+
+/** Room for a test that prepares whole photographs: each takes 1–3 s. */
+const PREPARING = 30_000;
 
 /** What share of a grey image's pixels are ink (below half brightness). */
 function inkShare(grey: Grey, from = 0, to = grey.width): number {
@@ -356,57 +360,130 @@ describe("prepareForOcr", () => {
     return inkShare(grey, 0, half) > inkShare(grey, half) ? 90 : 20;
   };
 
-  it("hands back the ticket upright, by its text", async () => {
-    for (const turn of [0, 180] as const) {
+  it(
+    "hands back the ticket upright, by its text",
+    async () => {
+      for (const turn of [0, 180] as const) {
+        const prepared = await prepareForOcr(
+          leftAlignedTicket(turn),
+          likesLeftText,
+        );
+        const half = prepared.width >> 1;
+
+        expect(inkShare(prepared, 0, half)).toBeGreaterThan(
+          inkShare(prepared, half),
+        );
+      }
+    },
+    PREPARING,
+  );
+
+  it(
+    "stands a ticket photographed on its side the long way up",
+    async () => {
       const prepared = await prepareForOcr(
-        leftAlignedTicket(turn),
+        leftAlignedTicket(90),
         likesLeftText,
       );
       const half = prepared.width >> 1;
 
+      expect(prepared.height).toBeGreaterThan(prepared.width);
       expect(inkShare(prepared, 0, half)).toBeGreaterThan(
         inkShare(prepared, half),
       );
-    }
-  });
+    },
+    PREPARING,
+  );
 
-  it("stands a ticket photographed on its side the long way up", async () => {
-    const prepared = await prepareForOcr(leftAlignedTicket(90), likesLeftText);
-    const half = prepared.width >> 1;
+  it(
+    "with no judge of text, goes by the proportions alone",
+    async () => {
+      const prepared = await prepareForOcr(leftAlignedTicket(180));
+      const half = prepared.width >> 1;
 
-    expect(prepared.height).toBeGreaterThan(prepared.width);
-    expect(inkShare(prepared, 0, half)).toBeGreaterThan(
-      inkShare(prepared, half),
-    );
-  });
+      // Upside down as photographed: nothing said otherwise.
+      expect(inkShare(prepared, half)).toBeGreaterThan(
+        inkShare(prepared, 0, half),
+      );
+    },
+    PREPARING,
+  );
+});
 
-  it("with no judge of text, goes by the proportions alone", async () => {
-    const prepared = await prepareForOcr(leftAlignedTicket(180));
-    const half = prepared.width >> 1;
+describe("prepareForOcr's thread", () => {
+  it(
+    "leaves the server's thread free while it works",
+    async () => {
+      // A 1200 × 1600 photo: its preparation is seconds of pixel loops.
+      const photo = pngPainted(1200, 1600, (x, y) => {
+        if (x < 200 || x >= 1000 || y < 100 || y >= 1500) return WOOD;
+        return y % 24 < 6 && x > 260 && x < 900 ? INK : PAPER;
+      });
+      let last = performance.now();
+      let longest = 0;
+      const tick = setInterval(() => {
+        const now = performance.now();
+        longest = Math.max(longest, now - last);
+        last = now;
+      }, 5);
+      try {
+        await prepareForOcr(photo);
+      } finally {
+        clearInterval(tick);
+      }
 
-    // Upside down as photographed: nothing said otherwise.
-    expect(inkShare(prepared, half)).toBeGreaterThan(
-      inkShare(prepared, 0, half),
-    );
-  });
+      // On this thread the same work stalls it for most of a second at a time.
+      expect(longest).toBeLessThan(250);
+    },
+    PREPARING,
+  );
+
+  it(
+    "fails with the error the preparation met, and carries on after it",
+    async () => {
+      await expect(
+        prepareForOcr(Buffer.from("not an image")),
+      ).rejects.toThrow();
+
+      const prepared = await prepareForOcr(ticketOnATable());
+      expect(prepared.width).toBe(OCR_TICKET_WIDTH);
+    },
+    PREPARING,
+  );
+
+  it(
+    "starts again after it was stopped",
+    async () => {
+      await terminateWorker();
+
+      expect((await prepareForOcr(ticketOnATable())).width).toBe(
+        OCR_TICKET_WIDTH,
+      );
+    },
+    PREPARING,
+  );
 });
 
 describe("prepareForOcr on a straightened ticket", () => {
-  it("stands a tilted ticket lying on its side the long way up", async () => {
-    // 700 × 300, long side across, tilted 8°, on a dark table.
-    const t = (8 * Math.PI) / 180;
-    const lying = pngPainted(1000, 1000, (px, py) => {
-      const dx = px - 500;
-      const dy = py - 500;
-      const x = dx * Math.cos(t) + dy * Math.sin(t);
-      const y = -dx * Math.sin(t) + dy * Math.cos(t);
-      if (Math.abs(x) > 350 || Math.abs(y) > 150) return [50, 35, 20];
-      return (x + 350) % 24 < 6 && Math.abs(y) < 120 ? INK : PAPER;
-    });
-    const prepared = await prepareForOcr(lying);
+  it(
+    "stands a tilted ticket lying on its side the long way up",
+    async () => {
+      // 700 × 300, long side across, tilted 8°, on a dark table.
+      const t = (8 * Math.PI) / 180;
+      const lying = pngPainted(1000, 1000, (px, py) => {
+        const dx = px - 500;
+        const dy = py - 500;
+        const x = dx * Math.cos(t) + dy * Math.sin(t);
+        const y = -dx * Math.sin(t) + dy * Math.cos(t);
+        if (Math.abs(x) > 350 || Math.abs(y) > 150) return [50, 35, 20];
+        return (x + 350) % 24 < 6 && Math.abs(y) < 120 ? INK : PAPER;
+      });
+      const prepared = await prepareForOcr(lying);
 
-    expect(prepared.height / prepared.width).toBeCloseTo(700 / 300, 1);
-  });
+      expect(prepared.height / prepared.width).toBeCloseTo(700 / 300, 1);
+    },
+    PREPARING,
+  );
 });
 
 describe("readReceiptPhoto", () => {

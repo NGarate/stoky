@@ -51,7 +51,8 @@ and the bench are not in git: they are the owner's receipts.
 | 19 | The application with #18 + #12, 2 workers, against the application before | 10 real + 30 degraded | **0.350 → 0.929**, 33 s → 16 s a ticket; real 0.48 → 0.94, validation 0.83 → 0.97, rotated 0.22 → 0.92, dark 0.34 → 0.94, small 0.36 → 0.92, shadowed 0.28 → 0.92; **no ticket worse** (`prod6.ts`, `app-final.log`) | **Yes** |
 | 20 | The six readings interleaved (ink 0.4, thin 0.4, …) instead of in the measured order | same | 0.918: the pharmacy 0.95 → 0.65, because `bestReading` keeps the first of equals | Measured order kept; **fragile**, see below |
 | 22 | The same, with the model the production image bakes (`tessdata_fast` 4.1.0) instead of the development one (`@tesseract.js-data/spa` 4.0.0 `best_int`, which every row above used) | 10 real + 30 degraded | Before 0.321 (23 s) → now **0.891** (12 s). Worse than before on two: the pharmacy 0.50 → 0.05 (reads `16,05` as `16,03` in all six), new Costco 0.95 → 0.86 | Yes; see "the model" below |
-| 21 | How long preparing blocks the server's event loop (`block-time.ts`, `block-old.ts`) | 4 photos | Longest stall 0.73–2.46 s, 1.0–3.1 s in all per photo; before, 0.02–0.64 s and 0–1.3 s | **Open**, see below |
+| 21 | How long preparing blocks the server's event loop (`block-time.ts`, `block-old.ts`) | 4 photos | Longest stall 0.73–2.46 s, 1.0–3.1 s in all per photo; before, 0.02–0.64 s and 0–1.3 s | Led to #23 |
+| 23 | The preparation's pixel work on a thread of its own (`prepare-worker.ts`); orientation stays on the server's thread | 4 photos | Longest stall **0.06–0.09 s**. The bundled worker chunk ran under Bun in a production build's standalone output | **Yes** |
 
 ### Options still open
 
@@ -101,13 +102,8 @@ is the application as it is.
 
 ### Known weaknesses of what is implemented
 
-- **The event loop stalls while a photo is prepared** (#21): up to 2.5 s at
-  a time, during which the server answers nobody. Most of it is pixel loops in
-  JavaScript (cropping and decoding about half, flattening about a third).
-  Options: yield to the event loop between rows of the long loops (a mechanical
-  change; `port-check.ts` would prove the output unchanged), or do the
-  preparation in a worker thread (the real fix, but the worker's script has
-  to survive Next's standalone build, as tesseract.js's does).
+- ~~The event loop stalls while a photo is prepared~~ (#21): fixed by #23.
+  Not checked under `next dev`, only with `bun test` and a production build.
 - **Ties decide some tickets** (#20). Re-check the order whenever readings
   change, and prefer a tie-break that does not depend on order, such as the
   higher Tesseract confidence, once there are tickets to measure it on.
