@@ -5,7 +5,7 @@
 This document tracks open issues and technical debt. It started as the Phase 0
 (Foundation) code review and is kept current as items are fixed.
 
-**Last Updated:** 2026-10-16
+**Last Updated:** 2026-11-07
 
 **Status:** after Phase 7's slice of the backlog, the browser suite's move
 to isolated data and the production artefact, and the owner's first pass
@@ -13,7 +13,7 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1 and TEST-9.** TEST-10 closed on 2026-10-27 with its spec deleted (PROGRESS D154). TEST-11 closed on 2026-10-23 (`cb08d9a`): every `bun test` now loads Next's environment baseline first. TEST-7 closed on 2026-09-12 by removing
+**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1, TEST-9, PARSE-1 to PARSE-4 and OCR-4 to OCR-12.** The PARSE and OCR entries (2026-11-07) are the review of PR #19 and what the receipt OCR bench measured; two of the review's findings closed with the preparation's rewrite (the crop repeated per reading, and image transforms outside `image.ts`). TEST-10 closed on 2026-10-27 with its spec deleted (PROGRESS D154). TEST-11 closed on 2026-10-23 (`cb08d9a`): every `bun test` now loads Next's environment baseline first. TEST-7 closed on 2026-09-12 by removing
 two process-wide ProductRating mocks from unrelated component tests.
 TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
@@ -144,6 +144,19 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | TEST-9 | Nothing pins that the caller's own row has no reset button, and a self-reset would be reported as "too easy" | 🟡 Open — deferred by the final review of the 2026-10-12 security branch |
 | TEST-10 | The service worker's offline spec failed three full runs on the Better Auth branch | ✅ Closed 2026-10-27 — the spec was deleted, cause never found |
 | TEST-11 | `trpc-links.test.ts` failed once in CI with Next's "AsyncLocalStorage accessed in runtime where it is not available" | ✅ Resolved `cb08d9a` — the first file to import `next/headers` left Next's request storage broken for the rest of the process |
+| PARSE-1 | A telephone number in the header is counted as a discount | 🟡 Open — found reviewing PR #19, 2026-11-06; reproduced |
+| PARSE-2 | An article whose price equals the sum of those above it is dropped as a damaged total | 🟡 Open — found reviewing PR #19; reproduced |
+| PARSE-3 | A weighed article with its name on the weight line is lost | 🟡 Open — found reviewing PR #19; reproduced |
+| PARSE-4 | Any receipt with a `P.UNIT` column is filed as Mercadona | 🟡 Open — found reviewing PR #19; reproduced |
+| OCR-4 | One of a photo's readings failing or timing out fails the whole receipt | 🟡 Open — found reviewing PR #19 |
+| OCR-5 | A photo the preparation cannot crop fails instead of being read uncropped | 🟡 Open — found reviewing PR #19 |
+| OCR-6 | Cropping decodes the whole photograph into memory, and a sideways crop is made twice | 🟡 Open — found reviewing PR #19 |
+| OCR-7 | The date can be borrowed from the wrong line of another reading | 🟡 Open — found reviewing PR #19 |
+| OCR-8 | A light or patterned background stays in the crop and is read as junk | 🟡 Open — measured 2026-11-07 |
+| OCR-9 | A receipt printer's digits are misread the same way in every reading | 🟡 Open — measured 2026-11-06 |
+| OCR-10 | Which of six equally agreed readings is kept depends on their order | 🟡 Open — measured 2026-11-07 |
+| OCR-11 | A dark area at the crop's edge is blanked as table, text and all | 🟡 Open — by design, measured trade |
+| OCR-12 | The image preparation thread has not been run under `next dev` | 🟡 Open — checked under `bun test` and a production build only |
 
 ---
 
@@ -983,6 +996,193 @@ past a configurable quota with a message in both catalogues, and finding 16's
 retention — `receipt.delete` removing its file, and a sweep for files no row
 names. Until then the operator's defence is disk monitoring and, for an open
 instance, an `uploads` volume on a filesystem of its own.
+
+---
+
+### 🟡 PARSE-1: A telephone number in the header is counted as a discount
+
+**Files:** `src/server/services/receiptParser.ts` (`discountOn`, about line 461)
+**Severity:** MEDIUM — a wrong discount moves the total chosen, the score that
+picks the OCR reading (`readingScore`, `bestReading`), and `reconcile`
+**Status:** OPEN — found reviewing PR #19 on 2026-11-06, reproduced
+
+`discountOn` adds up any line with a `-` before an amount, the header's
+included. `SUPER LOPEZ / Tel. 96-123.45.67 / PAN 1,00 / LECHE 2,00 /
+TOTAL 3,00` parses to `discount: 123.45`. **The fix** is to look for discounts
+only between the first article and the total, or to refuse an amount whose
+line looks like a phone number (`Tel`, `TFNO`, nine digits).
+
+---
+
+### 🟡 PARSE-2: An article whose price equals the sum of those above it is dropped as a damaged total
+
+**Files:** `receiptParser.ts` (about line 659)
+**Severity:** MEDIUM — a real article disappears with no sign in review
+**Status:** OPEN — found reviewing PR #19, reproduced
+
+`PAN 1,00 / LECHE 2,00 / ACEITE 3,00 / TOTAL ???` parses to `[pan, leche]`
+with a total of 3: the last line is taken for a total whose label was
+misread, because its price is the sum of the others. **The fix** needs a sign
+that the line really is a total — a label close to one, or its position after
+the last article — before discarding it.
+
+---
+
+### 🟡 PARSE-3: A weighed article with its name on the weight line is lost
+
+**Files:** `receiptParser.ts` (`parseWeightLine`, about line 505)
+**Severity:** MEDIUM — the article is missing from the receipt
+**Status:** OPEN — found reviewing PR #19, reproduced
+
+`MANZANA 0,500 KG 2,00 €/KG 1,00 / PAN 0,50 / TOTAL 1,50` parses to
+`[pan]` alone: `parseWeightLine` consumes the line and only creates the
+article from a `pendingName` on the line before. **The fix** is to take the
+name from the start of the weight line when there is no pending one.
+
+---
+
+### 🟡 PARSE-4: Any receipt with a `P.UNIT` column is filed as Mercadona
+
+**Files:** `receiptParser.ts` (about line 93)
+**Severity:** LOW — the store is wrong and can be corrected in review
+**Status:** OPEN — found reviewing PR #19, reproduced
+
+The column header is not Mercadona's alone. `DESCRIPCION P.UNIT IMPORTE /
+PAN 1,00 / TOTAL 1,00` comes back with `store: "mercadona"`, so another
+chain's ticket whose logo did not read is filed under the wrong shop. **The
+fix** is to need a second Mercadona sign (its NIF, its address lines) before
+using the column.
+
+---
+
+### 🟡 OCR-4: One of a photo's readings failing or timing out fails the whole receipt
+
+**Files:** `src/server/services/ocr.ts` (`readEveryWay`)
+**Severity:** MEDIUM — readings that succeeded are thrown away
+**Status:** OPEN — found reviewing PR #19, and still true of the six readings
+
+The readings are awaited with `Promise.all`, so one that throws or runs out
+`OCR_TIMEOUT_MS` makes the receipt FAILED although the other five read it.
+Each reading has its own 120 s limit, so a photo Tesseract cannot finish can
+hold the workers for several limits. **The fix** is `Promise.allSettled`,
+keeping what read, and failing only when nothing did.
+
+---
+
+### 🟡 OCR-5: A photo the preparation cannot crop fails instead of being read uncropped
+
+**Files:** `src/server/services/image.ts` (`croppedTicket`, `findPaper`,
+`cropImage`, `decodePng`), `src/server/services/prepare-worker.ts`
+**Severity:** LOW — needs an image the decoder refuses (for example
+"Unsupported PNG layout", should `Bun.Image` change the PNG it writes)
+**Status:** OPEN — found reviewing PR #19
+
+An error while cropping fails the receipt. **The fix** is to fall back to
+the whole photograph, greyed and scaled, and to say so in the log.
+
+---
+
+### 🟡 OCR-6: Cropping decodes the whole photograph into memory, and a sideways crop is made twice
+
+**Files:** `image.ts` (`cropImage`, about line 583; `croppedTicket`),
+`prepare-worker.ts`
+**Severity:** LOW — about 36 MB for a 4000 × 3000 photo, on the preparation
+thread
+**Status:** OPEN — found reviewing PR #19; the recomputation per reading it
+also named is gone (the photo is prepared once)
+
+`cropImage` turns the photo into one PNG and `inflateSync` inflates it whole,
+although its comment says it holds "the crop and two rows". And a crop wider
+than tall is cropped again, turned (`croppedTicket(…, 90)`), finding the paper
+twice. **The fix** is a streaming inflate, and turning the first crop rather
+than making a second.
+
+---
+
+### 🟡 OCR-7: The date can be borrowed from the wrong line of another reading
+
+**Files:** `ocr.ts` (`bestReading`)
+**Severity:** LOW — a wrong date is visible in review
+**Status:** OPEN — found reviewing PR #19
+
+When the reading kept has no date, the first line of another reading that
+parses to one is appended — `SOCIO DESDE 03/02/2019` as readily as the
+purchase date beside the time, which `extractDate` would prefer. It also
+parses every line of every reading to find it. **The fix** is to run
+`extractDate` on each whole reading and take the date most of them agree on.
+
+---
+
+### 🟡 OCR-8: A light or patterned background stays in the crop and is read as junk
+
+**Files:** `image.ts` (`straightenedTicket`, `findPaper`, `flattenedLight`)
+**Severity:** MEDIUM — one of the owner's tickets; another, on a white
+table, failed the same way until the six readings rescued it (0.95)
+**Status:** OPEN — measured 2026-11-07
+(`docs/superpowers/plans/2026-11-06-long-receipts-in-parts.md` §0, #24)
+
+When the background is nearly as light as the paper (a white table, a pale
+floral cloth), the corners are not trusted and the crop keeps the
+background; its pattern reads as junk beside every line and can swallow the
+large-print total. `test-tickets/1794088010070.HEIC` (a pharmacy ticket on a
+floral cloth) scores 0.65; its article lines read nearly right. **The idea
+not yet tried** is to crop to the extent of the text rather than of the paper.
+
+---
+
+### 🟡 OCR-9: A receipt printer's digits are misread the same way in every reading
+
+**Files:** the Spanish model (`Dockerfile`), `ocr.ts` (`OCR_READINGS`)
+**Severity:** MEDIUM — the Costco tickets score 0.73 and 0.87 while the rest
+score 0.95–1
+**Status:** OPEN — measured 2026-11-06 (the plan, §1b)
+
+Costco's receipt font has a `4` Tesseract reads as `9` in every size and
+stroke width, so six readings agree on the mistake. Resolution is not the
+cause (a 700 px-wide photo read best), and no model fixes it: none of the
+six Spanish models and engine modes measured reads that ticket above 0.87. **Options**, each a trial in
+`test-tickets/bench` first: fine-tuning the model on lines cut from real
+tickets (`tesstrain`), or a second engine (PaddleOCR) voting with Tesseract.
+
+---
+
+### 🟡 OCR-10: Which of six equally agreed readings is kept depends on their order
+
+**Files:** `ocr.ts` (`OCR_READINGS`, `bestReading`)
+**Severity:** LOW — fragile rather than wrong today
+**Status:** OPEN — measured 2026-11-07
+
+`bestReading` keeps the first of equals. With the readings interleaved
+instead of in the measured order, a pharmacy ticket fell from 0.95 to 0.65.
+**The fix** is a tie-break that does not depend on order, such as Tesseract's
+confidence in each reading, measured on the bench before it replaces the
+order.
+
+---
+
+### 🟡 OCR-11: A dark area at the crop's edge is blanked as table, text and all
+
+**Files:** `image.ts` (`flattenedLight`)
+**Severity:** LOW — a measured trade, pinned by a test
+**Status:** OPEN — by design
+
+A block much darker than the paper within two blocks of the crop's edge is
+taken for table or cloth and made white, because blanking dark blocks
+anywhere erased text under shadows. Text in a shadow touching the ticket's
+first or last rows is lost with it. `ocr-prepare.test.ts` ("makes paper white
+and ink black on both sides of a shadow") pins the behaviour.
+
+---
+
+### 🟡 OCR-12: The image preparation thread has not been run under `next dev`
+
+**Files:** `ocr.ts` (`onPreparationThread`), `prepare-worker.ts`
+**Severity:** LOW — a development-only risk
+**Status:** OPEN — checked under `bun test` and in a production build, where
+Next bundled the worker as a `[worker thread]` chunk that ran under Bun
+
+Turbopack's development server bundles differently from `next build`.
+**To close it**: upload a receipt with `bun run dev` and see it read.
 
 ---
 
