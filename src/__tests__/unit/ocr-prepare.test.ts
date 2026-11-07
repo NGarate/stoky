@@ -16,6 +16,8 @@ import {
   OCR_TICKET_WIDTH,
   OCR_READINGS,
   bestReading,
+  ocrWorkers,
+  pooledRecogniser,
   prepareForOcr,
   readReceiptPhoto,
 } from "@/server/services/ocr";
@@ -512,5 +514,77 @@ describe("bestReading", () => {
     expect(
       bestReading([alone, agreed, "PAN 1,49\nLECHE 2,99\nTOTAL 8,00"]),
     ).toBe(agreed);
+  });
+});
+
+describe("ocrWorkers", () => {
+  it("reads a positive whole number, up to the processors there are", () => {
+    expect(ocrWorkers("3", 8)).toBe(3);
+    expect(ocrWorkers("12", 4)).toBe(4);
+  });
+
+  it("keeps the default of two for anything else", () => {
+    for (const value of [undefined, "", "0", "-1", "1.5", "dos"]) {
+      expect(ocrWorkers(value, 8)).toBe(2);
+    }
+  });
+
+  it("never asks for fewer than one, nor more than a single processor runs", () => {
+    expect(ocrWorkers(undefined, 1)).toBe(1);
+  });
+});
+
+describe("pooledRecogniser", () => {
+  /** A recogniser that holds every image until it is told to answer. */
+  function held(name: string) {
+    const waiting: (() => void)[] = [];
+    return {
+      waiting,
+      recognise: () =>
+        new Promise<string>((resolve) => waiting.push(() => resolve(name))),
+    };
+  }
+
+  it("hands images that arrive together to different recognisers", async () => {
+    const a = held("a");
+    const b = held("b");
+    const pool = pooledRecogniser([a.recognise, b.recognise]);
+    const one = pool(Buffer.alloc(0));
+    const two = pool(Buffer.alloc(0));
+
+    expect([a.waiting.length, b.waiting.length]).toEqual([1, 1]);
+    a.waiting[0]!();
+    b.waiting[0]!();
+    expect([await one, await two]).toEqual(["a", "b"]);
+  });
+
+  it("keeps to the first while it is free, so one image starts one worker", async () => {
+    const a = held("a");
+    const b = held("b");
+    const pool = pooledRecogniser([a.recognise, b.recognise]);
+
+    const first = pool(Buffer.alloc(0));
+    a.waiting[0]!();
+    await first;
+    const second = pool(Buffer.alloc(0));
+    a.waiting[1]!();
+
+    expect(await second).toBe("a");
+    expect(b.waiting).toHaveLength(0);
+  });
+
+  it("frees a recogniser whose image failed", async () => {
+    let calls = 0;
+    const pool = pooledRecogniser([
+      async () => {
+        calls++;
+        throw new Error("unreadable");
+      },
+      async () => "b",
+    ]);
+
+    await expect(pool(Buffer.alloc(0))).rejects.toThrow("unreadable");
+    await expect(pool(Buffer.alloc(0))).rejects.toThrow("unreadable");
+    expect(calls).toBe(2);
   });
 });

@@ -92,6 +92,7 @@ services:
       STOKY_URLS: "https://${DOMAIN:?Define DOMAIN en .env sin https ni ruta}"
       STOKY_SECRET: "${STOKY_SECRET:-}"
       STOKY_REGISTRATION: "${STOKY_REGISTRATION:-first-user}"
+      OCR_WORKERS: "${OCR_WORKERS:-2}"
     volumes:
       - uploads:/app/uploads
     networks:

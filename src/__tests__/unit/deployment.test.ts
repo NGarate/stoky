@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { REGISTRATION_MODES } from "@/lib/auth/registration";
+import { DEFAULT_OCR_WORKERS } from "@/server/services/ocr";
 import nextConfig from "../../../next.config";
 
 const root = join(import.meta.dir, "../../..");
@@ -109,6 +110,19 @@ describe("the downloadable installation", () => {
         ),
       });
     }
+  });
+
+  it("reads receipts with two OCR workers unless the operator says otherwise", () => {
+    // Defaulted in Compose for the same reason as STOKY_REGISTRATION: an .env
+    // from an earlier release has no such line. The number is the
+    // application's own default (`DEFAULT_OCR_WORKERS`), so leaving the line
+    // out and keeping it say the same thing.
+    expect(compose.services.app.environment!.OCR_WORKERS).toBe(
+      `\${OCR_WORKERS:-${DEFAULT_OCR_WORKERS}}`,
+    );
+    expect(template).toMatch(
+      new RegExp(`^OCR_WORKERS=${DEFAULT_OCR_WORKERS}$`, "m"),
+    );
   });
 
   it("closes registration after the first account unless the operator opens it", () => {

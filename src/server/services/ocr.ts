@@ -2,6 +2,7 @@ import { createWorker, type Worker } from "tesseract.js";
 import { prisma } from "@/lib/prisma";
 import { ReceiptStatus } from "@/generated/prisma/client";
 import { existsSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { InvalidInputError, NotFoundError } from "./errors";
 import { parseReceiptText } from "./receiptParser";
@@ -500,7 +501,7 @@ async function readEveryWay(
       greyPng(thin ? thinnedInk : prepared, Math.round(prepared.width * scale)),
     ),
   );
-  // All asked for at once: the recogniser decides how many run together.
+  // In parallel: the recogniser spreads them over its workers.
   return Promise.all(images.map((one) => recognise(one, OCR_OPTIONS)));
 }
 
@@ -521,13 +522,62 @@ export async function readReceiptPhoto(
   return bestReading(await readEveryWay(prepared, recognise));
 }
 
-const ocrWorker = sharedWorker<Worker>(() =>
-  createWorker("spa", undefined, workerOptions()),
+/** Workers when `OCR_WORKERS` does not say otherwise. */
+export const DEFAULT_OCR_WORKERS = 2;
+
+/**
+ * `OCR_WORKERS` when it is a positive whole number, the default otherwise;
+ * never more than the processor can run at once.
+ *
+ * Each worker is a thread with its own copy of the model, about 120 MB, and
+ * reads one image at a time. Measured with six readings of one long ticket on
+ * an 8-core machine, with the model the image bakes: 1 worker 22.4 s, 2
+ * 12.6 s, 3 10.1 s; past three, the slowest single reading is what is left.
+ * Two by default, because the release bundle gives the application 1 GiB.
+ */
+export function ocrWorkers(
+  configured = process.env.OCR_WORKERS,
+  processors = availableParallelism(),
+): number {
+  const value = Number(configured);
+  const wanted =
+    Number.isInteger(value) && value > 0 ? value : DEFAULT_OCR_WORKERS;
+  return Math.max(1, Math.min(wanted, processors));
+}
+
+/**
+ * One recogniser made of several, each image handed to the one with the
+ * fewest in hand; the first of equals.
+ *
+ * Each keeps its own queue and its own time limit (`timedRecogniser`), so an
+ * image's clock still starts when its worker starts it, and a worker that is
+ * replaced takes nothing of the others' with it. A recogniser is only asked
+ * once it is needed: one image at a time keeps to the first one, and so
+ * starts one worker.
+ */
+export function pooledRecogniser<T = string>(
+  recognisers: readonly ((
+    image: Buffer,
+    options?: RecogniseOptions,
+  ) => Promise<T>)[],
+): (image: Buffer, options?: RecogniseOptions) => Promise<T> {
+  const inHand = recognisers.map(() => 0);
+  return (image, options) => {
+    const index = inHand.indexOf(Math.min(...inHand));
+    inHand[index]!++;
+    return recognisers[index]!(image, options).finally(() => {
+      inHand[index]!--;
+    });
+  };
+}
+
+const ocrWorkerPool = Array.from({ length: ocrWorkers() }, () =>
+  sharedWorker<Worker>(() => createWorker("spa", undefined, workerOptions())),
 );
 
-// One worker, and so one queue, for the readings and for the orientation's
-// judgements alike (`timedReader`).
-const readWithTesseract = timedReader(ocrWorker);
+const readWithTesseract = pooledRecogniser(
+  ocrWorkerPool.map((worker) => timedReader(worker)),
+);
 
 const recogniseWithTesseract: Recognise = async (image, options) =>
   (await readWithTesseract(image, options)).text;
@@ -611,5 +661,5 @@ export async function processReceiptOcr(
 }
 
 export async function terminateWorker(): Promise<void> {
-  await ocrWorker.terminate();
+  await Promise.all(ocrWorkerPool.map((worker) => worker.terminate()));
 }
