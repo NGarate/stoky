@@ -809,30 +809,7 @@ export function middleBand(grey: Grey, fraction = 0.3): Grey {
  */
 export function thinned(grey: Grey): Grey {
   const { width, height, pixels } = grey;
-  const across = new Uint8Array(width * height);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const at = y * width;
-      across[at + x] = Math.max(
-        pixels[at + Math.max(0, x - 1)]!,
-        pixels[at + x]!,
-        pixels[at + Math.min(width - 1, x + 1)]!,
-      );
-    }
-  }
-  const out = new Uint8Array(width * height);
-  for (let y = 0; y < height; y++) {
-    const above = Math.max(0, y - 1) * width;
-    const below = Math.min(height - 1, y + 1) * width;
-    for (let x = 0; x < width; x++) {
-      out[y * width + x] = Math.max(
-        across[above + x]!,
-        across[y * width + x]!,
-        across[below + x]!,
-      );
-    }
-  }
-  return { width, height, pixels: out };
+  return { width, height, pixels: windowMax(pixels, width, height, 1) };
 }
 
 /** One value per block of a block grid, and the grid's size. */
@@ -1068,15 +1045,7 @@ function paperMask(
       for (let c = 0; c < 3; c++) histograms[c]![channel(row, x, c)]!++;
     }
   }
-  const whites = histograms.map((histogram) => {
-    const target = width * height * 0.95;
-    let seen = 0;
-    for (let value = 0; value < 256; value++) {
-      seen += histogram[value]!;
-      if (seen >= target) return value || 1;
-    }
-    return 255;
-  });
+  const whites = histograms.map((counts) => percentile(counts, 0.95) || 1);
   const bright = new Uint8Array(width * height);
   const grey = new Uint8Array(width * height);
   const brightness = new Uint32Array(256);
@@ -1087,7 +1056,8 @@ function paperMask(
       );
       const max = Math.max(...balanced);
       bright[y * width + x] = Math.round(max * 255);
-      grey[y * width + x] = max - Math.min(...balanced) < 0.22 * max ? 1 : 0;
+      grey[y * width + x] =
+        max - Math.min(...balanced) < PAPER_CHROMA * max ? 1 : 0;
       brightness[bright[y * width + x]!]!++;
     }
   });
@@ -1125,34 +1095,33 @@ function largestPart(
   width: number,
   height: number,
 ): Uint8Array {
-  const morph = (source: Uint8Array, radius: number, grow: boolean) => {
+  // Growing is `windowMax`; shrinking counts outside the image as background.
+  const shrink = (source: Uint8Array, radius: number) => {
     const across = new Uint8Array(width * height);
     const out = new Uint8Array(width * height);
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        let value = grow ? 0 : 1;
+        let value = 1;
         for (let d = -radius; d <= radius; d++) {
           const xx = x + d;
-          const s = xx < 0 || xx >= width ? 0 : source[y * width + xx]!;
-          value = grow ? value | s : value & s;
+          value &= xx < 0 || xx >= width ? 0 : source[y * width + xx]!;
         }
         across[y * width + x] = value;
       }
     }
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        let value = grow ? 0 : 1;
+        let value = 1;
         for (let d = -radius; d <= radius; d++) {
           const yy = y + d;
-          const s = yy < 0 || yy >= height ? 0 : across[yy * width + x]!;
-          value = grow ? value | s : value & s;
+          value &= yy < 0 || yy >= height ? 0 : across[yy * width + x]!;
         }
         out[y * width + x] = value;
       }
     }
     return out;
   };
-  const closed = morph(morph(mask, 3, true), 3, false);
+  const closed = shrink(windowMax(mask, width, height, 3), 3);
   const label = new Int32Array(width * height).fill(-1);
   let best = -1;
   let bestSize = 0;
