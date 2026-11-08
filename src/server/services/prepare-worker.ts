@@ -20,7 +20,7 @@ import {
   croppedTicket,
   dewarped,
   flattenedLight,
-  greyPng,
+  greyPngs,
   straightenedTicket,
   thinned,
 } from "./image";
@@ -73,17 +73,20 @@ async function answer(
       return { grey: dewarped(request.grey) };
     case "readings": {
       const { grey, readings } = request;
-      const thin = readings.some((reading) => reading.thin)
-        ? thinned(grey)
-        : grey;
-      const images = await Promise.all(
-        readings.map((reading) =>
-          greyPng(
-            reading.thin ? thin : grey,
-            Math.round(grey.width * reading.scale),
-          ),
-        ),
-      );
+      const images: Buffer[] = [];
+      // One source at a time, each a bitmap resized to all its widths: a
+      // bitmap per reading held six full-size bitmaps at once.
+      for (const thin of [false, true]) {
+        const at = readings.flatMap((reading, i) =>
+          reading.thin === thin ? [i] : [],
+        );
+        if (at.length === 0) continue;
+        const pngs = await greyPngs(
+          thin ? thinned(grey) : grey,
+          at.map((i) => Math.round(grey.width * readings[i]!.scale)),
+        );
+        at.forEach((i, k) => (images[i] = pngs[k]!));
+      }
       return { images: images.map((png) => new Uint8Array(png)) };
     }
   }

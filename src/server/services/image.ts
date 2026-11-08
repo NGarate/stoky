@@ -763,6 +763,18 @@ function greyOfPng(png: Buffer): Grey {
  * read in 1.8 s as a PNG.
  */
 export async function greyPng(grey: Grey, width?: number): Promise<Buffer> {
+  return (await greyPngs(grey, [width]))[0]!;
+}
+
+/**
+ * `grey` as a PNG at each of `widths` (as it is where one is undefined), all
+ * from one 32-bit bitmap. A bitmap per width held them all at once: six of a
+ * 20-megapixel ticket were 480 MB. The PNGs are the same bytes either way.
+ */
+export async function greyPngs(
+  grey: Grey,
+  widths: readonly (number | undefined)[],
+): Promise<Buffer[]> {
   const bitmap = emptyBitmap(grey.width, grey.height);
   const out = bitmap.subarray(BMP_HEADER_BYTES);
   for (let i = 0; i < grey.pixels.length; i++) {
@@ -770,9 +782,13 @@ export async function greyPng(grey: Grey, width?: number): Promise<Buffer> {
     out[to] = out[to + 1] = out[to + 2] = grey.pixels[i]!;
     out[to + 3] = 255;
   }
-  let image = new Bun.Image(bitmap, { maxPixels: MAX_PIXELS });
-  if (width !== undefined) image = image.resize(width);
-  return Buffer.from(await image.png().toBuffer());
+  return Promise.all(
+    widths.map(async (width) => {
+      let image = new Bun.Image(bitmap, { maxPixels: MAX_PIXELS });
+      if (width !== undefined) image = image.resize(width);
+      return Buffer.from(await image.png().toBuffer());
+    }),
+  );
 }
 
 /** Half a turn. */
