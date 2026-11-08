@@ -1271,9 +1271,10 @@ Verified against the files named in each row.
   (`docs/SECURITY_REVIEW.md` finding 16).
 - **Recognition is bounded in time** (`src/server/services/ocr.ts`): there
   are `OCR_WORKERS` Tesseract workers, 2 unless set and never more than the
-  host's processors, each with its own queue and its own limit, so what
-  follows holds for each one, and one stuck image holds one worker rather
-  than all of them. One image
+  host's processors. Images wait in one queue and each goes to whichever
+  worker is free when its turn comes, and each worker has its own limit, so
+  what follows holds for each one, and one stuck image holds one worker
+  while the rest of the queue goes through the others. One image
   may hold its worker for `OCR_TIMEOUT_MS`, 120 seconds unless the
   variable is set to a positive whole number of milliseconds no larger than a
   timer can hold, 2 147 483 647 (the release bundle does not pass it). Past

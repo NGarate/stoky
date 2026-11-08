@@ -657,6 +657,26 @@ describe("pooledRecogniser", () => {
     expect(b.waiting).toHaveLength(0);
   });
 
+  it("gives a waiting image to whichever recogniser frees first", async () => {
+    const stuck = held("stuck");
+    const quick = held("quick");
+    const pool = pooledRecogniser([stuck.recognise, quick.recognise]);
+    const images = [0, 1, 2, 3].map(() => pool(Buffer.alloc(0)));
+
+    // The first is stuck; the rest go through the other as it frees.
+    for (let i = 0; i < 3; i++) {
+      quick.waiting[i]!();
+      await images[i + 1];
+    }
+
+    expect(await Promise.all(images.slice(1))).toEqual([
+      "quick",
+      "quick",
+      "quick",
+    ]);
+    expect(stuck.waiting).toHaveLength(1);
+  });
+
   it("frees a recogniser whose image failed", async () => {
     let calls = 0;
     const pool = pooledRecogniser([

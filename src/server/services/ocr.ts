@@ -628,14 +628,16 @@ export function ocrWorkers(
 }
 
 /**
- * One recogniser made of several, each image handed to the one with the
- * fewest in hand; the first of equals.
+ * One recogniser made of several: images wait in one queue, and each goes to
+ * whichever recogniser is free when its turn comes.
  *
- * Each keeps its own queue and its own time limit (`timedRecogniser`), so an
- * image's clock still starts when its worker starts it, and a worker that is
- * replaced takes nothing of the others' with it. A recogniser is only asked
- * once it is needed: one image at a time keeps to the first one, and so
- * starts one worker.
+ * Handed out as they are taken, not as they arrive. Choosing a recogniser
+ * when an image arrived — the one with the fewest in hand — left the images
+ * behind a stuck one waiting out its whole time limit while the others sat
+ * idle. Each still has its own time limit (`timedReader`), so an image's
+ * clock starts when a worker starts it, and a worker that is replaced takes
+ * nothing of the others' with it. The free one used last is used first: one
+ * image at a time keeps to the first, and so starts one worker.
  */
 export function pooledRecogniser<T = string>(
   recognisers: readonly ((
@@ -643,13 +645,22 @@ export function pooledRecogniser<T = string>(
     options?: RecogniseOptions,
   ) => Promise<T>)[],
 ): (image: Buffer, options?: RecogniseOptions) => Promise<T> {
-  const inHand = recognisers.map(() => 0);
-  return (image, options) => {
-    const index = inHand.indexOf(Math.min(...inHand));
-    inHand[index]!++;
-    return recognisers[index]!(image, options).finally(() => {
-      inHand[index]!--;
-    });
+  type Recogniser = (typeof recognisers)[number];
+  const free = recognisers.slice();
+  const waiting: ((recogniser: Recogniser) => void)[] = [];
+  const release = (recogniser: Recogniser) => {
+    const next = waiting.shift();
+    if (next) next(recogniser);
+    else free.unshift(recogniser);
+  };
+  return async (image, options) => {
+    const recogniser =
+      free.shift() ?? (await new Promise<Recogniser>((r) => waiting.push(r)));
+    try {
+      return await recogniser(image, options);
+    } finally {
+      release(recogniser);
+    }
   };
 }
 
