@@ -191,6 +191,13 @@ describe("croppedTicket", () => {
 
     expect((await croppedTicket(wide, OCR_TICKET_WIDTH)).width).toBe(1600);
   });
+
+  it("stands a ticket lying on its side, scaling its width", async () => {
+    const grey = await croppedTicket(leftAlignedTicket(90), OCR_TICKET_WIDTH);
+
+    expect(grey.width).toBe(OCR_TICKET_WIDTH);
+    expect(grey.height).toBeGreaterThan(grey.width);
+  });
 });
 
 describe("straightenedTicket", () => {

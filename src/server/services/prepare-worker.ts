@@ -64,15 +64,9 @@ async function answer(
         request.image.byteOffset,
         request.image.byteLength,
       );
-      let grey = await straightenedTicket(image, request.width);
-      if (!grey) {
-        grey = await croppedTicket(image, request.width);
-        // A crop wider than tall was taken on its side: crop it turned, so
-        // that the ticket's width is what is scaled.
-        if (grey.width > grey.height) {
-          grey = await croppedTicket(image, request.width, 90);
-        }
-      }
+      const grey =
+        (await straightenedTicket(image, request.width)) ??
+        (await croppedTicket(image, request.width));
       return { grey: flattenedLight(grey) };
     }
     case "dewarped":

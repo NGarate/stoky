@@ -705,14 +705,18 @@ async function decodedRows(image: Buffer, width: number, grey: boolean) {
 const TICKET_MAX_PIXELS = 20_000_000;
 
 /**
- * The ticket cropped to its paper (`findPaper`), turned by `turn`, grey, and
- * scaled up to at least `width` across — never down. The crop is the
- * fallback when the corners cannot be trusted (`straightenedTicket`).
+ * The ticket cropped to its paper (`findPaper`), grey, and scaled up to at
+ * least `width` across — never down. The crop is the fallback when the
+ * corners cannot be trusted (`straightenedTicket`).
+ *
+ * A crop wider than tall was taken on its side, so it is turned a quarter
+ * first, so that the ticket's width is what is scaled. Decided from the
+ * paper's size before anything is built: the turn used to be found by
+ * building the crop and building it again turned.
  */
 export async function croppedTicket(
   image: Buffer,
   width: number,
-  turn: 0 | 90 = 0,
 ): Promise<Grey> {
   const { width: photoWidth, height: photoHeight } =
     await readImageMetadata(image);
@@ -723,6 +727,7 @@ export async function croppedTicket(
   const source = paper ? await cropImage(image, paper) : image;
   const paperWidth = paper?.width ?? photoWidth;
   const paperHeight = paper?.height ?? photoHeight;
+  const turn = paperWidth > paperHeight ? 90 : 0;
   const across = turn === 90 ? paperHeight : paperWidth;
   const down = turn === 90 ? paperWidth : paperHeight;
   const scale = Math.max(

@@ -1082,20 +1082,19 @@ the whole photograph, greyed and scaled, and to say so in the log.
 
 ---
 
-### 🟡 OCR-6: Cropping decodes the whole photograph into memory, and a sideways crop is made twice
+### 🟡 OCR-6: Cropping decodes the whole photograph into memory
 
-**Files:** `image.ts` (`cropImage`, about line 583; `croppedTicket`),
-`prepare-worker.ts`
+**Files:** `image.ts` (`cropImage`, about line 583)
 **Severity:** LOW — about 36 MB for a 4000 × 3000 photo, on the preparation
 thread
 **Status:** OPEN — found reviewing PR #19; the recomputation per reading it
-also named is gone (the photo is prepared once)
+also named is gone (the photo is prepared once), and so is the second crop
+of a ticket lying on its side (`croppedTicket` chooses the turn from the
+paper's size before building anything)
 
 `cropImage` turns the photo into one PNG and `inflateSync` inflates it whole,
-although its comment says it holds "the crop and two rows". And a crop wider
-than tall is cropped again, turned (`croppedTicket(…, 90)`), finding the paper
-twice. **The fix** is a streaming inflate, and turning the first crop rather
-than making a second.
+although its comment says it holds "the crop and two rows". **The fix** is a
+streaming inflate.
 
 ---
 
