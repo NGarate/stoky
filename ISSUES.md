@@ -1057,15 +1057,20 @@ using the column.
 
 ### 🟡 OCR-4: One of a photo's readings failing or timing out fails the whole receipt
 
-**Files:** `src/server/services/ocr.ts` (`readEveryWay`)
-**Severity:** MEDIUM — readings that succeeded are thrown away
-**Status:** OPEN — found reviewing PR #19, and still true of the six readings
+**Files:** `src/server/services/ocr.ts` (`readReceiptPhoto`)
+**Severity:** LOW — readings that succeeded are thrown away
+**Status:** OPEN by decision — found reviewing PR #19. The owner chose on
+2026-11-09 to keep failing the receipt and move on to the next one, rather
+than keep what read
 
 The readings are awaited with `Promise.all`, so one that throws or runs out
 `OCR_TIMEOUT_MS` makes the receipt FAILED although the other five read it.
-Each reading has its own 120 s limit, so a photo Tesseract cannot finish can
-hold the workers for several limits. **The fix** is `Promise.allSettled`,
-keeping what read, and failing only when nothing did.
+What used to make that expensive is gone: the receipt's readings still
+waiting for a worker are dropped the moment one fails, so a photo
+Tesseract cannot finish costs one limit, plus whatever reading another
+worker had already started, instead of a limit per reading. The
+alternative is `Promise.allSettled`, keeping what read and failing only
+when nothing did.
 
 ---
 

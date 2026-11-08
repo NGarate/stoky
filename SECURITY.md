@@ -1274,7 +1274,10 @@ Verified against the files named in each row.
   host's processors. Images wait in one queue and each goes to whichever
   worker is free when its turn comes, and each worker has its own limit, so
   what follows holds for each one, and one stuck image holds one worker
-  while the rest of the queue goes through the others. One image
+  while the rest of the queue goes through the others. When one of a
+  receipt's readings fails or runs out its time, the receipt becomes FAILED
+  and its readings still waiting are dropped unread, so the queue moves on
+  to the next receipt. One image
   may hold its worker for `OCR_TIMEOUT_MS`, 120 seconds unless the
   variable is set to a positive whole number of milliseconds no larger than a
   timer can hold, 2 147 483 647 (the release bundle does not pass it). Past

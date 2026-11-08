@@ -529,6 +529,22 @@ describe("readReceiptPhoto", () => {
     expect(asked).toBe(OCR_READINGS.length);
   });
 
+  it("calls off the readings still waiting when one fails", async () => {
+    const signals: (AbortSignal | undefined)[] = [];
+    const reading = readReceiptPhoto(
+      ticketOnATable(),
+      async (_image, _options, signal) => {
+        signals.push(signal);
+        if (signals.length === 1) throw new Error("timed out");
+        return READ;
+      },
+    );
+
+    await expect(reading).rejects.toThrow("timed out");
+    expect(signals).toHaveLength(OCR_READINGS.length);
+    for (const signal of signals) expect(signal?.aborted).toBe(true);
+  });
+
   it("reads the ticket with its ink thinned as well as as it is", async () => {
     const inkAt = new Map<number, number[]>();
     await readReceiptPhoto(ticketOnATable(), async (image) => {
@@ -675,6 +691,22 @@ describe("pooledRecogniser", () => {
       "quick",
     ]);
     expect(stuck.waiting).toHaveLength(1);
+  });
+
+  it("drops the images still waiting once their receipt has failed", async () => {
+    const only = held("a");
+    const pool = pooledRecogniser([only.recognise]);
+    const failed = new AbortController();
+    const images = [0, 1, 2].map(() =>
+      pool(Buffer.alloc(0), undefined, failed.signal).catch(() => "dropped"),
+    );
+
+    failed.abort();
+    only.waiting[0]!();
+
+    // The one already started ends; the two behind it are never read.
+    expect(await Promise.all(images)).toEqual(["a", "dropped", "dropped"]);
+    expect(only.waiting).toHaveLength(1);
   });
 
   it("frees a recogniser whose image failed", async () => {

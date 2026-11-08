@@ -158,14 +158,22 @@ export interface Reading {
 /** What one recognition is asked for: Tesseract's options and parameters. */
 export type RecogniseOptions = Record<string, string | boolean>;
 
-/** The OCR engine, as the pipeline sees it: an image and options in, text out. */
+/**
+ * The OCR engine, as the pipeline sees it: an image and options in, text out.
+ * `signal`, once aborted, means the receipt has failed: an image still
+ * waiting for a worker is dropped rather than read.
+ */
 export type Recognise = (
   image: Buffer,
   options?: RecogniseOptions,
+  signal?: AbortSignal,
 ) => Promise<string>;
 
-/** How sure the OCR engine is of its reading of an image, 0–100. */
-export type Confidence = (image: Buffer) => Promise<number>;
+/** How sure the OCR engine is of its reading of an image, 0–100; `signal` as for `Recognise`. */
+export type Confidence = (
+  image: Buffer,
+  signal?: AbortSignal,
+) => Promise<number>;
 
 /** No opinion on any image: the orientation the proportions chose stands. */
 export const noConfidence: Confidence = async () => 0;
@@ -336,10 +344,14 @@ const ORIENTATION_MARGIN = 10;
  *
  * Measured on 28 photographs turned a quarter or half a turn: 28 right.
  */
-async function upright(grey: Grey, confidence: Confidence): Promise<Grey> {
+async function upright(
+  grey: Grey,
+  confidence: Confidence,
+  signal?: AbortSignal,
+): Promise<Grey> {
   const standing = grey.width > grey.height ? turnedQuarter(grey) : grey;
   const judge = async (candidate: Grey) =>
-    confidence(await greyPng(middleBand(candidate)));
+    confidence(await greyPng(middleBand(candidate)), signal);
   const flipped = turnedHalf(standing);
   const [asIs, turned] = await Promise.all([judge(standing), judge(flipped)]);
   let best = turned > asIs ? flipped : standing;
@@ -450,6 +462,7 @@ function greyOf(reply: PreparationReply): Grey {
 export async function prepareForOcr(
   image: Buffer,
   confidence: Confidence = noConfidence,
+  signal?: AbortSignal,
 ): Promise<Grey> {
   const ticket = greyOf(
     await onPreparationThread({
@@ -458,7 +471,7 @@ export async function prepareForOcr(
       width: OCR_TICKET_WIDTH,
     }),
   );
-  const standing = await upright(ticket, confidence);
+  const standing = await upright(ticket, confidence, signal);
   return greyOf(
     await onPreparationThread({ step: "dewarped", grey: standing }),
   );
@@ -567,6 +580,7 @@ export function bestReading(readings: readonly string[]): string {
 async function readEveryWay(
   prepared: Grey,
   recognise: Recognise,
+  signal: AbortSignal,
 ): Promise<string[]> {
   const reply = await onPreparationThread({
     step: "readings",
@@ -582,6 +596,7 @@ async function readEveryWay(
       recognise(
         Buffer.from(image.buffer, image.byteOffset, image.byteLength),
         OCR_OPTIONS,
+        signal,
       ),
     ),
   );
@@ -594,14 +609,27 @@ async function readEveryWay(
  * A photograph taken upside down no longer needs a second round: the
  * preparation turns it by its text (`upright`). `confidence` is what judges
  * that; left out, the proportions alone decide.
+ *
+ * **One failure fails the receipt, at once.** When a reading throws or runs
+ * out its time, the receipt is FAILED and its readings still waiting for a
+ * worker are dropped, so the workers go on to the next receipt instead of
+ * reading for a result nobody will use. A reading a worker has already
+ * started runs to its end: tesseract.js cannot stop one short of replacing
+ * the worker.
  */
 export async function readReceiptPhoto(
   image: Buffer,
   recognise: Recognise,
   confidence: Confidence = noConfidence,
 ): Promise<string> {
-  const prepared = await prepareForOcr(image, confidence);
-  return bestReading(await readEveryWay(prepared, recognise));
+  const failed = new AbortController();
+  try {
+    const prepared = await prepareForOcr(image, confidence, failed.signal);
+    return bestReading(await readEveryWay(prepared, recognise, failed.signal));
+  } finally {
+    // After a success nothing is waiting; after a failure, this drops it.
+    failed.abort();
+  }
 }
 
 /** Workers when `OCR_WORKERS` does not say otherwise. */
@@ -637,14 +665,19 @@ export function ocrWorkers(
  * idle. Each still has its own time limit (`timedReader`), so an image's
  * clock starts when a worker starts it, and a worker that is replaced takes
  * nothing of the others' with it. The free one used last is used first: one
- * image at a time keeps to the first, and so starts one worker.
+ * image at a time keeps to the first, and so starts one worker. An image whose
+ * `signal` was aborted while it waited is refused when its turn comes, unread.
  */
 export function pooledRecogniser<T = string>(
   recognisers: readonly ((
     image: Buffer,
     options?: RecogniseOptions,
   ) => Promise<T>)[],
-): (image: Buffer, options?: RecogniseOptions) => Promise<T> {
+): (
+  image: Buffer,
+  options?: RecogniseOptions,
+  signal?: AbortSignal,
+) => Promise<T> {
   type Recogniser = (typeof recognisers)[number];
   const free = recognisers.slice();
   const waiting: ((recogniser: Recogniser) => void)[] = [];
@@ -653,10 +686,11 @@ export function pooledRecogniser<T = string>(
     if (next) next(recogniser);
     else free.unshift(recogniser);
   };
-  return async (image, options) => {
+  return async (image, options, signal) => {
     const recogniser =
       free.shift() ?? (await new Promise<Recogniser>((r) => waiting.push(r)));
     try {
+      signal?.throwIfAborted();
       return await recogniser(image, options);
     } finally {
       release(recogniser);
@@ -672,11 +706,11 @@ const readWithTesseract = pooledRecogniser(
   ocrWorkerPool.map((worker) => timedReader(worker)),
 );
 
-const recogniseWithTesseract: Recognise = async (image, options) =>
-  (await readWithTesseract(image, options)).text;
+const recogniseWithTesseract: Recognise = async (image, options, signal) =>
+  (await readWithTesseract(image, options, signal)).text;
 
-const confidenceWithTesseract: Confidence = async (image) =>
-  (await readWithTesseract(image)).confidence;
+const confidenceWithTesseract: Confidence = async (image, signal) =>
+  (await readWithTesseract(image, undefined, signal)).confidence;
 
 /**
  * Reads the receipt's photograph and moves it to PARSED with the text — or to
