@@ -341,12 +341,16 @@ const ORIENTATION_MARGIN = 10;
  *   wins.
  *
  * Measured on 28 photographs turned a quarter or half a turn: 28 right.
+ *
+ * `sure` when the turn chosen read clearly better than half a turn from it.
+ * When it did not — a faint or sparse middle, or no judge at all — the
+ * caller reads the ticket half turned as well if nothing came of it.
  */
 async function upright(
   bands: readonly Buffer[],
   confidence: Confidence,
   signal?: AbortSignal,
-): Promise<Turn> {
+): Promise<{ turn: Turn; sure: boolean }> {
   const scores: number[] = [];
   const judge = async (turns: Turn[]) => {
     const judged = await Promise.all(
@@ -366,7 +370,15 @@ async function upright(
       }
     }
   }
-  return best;
+  return {
+    turn: best,
+    sure: scores[best]! - scores[(best + 2) % 4]! >= ORIENTATION_MARGIN,
+  };
+}
+
+/** A prepared ticket, and whether its text said which way up it is. */
+export interface PreparedTicket extends Grey {
+  sure: boolean;
 }
 
 /** Requests the preparation thread has not answered yet, by id. */
@@ -475,25 +487,26 @@ export async function prepareForOcr(
   image: Buffer,
   confidence: Confidence = noConfidence,
   signal?: AbortSignal,
-): Promise<Grey> {
+): Promise<PreparedTicket> {
   const ticket = await onPreparationThread({
     step: "ticket",
     image,
     width: OCR_TICKET_WIDTH,
   });
   const grey = sent(ticket, "grey");
-  const turn = await upright(
+  const { turn, sure } = await upright(
     sent(ticket, "images").map(asBuffer),
     confidence,
     signal,
   );
   // Handed over, not copied: nothing here needs the ticket again.
-  return sent(
+  const prepared = sent(
     await onPreparationThread({ step: "upright", grey, turn }, [
       grey.pixels.buffer as ArrayBuffer,
     ]),
     "grey",
   );
+  return { ...prepared, sure };
 }
 
 /**
@@ -596,33 +609,44 @@ export function bestReading(readings: readonly string[]): string {
 }
 
 /**
- * `prepared` read every way `OCR_READINGS` lists, all at once. `prepared` is
- * handed to the preparation thread, not copied, and cannot be used after.
+ * `prepared`, half turned when asked, read every way `OCR_READINGS` lists,
+ * all at once. `prepared` goes to the preparation thread and back without
+ * being copied: what comes back is it, and `prepared` itself is unusable.
  */
 async function readEveryWay(
   prepared: Grey,
   recognise: Recognise,
   signal: AbortSignal,
-): Promise<string[]> {
+  halfTurned = false,
+): Promise<{ texts: string[]; prepared: Grey }> {
   const reply = await onPreparationThread(
-    { step: "readings", grey: prepared, readings: OCR_READINGS },
+    { step: "readings", grey: prepared, halfTurned, readings: OCR_READINGS },
     [prepared.pixels.buffer as ArrayBuffer],
   );
   // In parallel: the recogniser spreads them over its workers.
-  return Promise.all(
+  const texts = await Promise.all(
     sent(reply, "images").map((image) =>
       recognise(asBuffer(image), OCR_OPTIONS, signal),
     ),
   );
+  return { texts, prepared: sent(reply, "grey") };
 }
+
+/** How many articles a reading yields. */
+const articles = (text: string) => parseReceiptText(text).items.length;
 
 /**
  * Every reading of `OCR_READINGS` of the prepared photograph, and the one
  * kept.
  *
- * A photograph taken upside down no longer needs a second round: the
- * preparation turns it by its text (`upright`). `confidence` is what judges
- * that; left out, the proportions alone decide.
+ * The preparation turns the ticket by its text (`upright`); `confidence` is
+ * what judges that, and left out, the proportions alone decide. **When the
+ * text did not say which way up and no article was read, it is read again
+ * half turned**, and that reading kept if it yields articles: upside down is
+ * the likeliest way to read nothing, and this is how an Eroski ticket went
+ * from no article to 65% before the orientation was judged at all. Only
+ * then: a ticket that was judged clearly is not read twice, and a blank
+ * photograph is read twice only when the judge could not tell either.
  *
  * **One failure fails the receipt, at once.** When a reading throws or runs
  * out its time, the receipt is FAILED and its readings still waiting for a
@@ -639,7 +663,14 @@ export async function readReceiptPhoto(
   const failed = new AbortController();
   try {
     const prepared = await prepareForOcr(image, confidence, failed.signal);
-    return bestReading(await readEveryWay(prepared, recognise, failed.signal));
+    const first = await readEveryWay(prepared, recognise, failed.signal);
+    const best = bestReading(first.texts);
+    if (prepared.sure || articles(best) > 0) return best;
+    const turned = bestReading(
+      (await readEveryWay(first.prepared, recognise, failed.signal, true))
+        .texts,
+    );
+    return articles(turned) > 0 ? turned : best;
   } finally {
     // After a success nothing is waiting; after a failure, this drops it.
     failed.abort();

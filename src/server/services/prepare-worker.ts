@@ -55,9 +55,14 @@ export type PreparationRequest =
     }
   | {
       id: number;
-      /** `grey` as a PNG per reading, scaled and with its ink thinned as each asks. */
+      /**
+       * `grey`, half turned when asked, as a PNG per reading, scaled
+       * and with its ink thinned as it asks; and `grey` back as it came, for
+       * a second round.
+       */
       step: "readings";
       grey: Grey;
+      halfTurned: boolean;
       readings: readonly { scale: number; thin: boolean }[];
     };
 
@@ -106,7 +111,8 @@ async function answer(
     case "upright":
       return { grey: dewarped(turned(request.grey, request.turn)) };
     case "readings": {
-      const { grey, readings } = request;
+      const { readings } = request;
+      const grey = request.halfTurned ? turnedHalf(request.grey) : request.grey;
       const images: Buffer[] = [];
       // One source at a time, each a bitmap resized to all its widths: a
       // bitmap per reading held six full-size bitmaps at once.
@@ -121,7 +127,7 @@ async function answer(
         );
         at.forEach((i, k) => (images[i] = pngs[k]!));
       }
-      return { images };
+      return { grey: request.grey, images };
     }
   }
 }

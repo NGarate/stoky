@@ -354,19 +354,19 @@ describe("thinned", () => {
   });
 });
 
-describe("prepareForOcr", () => {
-  /** Tesseract's confidence, as far as these tests need it: sure of text that starts on the left. */
-  const likesLeftText: Confidence = async (png) => {
-    const band = await pixelsOf(png);
-    const grey: Grey = greyPainted(
-      band.width,
-      band.height,
-      (x, y) => band.at(x, y)[0]!,
-    );
-    const half = grey.width >> 1;
-    return inkShare(grey, 0, half) > inkShare(grey, half) ? 90 : 20;
-  };
+/** Tesseract's confidence, as far as these tests need it: sure of text that starts on the left. */
+const likesLeftText: Confidence = async (png) => {
+  const band = await pixelsOf(png);
+  const grey: Grey = greyPainted(
+    band.width,
+    band.height,
+    (x, y) => band.at(x, y)[0]!,
+  );
+  const half = grey.width >> 1;
+  return inkShare(grey, 0, half) > inkShare(grey, half) ? 90 : 20;
+};
 
+describe("prepareForOcr", () => {
   it(
     "hands back the ticket upright, by its text",
     async () => {
@@ -528,6 +528,31 @@ describe("readReceiptPhoto", () => {
     expect(await reading).toBe(READ);
     expect(asked).toBe(OCR_READINGS.length);
   });
+
+  it("reads it half turned when nothing was read and no judge said which way up", async () => {
+    let calls = 0;
+    const text = await readReceiptPhoto(ticketOnATable(), async () =>
+      ++calls > OCR_READINGS.length ? READ : "",
+    );
+
+    expect(text).toBe(READ);
+    expect(calls).toBe(2 * OCR_READINGS.length);
+  });
+
+  it(
+    "does not read it again when its text said which way up",
+    async () => {
+      let calls = 0;
+      await readReceiptPhoto(
+        leftAlignedTicket(),
+        async () => (calls++, ""),
+        likesLeftText,
+      );
+
+      expect(calls).toBe(OCR_READINGS.length);
+    },
+    PREPARING,
+  );
 
   it("calls off the readings still waiting when one fails", async () => {
     const signals: (AbortSignal | undefined)[] = [];
