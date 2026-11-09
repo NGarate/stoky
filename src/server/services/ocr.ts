@@ -7,15 +7,13 @@ import { Worker as Thread } from "node:worker_threads";
 import { join } from "node:path";
 import { InvalidInputError, NotFoundError, UpstreamError } from "./errors";
 import { parseReceiptText } from "./receiptParser";
-import {
-  type Grey,
-  greyPng,
-  middleBand,
-  readImageMetadata,
-  turnedHalf,
-  turnedQuarter,
-} from "./image";
-import type { PreparationReply, PreparationRequest } from "./prepare-worker";
+import { type Grey, readImageMetadata } from "./image";
+import type {
+  Prepared,
+  PreparationReply,
+  PreparationRequest,
+  Turn,
+} from "./prepare-worker";
 
 /**
  * Where the Spanish traineddata is read from — ISSUES.md OCR-1.
@@ -330,11 +328,11 @@ export const OCR_OPTIONS: RecogniseOptions = {
 const ORIENTATION_MARGIN = 10;
 
 /**
- * `grey` the right way up.
+ * Which way up a standing ticket reads, from `bands`: its middle band turned
+ * each `Turn`, as the preparation thread made them.
  *
- * - **Proportions pick the axis.** A ticket is longer than it is wide, so a
- *   ticket wider than tall was photographed on its side and is turned a
- *   quarter.
+ * - **Proportions pick the axis.** A ticket is longer than it is wide, so the
+ *   thread has already stood one that was wider than tall.
  * - **Text picks which end is up**: of the ticket and its half-turn, the one
  *   whose middle band Tesseract reads with more confidence. Upside-down text
  *   reads as nonsense, and its confidence says so.
@@ -345,27 +343,28 @@ const ORIENTATION_MARGIN = 10;
  * Measured on 28 photographs turned a quarter or half a turn: 28 right.
  */
 async function upright(
-  grey: Grey,
+  bands: readonly Buffer[],
   confidence: Confidence,
   signal?: AbortSignal,
-): Promise<Grey> {
-  const standing = grey.width > grey.height ? turnedQuarter(grey) : grey;
-  const judge = async (candidate: Grey) =>
-    confidence(await greyPng(middleBand(candidate)), signal);
-  const flipped = turnedHalf(standing);
-  const [asIs, turned] = await Promise.all([judge(standing), judge(flipped)]);
-  let best = turned > asIs ? flipped : standing;
-  let bestConfidence = Math.max(asIs, turned);
-  if (Math.abs(asIs - turned) < ORIENTATION_MARGIN) {
-    const across = turnedQuarter(standing);
-    const others = [across, turnedHalf(across)];
-    const scores = await Promise.all(others.map(judge));
-    others.forEach((candidate, i) => {
-      if (scores[i]! > bestConfidence + ORIENTATION_MARGIN) {
-        best = candidate;
-        bestConfidence = scores[i]!;
+): Promise<Turn> {
+  const scores: number[] = [];
+  const judge = async (turns: Turn[]) => {
+    const judged = await Promise.all(
+      turns.map((turn) => confidence(bands[turn]!, signal)),
+    );
+    turns.forEach((turn, i) => (scores[turn] = judged[i]!));
+  };
+  await judge([0, 2]);
+  let best: Turn = scores[2]! > scores[0]! ? 2 : 0;
+  if (Math.abs(scores[0]! - scores[2]!) < ORIENTATION_MARGIN) {
+    await judge([1, 3]);
+    let bestConfidence = scores[best]!;
+    for (const across of [1, 3] as const) {
+      if (scores[across]! > bestConfidence + ORIENTATION_MARGIN) {
+        best = across;
+        bestConfidence = scores[across]!;
       }
-    });
+    }
   }
   return best;
 }
@@ -373,7 +372,7 @@ async function upright(
 /** Requests the preparation thread has not answered yet, by id. */
 type Waiting = Map<
   number,
-  { resolve: (reply: PreparationReply) => void; reject: (error: Error) => void }
+  { resolve: (reply: Prepared) => void; reject: (error: Error) => void }
 >;
 
 /** The thread the preparation's pixel work runs on, while there is one. */
@@ -391,7 +390,8 @@ let nextRequest = 0;
  */
 function onPreparationThread(
   request: DistributiveOmit<PreparationRequest, "id">,
-): Promise<PreparationReply> {
+  transfer: ArrayBuffer[] = [],
+): Promise<Prepared> {
   if (!preparationThread) {
     const thread = new Thread(new URL("./prepare-worker.ts", import.meta.url));
     const waiting: Waiting = new Map();
@@ -427,7 +427,7 @@ function onPreparationThread(
   return new Promise((resolve, reject) => {
     waiting.set(id, { resolve, reject });
     thread.ref();
-    thread.postMessage({ ...request, id });
+    thread.postMessage({ ...request, id }, transfer);
   });
 }
 
@@ -435,13 +435,21 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
   ? Omit<T, K>
   : never;
 
-/** The grey image a preparation step answered with. */
-function greyOf(reply: PreparationReply): Grey {
-  if (!("grey" in reply)) {
-    throw new UpstreamError("The preparation thread sent no image back");
+/** What a preparation step answered with, which must be there. */
+function sent<K extends keyof Prepared>(
+  reply: Prepared,
+  what: K,
+): NonNullable<Prepared[K]> {
+  const value = reply[what];
+  if (!value) {
+    throw new UpstreamError(`The preparation thread sent no ${what} back`);
   }
-  return reply.grey;
+  return value;
 }
+
+/** A PNG the preparation thread sent, as the recogniser takes it. */
+const asBuffer = (png: Uint8Array) =>
+  Buffer.from(png.buffer, png.byteOffset, png.byteLength);
 
 /**
  * The photograph as the readings start from: the ticket alone, square to the
@@ -456,6 +464,10 @@ function greyOf(reply: PreparationReply): Grey {
  * 3. **Turned upright** (`upright`), by its proportions and then by its text.
  * 4. **Lines straightened** when they curve (`dewarped`).
  *
+ * Every step is the preparation thread's (`prepare-worker.ts`); this thread
+ * only asks Tesseract about the middle bands it is sent. The images are
+ * handed between the two, not copied.
+ *
  * On 9 real tickets and 30 copies turned, darkened, shrunk and shadowed, the
  * parse score went from 27% with the crop alone to 89% with all four.
  */
@@ -464,16 +476,23 @@ export async function prepareForOcr(
   confidence: Confidence = noConfidence,
   signal?: AbortSignal,
 ): Promise<Grey> {
-  const ticket = greyOf(
-    await onPreparationThread({
-      step: "ticket",
-      image,
-      width: OCR_TICKET_WIDTH,
-    }),
+  const ticket = await onPreparationThread({
+    step: "ticket",
+    image,
+    width: OCR_TICKET_WIDTH,
+  });
+  const grey = sent(ticket, "grey");
+  const turn = await upright(
+    sent(ticket, "images").map(asBuffer),
+    confidence,
+    signal,
   );
-  const standing = await upright(ticket, confidence, signal);
-  return greyOf(
-    await onPreparationThread({ step: "dewarped", grey: standing }),
+  // Handed over, not copied: nothing here needs the ticket again.
+  return sent(
+    await onPreparationThread({ step: "upright", grey, turn }, [
+      grey.pixels.buffer as ArrayBuffer,
+    ]),
+    "grey",
   );
 }
 
@@ -576,28 +595,23 @@ export function bestReading(readings: readonly string[]): string {
   return best;
 }
 
-/** `prepared` read every way `OCR_READINGS` lists, all at once. */
+/**
+ * `prepared` read every way `OCR_READINGS` lists, all at once. `prepared` is
+ * handed to the preparation thread, not copied, and cannot be used after.
+ */
 async function readEveryWay(
   prepared: Grey,
   recognise: Recognise,
   signal: AbortSignal,
 ): Promise<string[]> {
-  const reply = await onPreparationThread({
-    step: "readings",
-    grey: prepared,
-    readings: OCR_READINGS,
-  });
-  if (!("images" in reply)) {
-    throw new UpstreamError("The preparation thread sent no images back");
-  }
+  const reply = await onPreparationThread(
+    { step: "readings", grey: prepared, readings: OCR_READINGS },
+    [prepared.pixels.buffer as ArrayBuffer],
+  );
   // In parallel: the recogniser spreads them over its workers.
   return Promise.all(
-    reply.images.map((image) =>
-      recognise(
-        Buffer.from(image.buffer, image.byteOffset, image.byteLength),
-        OCR_OPTIONS,
-        signal,
-      ),
+    sent(reply, "images").map((image) =>
+      recognise(asBuffer(image), OCR_OPTIONS, signal),
     ),
   );
 }

@@ -2,12 +2,13 @@
  * The pixel work of preparing a receipt photograph, on a thread of its own.
  *
  * **Why a thread.** The preparation (`image.ts`) is loops over every pixel
- * in JavaScript: straightening, flattening the light, dewarping. On the
- * server's own thread they held the event loop for up to 2.5 s at a time
+ * in JavaScript: straightening, flattening the light, turning, dewarping. On
+ * the server's own thread they held the event loop for up to 2.5 s at a time
  * per photograph, measured, during which the server answered nobody. Here
  * they hold this thread instead. What needs Tesseract (which way up the
  * ticket is) stays with the caller, `prepareForOcr` in `ocr.ts`, which is
- * the only thing that talks to this thread.
+ * the only thing that talks to this thread and touches no pixels itself: it
+ * is handed small PNGs to judge, and answers with the turn to make.
  *
  * Next bundles this file as a `[worker thread]` chunk because `ocr.ts`
  * starts it with `new Worker(new URL(…, import.meta.url))`, and its
@@ -20,25 +21,37 @@ import {
   croppedTicket,
   dewarped,
   flattenedLight,
+  greyPng,
   greyPngs,
+  middleBand,
   straightenedTicket,
   thinned,
+  turnedHalf,
+  turnedQuarter,
 } from "./image";
+
+/** Quarter turns clockwise. */
+export type Turn = 0 | 1 | 2 | 3;
 
 /** What `prepareForOcr` asks of this thread, one step at a time. */
 export type PreparationRequest =
   | {
       id: number;
-      /** The ticket straightened or cropped, standing, with its light flattened. */
+      /**
+       * The ticket straightened or cropped, standing, with its light
+       * flattened — and, as PNGs indexed by `Turn`, its middle band turned
+       * each way, for Tesseract to say which way up it reads.
+       */
       step: "ticket";
       image: Uint8Array;
       width: number;
     }
   | {
       id: number;
-      /** `grey` with its lines straightened when they curve. */
-      step: "dewarped";
+      /** `grey` turned by `turn`, with its lines straightened when they curve. */
+      step: "upright";
       grey: Grey;
+      turn: Turn;
     }
   | {
       id: number;
@@ -48,15 +61,26 @@ export type PreparationRequest =
       readings: readonly { scale: number; thin: boolean }[];
     };
 
+/** What a step hands back: an image, PNGs, or both. */
+export interface Prepared {
+  grey?: Grey;
+  images?: Uint8Array[];
+}
+
 /** The answer to the request with the same `id`. */
 export type PreparationReply =
-  | { id: number; grey: Grey }
-  | { id: number; images: Uint8Array[] }
+  | (Prepared & { id: number })
   | { id: number; error: { name: string; message: string } };
+
+/** `grey` turned `turn` quarters clockwise. */
+function turned(grey: Grey, turn: Turn): Grey {
+  const quarter = turn % 2 ? turnedQuarter(grey) : grey;
+  return turn >= 2 ? turnedHalf(quarter) : quarter;
+}
 
 async function answer(
   request: PreparationRequest,
-): Promise<{ grey: Grey } | { images: Uint8Array[] }> {
+): Promise<{ grey?: Grey; images?: Buffer[] }> {
   switch (request.step) {
     case "ticket": {
       const image = Buffer.from(
@@ -64,13 +88,23 @@ async function answer(
         request.image.byteOffset,
         request.image.byteLength,
       );
-      const grey =
+      const ticket = flattenedLight(
         (await straightenedTicket(image, request.width)) ??
-        (await croppedTicket(image, request.width));
-      return { grey: flattenedLight(grey) };
+          (await croppedTicket(image, request.width)),
+      );
+      // A ticket is longer than it is wide: one wider than tall lies on its side.
+      const grey =
+        ticket.width > ticket.height ? turnedQuarter(ticket) : ticket;
+      const across = turnedQuarter(grey);
+      const images = await Promise.all(
+        [grey, across, turnedHalf(grey), turnedHalf(across)].map((turn) =>
+          greyPng(middleBand(turn)),
+        ),
+      );
+      return { grey, images };
     }
-    case "dewarped":
-      return { grey: dewarped(request.grey) };
+    case "upright":
+      return { grey: dewarped(turned(request.grey, request.turn)) };
     case "readings": {
       const { grey, readings } = request;
       const images: Buffer[] = [];
@@ -87,21 +121,22 @@ async function answer(
         );
         at.forEach((i, k) => (images[i] = pngs[k]!));
       }
-      return { images: images.map((png) => new Uint8Array(png)) };
+      return { images };
     }
   }
 }
 
 parentPort?.on("message", async (request: PreparationRequest) => {
   try {
-    const result = await answer(request);
+    const { grey, images = [] } = await answer(request);
+    const pngs = images.map((png) => new Uint8Array(png));
     // The pixels go back without a copy: nothing here keeps them.
-    const transfer =
-      "grey" in result
-        ? [result.grey.pixels.buffer]
-        : result.images.map((image) => image.buffer);
+    const transfer = [
+      ...(grey ? [grey.pixels.buffer] : []),
+      ...pngs.map((png) => png.buffer),
+    ];
     parentPort!.postMessage(
-      { id: request.id, ...result } satisfies PreparationReply,
+      { id: request.id, grey, images: pngs } satisfies PreparationReply,
       transfer as ArrayBuffer[],
     );
   } catch (error) {

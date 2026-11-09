@@ -1301,9 +1301,10 @@ Verified against the files named in each row.
   it 120 s, and the 30 uploads an account may make in an hour can fill an hour
   of OCR.
 - **Preparing a photo cannot stall the server** (`src/server/services/prepare-worker.ts`):
-  straightening, flattening and dewarping are pixel loops in JavaScript, and
-  on the server's thread they held every request for up to 2.5 s per photo.
-  They run on one thread of their own, which receipts share in turn; the
+  straightening, flattening, turning and dewarping are pixel loops in
+  JavaScript, and on the server's thread they held every request for up to
+  2.5 s per photo. They run on one thread of their own, which receipts share
+  in turn, and the server's thread handles no pixels; the
   longest stall left on the server's thread was measured at 0.09 s. That
   thread has no time limit of its own: its work is bounded by the pixel caps,
   `MAX_PIXELS` on decode and 20 megapixels for a prepared ticket.
