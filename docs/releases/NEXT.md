@@ -153,6 +153,14 @@ memoria). El contenedor de la aplicación pasa por eso de 1 GiB a 2 GiB de
 memoria en `docker-compose.yml`. Lo que la lectura no acierte se sigue
 corrigiendo en la revisión.
 
+### Sin conexión, lo último que viste sigue ahí aunque recargues
+
+Si recargabas la página mientras algo terminaba de cargar, la copia que la
+app guarda para usarla sin conexión quedaba dañada y se tiraba entera en la
+siguiente visita: sin señal, la lista de la compra o el inventario salían
+vacíos. Ahora solo se guarda lo que ya ha llegado, y una copia antigua dañada
+se descarta sin más.
+
 ## English
 
 > [!CAUTION]
@@ -292,3 +300,10 @@ time is `OCR_WORKERS` in `.env` (3 when unset; each takes about 120 MB of
 memory). For that, the application container's memory goes from 1 GiB to
 2 GiB in `docker-compose.yml`. Whatever the reading gets wrong can still be
 corrected in the review.
+
+### What you last saw stays there offline, even after a reload
+
+Reloading a page while something was still loading damaged the copy the app
+keeps for use offline, and the next visit threw the whole copy away: with no
+signal, the shopping list or the inventory came up empty. Now only what has
+already arrived is kept, and an old damaged copy is simply discarded.

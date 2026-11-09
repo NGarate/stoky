@@ -18,8 +18,11 @@ import type { Query } from "@tanstack/react-query";
  * outside the small list a screen genuinely needs before it can show anything.
  */
 
-function query(key: readonly unknown[]): Query {
-  return { queryKey: key } as unknown as Query;
+function query(
+  key: readonly unknown[],
+  status: "success" | "pending" | "error" = "success",
+): Query {
+  return { queryKey: key, state: { status } } as unknown as Query;
 }
 
 describe("which queries are kept", () => {
@@ -47,6 +50,13 @@ describe("which queries are kept", () => {
     // the dashboard waited on the other for ever and could not say whether
     // anything had gone off.
     expect(shouldPersist(query([["inventory", "getExpiredItems"]]))).toBe(true);
+  });
+
+  it("keeps only answers, never a query still loading or one that failed", () => {
+    const path = [["shopping", "list"]];
+    expect(shouldPersist(query(path, "pending"))).toBe(false);
+    expect(shouldPersist(query(path, "error"))).toBe(false);
+    expect(shouldPersist(query(path))).toBe(true);
   });
 
   it("keeps nothing else", () => {
