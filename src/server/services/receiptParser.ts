@@ -1240,14 +1240,16 @@ function countedTotal(line: string): string | undefined {
  * called "entregado" and "a devolver".
  *
  * `PRECIO KILO 6.95` is DIA's price a kilo under a weighed article, and
- * `IMP.: 5,94 EUR` the amount on Lidl's card slip — neither is bought.
+ * `IMP.: 5,94 EUR` the amount on Lidl's card slip — neither is bought. Nor
+ * is an optician's `Impuestos 24,35` (read `Inpuestos`), the tax between its
+ * subtotal and total: booked, no reading of that ticket added up.
  *
  * The words of a discount or a voucher (`DISCOUNT_LABEL`) only head their
  * line: in a name they are a product's — `LECHE PACK AHORRO 6`, `CAFE
  * MOLIDO DESC.` (decaf), `DETERGENTE ARIEL PROMO` were all lost.
  */
 const NOT_A_PURCHASE =
-  /\b(?:sub\s*total|iva|i\.v\.a|imponible|cuota|saldo|acumulado|redondeo|cambio|efectivo|metal\s?ico|entregado|entrega|pagado|devolver|devolucion|tarjeta|targeta|visa|mastercard|maestro|pago|quota|imposable|precio\s*(?:kilo|kg))\b|^\W*imp(?:orte)?\.?\s*[:.,]/;
+  /\b(?:sub\s*total|iva|i\.v\.a|imponible|i[mn]puestos?|cuota|saldo|acumulado|redondeo|cambio|efectivo|metal\s?ico|entregado|entrega|pagado|devolver|devolucion|tarjeta|targeta|visa|mastercard|maestro|pago|quota|imposable|precio\s*(?:kilo|kg))\b|^\W*imp(?:orte)?\.?\s*[:.,]/;
 
 /** A line headed by a discount or a voucher, after the paper's edge: `Dto. Pisto 0,40`. */
 const DISCOUNT_LABEL =

@@ -1212,6 +1212,14 @@ GRACIAS POR SU VISITA
       ]);
     });
 
+    it("books no tax line printed between the subtotal and the total", () => {
+      const result = parseReceiptText(
+        "GAFAS 40,00\nSubtotal 33,06\nInpuestos 6,94\nTotal 40,00",
+      );
+
+      expect(result.items.map((item) => item.parsedName)).toEqual(["gafas"]);
+    });
+
     it("leaves out the paper's edge before a line", () => {
       expect(summary("| PATATAS GAJO 1,65\nE ARROZ CON LECHE 1,27")).toEqual([
         ["patatas gajo", 1.65, undefined],
