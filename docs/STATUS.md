@@ -1689,14 +1689,18 @@ one-tap add-to-list. The per-journey evidence is in that file.
 - If message catalogues appear stale, the running dev server has cached them —
   `touch next.config.ts` makes it reload.
 - **A page that reloads itself in a loop under `bun run dev`** — on a phone
-  through Tailscale or on `localhost`, signed in or not — is a stale
-  Turbopack development cache, not the network. Seen 2026-11-01 with a 1.6 GB
-  `.next/dev` whose client entry chunk was five days old: on every HMR connect
-  the server sent `{"type":"restart"}` for that chunk, and the browser reloaded
-  (13–24 navigations of `/login` in 15 s). Stop the dev server,
-  `rm -rf .next/dev`, start it again: two navigations in 15 s afterwards, the
-  load and one reload, then quiet. To tell it from a real reload, log the HMR
-  frames (Playwright `page.on("websocket")`) and look for `restart`.
+  through Tailscale or on `localhost`, signed in or not — with a
+  `{"type":"restart"}` frame for the main client chunk list on every HMR
+  connect is vercel/next.js#100251: Turbopack's on-disk dev cache, after a
+  restart with a tab left open. `next.config.ts` turns that cache off
+  (`turbopackFileSystemCacheForDev: false`), which is why a dev start compiles
+  cold. Deleting `.next/dev` only hid it until the next restart (seen
+  2026-11-01, and again 2026-11-09). Reproduced in a worktree on another port
+  by restarting `next dev` under an open, signed-in tab while polling
+  `/api/health`: 23 navigations in 15 s with the cache; without it, the one
+  reload a restart calls for, in six restarts out of six.
+  To tell it from a real reload, log the HMR frames (Playwright
+  `page.on("websocket")`) and look for `restart`.
   **A second cause, with no `restart` frame:** after one unhandled error or
   rejection, `next dev` reloads the page on every hot-reload message
   (`hot-reloader-app.js`, `hadRuntimeError`), and a phone's tab bar compiling
