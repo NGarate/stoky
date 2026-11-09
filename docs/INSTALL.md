@@ -188,7 +188,7 @@ thread with its own copy of the OCR model, about 120 MB, and one core.
 | `3` | about 16 s |
 
 Past three it hardly gets faster. The application container is limited to
-1 GiB, so `1` suits a host short of memory and `3` one with cores to spare. A
+2 GiB, so `1` suits a host short of memory and `3` one with cores to spare. A
 value that is not a positive whole number means `2`, and more than the host's
 processors means as many as it has. It is read when the app starts, so apply
 a change with `docker compose up -d --wait`.

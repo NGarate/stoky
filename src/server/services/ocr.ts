@@ -696,7 +696,7 @@ export const DEFAULT_OCR_WORKERS = 2;
  * reads one image at a time. Measured with six readings of one long ticket on
  * an 8-core machine, with the model the image bakes: 1 worker 37.9 s, 2
  * 20.7 s, 3 15.7 s; past three, the slowest single reading is what is left.
- * Two by default, because the release bundle gives the application 1 GiB.
+ * Two by default; the release bundle gives the application 2 GiB.
  */
 export function ocrWorkers(
   configured = process.env.OCR_WORKERS,

@@ -45,7 +45,7 @@ export const MAX_PIXELS = 50_000_000;
  * noise PNG at 7000 × 7000 came out as a 47 MB JPEG, and comes out as 11.7 MB
  * at 4000 × 4000 now, measured — and the OCR path handed all of it to the one
  * Tesseract worker inside the app process. The security audit measured that
- * worker past the container's 1 GiB limit on such an image.
+ * worker past the container's limit, then 1 GiB, on such an image.
  *
  * 4000 rather than the 2560 or 3000 a thumbnail would take, because a long
  * receipt photographed end to end is all long edge: its lines are what gets

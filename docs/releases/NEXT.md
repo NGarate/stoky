@@ -149,7 +149,9 @@ sombra, la nota (precios de los artículos, total y fecha) pasa del 32 % al
 93 %, y leer un ticket tarda algo menos que antes: unos 21 segundos, con dos
 lecturas a la vez. Cuántas a la vez lo decide
 `OCR_WORKERS` en `.env` (2 si no se pone; cada una usa unos 120 MB de
-memoria). Lo que la lectura no acierte se sigue corrigiendo en la revisión.
+memoria). El contenedor de la aplicación pasa por eso de 1 GiB a 2 GiB de
+memoria en `docker-compose.yml`. Lo que la lectura no acierte se sigue
+corrigiendo en la revisión.
 
 ## English
 
@@ -287,5 +289,6 @@ and shadowed, the score (article prices, total and date) goes from 32% to
 93%, and reading a receipt takes a little less time than before: about 21
 seconds, with two readings at a time. How many at a
 time is `OCR_WORKERS` in `.env` (2 when unset; each takes about 120 MB of
-memory). Whatever the reading gets wrong can still be corrected in the
-review.
+memory). For that, the application container's memory goes from 1 GiB to
+2 GiB in `docker-compose.yml`. Whatever the reading gets wrong can still be
+corrected in the review.

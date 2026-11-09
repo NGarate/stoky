@@ -436,7 +436,7 @@ Verified against the files named in each row.
 - What remains is concurrency: a body may still be up to 15 MiB, held more
   than once while it is read and parsed — the bytes, then the text, then the
   parsed value — and nothing limits how many arrive at once. The app
-  container's limit in `deploy/docker-compose.yml` is 1 GiB. How many
+  container's limit in `deploy/docker-compose.yml` is 2 GiB. How many
   concurrent 15 MiB requests that takes has not been measured.
 
 ### Batched calls — `src/lib/trpc/batch.ts`

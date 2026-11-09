@@ -83,7 +83,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1g
+          # Two Tesseract workers of about 120 MB each, the preparation
+          # thread's images of up to 20 megapixels and the server itself.
+          memory: 2g
           pids: 512
     environment:
       NODE_ENV: production
