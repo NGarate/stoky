@@ -31,6 +31,8 @@ import {
   turnedHalf,
   turnedQuarter,
 } from "./image";
+import { bestReading } from "./reading-choice";
+import { parseReceiptText } from "./receiptParser";
 
 /** Quarter turns clockwise. */
 export type Turn = 0 | 1 | 2 | 3;
@@ -56,6 +58,12 @@ export type PreparationRequest =
     }
   | {
       id: number;
+      /** The reading kept of `readings` (`bestReading`) as `text`, and how many articles it yields. */
+      step: "choose";
+      readings: string[];
+    }
+  | {
+      id: number;
       /** `grey` turned by `turn`, with its lines straightened when they curve. */
       step: "upright";
       grey: Grey;
@@ -74,10 +82,12 @@ export type PreparationRequest =
       readings: readonly { scale: number; thin: boolean }[];
     };
 
-/** What a step hands back: an image, PNGs, or both. */
+/** What a step hands back: an image, PNGs, or both — or a reading chosen. */
 export interface Prepared {
   grey?: Grey;
   images?: Uint8Array[];
+  text?: string;
+  articles?: number;
 }
 
 /** The answer to the request with the same `id`. */
@@ -91,10 +101,17 @@ function turned(grey: Grey, turn: Turn): Grey {
   return turn >= 2 ? turnedHalf(quarter) : quarter;
 }
 
-async function answer(
-  request: PreparationRequest,
-): Promise<{ grey?: Grey; images?: Buffer[] }> {
+async function answer(request: PreparationRequest): Promise<{
+  grey?: Grey;
+  images?: Buffer[];
+  text?: string;
+  articles?: number;
+}> {
   switch (request.step) {
+    case "choose": {
+      const text = bestReading(request.readings);
+      return { text, articles: parseReceiptText(text).items.length };
+    }
     case "reencode":
       return {
         images: [
@@ -154,7 +171,7 @@ async function answer(
 
 parentPort?.on("message", async (request: PreparationRequest) => {
   try {
-    const { grey, images = [] } = await answer(request);
+    const { grey, images = [], ...chosen } = await answer(request);
     const pngs = images.map((png) => new Uint8Array(png));
     // The pixels go back without a copy: nothing here keeps them.
     const transfer = [
@@ -162,7 +179,12 @@ parentPort?.on("message", async (request: PreparationRequest) => {
       ...pngs.map((png) => png.buffer),
     ];
     parentPort!.postMessage(
-      { id: request.id, grey, images: pngs } satisfies PreparationReply,
+      {
+        id: request.id,
+        grey,
+        images: pngs,
+        ...chosen,
+      } satisfies PreparationReply,
       transfer as ArrayBuffer[],
     );
   } catch (error) {

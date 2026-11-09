@@ -1,5 +1,3 @@
-import { prisma } from "@/lib/prisma";
-import { ReceiptStatus, MatchStatus } from "@/generated/prisma/client";
 import { NotFoundError } from "./errors";
 
 interface ParsedItem {
@@ -2385,6 +2383,12 @@ export async function saveParsedItems(
   receiptId: string,
   parsed: ParsedReceipt,
 ): Promise<void> {
+  // Imported here, not at the top: the parser also runs on the image thread
+  // (`prepare-worker.ts`), which must not load a database client.
+  const [{ prisma }, { ReceiptStatus, MatchStatus }] = await Promise.all([
+    import("@/lib/prisma"),
+    import("@/generated/prisma/client"),
+  ]);
   const receipt = await prisma.receipt.findUnique({
     where: { id: receiptId },
     select: { householdId: true, storeId: true },

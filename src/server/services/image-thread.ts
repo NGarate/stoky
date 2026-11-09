@@ -99,10 +99,11 @@ export function sent<K extends keyof Prepared>(
   what: K,
 ): NonNullable<Prepared[K]> {
   const value = reply[what];
-  if (!value) {
+  // Not `!value`: an empty reading and no articles are answers.
+  if (value === undefined) {
     throw new UpstreamError(`The image thread sent no ${what} back`);
   }
-  return value;
+  return value as NonNullable<Prepared[K]>;
 }
 
 /** Bytes the thread sent, as a `Buffer` over the same memory. */
