@@ -1270,7 +1270,7 @@ Verified against the files named in each row.
   because nothing is deleted and there is no per-household quota
   (`docs/SECURITY_REVIEW.md` finding 16).
 - **Recognition is bounded in time** (`src/server/services/ocr.ts`): there
-  are `OCR_WORKERS` Tesseract workers, 2 unless set and never more than the
+  are `OCR_WORKERS` Tesseract workers, 3 unless set and never more than the
   host's processors. Images wait in one queue and each goes to whichever
   worker is free when its turn comes, and each worker has its own limit, so
   what follows holds for each one, and one stuck image holds one worker

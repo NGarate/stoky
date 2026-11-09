@@ -146,9 +146,9 @@ cadenas leídos a mano: los productos leídos con nombre y precio correctos
 pasan del 34 % al 60 %, y el total correcto, del 13 % al 58 %. Con diez
 tickets más y treinta copias suyas giradas, oscurecidas, reducidas y con
 sombra, la nota (precios de los artículos, total y fecha) pasa del 32 % al
-93 %, y leer un ticket tarda algo menos que antes: unos 21 segundos, con dos
+93 %, y leer un ticket tarda menos que antes: unos 16 segundos, con tres
 lecturas a la vez. Cuántas a la vez lo decide
-`OCR_WORKERS` en `.env` (2 si no se pone; cada una usa unos 120 MB de
+`OCR_WORKERS` en `.env` (3 si no se pone; cada una usa unos 120 MB de
 memoria). El contenedor de la aplicación pasa por eso de 1 GiB a 2 GiB de
 memoria en `docker-compose.yml`. Lo que la lectura no acierte se sigue
 corrigiendo en la revisión.
@@ -286,9 +286,9 @@ on 63 real receipts from eleven chains, read by hand: products read with the
 right name and price went from 34% to 60%, and the right total from 13% to
 58%. On ten more receipts and thirty copies of them turned, darkened, shrunk
 and shadowed, the score (article prices, total and date) goes from 32% to
-93%, and reading a receipt takes a little less time than before: about 21
-seconds, with two readings at a time. How many at a
-time is `OCR_WORKERS` in `.env` (2 when unset; each takes about 120 MB of
+93%, and reading a receipt takes less time than before: about 16 seconds,
+with three readings at a time. How many at a
+time is `OCR_WORKERS` in `.env` (3 when unset; each takes about 120 MB of
 memory). For that, the application container's memory goes from 1 GiB to
 2 GiB in `docker-compose.yml`. Whatever the reading gets wrong can still be
 corrected in the review.

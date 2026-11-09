@@ -648,9 +648,9 @@ describe("ocrWorkers", () => {
     expect(ocrWorkers("12", 4)).toBe(4);
   });
 
-  it("keeps the default of two for anything else", () => {
+  it("keeps the default of three for anything else", () => {
     for (const value of [undefined, "", "0", "-1", "1.5", "dos"]) {
-      expect(ocrWorkers(value, 8)).toBe(2);
+      expect(ocrWorkers(value, 8)).toBe(3);
     }
   });
 

@@ -184,12 +184,12 @@ thread with its own copy of the OCR model, about 120 MB, and one core.
 | Value | Six readings of one long receipt, measured on an 8-core host |
 |---|---|
 | `1` | about 38 s |
-| `2` (the default) | about 21 s |
-| `3` | about 16 s |
+| `2` | about 21 s |
+| `3` (the default) | about 16 s |
 
 Past three it hardly gets faster. The application container is limited to
-2 GiB, so `1` suits a host short of memory and `3` one with cores to spare. A
-value that is not a positive whole number means `2`, and more than the host's
+2 GiB, which three hold; `1` or `2` suit a host short of memory or cores. A
+value that is not a positive whole number means `3`, and more than the host's
 processors means as many as it has. It is read when the app starts, so apply
 a change with `docker compose up -d --wait`.
 
