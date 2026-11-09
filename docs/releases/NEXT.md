@@ -138,7 +138,7 @@ toma de donde el ticket coincide consigo mismo: la línea TOTAL, el pago con
 tarjeta o en efectivo, el desglose del IVA y la suma de los productos.
 Además, antes de leer la foto se endereza el ticket (si está inclinado o
 torcido se convierte en un rectángulo), se recorta para que la mesa no se lea
-como texto, se igualan la luz, las sombras y los pliegues, se gira solo
+como texto (también la que queda junto a un ticket inclinado o curvado), se igualan la luz, las sombras y los pliegues, se gira solo
 (de lado o del revés, según la forma del ticket y lo legible del texto) y se
 estiran las líneas curvadas. Luego se lee de seis maneras y se queda la
 lectura en la que coinciden las demás. Medido con 63 tickets reales de once
@@ -286,8 +286,9 @@ booked as a product any more, and the total is taken from where the
 receipt agrees with itself: the TOTAL line, the card or cash payment, the
 VAT breakdown and the sum of the products. The photo is also cropped to the
 receipt before it is read — straightened into a rectangle when it is tilted
-or skewed, cropped so the table is not read as text, its light, shadows and
-folds evened out, turned the right way up (on its side or upside down, by its
+or skewed, cropped so the table is not read as text (nor what the crop
+holds beside a leaning or curved ticket), its light, shadows and folds
+evened out, turned the right way up (on its side or upside down, by its
 shape and by how legible its text is) and its curled lines straightened —
 and it is read six ways, keeping the reading the others agree with. Measured
 on 63 real receipts from eleven chains, read by hand: products read with the

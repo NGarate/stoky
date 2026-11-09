@@ -198,6 +198,37 @@ describe("croppedTicket", () => {
     expect(grey.width).toBe(OCR_TICKET_WIDTH);
     expect(grey.height).toBeGreaterThan(grey.width);
   });
+
+  it("whitens what the crop holds beyond the paper's edge", async () => {
+    // A ticket on dark woven cloth, its left edge leaning: 300 pixels wide at
+    // the foot and 200 at the head, so the rectangle around it holds a
+    // wedge of cloth at the top left. Ink rows reach close to that edge.
+    const leftEdge = (y: number) => 300 + (100 * (900 - y)) / 800;
+    const photo = pngPainted(1000, 1000, (x, y) => {
+      if (y < 100 || y >= 900 || x < leftEdge(y) || x >= 600) {
+        return (x + y) % 6 < 3 ? [30, 30, 30] : [70, 70, 70];
+      }
+      return y % 24 < 6 && x > leftEdge(y) + 15 && x < 585 ? INK : PAPER;
+    });
+    const grey = await croppedTicket(photo, OCR_TICKET_WIDTH);
+    const at = (fx: number, fy: number) =>
+      grey.pixels[
+        Math.round(fy * (grey.height - 1)) * grey.width +
+          Math.round(fx * (grey.width - 1))
+      ]!;
+
+    // Cloth at the head's left, a third of the way into the wedge: white now.
+    expect(at(0.1, 0.05)).toBeGreaterThan(200);
+    // The ink stays: the darkest pixel of a column through the print.
+    let darkest = 255;
+    for (let y = 0; y < grey.height; y++) {
+      darkest = Math.min(
+        darkest,
+        grey.pixels[y * grey.width + grey.width / 2]!,
+      );
+    }
+    expect(darkest).toBeLessThan(80);
+  });
 });
 
 describe("straightenedTicket", () => {

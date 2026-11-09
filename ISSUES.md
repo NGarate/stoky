@@ -1132,6 +1132,14 @@ large-print total. `test-tickets/1794088010070.HEIC` (a pharmacy ticket on a
 floral cloth) scores 0.65; its article lines read nearly right. **The idea
 not yet tried** is to crop to the extent of the text rather than of the paper.
 
+A **dark** background is no longer read, since 2026-11-09: what the crop
+rectangle holds beside a leaning or curved ticket is whitened row by row to
+the paper's edge (`blankBeyondPaper`). The owner's Costco ticket on dark
+fabric read "EA O. Ostco Bol" for "Costco Bolsa Cong" and took a promotion
+for an article; afterwards all 15 articles, the total and the promotion came
+out (bench 0.87 → 0.91, 42 photos 0.921 → 0.922). A light background passes
+the paper test, so this one stays open.
+
 ---
 
 ### 🟡 OCR-9: A receipt printer's digits are misread the same way in every reading

@@ -725,6 +725,7 @@ export async function croppedTicket(
   }
   const paper = await findPaper(image, photoWidth, photoHeight);
   const source = paper ? await cropImage(image, paper) : image;
+  if (paper) await blankBeyondPaper(source, paper.width, paper.height);
   const paperWidth = paper?.width ?? photoWidth;
   const paperHeight = paper?.height ?? photoHeight;
   const turn = paperWidth > paperHeight ? 90 : 0;
@@ -741,6 +742,64 @@ export async function croppedTicket(
     .png()
     .toBuffer();
   return greyOfPng(Buffer.from(png));
+}
+
+/** How finely the paper's edge is found inside a crop, in pixels across. */
+const EDGE_PROBE_WIDTH = 300;
+
+/**
+ * Whitens, row by row, what of a crop (a `cropImage` bitmap) lies beyond the
+ * paper's edges.
+ *
+ * A rectangle around a ticket that is tilted, curved or narrower at one end
+ * holds strips of what it lies on, and Tesseract reads a cloth's weave as
+ * letters on every line beside it: a Costco ticket on dark fabric came back
+ * as "EA O. Ostco Bol" for "Costco Bolsa Cong", "Sn: 562292" for "562292 V".
+ * The paper is the largest connected part of the paper mask, its holes —
+ * the print — closed, so a row's paper runs from its first pixel of that
+ * part to its last, and a black bar of print in between stays. A row with no
+ * paper found is left as it is: a shadow across the ticket is not a reason
+ * to blank a line of it.
+ */
+async function blankBeyondPaper(
+  bitmap: Buffer,
+  width: number,
+  height: number,
+): Promise<void> {
+  const probe = await decodedRows(
+    bitmap,
+    Math.min(EDGE_PROBE_WIDTH, width),
+    false,
+  );
+  const w = probe.width;
+  const h = probe.height;
+  const mask = largestPart(
+    paperMask(probe.rows, w, h, probe.channels).mask,
+    w,
+    h,
+  );
+  const spans = Array.from({ length: h }, (_, y) => {
+    let first = -1;
+    let last = -1;
+    for (let x = 0; x < w; x++) {
+      if (!mask[y * w + x]) continue;
+      if (first < 0) first = x;
+      last = x;
+    }
+    return [first, last] as const;
+  });
+  const across = width / w;
+  // Two probe pixels: the mask's edge is that coarse.
+  const margin = Math.ceil(2 * across);
+  const pixels = bitmap.subarray(BMP_HEADER_BYTES);
+  for (let y = 0; y < height; y++) {
+    const [first, last] = spans[Math.min(h - 1, Math.floor((y * h) / height))]!;
+    if (first < 0) continue;
+    const from = Math.max(0, Math.floor(first * across) - margin);
+    const to = Math.min(width, Math.ceil((last + 1) * across) + margin);
+    pixels.fill(255, y * width * 4, (y * width + from) * 4);
+    pixels.fill(255, (y * width + to) * 4, (y + 1) * width * 4);
+  }
 }
 
 /** A PNG's first channel as `Grey`. */
