@@ -3,6 +3,7 @@ import { NotFoundError } from "./errors";
 interface ParsedItem {
   rawText: string;
   parsedName: string;
+  /** What the line cost, less a discount printed under it: the price paid. */
   parsedPrice: number;
   parsedQuantity?: number;
 }
@@ -12,7 +13,11 @@ interface ParsedReceipt {
   purchaseDate?: Date;
   totalAmount?: number;
   items: ParsedItem[];
-  /** What the discount lines took off, in euros: never items, but part of the sum. */
+  /**
+   * What the discounts on no one article took off, in euros — a block of
+   * offers, a discount on the whole purchase: never items, but part of the
+   * sum. A discount under an article is taken off that article's price.
+   */
   discountAmount?: number;
 }
 
@@ -456,7 +461,27 @@ export function parseReceiptText(
       signedOffers = undefined;
       continue;
     }
-    discounts += discountOn(lines[i]);
+    const off = discountOn(lines[i]);
+    const discounted = result.items.at(-1);
+    if (
+      off > 0 &&
+      discounted !== undefined &&
+      !WHOLE_PURCHASE.test(normalizeText(lines[i])) &&
+      cents(off) < cents(discounted.parsedPrice)
+    ) {
+      // A discount among the articles is the one above's, and what is kept
+      // is the price paid: Costco's `MVM P2 562292` / `4,50-B` under its
+      // Tenders Pollo at 18,49 is a 13,99 € article.
+      discounted.parsedPrice =
+        (cents(discounted.parsedPrice) - cents(off)) / 100;
+      discounted.rawText += `\n${lines[i]}`;
+      const other = OTHER_READING.get(discounted);
+      if (other !== undefined) {
+        OTHER_READING.set(discounted, (cents(other) - cents(off)) / 100);
+      }
+    } else {
+      discounts += off;
+    }
 
     // Before the first article, a time of day with its two-digit hour is the
     // header's, not a price whose comma the OCR read as a colon: `OPERADOR
@@ -1250,6 +1275,12 @@ function countedTotal(line: string): string | undefined {
  */
 const NOT_A_PURCHASE =
   /\b(?:sub\s*total|iva|i\.v\.a|imponible|i[mn]puestos?|cuota|saldo|acumulado|redondeo|cambio|efectivo|metal\s?ico|entregado|entrega|pagado|devolver|devolucion|tarjeta|targeta|visa|mastercard|maestro|pago|quota|imposable|precio\s*(?:kilo|kg))\b|^\W*imp(?:orte)?\.?\s*[:.,]/;
+
+/**
+ * A discount on the whole purchase rather than on the article above it:
+ * Lidl's `Desc. total en compra`, a `DTO. TICKET`.
+ */
+const WHOLE_PURCHASE = /\b(?:compra|ticket)\b/;
 
 /** A line headed by a discount or a voucher, after the paper's edge: `Dto. Pisto 0,40`. */
 const DISCOUNT_LABEL =
@@ -2200,7 +2231,7 @@ const PAYMENT_LINE =
  * 0.63` — have a word and an amount, and were booked as articles.
  */
 const TAX_TABLE_HEADER =
-  /\b(?:base\s+i[mn]p\w*|imposable|imponible|cuota|quota)\b|^\W*[i1lt][vy]a\s*%|\bneto\b.*\b(?:bruto|pvp)\b/;
+  /\b(?:base\s+i[mn]p\w*|imposable|imponible|i[mn]puestos?|cuota|quota)\b|^\W*[i1lt][vy]a\s*%|\bneto\b.*\b(?:bruto|pvp)\b/;
 
 /**
  * Below the tax table or the loyalty block no label is the charge. Not a

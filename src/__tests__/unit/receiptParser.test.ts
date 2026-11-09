@@ -227,8 +227,9 @@ GRACIAS POR SU VISITA
     it("never books a negative line as a purchase", () => {
       const result = parseReceiptText("YOGUR 1,80\nPROMO YOGUR -0,60");
 
+      // Not booked: taken off the yogurt, which is booked at what was paid.
       expect(result.items).toHaveLength(1);
-      expect(result.items[0].parsedPrice).toBe(1.8);
+      expect(result.items[0].parsedPrice).toBe(1.2);
     });
 
     it("still reads a product whose name holds a header word", () => {
@@ -926,7 +927,7 @@ GRACIAS POR SU VISITA
 
     it("still reads a dash touching the number as a minus sign", () => {
       expect(summary("CUPON -0,50")).toEqual([]);
-      expect(summary("PAN 1,00\nYOGUR 2X1 0,50-")).toEqual([["pan", 1]]);
+      expect(summary("YOGUR 1,00\nYOGUR 2X1 0,50-")).toEqual([["yogur", 0.5]]);
     });
   });
 
@@ -1207,9 +1208,55 @@ GRACIAS POR SU VISITA
           ].join("\n"),
         ),
       ).toEqual([
-        ["pepino", 2.14, undefined],
-        ["pisto", 1.79, undefined],
+        ["pepino", 1.42, undefined],
+        ["pisto", 1.39, undefined],
       ]);
+    });
+
+    it("books an article at what was paid for it, its discount taken off", () => {
+      // Costco names a promotion on a line of its own, then prints it with a
+      // trailing minus under the article it is for.
+      const result = parseReceiptText(
+        [
+          "Tenders Pollo",
+          "562292 V 1x 18,49 18,49 B",
+          "MVM P2 562292 FY27",
+          "9138848V 1x 4,50 4,50-B",
+          "Mango Deshidratado",
+          "1946954V 1x 15,99 15,99 B",
+          "TOTAL 29,98",
+        ].join("\n"),
+      );
+
+      expect(
+        result.items.map((item) => [item.parsedName, item.parsedPrice]),
+      ).toEqual([
+        ["tenders pollo", 13.99],
+        ["mango deshidratado", 15.99],
+      ]);
+      expect(result.items[0]?.rawText).toContain("4,50-B");
+      expect(result.discountAmount).toBeUndefined();
+      expect(result.totalAmount).toBe(29.98);
+    });
+
+    it("takes every discount under an article off it, a line's 'total' too", () => {
+      // An optician's: `Dto Total` is the line's own discount, and a second
+      // one can follow it.
+      const result = parseReceiptText(
+        [
+          "TAN - NAVY 1 40,00 € 40,00 €",
+          "Dto Total 0,82 % -0,33 €",
+          "ONE RAW - CHERRY RE 1 40,00 € 40,00 €",
+          "Dto Total 0,85 % -0,22 €",
+          "Tarifa Outlet 33% de De35 % -14,00 €",
+          "Total 65,45 €",
+        ].join("\n"),
+      );
+
+      expect(result.items.map((item) => item.parsedPrice)).toEqual([
+        39.67, 25.78,
+      ]);
+      expect(result.discountAmount).toBeUndefined();
     });
 
     it("books no tax line printed between the subtotal and the total", () => {
@@ -1218,6 +1265,22 @@ GRACIAS POR SU VISITA
       );
 
       expect(result.items.map((item) => item.parsedName)).toEqual(["gafas"]);
+    });
+
+    it("keeps a discount on the whole purchase off every article", () => {
+      const result = parseReceiptText(
+        "PAN 1,00\nLECHE 2,00\nDesc. total en compra -0,20\nTOTAL 2,80",
+      );
+
+      expect(result.items.map((item) => item.parsedPrice)).toEqual([1, 2]);
+      expect(result.discountAmount).toBe(0.2);
+    });
+
+    it("keeps a discount larger than the article above off it", () => {
+      const result = parseReceiptText("PAN 1,00\nLECHE 2,00\nCUPON -2,50");
+
+      expect(result.items.map((item) => item.parsedPrice)).toEqual([1, 2]);
+      expect(result.discountAmount).toBe(2.5);
     });
 
     it("leaves out the paper's edge before a line", () => {

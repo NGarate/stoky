@@ -150,8 +150,9 @@ sombra, la nota (precios de los artículos, total y fecha) pasa del 32 % al
 lecturas a la vez. Cuántas a la vez lo decide
 `OCR_WORKERS` en `.env` (3 si no se pone; cada una usa unos 120 MB de
 memoria). El contenedor de la aplicación pasa por eso de 1 GiB a 2 GiB de
-memoria en `docker-compose.yml`. Lo que la lectura no acierte se sigue
-corrigiendo en la revisión.
+memoria en `docker-compose.yml`. El precio que se guarda de cada producto es el que
+pagaste: un descuento impreso debajo de un producto se le resta. Lo que la
+lectura no acierte se sigue corrigiendo en la revisión.
 
 ### Sin conexión, lo último que viste sigue ahí aunque recargues
 
@@ -299,8 +300,9 @@ and shadowed, the score (article prices, total and date) goes from 32% to
 with three readings at a time. How many at a
 time is `OCR_WORKERS` in `.env` (3 when unset; each takes about 120 MB of
 memory). For that, the application container's memory goes from 1 GiB to
-2 GiB in `docker-compose.yml`. Whatever the reading gets wrong can still be
-corrected in the review.
+2 GiB in `docker-compose.yml`. The price kept for each product is what you
+paid: a discount printed under a product is taken off it. Whatever the
+reading gets wrong can still be corrected in the review.
 
 ### What you last saw stays there offline, even after a reload
 
