@@ -7,6 +7,7 @@ import {
   reencodeAsJpeg,
   stripJpegMetadata,
 } from "@/server/services/image";
+import { reencodedAsJpeg } from "@/server/services/image-thread";
 import { withExif } from "../utils/exif";
 import { pngClaiming, pngOf } from "../utils/png";
 import {
@@ -515,5 +516,23 @@ describe("a HEIC photograph", () => {
     bomb.writeUInt32BE(9000, ispe + 12);
 
     expect(reencodeAsJpeg(bomb)).rejects.toThrow("maxPixels");
+  });
+});
+
+describe("reencodedAsJpeg, on the upload's own thread", () => {
+  const heic = () =>
+    readFile(new URL("../fixtures/rotated-with-exif.heic", import.meta.url));
+
+  it("stores what reencodeAsJpeg would, byte for byte", async () => {
+    for (const source of [await heic(), pngOf(64, 48)]) {
+      expect(
+        (await reencodedAsJpeg(source)).equals(await reencodeAsJpeg(source)),
+      ).toBe(true);
+    }
+  });
+
+  it("refuses what reencodeAsJpeg refuses, and carries on after it", async () => {
+    await expect(reencodedAsJpeg(pngClaiming(60, 40))).rejects.toThrow();
+    expect(isJpeg(await reencodedAsJpeg(pngOf(16, 16)))).toBe(true);
   });
 });

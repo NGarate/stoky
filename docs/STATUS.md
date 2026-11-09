@@ -1593,7 +1593,8 @@ Two things that sequence surfaced, both operational rather than defects:
   measured), so the upload decodes HEIC itself with `libheif-js` — libheif
   and libde265 as WebAssembly, no change to the image or to anyone's machine
   — and hands the pixels to the same `Bun.Image` re-encode every other upload
-  takes (`src/server/services/image.ts`, `heifAsBitmap`). Five sample files,
+  takes (`src/server/services/image.ts`, `heifAsBitmap`), on a thread of its
+  own (`image-thread.ts`, since 2026-11-09). Five sample files,
   iPhone and others, convert; real Android camera photographs were not among
   them. The pixel bound is read from the file's `ispe` boxes because libheif's
   own limit is not enforced in that build; a HEVC stream lying about its size

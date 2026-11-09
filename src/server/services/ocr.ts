@@ -7,7 +7,12 @@ import { join } from "node:path";
 import { InvalidInputError, NotFoundError } from "./errors";
 import { parseReceiptText } from "./receiptParser";
 import { type Grey, readImageMetadata } from "./image";
-import { asBuffer, onImageThread, sent, stopImageThread } from "./image-thread";
+import {
+  asBuffer,
+  onImageThread,
+  sent,
+  stopImageThreads,
+} from "./image-thread";
 import type { Turn } from "./prepare-worker";
 
 /**
@@ -409,7 +414,7 @@ export async function prepareForOcr(
   confidence: Confidence = noConfidence,
   signal?: AbortSignal,
 ): Promise<PreparedTicket> {
-  const ticket = await onImageThread({
+  const ticket = await onImageThread("ocr", {
     step: "ticket",
     image,
     width: OCR_TICKET_WIDTH,
@@ -422,7 +427,7 @@ export async function prepareForOcr(
   );
   // Handed over, not copied: nothing here needs the ticket again.
   const prepared = sent(
-    await onImageThread({ step: "upright", grey, turn }, [
+    await onImageThread("ocr", { step: "upright", grey, turn }, [
       grey.pixels.buffer as ArrayBuffer,
     ]),
     "grey",
@@ -520,6 +525,7 @@ async function readEveryWay(
   halfTurned = false,
 ): Promise<{ texts: string[]; prepared: Grey }> {
   const reply = await onImageThread(
+    "ocr",
     { step: "readings", grey: prepared, halfTurned, readings: OCR_READINGS },
     [prepared.pixels.buffer as ArrayBuffer],
   );
@@ -735,6 +741,6 @@ export async function processReceiptOcr(
 export async function terminateWorker(): Promise<void> {
   await Promise.all([
     ...ocrWorkerPool.map((worker) => worker.terminate()),
-    stopImageThread(),
+    stopImageThreads(),
   ]);
 }

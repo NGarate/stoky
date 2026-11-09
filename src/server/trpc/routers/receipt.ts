@@ -27,7 +27,8 @@ import {
 } from "@/server/services/productMatcher";
 import { uploadRateLimit } from "@/lib/rate-limit";
 import { enforceRateLimit } from "../throttle";
-import { HEIF_BRANDS, reencodeAsJpeg } from "@/server/services/image";
+import { HEIF_BRANDS } from "@/server/services/image";
+import { reencodedAsJpeg } from "@/server/services/image-thread";
 import { describeError } from "@/server/log-error";
 import {
   MAX_RECEIPT_BASE64_LENGTH,
@@ -345,9 +346,11 @@ export const receiptRouter = createTRPCRouter({
       // orientation is applied to the pixels. Bounded in pixels as well as
       // bytes — see the module, which the OCR path reads the same bound from.
       // An output the metadata strip cannot parse throws, and is refused here.
+      // On a thread of its own: decoding a HEIC is libheif's WebAssembly,
+      // which held the server's thread for 0.9 s on a phone photo.
       let processedBuffer: Buffer;
       try {
-        processedBuffer = await reencodeAsJpeg(buffer);
+        processedBuffer = await reencodedAsJpeg(buffer);
       } catch {
         throw new TRPCError({
           code: "BAD_REQUEST",

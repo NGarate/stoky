@@ -1308,6 +1308,12 @@ Verified against the files named in each row.
   longest stall left on the server's thread was measured at 0.09 s. That
   thread has no time limit of its own: its work is bounded by the pixel caps,
   `MAX_PIXELS` on decode and 20 megapixels for a prepared ticket.
+- **Storing an upload cannot stall the server either**
+  (`src/server/services/image-thread.ts`): decoding a phone's HEIC is
+  libheif's WebAssembly, which held the server's thread for 0.9 s per photo.
+  The re-encode every upload goes through runs on a second thread, its own,
+  so an upload never waits behind a receipt being read; the longest stall
+  left was 3 ms on three phone photos.
 - **A restart does not strand a receipt** (`src/server/services/receipt-recovery.ts`,
   called from `src/instrumentation.ts`). A receipt is read inside the process
   that took its upload, so one that process was still reading when it stopped

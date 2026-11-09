@@ -23,6 +23,7 @@ import {
   dewarped,
   flattenedLight,
   greyPng,
+  reencodeAsJpeg,
   greyPngs,
   middleBand,
   straightenedTicket,
@@ -34,8 +35,14 @@ import {
 /** Quarter turns clockwise. */
 export type Turn = 0 | 1 | 2 | 3;
 
-/** What `prepareForOcr` asks of this thread, one step at a time. */
+/** What `image-thread.ts` asks of this thread, one step at a time. */
 export type PreparationRequest =
+  | {
+      id: number;
+      /** `image` as the upload stores it (`reencodeAsJpeg`), the JPEG alone in `images`. */
+      step: "reencode";
+      image: Uint8Array;
+    }
   | {
       id: number;
       /**
@@ -88,6 +95,18 @@ async function answer(
   request: PreparationRequest,
 ): Promise<{ grey?: Grey; images?: Buffer[] }> {
   switch (request.step) {
+    case "reencode":
+      return {
+        images: [
+          await reencodeAsJpeg(
+            Buffer.from(
+              request.image.buffer,
+              request.image.byteOffset,
+              request.image.byteLength,
+            ),
+          ),
+        ],
+      };
     case "ticket": {
       const image = Buffer.from(
         request.image.buffer,
