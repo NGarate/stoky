@@ -276,7 +276,15 @@ export const OCR_TICKET_WIDTH = 1400;
 
 /** One of the readings taken of every photograph. */
 export interface OcrReading {
-  /** The prepared ticket's width this reading is scaled to. */
+  /**
+   * The prepared ticket's own width this reading is scaled to — not
+   * `OCR_TICKET_WIDTH`'s, although a crop, never scaled down, can be wider.
+   * Reading those at the 560–980 pixels the six were measured at was tried
+   * on 2026-11-09: of the 41 bench photos three are wider, one read the
+   * same, `0070` went from 0.65 to 0.75 and `mine1` from 0.95 to 0.55. Both
+   * are whole frames the paper was not found in (ISSUES.md OCR-8), whose text
+   * is small in the frame and is lost when the frame is shrunk to 560.
+   */
   scale: number;
   /** Read with the ink thinned (`thinned`) rather than as it is. */
   thin: boolean;
