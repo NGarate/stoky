@@ -91,3 +91,40 @@ describe("the browser client's links", () => {
     expect(only?.accept).toBe("application/jsonl");
   });
 });
+
+describe("the browser client's console line for a failed call", () => {
+  it("says what failed in its text, not only in an object", async () => {
+    // Next's development overlay drops styled `%c` text and shows an error
+    // argument as `{}`: the code and message must be in the string.
+    const refusing = (async () =>
+      new Response(
+        JSON.stringify({
+          error: SuperJSON.serialize({
+            message: "Receipt image not found",
+            code: -32004,
+            data: { code: "NOT_FOUND", httpStatus: 404 },
+          }),
+        }),
+        { status: 404, headers: { "content-type": "application/json" } },
+      )) as unknown as typeof fetch;
+    const client = createTRPCClient<AppRouter>({
+      links: trpcLinks({ url: "http://localhost/api/trpc", fetch: refusing }),
+    });
+    const errors = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      // The unstreamed link, so the fake's plain JSON is a well-formed answer.
+      await client.auth.changePassword
+        .mutate({
+          currentPassword: "cocina despensa nevera",
+          newPassword: "tarro de garbanzos azul",
+        })
+        .catch(() => {});
+      expect(errors).toHaveBeenCalledTimes(1);
+      expect(String(errors.mock.calls[0]?.[0])).toMatch(
+        /^<< mutation #\d+ auth\.changePassword failed after \d+ ms: NOT_FOUND: Receipt image not found$/,
+      );
+    } finally {
+      errors.mockRestore();
+    }
+  });
+});
