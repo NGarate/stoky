@@ -13,7 +13,14 @@ import { api } from "@/lib/trpc/client";
  * drawn until the photograph arrives, so a refusal or a missing file leaves
  * the review as it was rather than a broken image.
  */
-export function ReceiptPhoto({ receiptId }: { receiptId: string }) {
+export function ReceiptPhoto({
+  receiptId,
+  defaultOpen,
+}: {
+  receiptId: string;
+  /** Unfolded, as on the upload screen, where it is the photo being read. */
+  defaultOpen?: boolean;
+}) {
   const t = useTranslations("receipts");
   const me = api.auth.me.useQuery(undefined, { retry: false });
   const canReview = me.data !== undefined && me.data.role !== "KITCHEN";
@@ -27,7 +34,7 @@ export function ReceiptPhoto({ receiptId }: { receiptId: string }) {
   if (!image.data) return null;
 
   return (
-    <Disclosure className="mb-6" summary={t("photo")}>
+    <Disclosure className="mb-6" defaultOpen={defaultOpen} summary={t("photo")}>
       <img
         alt={t("photoAlt")}
         className="w-full rounded-b bg-card object-contain"

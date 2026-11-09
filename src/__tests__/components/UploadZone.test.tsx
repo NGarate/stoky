@@ -1,6 +1,6 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, mock } from "bun:test";
-import { screen, cleanup, waitFor } from "@testing-library/react";
+import { screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
 import { minimumHeight } from "../setup/tailwind";
@@ -160,6 +160,19 @@ describe("UploadZone", () => {
     expect(
       screen.queryByText("Arrastra una foto del ticket o pulsa para elegirla"),
     ).toBeAbsent();
+  });
+
+  it("draws no broken image when the browser cannot show what was chosen", async () => {
+    const { container } = renderWithIntl(<UploadZone onUpload={() => {}} />);
+
+    await userEvent.upload(
+      fileInput(container),
+      new File(["heic-bytes"], "IMG_0001.HEIC", { type: "image/heic" }),
+    );
+    // What a browser without a HEIC decoder does with the data URL.
+    fireEvent.error(await screen.findByAltText("Vista previa del ticket"));
+
+    expect(screen.queryByAltText("Vista previa del ticket")).toBeAbsent();
   });
 
   it("lets the user clear the preview and choose again", async () => {

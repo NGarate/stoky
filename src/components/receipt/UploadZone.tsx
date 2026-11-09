@@ -133,10 +133,15 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
 
       {preview ? (
         <div className="relative">
+          {/* A browser that cannot draw what was chosen — a phone's HEIC
+              anywhere but Safari — would show a broken image; it shows
+              nothing instead, and the upload screen shows the photo as the
+              server stored it, a JPEG, once it is sent. */}
           <img
             src={preview}
             alt={t("previewAlt")}
             className="w-full h-64 object-contain rounded-lg border border-border"
+            onError={clearPreview}
           />
           {/* The icon primitive: a hand-styled 24px circle was half the
               target floor, on the one control that throws the photo away. */}

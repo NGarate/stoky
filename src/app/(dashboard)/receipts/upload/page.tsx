@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { UploadZone } from "@/components/receipt/UploadZone";
+import { ReceiptPhoto } from "@/components/receipt/ReceiptPhoto";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 import { api } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
@@ -217,6 +218,10 @@ function UploadView() {
                 status={statusQuery.data.status}
                 progress={statusQuery.data.progress}
               />
+
+              {/* What is being read, as the server stored it: a JPEG every
+                  browser draws, where the phone's own HEIC was not. */}
+              <ReceiptPhoto defaultOpen receiptId={uploadedReceiptId} />
 
               {failed && (
                 <div className="rounded-lg border border-danger-foreground bg-danger p-4">

@@ -69,6 +69,9 @@ mock.module("@/lib/offline/queue-context", () => ({
 
 mock.module("@/lib/trpc/client", () => ({
   api: {
+    auth: {
+      me: { useQuery: () => ({ data: { role: "MEMBER" } }) },
+    },
     useUtils: () => ({
       store: {
         list: { invalidate: async () => void invalidated.push("store.list") },
@@ -99,6 +102,9 @@ mock.module("@/lib/trpc/client", () => ({
         useQuery: (_input: unknown, options: { enabled: boolean }) => ({
           data: options.enabled ? statusData : undefined,
         }),
+      },
+      getImage: {
+        useQuery: () => ({ data: "data:image/jpeg;base64,c3RvcmVk" }),
       },
     },
   },
@@ -193,6 +199,17 @@ describe("following the receipt it sent", () => {
         /No se ha podido leer el ticket/,
       );
     });
+  });
+
+  it("shows the photo being read as the server stored it, unfolded", async () => {
+    statusData = { status: "PROCESSING", progress: { processed: 0, total: 0 } };
+    const container = mount();
+
+    await upload(container);
+
+    const photo = await screen.findByAltText("Foto del ticket");
+    expect(photo.getAttribute("src")).toBe("data:image/jpeg;base64,c3RvcmVk");
+    expect(photo.closest("details")?.open).toBe(true);
   });
 
   it("goes on to the review once the receipt has been read", async () => {

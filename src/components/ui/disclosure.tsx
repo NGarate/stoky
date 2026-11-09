@@ -56,11 +56,17 @@ export interface DisclosureProps {
   children: React.ReactNode;
   variant?: "panel" | "inline";
   className?: string;
+  /** Open when first drawn; the person can still fold it away. */
+  defaultOpen?: boolean;
 }
 
 const Disclosure = React.forwardRef<HTMLDetailsElement, DisclosureProps>(
-  ({ summary, children, variant, className }, ref) => (
-    <details className={cn(detailsVariants({ variant }), className)} ref={ref}>
+  ({ summary, children, variant, className, defaultOpen }, ref) => (
+    <details
+      className={cn(detailsVariants({ variant }), className)}
+      open={defaultOpen}
+      ref={ref}
+    >
       <summary className={cn(summaryVariants({ variant }))}>
         {summary}
         <ChevronDown
