@@ -1,7 +1,11 @@
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { persistQueryClient } from "@tanstack/react-query-persist-client";
 import SuperJSON from "@/lib/superjson";
-import type { Query, QueryClient } from "@tanstack/react-query";
+import {
+  defaultShouldDehydrateQuery,
+  type Query,
+  type QueryClient,
+} from "@tanstack/react-query";
 import type { Persister } from "@tanstack/react-query-persist-client";
 
 /**
@@ -45,7 +49,9 @@ import type { Persister } from "@tanstack/react-query-persist-client";
 // plain numbers, and a component calling `.toNumber()` on one throws.
 // 6 when a batch's remainder became a stored figure: `quantity` on an
 // expiring batch is never null now, and a cached null would draw as nothing.
-export const CACHE_VERSION = "6";
+// 7 when a query still loading stopped being kept (`shouldPersist`): a cache
+// from before can hold one, and restoring it throws.
+export const CACHE_VERSION = "7";
 
 /**
  * The queries worth keeping between visits.
@@ -77,6 +83,10 @@ export function queryPathOf(queryKey: readonly unknown[]): string | null {
 }
 
 export function shouldPersist(query: Query): boolean {
+  // Answers only, as TanStack's own filter that this one replaces: a query
+  // still loading is written with its promise, which storage keeps as `{}`,
+  // and the next restore threw on `.then` and discarded the whole copy.
+  if (!defaultShouldDehydrateQuery(query)) return false;
   const path = queryPathOf(query.queryKey);
   return path !== null && PERSISTED_QUERIES.has(path);
 }
@@ -305,9 +315,17 @@ export function restoreThenRefresh(
     ...options,
   });
 
-  const ready = restored.then(async () => {
-    await queryClient.invalidateQueries();
-  });
+  const ready = restored.then(
+    async () => {
+      await queryClient.invalidateQueries();
+    },
+    // A copy that cannot be restored has been discarded by the persister, and
+    // the screen starts from the server as on a first visit. Unhandled, the
+    // rejection counted as a runtime error, and after one `next dev` reloads
+    // the page on every hot-reload message: a phone kept reloading for as
+    // long as it was open, each reload persisting a fresh copy mid-load.
+    () => undefined,
+  );
 
   return [unsubscribe, ready];
 }

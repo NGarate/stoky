@@ -176,6 +176,39 @@ describe("a restored answer is shown, never trusted", () => {
 });
 
 describe("what is not written", () => {
+  it("leaves out a query still waiting for its answer, so the next visit restores", async () => {
+    const writing = new QueryClient();
+    // A screen reloaded mid-load: one answer in, one still on its way.
+    void writing.prefetchQuery({
+      queryKey: [["shopping", "list"], { type: "query" }],
+      queryFn: () => new Promise(() => {}),
+    });
+    writing.setQueryData(
+      [["inventory", "getExpiringItems"], { type: "query" }],
+      [{ id: "b1" }],
+    );
+    await persistQueryClientSave({
+      queryClient: writing,
+      ...persistOptions(USER, { throttleTime: 0 }),
+    });
+    await flushWrites();
+
+    // A pending query is written with its promise, which storage keeps as
+    // `{}`; restoring that threw "promise.then is not a function" and threw
+    // the whole copy away.
+    const reading = new QueryClient();
+    await persistQueryClientRestore({
+      queryClient: reading,
+      ...persistOptions(USER, { throttleTime: 0 }),
+    });
+    expect(
+      reading.getQueryData([
+        ["inventory", "getExpiringItems"],
+        { type: "query" },
+      ]),
+    ).toEqual([{ id: "b1" }]);
+  });
+
   it("leaves a query outside the allowlist out of the cache", async () => {
     const writing = new QueryClient();
     writing.setQueryData(
@@ -190,6 +223,26 @@ describe("what is not written", () => {
 
     const stored = window.localStorage.getItem(persistKey(USER)) ?? "";
     expect(stored).not.toContain("receipt");
+  });
+});
+
+describe("a copy that cannot be restored", () => {
+  it("is let go of without an unhandled rejection", async () => {
+    // Under `next dev` one unhandled rejection marks the page as broken, and
+    // every hot-reload message after it reloads the page: a copy that failed
+    // to restore kept a phone reloading for as long as it was open.
+    window.localStorage.setItem(persistKey(USER), "not a cache");
+
+    const [unsubscribe, ready] = restoreThenRefresh(
+      new QueryClient(),
+      persistOptions(USER, { throttleTime: 0 }),
+    );
+    try {
+      await expect(ready).resolves.toBeUndefined();
+      expect(window.localStorage.getItem(persistKey(USER))).toBeNull();
+    } finally {
+      unsubscribe();
+    }
   });
 });
 

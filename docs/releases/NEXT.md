@@ -125,6 +125,14 @@ de compra y el importe total cuando no se leyeron o se leyeron mal. La tienda
 se elige o se escribe como al subirlo. Importa sobre todo: sin tienda, los
 precios del ticket no se guardan. La revisión muestra ahora también el total.
 
+### Sin conexión, lo último que viste sigue ahí aunque recargues
+
+Si recargabas la página mientras algo terminaba de cargar, la copia que la
+app guarda para usarla sin conexión quedaba dañada y se tiraba entera en la
+siguiente visita: sin señal, la lista de la compra o el inventario salían
+vacíos. Ahora solo se guarda lo que ya ha llegado, y una copia antigua dañada
+se descarta sin más.
+
 ## English
 
 > [!CAUTION]
@@ -238,3 +246,10 @@ too.
 purchase date and the total when they were not read or were misread. The
 store is picked or typed as when uploading. It matters most: without a store,
 the receipt's prices are not kept. The review now shows the total as well.
+
+### What you last saw stays there offline, even after a reload
+
+Reloading a page while something was still loading damaged the copy the app
+keeps for use offline, and the next visit threw the whole copy away: with no
+signal, the shopping list or the inventory came up empty. Now only what has
+already arrived is kept, and an old damaged copy is simply discarded.
