@@ -270,8 +270,9 @@ export function timedReader<W extends RecognisingWorker>(
  * Pixels across the ticket it is prepared at: the short side of a straightened
  * ticket, the width of a cropped one (which is only ever scaled up to it).
  *
- * Every number of the preparation was measured at this width, and the
- * readings are scaled from it (`OCR_READINGS`).
+ * Every number of the preparation was measured at this width, and so were
+ * the readings, which are scaled from the ticket as prepared
+ * (`OcrReading.scale`).
  */
 export const OCR_TICKET_WIDTH = 1400;
 
