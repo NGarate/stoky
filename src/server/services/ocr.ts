@@ -3,17 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { ReceiptStatus } from "@/generated/prisma/client";
 import { existsSync } from "node:fs";
 import { availableParallelism } from "node:os";
-import { Worker as Thread } from "node:worker_threads";
 import { join } from "node:path";
-import { InvalidInputError, NotFoundError, UpstreamError } from "./errors";
+import { InvalidInputError, NotFoundError } from "./errors";
 import { parseReceiptText } from "./receiptParser";
 import { type Grey, readImageMetadata } from "./image";
-import type {
-  Prepared,
-  PreparationReply,
-  PreparationRequest,
-  Turn,
-} from "./prepare-worker";
+import { asBuffer, onImageThread, sent, stopImageThread } from "./image-thread";
+import type { Turn } from "./prepare-worker";
 
 /**
  * Where the Spanish traineddata is read from — ISSUES.md OCR-1.
@@ -389,88 +384,6 @@ export interface PreparedTicket extends Grey {
   sure: boolean;
 }
 
-/** Requests the preparation thread has not answered yet, by id. */
-type Waiting = Map<
-  number,
-  { resolve: (reply: Prepared) => void; reject: (error: Error) => void }
->;
-
-/** The thread the preparation's pixel work runs on, while there is one. */
-let preparationThread: { thread: Thread; waiting: Waiting } | null = null;
-let nextRequest = 0;
-
-/**
- * `request` answered by the preparation thread (`prepare-worker.ts`), which
- * is started on first use and again after it fails.
- *
- * A thread that dies fails what it was asked; the next request starts a new
- * one. An image the preparation cannot work with comes back as the
- * `InvalidInputError` it was; anything else that goes wrong over there is an
- * `UpstreamError` here, the thread being something this service depends on.
- */
-function onPreparationThread(
-  request: DistributiveOmit<PreparationRequest, "id">,
-  transfer: ArrayBuffer[] = [],
-): Promise<Prepared> {
-  if (!preparationThread) {
-    const thread = new Thread(new URL("./prepare-worker.ts", import.meta.url));
-    const waiting: Waiting = new Map();
-    const fail = (error: Error) => {
-      for (const { reject } of waiting.values()) reject(error);
-      waiting.clear();
-      if (preparationThread?.thread === thread) preparationThread = null;
-    };
-    thread.on("message", (reply: PreparationReply) => {
-      const asked = waiting.get(reply.id);
-      waiting.delete(reply.id);
-      // Idle, the thread must not keep the process alive.
-      if (waiting.size === 0) thread.unref();
-      if (!asked) return;
-      if ("error" in reply) {
-        asked.reject(
-          reply.error.name === "InvalidInputError"
-            ? new InvalidInputError(reply.error.message)
-            : new UpstreamError(reply.error.message),
-        );
-      } else {
-        asked.resolve(reply);
-      }
-    });
-    thread.on("error", fail);
-    thread.on("exit", (code) =>
-      fail(new UpstreamError(`The image preparation thread stopped (${code})`)),
-    );
-    preparationThread = { thread, waiting };
-  }
-  const { thread, waiting } = preparationThread;
-  const id = nextRequest++;
-  return new Promise((resolve, reject) => {
-    waiting.set(id, { resolve, reject });
-    thread.ref();
-    thread.postMessage({ ...request, id }, transfer);
-  });
-}
-
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
-  ? Omit<T, K>
-  : never;
-
-/** What a preparation step answered with, which must be there. */
-function sent<K extends keyof Prepared>(
-  reply: Prepared,
-  what: K,
-): NonNullable<Prepared[K]> {
-  const value = reply[what];
-  if (!value) {
-    throw new UpstreamError(`The preparation thread sent no ${what} back`);
-  }
-  return value;
-}
-
-/** A PNG the preparation thread sent, as the recogniser takes it. */
-const asBuffer = (png: Uint8Array) =>
-  Buffer.from(png.buffer, png.byteOffset, png.byteLength);
-
 /**
  * The photograph as the readings start from: the ticket alone, square to the
  * frame, evenly lit, the right way up and with its lines straight. The stored
@@ -496,7 +409,7 @@ export async function prepareForOcr(
   confidence: Confidence = noConfidence,
   signal?: AbortSignal,
 ): Promise<PreparedTicket> {
-  const ticket = await onPreparationThread({
+  const ticket = await onImageThread({
     step: "ticket",
     image,
     width: OCR_TICKET_WIDTH,
@@ -509,7 +422,7 @@ export async function prepareForOcr(
   );
   // Handed over, not copied: nothing here needs the ticket again.
   const prepared = sent(
-    await onPreparationThread({ step: "upright", grey, turn }, [
+    await onImageThread({ step: "upright", grey, turn }, [
       grey.pixels.buffer as ArrayBuffer,
     ]),
     "grey",
@@ -606,7 +519,7 @@ async function readEveryWay(
   signal: AbortSignal,
   halfTurned = false,
 ): Promise<{ texts: string[]; prepared: Grey }> {
-  const reply = await onPreparationThread(
+  const reply = await onImageThread(
     { step: "readings", grey: prepared, halfTurned, readings: OCR_READINGS },
     [prepared.pixels.buffer as ArrayBuffer],
   );
@@ -820,10 +733,8 @@ export async function processReceiptOcr(
 }
 
 export async function terminateWorker(): Promise<void> {
-  const preparation = preparationThread;
-  preparationThread = null;
   await Promise.all([
     ...ocrWorkerPool.map((worker) => worker.terminate()),
-    preparation?.thread.terminate(),
+    stopImageThread(),
   ]);
 }

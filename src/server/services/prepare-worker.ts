@@ -6,12 +6,13 @@
  * the server's own thread they held the event loop for up to 2.5 s at a time
  * per photograph, measured, during which the server answered nobody. Here
  * they hold this thread instead. What needs Tesseract (which way up the
- * ticket is) stays with the caller, `prepareForOcr` in `ocr.ts`, which is
- * the only thing that talks to this thread and touches no pixels itself: it
- * is handed small PNGs to judge, and answers with the turn to make.
+ * ticket is) stays with the caller, `prepareForOcr` in `ocr.ts`, which
+ * touches no pixels itself: it is handed small PNGs to judge, and answers
+ * with the turn to make. Everything reaches this thread through
+ * `image-thread.ts`.
  *
- * Next bundles this file as a `[worker thread]` chunk because `ocr.ts`
- * starts it with `new Worker(new URL(…, import.meta.url))`, and its
+ * Next bundles this file as a `[worker thread]` chunk because
+ * `image-thread.ts` starts it with `new Worker(new URL(…, import.meta.url))`, and its
  * standalone output keeps the chunk: checked on a production build, where
  * the chunk ran under Bun and answered.
  */

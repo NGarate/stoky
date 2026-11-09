@@ -1180,7 +1180,7 @@ and ink black on both sides of a shadow") pins the behaviour.
 
 ### 🟡 OCR-12: The image preparation thread has not been run under `next dev`
 
-**Files:** `ocr.ts` (`onPreparationThread`), `prepare-worker.ts`
+**Files:** `image-thread.ts` (`onImageThread`), `prepare-worker.ts`
 **Severity:** LOW — a development-only risk
 **Status:** OPEN — checked under `bun test` and in a production build, where
 Next bundled the worker as a `[worker thread]` chunk that ran under Bun
