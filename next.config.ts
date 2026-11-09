@@ -157,6 +157,21 @@ const nextConfig: NextConfig = {
      * drops below what the feature needs or the two stop being one.
      */
     proxyClientMaxBodySize: MAX_TRPC_BODY_BYTES,
+
+    /**
+     * No Turbopack cache on disk for `next dev`.
+     *
+     * With it, an open tab can reload forever once `next dev` restarts: the
+     * first HMR message for the main client chunk list is `restart`, every
+     * load, though the chunks are byte-identical (vercel/next.js#100251, a
+     * 16.4.0 regression, open at 16.4.5). It needs a tab left open across the
+     * restart, client-side navigations before it, and a route handler
+     * compiled before the tab reconnects — a phone on Tailscale and a
+     * `/api/health` poll. Reproduced 2026-11-09 against a worktree: 23
+     * navigations in 15 s with the cache; without it, only the one reload a
+     * restart calls for. Costs a cold compile on each start. Remove when the upstream fix ships.
+     */
+    turbopackFileSystemCacheForDev: false,
   },
 
   /**
