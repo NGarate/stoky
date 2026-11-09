@@ -1697,6 +1697,13 @@ one-tap add-to-list. The per-journey evidence is in that file.
   `rm -rf .next/dev`, start it again: two navigations in 15 s afterwards, the
   load and one reload, then quiet. To tell it from a real reload, log the HMR
   frames (Playwright `page.on("websocket")`) and look for `restart`.
+  **A second cause, with no `restart` frame:** after one unhandled error or
+  rejection, `next dev` reloads the page on every hot-reload message
+  (`hot-reloader-app.js`, `hadRuntimeError`), and a phone's tab bar compiling
+  the routes it links to sends those continually. Seen 2026-11-09, signed in
+  on `/dashboard`: the offline cache's restore threw on every load
+  (`promise.then is not a function`, fixed in `src/lib/offline/persist.ts`).
+  Look in the dev server's log for `[browser] ⨯ unhandledRejection` first.
 
 ---
 
