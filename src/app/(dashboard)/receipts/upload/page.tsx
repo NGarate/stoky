@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { UploadZone } from "@/components/receipt/UploadZone";
@@ -31,14 +31,33 @@ function readAsDataUrl(file: File): Promise<string> {
   });
 }
 
+/**
+ * `useSearchParams` opts the subtree out of static rendering, so it sits
+ * under a Suspense boundary, as on /inventory.
+ */
 export default function UploadPage() {
+  return (
+    <Suspense fallback={null}>
+      <UploadView />
+    </Suspense>
+  );
+}
+
+/** Where the upload screen follows the receipt it sent, `?receipt=<id>`. */
+const UPLOAD_PATH = "/receipts/upload";
+
+function UploadView() {
   const t = useTranslations("receipts");
   const snackbar = useSnackbar();
   const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadedReceiptId, setUploadedReceiptId] = useState<string | null>(
-    null,
-  );
+  // In the address, not in React state. Held in state, a reload while the
+  // photo was being read — or the page being dropped from memory on a phone —
+  // put the person back in front of an empty form, with no word of the
+  // receipt they had just sent.
+  const uploadedReceiptId = useSearchParams().get("receipt");
+  const setUploadedReceiptId = (id: string | null) =>
+    router.replace(id ? `${UPLOAD_PATH}?receipt=${id}` : UPLOAD_PATH);
   const utils = api.useUtils();
   // "No store means no prices": applyReceipt writes a PriceRecord per line
   // only when the receipt has a store, and until Phase 8 no screen ever sent
@@ -130,6 +149,14 @@ export default function UploadPage() {
       router.push(`/receipts/${uploadedReceiptId}/review`);
     }
   };
+
+  // Read, so on to what was read. Replaced rather than pushed: back from the
+  // review is the list, not a screen saying the wait is over.
+  useEffect(() => {
+    if (ready && uploadedReceiptId) {
+      router.replace(`/receipts/${uploadedReceiptId}/review`);
+    }
+  }, [ready, uploadedReceiptId, router]);
 
   return (
     // No padding of its own: the layout's `p-4` is the gutter (ISSUES UI-5).

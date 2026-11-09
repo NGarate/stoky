@@ -2,7 +2,7 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createContext } from "react";
+import { createContext, useSyncExternalStore } from "react";
 import { renderWithIntl } from "../utils/render";
 import { axeViolations } from "../utils/axe";
 
@@ -20,9 +20,33 @@ const noop = (): void => {};
 const uploads: Array<Record<string, unknown>> = [];
 const invalidated: string[] = [];
 
+/**
+ * The address, as far as the page reads it: its query, and where it was sent.
+ * The page keeps the receipt it is following in `?receipt=`, so `replace` to
+ * /receipts/upload changes what `useSearchParams` answers; anywhere else is
+ * a navigation away, recorded and otherwise ignored.
+ */
+let query = new URLSearchParams();
+const replaced: string[] = [];
+const watchers = new Set<() => void>();
+function replace(url: string): void {
+  replaced.push(url);
+  const [path, search = ""] = url.split("?");
+  if (path !== "/receipts/upload") return;
+  query = new URLSearchParams(search);
+  for (const watcher of watchers) watcher();
+}
+
 mock.module("next/navigation", () => ({
-  useRouter: () => ({ push: noop, replace: noop, refresh: noop }),
-  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: noop, replace, refresh: noop }),
+  useSearchParams: () =>
+    useSyncExternalStore(
+      (watcher) => {
+        watchers.add(watcher);
+        return () => watchers.delete(watcher);
+      },
+      () => query,
+    ),
   usePathname: () => "/receipts/upload",
   useParams: () => ({}),
   redirect: noop,
@@ -109,6 +133,8 @@ function pageStatus(container: HTMLElement): HTMLElement | null {
 
 beforeEach(() => {
   statusData = undefined;
+  query = new URLSearchParams();
+  replaced.length = 0;
   uploads.length = 0;
   invalidated.length = 0;
 });
@@ -152,6 +178,44 @@ describe("the result of reading a receipt", () => {
     expect(
       screen.getByRole("button", { name: "Subir otra foto" }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("following the receipt it sent", () => {
+  it("keeps it in the address, so a reload still shows how the read went", async () => {
+    statusData = { status: "FAILED", progress: null };
+    // As after a reload: no upload in this page's life, the receipt in the URL.
+    query = new URLSearchParams("receipt=r1");
+    const container = mount();
+
+    await waitFor(() => {
+      expect(pageStatus(container)?.textContent).toMatch(
+        /No se ha podido leer el ticket/,
+      );
+    });
+  });
+
+  it("goes on to the review once the receipt has been read", async () => {
+    statusData = { status: "NEEDS_REVIEW", progress: { processed: 3 } };
+    const container = mount();
+
+    await upload(container);
+
+    await waitFor(() => {
+      expect(replaced).toContain("/receipts/r1/review");
+    });
+  });
+
+  it("stays to say so when the read failed", async () => {
+    statusData = { status: "FAILED", progress: null };
+    const container = mount();
+
+    await upload(container);
+
+    await waitFor(() => {
+      expect(pageStatus(container)?.textContent).toMatch(/No se ha podido/);
+    });
+    expect(replaced.some((url) => url.includes("/review"))).toBe(false);
   });
 });
 
