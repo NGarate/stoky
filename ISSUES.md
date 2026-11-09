@@ -1003,7 +1003,7 @@ instance, an `uploads` volume on a filesystem of its own.
 
 **Files:** `src/server/services/receiptParser.ts` (`discountOn`, about line 461)
 **Severity:** MEDIUM — a wrong discount moves the total chosen, the score that
-picks the OCR reading (`readingScore`, `bestReading`), and `reconcile`
+picks the OCR reading (`bestReading`), and `reconcile`
 **Status:** OPEN — found reviewing PR #19 on 2026-11-06, reproduced
 
 `discountOn` adds up any line with a `-` before an amount, the header's

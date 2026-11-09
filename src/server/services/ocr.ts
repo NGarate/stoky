@@ -517,28 +517,6 @@ export async function prepareForOcr(
   return { ...prepared, sure };
 }
 
-/**
- * How believable a reading is, without knowing what the ticket says: how
- * many articles it yields, and whether they add up to the total it yields.
- *
- * A misread digit or a lost line breaks the sum, so of two readings of the
- * same ticket the one whose articles come to its total is almost always the
- * better one — and when neither does, the one with more articles.
- */
-export function readingScore(text: string): number {
-  const { items, totalAmount, discountAmount = 0 } = parseReceiptText(text);
-  const count = items.length;
-  if (!totalAmount || count === 0) return count;
-  // Less the discounts the reading found: a correct reading of a ticket with
-  // a `DTO -0,50` misses its total by exactly that, and a misread digit that
-  // happened to close the gap used to beat it.
-  const sum =
-    items.reduce((total, item) => total + item.parsedPrice, 0) - discountAmount;
-  const gap = Math.abs(sum - totalAmount) / totalAmount;
-  const agreement = gap < 0.005 ? 3 : gap < 0.05 ? 1.5 : gap < 0.2 ? 0.5 : 0;
-  return count * (1 + agreement);
-}
-
 /** How many of `a`'s values `b` has too, each counted once. */
 function shared(a: readonly number[], b: readonly number[]): number {
   const left = [...b];
@@ -561,13 +539,14 @@ function shared(a: readonly number[], b: readonly number[]): number {
  * **Among those, the one whose prices the other readings share most**, every
  * reading counting, so that six readings outvote one that went wrong in its
  * own way. Measured on the bench of `OCR_READINGS`: picking instead the
- * reading `readingScore` rated highest scored 0.861 of 24 readings, against
- * 0.901 for this, because that score rewards a reading for finding more
- * lines, including lines that are not articles. The first of equals.
+ * reading with the most articles, counted thrice when they added up, scored
+ * 0.861 of 24 readings, against 0.901 for this, because that rewards a
+ * reading for finding more lines, including lines that are not articles.
+ * The first of equals.
  *
  * **With a date from another reading when it has none.** The date is one
  * short line, and which pass reads it is close to chance; the score cannot
- * weigh it — a date bonus in `readingScore` chose worse readings. So the
+ * weigh it — a date bonus in that article score chose worse readings. So the
  * first line of another reading that parses to a date on its own is added to
  * the end of the one kept. Measured over 111 photographs: two tickets gained
  * their date and no score fell.
@@ -605,7 +584,7 @@ export function bestReading(readings: readonly string[]): string {
     if (agreement(index) > agreement(bestIndex)) bestIndex = index;
   }
   const best = readings[bestIndex] ?? "";
-  if (parseReceiptText(best).purchaseDate) return best;
+  if (parsed[bestIndex]?.purchaseDate) return best;
   for (const reading of readings) {
     if (reading === best) continue;
     const dated = reading
