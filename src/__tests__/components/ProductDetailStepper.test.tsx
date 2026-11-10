@@ -12,6 +12,7 @@ import { createContext } from "react";
 import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
+import { findSnackbarAction } from "../utils/snackbar";
 import type { QueuedOp, EnqueueResult } from "@/lib/offline/queue";
 import { Decimal } from "@prisma/client-runtime-utils";
 
@@ -268,9 +269,7 @@ describe("confirmed in plain words, with undo", () => {
     ).not.toHaveLength(0);
 
     // Undo cancels the queued change — never a compensating write (D57).
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Deshacer" }),
-    );
+    await userEvent.click(await findSnackbarAction());
     expect(cancel).toHaveBeenCalledWith("op-1");
     expect(enqueue).toHaveBeenCalledTimes(1);
   });

@@ -4,6 +4,7 @@ import { createContext } from "react";
 import { act, cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
+import { findSnackbarAction } from "../utils/snackbar";
 import { axeViolations } from "../utils/axe";
 import type { QueuedOp, EnqueueResult } from "@/lib/offline/queue";
 import { Decimal } from "@prisma/client-runtime-utils";
@@ -496,9 +497,7 @@ describe("undo", () => {
 
     // Pressing it cancels the change `enqueue` just returned, and no other —
     // and never writes a compensating one (D57).
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Deshacer" }),
-    );
+    await userEvent.click(await findSnackbarAction());
     expect(cancel).toHaveBeenCalledWith("op-1");
     expect(enqueue).toHaveBeenCalledTimes(1);
   });

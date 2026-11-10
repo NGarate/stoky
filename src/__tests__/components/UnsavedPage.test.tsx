@@ -5,6 +5,7 @@ import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl as renderWithIntlOnly } from "../utils/render";
 import { axeViolations } from "../utils/axe";
+import { findSnackbarAction } from "../utils/snackbar";
 import type { FailedOp, FailureReason } from "@/lib/offline/queue";
 
 /**
@@ -296,7 +297,7 @@ describe("taking a discard back", () => {
         )
       ).length,
     ).toBeGreaterThan(0);
-    await userEvent.click(screen.getByRole("button", { name: "Deshacer" }));
+    await userEvent.click(await findSnackbarAction());
     expect(restore).toHaveBeenCalledWith(change);
   });
 });

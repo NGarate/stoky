@@ -4,6 +4,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import { findSnackbarAction } from "../utils/snackbar";
 import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
@@ -245,9 +246,7 @@ describe("the product's details", () => {
       ).not.toHaveLength(0);
     });
 
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Deshacer" }),
-    );
+    await userEvent.click(await findSnackbarAction());
 
     // An exact inverse exists here and nowhere near stock: the row's previous
     // values are still in hand, so undo restores them rather than writing a
@@ -330,9 +329,7 @@ describe("undoing a save", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Deshacer" }),
-    );
+    await userEvent.click(await findSnackbarAction());
 
     // Restoring used to go through the save's own mutation, so it re-entered
     // that `onSuccess` and produced a second snackbar offering to undo *that*
@@ -355,7 +352,7 @@ describe("undoing a save", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
-    const undo = await screen.findByRole("button", { name: "Deshacer" });
+    const undo = await findSnackbarAction();
     updateFails = true;
     await userEvent.click(undo);
 

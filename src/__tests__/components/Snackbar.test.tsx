@@ -18,6 +18,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import { findSnackbarAction } from "../utils/snackbar";
 
 /**
  * The one snackbar.
@@ -334,9 +335,7 @@ describe("undo", () => {
     render();
     await press("deshacible");
 
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Deshacer" }),
-    );
+    await userEvent.click(await findSnackbarAction());
 
     // D57: a stock movement that never happened must leave no trace. A
     // compensating addStock would record an acquisition the household never
@@ -383,9 +382,7 @@ describe("undo", () => {
     render();
     await press("deshacible");
 
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Deshacer" }),
-    );
+    await userEvent.click(await findSnackbarAction());
 
     expect(
       (await screen.findAllByText(/Demasiado tarde para deshacerlo/)).length,
@@ -426,9 +423,7 @@ describe("undo", () => {
     render(undo);
     await press("inverso");
 
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Deshacer" }),
-    );
+    await userEvent.click(await findSnackbarAction());
 
     expect(undo).toHaveBeenCalledTimes(1);
     expect(cancel).not.toHaveBeenCalled();
