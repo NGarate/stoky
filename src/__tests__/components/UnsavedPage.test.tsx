@@ -25,6 +25,16 @@ const restore = mock((_op: FailedOp) => {});
 
 let failed: FailedOp[] = [];
 
+// The page's way back reads the search params (`useBack`). Without this the
+// file passed only after another file had mocked the module.
+mock.module("next/navigation", () => ({
+  useRouter: () => ({ replace: () => {}, push: () => {}, refresh: () => {} }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/settings/unsaved",
+  useParams: () => ({}),
+  redirect: () => {},
+}));
+
 mock.module("@/lib/offline/queue-context", () => ({
   WriteQueueContext: createContext(null),
   useWriteQueue: () => ({
