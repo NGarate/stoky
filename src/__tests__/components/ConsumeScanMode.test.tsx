@@ -2,7 +2,6 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createContext } from "react";
 import { Decimal } from "@prisma/client-runtime-utils";
 import { renderWithIntl } from "../utils/render";
 
@@ -22,16 +21,6 @@ mock.module("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
   useParams: () => ({}),
   redirect: () => {},
-}));
-
-mock.module("@/components/offline/Composer", () => ({
-  ComposerContext: createContext(null),
-  ComposerProvider: ({ children }: { children: React.ReactNode }) => children,
-  useComposer: () => ({ userId: "u1", householdId: "h1" }),
-  useEnvelope: () => () => ({
-    idempotencyKey: "test-key",
-    composedByUserId: "u1",
-  }),
 }));
 
 mock.module("@/lib/trpc/client", () => ({

@@ -8,7 +8,6 @@ import {
   waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
 import { axeViolations } from "../utils/axe";
 
@@ -47,18 +46,6 @@ mock.module("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
   useParams: () => ({}),
   redirect: () => {},
-}));
-
-mock.module("@/components/offline/Composer", () => ({
-  // Complete mock, per D50 — the page uses only useEnvelope, but a partial
-  // module mock nulls the other exports for every later file in the run.
-  ComposerContext: createContext(null),
-  ComposerProvider: ({ children }: { children: React.ReactNode }) => children,
-  useComposer: () => ({ userId: "u1", householdId: "h1" }),
-  useEnvelope: () => () => ({
-    idempotencyKey: "test-key",
-    composedByUserId: "u1",
-  }),
 }));
 
 mock.module("@/lib/trpc/client", () => ({
