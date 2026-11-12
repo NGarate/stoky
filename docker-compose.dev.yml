@@ -15,7 +15,7 @@
 
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     # The image's postgres user (70 on Alpine), as in deploy/: the entrypoint
     # then never runs as root and never steps down through gosu.
     user: "70:70"
@@ -28,7 +28,7 @@ services:
     networks:
       - stoky
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U stoky -d stoky"]
       interval: 5s

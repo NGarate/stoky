@@ -32,7 +32,7 @@ jobs:
   # Compose file attached to the release, not the one on master. Bundles from
   # the release after v0.1.0-alpha.3 name the application by digest, which is
   # then what is scanned; earlier ones name the tag only, so the scan reads
-  # whatever the tag names today. Service tags (postgres:16-alpine) are read
+  # whatever the tag names today. Service tags (postgres:18-alpine) are read
   # the same way a `docker compose pull` would read them this week.
   images:
     name: Resolve the published release's images

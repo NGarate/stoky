@@ -177,7 +177,7 @@ Verified against the files named in each row.
 ### Release deployment — `deploy/docker-compose.yml`
 
 - **PostgreSQL, Valkey and Traefik are pinned by exact version and digest**
-  (`postgres:16.15-alpine@sha256:…`, the digest of the multi-platform index).
+  (`postgres:18.6-alpine@sha256:…`, the digest of the multi-platform index).
   A tag can be re-pushed and a digest cannot, so the release smoke and every
   later `docker compose pull` of that release run the same builds, and a
   re-pushed upstream tag cannot reach an installation without a change in this
@@ -190,7 +190,7 @@ Verified against the files named in each row.
   and ships with the next release. The app image is named by `STOKY_VERSION`.
   `src/__tests__/unit/deployment.test.ts` fails if a service image loses its
   digest or names a floating major. Verified by running each pinned reference:
-  PostgreSQL 16.15, Valkey 8.1.11, Traefik 3.7.17.
+  PostgreSQL 18.6, Valkey 8.1.11, Traefik 3.7.17.
 - `no-new-privileges:true` on every service.
 - `cap_drop: [ALL]` on every service, with capabilities added back only where
   they are actually needed (Valkey for setgid/setuid, Traefik for

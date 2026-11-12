@@ -5,6 +5,9 @@
 > Traefik de alpha.4 (`v3.7.16`) tiene un aviso HIGH en `go-jose` y dos en
 > `golang.org/x/net`; esta versión instala `v3.7.17`, que no tiene ninguno.
 > Valkey pasa a `8.1.11`, con `zlib` y `musl` corregidos.
+>
+> PostgreSQL pasa de la versión 16 a la 18, que no abre los datos de la 16:
+> una instalación anterior arranca con la base de datos vacía.
 
 ## Destacado
 
@@ -201,6 +204,9 @@ se descarta sin más.
 > (`v3.7.16`) has a HIGH advisory in `go-jose` and two in
 > `golang.org/x/net`; this release installs `v3.7.17`, which has none.
 > Valkey moves to `8.1.11`, with `zlib` and `musl` fixed.
+>
+> PostgreSQL moves from 16 to 18, which cannot open 16's data: an earlier
+> installation starts with an empty database.
 
 ### Brand, category and unit suggest what you already use
 

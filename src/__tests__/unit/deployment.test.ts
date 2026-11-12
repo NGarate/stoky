@@ -92,7 +92,7 @@ describe("the downloadable installation", () => {
     // A tag can be re-pushed; a digest cannot. Without it the release smoke and
     // an operator's later pull can run different PostgreSQL, Valkey or Traefik
     // builds under the same release. The tag must still be an exact version
-    // (16.15, not 16): it is what a reader and an update tool compare. The app
+    // (18.6, not 18): it is what a reader and an update tool compare. The app
     // is named by STOKY_VERSION, checked above.
     const services = Object.entries(compose.services).filter(
       ([name]) => name !== "app",

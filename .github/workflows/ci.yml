@@ -157,7 +157,7 @@ jobs:
     # runner owns health and teardown, and a hung compose cannot wedge the job.
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:18-alpine
         env:
           POSTGRES_USER: stoky
           POSTGRES_PASSWORD: stoky_ci
@@ -262,7 +262,7 @@ jobs:
       options: --shm-size=2gb
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:18-alpine
         env:
           POSTGRES_USER: stoky
           POSTGRES_PASSWORD: stoky_ci

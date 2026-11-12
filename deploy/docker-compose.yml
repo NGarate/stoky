@@ -15,7 +15,7 @@ x-logging: &logging
 
 services:
   db:
-    image: postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
+    image: postgres:18.6-alpine@sha256:9ba53c7d41ea093baf5c1ba635ba5434c4f979880527d49bb7d9237d3193085b
     restart: unless-stopped
     logging: *logging
     security_opt:
@@ -34,7 +34,7 @@ services:
       POSTGRES_DB: stoky
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env con openssl rand -hex 32}"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     networks:
       - stoky
     healthcheck:
