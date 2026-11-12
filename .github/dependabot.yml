@@ -93,7 +93,7 @@ updates:
       minor-and-patch:
         update-types: [minor, patch]
     ignore:
-      - dependency-name: postgres
+      - dependency-name: ghcr.io/ngarate/stoky/postgres
         update-types: ["version-update:semver-major"]
       - dependency-name: valkey/valkey
         update-types: ["version-update:semver-major"]

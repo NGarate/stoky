@@ -177,7 +177,10 @@ Verified against the files named in each row.
 ### Release deployment — `deploy/docker-compose.yml`
 
 - **PostgreSQL, Valkey and Traefik are pinned by exact version and digest**
-  (`postgres:18.6-alpine@sha256:…`, the digest of the multi-platform index).
+  (`valkey/valkey:8.1.11-alpine@sha256:…`, the digest of the multi-platform
+  index). PostgreSQL's is our build of the official image
+  (`ghcr.io/ngarate/stoky/postgres`, `postgres.Dockerfile`), which takes the
+  fixes Alpine has shipped before upstream rebuilds.
   A tag can be re-pushed and a digest cannot, so the release smoke and every
   later `docker compose pull` of that release run the same builds, and a
   re-pushed upstream tag cannot reach an installation without a change in this
