@@ -13,7 +13,7 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1, TEST-9, PARSE-1 to PARSE-4 and OCR-4 to OCR-12.** The PARSE and OCR entries (2026-11-07) are the review of PR #19 and what the receipt OCR bench measured; two of the review's findings closed with the preparation's rewrite (the crop repeated per reading, and image transforms outside `image.ts`). TEST-10 closed on 2026-10-27 with its spec deleted (PROGRESS D154). TEST-11 closed on 2026-10-23 (`cb08d9a`): every `bun test` now loads Next's environment baseline first. TEST-7 closed on 2026-09-12 by removing
+**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1, TEST-9, PARSE-1 to PARSE-5 and OCR-4 to OCR-12.** PARSE-5 (2026-11-12) is the owner's requirement that what the parser knows of each chain move to the database. The PARSE and OCR entries (2026-11-07) are the review of PR #19 and what the receipt OCR bench measured; two of the review's findings closed with the preparation's rewrite (the crop repeated per reading, and image transforms outside `image.ts`). TEST-10 closed on 2026-10-27 with its spec deleted (PROGRESS D154). TEST-11 closed on 2026-10-23 (`cb08d9a`): every `bun test` now loads Next's environment baseline first. TEST-7 closed on 2026-09-12 by removing
 two process-wide ProductRating mocks from unrelated component tests.
 TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
@@ -148,6 +148,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | PARSE-2 | An article whose price equals the sum of those above it is dropped as a damaged total | 🟡 Open — found reviewing PR #19; reproduced |
 | PARSE-3 | A weighed article with its name on the weight line is lost | 🟡 Open — found reviewing PR #19; reproduced |
 | PARSE-4 | Any receipt with a `P.UNIT` column is filed as Mercadona | 🟡 Open — found reviewing PR #19; reproduced |
+| PARSE-5 | What the parser knows of each chain and its tickets is code, so a new shop or a changed ticket needs a release | 🟡 Open — the owner's requirement, 2026-11-12; waits for one household per installation |
 | OCR-4 | One of a photo's readings failing or timing out fails the whole receipt | 🟡 Open — found reviewing PR #19 |
 | OCR-5 | A photo the preparation cannot crop fails instead of being read uncropped | 🟡 Open — found reviewing PR #19 |
 | OCR-6 | Cropping decodes the whole photograph into memory, and a sideways crop is made twice | 🟡 Open — found reviewing PR #19 |
@@ -1052,6 +1053,58 @@ PAN 1,00 / TOTAL 1,00` comes back with `store: "mercadona"`, so another
 chain's ticket whose logo did not read is filed under the wrong shop. **The
 fix** is to need a second Mercadona sign (its NIF, its address lines) before
 using the column.
+
+---
+
+### 🟡 PARSE-5: What the parser knows of each chain and its tickets is code, so a new shop or a changed ticket needs a release
+
+**Files:** `src/server/services/receiptParser.ts` — the chains and their marks
+(`KNOWN_STORES`, `STORE_ALIASES`, `STORE_MARKS`, `TAX_IDS`, lines 24–118),
+the words of a total, a discount, an offers block and what is never an
+article (`TOTAL_WORDS`, `NOT_A_PURCHASE`, `DISCOUNT_LABEL`, `HEADER_FIELD`,
+`OFFERS_HEADER`), a weighed article's opening line (`COSTCO_WEIGHED`, Costco's
+`ARTPESO`, `8a295a17`; `PER_KILO_LINE`, DIA's `PRECIO KILO`) and the printed
+article count's labels (`COUNT_AFTER_LABEL`)
+**Severity:** MEDIUM — every chain the parser does not know, and every change
+a chain makes to its till, is a code change and a release
+**Status:** OPEN — the owner's requirement, 2026-11-12. Waits for one
+household per installation, which settles who may edit the rules
+
+The owner, on `ARTPESO` being Costco's alone: what a ticket prints changes by
+chain, by kind of ticket, and within one chain over time, so it belongs in
+the database, configurable by the administrator, and adding a shop or a
+ticket format must not need a code change — not only `ARTPESO`, every
+keyword, discounts included.
+
+Decided with the owner on 2026-11-12:
+
+- **Every word list moves**, the generic ones too (total labels, discount
+  words, `IVA`, `tarjeta`…), so a ticket in Catalan or Basque is a row, not a
+  release. The formats of amounts and dates stay code.
+- **What a word does stays code.** A rule is a kind the parser understands —
+  names this chain, opens a weighed article (the next line is kilos ×
+  price a kilo, the one after the name), heads an offers block, labels the
+  printed count, takes money off, is never an article — plus the words that
+  trigger it, optionally tied to one chain. A layout no kind describes is
+  still a code change; a new shop or a new word is not.
+- **No regular expressions from the screen.** A pattern typed by a person is
+  run over every line of every receipt, and one that backtracks hangs the
+  reading. The administrator types the word as the ticket prints it, and the
+  code normalises it and tolerates the OCR's usual misreads (`O`/`0`, a lost
+  space), as `COSTCO_WEIGHED`'s `art\s?pes[o0]` does by hand today.
+- **An old word and its replacement coexist**: no dates of validity.
+- **Seeded with today's lists**, so the bench (`test-tickets/bench`) does not
+  move when the lists leave the code.
+
+Who edits them was left open: the rules belong to the installation, not to a
+household, and today nothing stands above a household. Once an installation
+is one household, its OWNER and ADMIN (`adminProcedure`) are that
+administrator.
+
+Two things the move must carry: the parser runs on the preparation thread
+(`prepare-worker.ts`, through `reading-choice.ts`), so the rules are read
+from the database and handed to it as data; and `printedArticleCount` is
+also run when a review is read (`routers/receipt.ts`).
 
 ---
 
