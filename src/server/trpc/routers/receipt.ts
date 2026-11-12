@@ -16,8 +16,9 @@ import {
   StockOperation,
 } from "@/generated/prisma/client";
 import { randomUUID } from "node:crypto";
-import { processReceiptOcr } from "@/server/services/ocr";
+import { processReceiptOcr, readFramedLines } from "@/server/services/ocr";
 import {
+  framedArticle,
   parseReceiptText,
   saveParsedItems,
 } from "@/server/services/receiptParser";
@@ -25,9 +26,9 @@ import {
   matchReceiptItems,
   getItemCandidates,
 } from "@/server/services/productMatcher";
-import { uploadRateLimit } from "@/lib/rate-limit";
+import { regionReadRateLimit, uploadRateLimit } from "@/lib/rate-limit";
 import { enforceRateLimit } from "../throttle";
-import { HEIF_BRANDS } from "@/server/services/image";
+import { HEIF_BRANDS, readImageMetadata } from "@/server/services/image";
 import { reencodedAsJpeg } from "@/server/services/image-thread";
 import { describeError } from "@/server/log-error";
 import {
@@ -38,6 +39,7 @@ import {
   receiptItemAddSchema,
   receiptItemMatchSchema,
   receiptItemUpdateSchema,
+  receiptRegionSchema,
 } from "@/lib/validations/receipt";
 
 const VALID_MIME_TYPES: readonly string[] = RECEIPT_IMAGE_TYPES;
@@ -711,6 +713,55 @@ export const receiptRouter = createTRPCRouter({
       });
 
       return { success: true };
+    }),
+
+  /**
+   * Reads again only the lines a person framed on the receipt's photograph —
+   * one article, with its price and any discount under it — and answers
+   * with the article they make, for the person to check and save
+   * (`updateItem`). Nothing is written: a second reading is a suggestion.
+   *
+   * Only this household's stored photograph is read; the frame is four
+   * numbers. Tesseract on a few lines is a fraction of a receipt, metered on
+   * a budget of its own (`regionReadRateLimit`), counted before the photo is
+   * read. `writeProcedure`, like `getImage`: framing lines needs the photo.
+   */
+  readRegion: writeProcedure
+    .input(receiptRegionSchema)
+    .mutation(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        regionReadRateLimit(),
+        ctx.session.user.id,
+        "Too many lines read again. Try again in a little while.",
+      );
+
+      const receipt = await ctx.db.receipt.findFirst({
+        where: { id: input.receiptId, householdId: ctx.householdId },
+        select: { imagePath: true },
+      });
+
+      if (!receipt) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Receipt not found",
+        });
+      }
+
+      const fs = await import("node:fs");
+      let image: Buffer;
+      try {
+        image = await fs.promises.readFile(receipt.imagePath);
+      } catch {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Receipt image not found",
+        });
+      }
+      // Bounded in pixels before it is decoded, as the OCR path does.
+      await readImageMetadata(image);
+
+      const text = await readFramedLines(image, input.quad);
+      return { text, line: framedArticle(text) };
     }),
 
   /**

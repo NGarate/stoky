@@ -116,6 +116,20 @@ export const receiptLineSchema = z.object({
   quantity: quantitySchema,
 });
 
+/**
+ * Four corners on a receipt's photograph, top-left first and clockwise, each
+ * in proportions of the photo (`src/lib/receipt-quad.ts`): the lines of one
+ * article, framed to be read again (`receipt.readRegion`).
+ */
+const cornerSchema = z.tuple([
+  z.number().min(0).max(1),
+  z.number().min(0).max(1),
+]);
+export const receiptRegionSchema = z.object({
+  receiptId: z.string().min(1).max(MAX_ID_LENGTH),
+  quad: z.tuple([cornerSchema, cornerSchema, cornerSchema, cornerSchema]),
+});
+
 /** Correcting a line the receipt already has. */
 export const receiptItemUpdateSchema = receiptLineSchema.extend({
   receiptItemId: z.string().min(1).max(MAX_ID_LENGTH),

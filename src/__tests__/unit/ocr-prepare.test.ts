@@ -19,9 +19,11 @@ import {
   ocrWorkers,
   pooledRecogniser,
   prepareForOcr,
+  readFramedLines,
   readReceiptPhoto,
   terminateWorker,
 } from "@/server/services/ocr";
+import { InvalidInputError } from "@/server/services/errors";
 import { parseReceiptText } from "@/server/services/receiptParser";
 import { pngPainted } from "../utils/png";
 
@@ -617,6 +619,64 @@ describe("readReceiptPhoto", () => {
     for (const [, [one, two]] of inkAt) {
       expect(Math.min(one!, two!)).toBeLessThan(Math.max(one!, two!) * 0.99);
     }
+  });
+});
+
+describe("readFramedLines", () => {
+  /** 400 × 300, ink in its top-left quarter only, paper elsewhere. */
+  const quarterInked = () =>
+    pngPainted(400, 300, (x, y) => (x < 200 && y < 150 ? INK : PAPER));
+
+  /** How dark each image read was, on average, and how wide. */
+  async function framed(quad: Parameters<typeof readFramedLines>[1]) {
+    const seen: { width: number; dark: number }[] = [];
+    await readFramedLines(quarterInked(), quad, async (image) => {
+      const { width, height, at } = await pixelsOf(image);
+      let dark = 0;
+      for (let y = 0; y < height; y++)
+        for (let x = 0; x < width; x++) if (at(x, y)[0]! < 128) dark++;
+      seen.push({ width, dark: dark / (width * height) });
+      return "PAN 1,00";
+    });
+    return seen;
+  }
+
+  it(
+    "reads only what was framed, every way, scaled as a ticket's width is",
+    async () => {
+      const inked = await framed([
+        [0, 0],
+        [0.5, 0],
+        [0.5, 0.5],
+        [0, 0.5],
+      ]);
+      const blank = await framed([
+        [0.5, 0.5],
+        [1, 0.5],
+        [1, 1],
+        [0.5, 1],
+      ]);
+
+      expect(inked.map(({ width }) => width).sort()).toEqual(
+        OCR_READINGS.map(({ scale }) =>
+          Math.round(OCR_TICKET_WIDTH * scale),
+        ).sort(),
+      );
+      for (const { dark } of inked) expect(dark).toBeGreaterThan(0.9);
+      for (const { dark } of blank) expect(dark).toBeLessThan(0.1);
+    },
+    PREPARING,
+  );
+
+  it("refuses a frame with nothing inside it", async () => {
+    const point: [number, number] = [0.3, 0.3];
+    const reading = readFramedLines(
+      quarterInked(),
+      [point, point, point, point],
+      async () => "",
+    );
+
+    await expect(reading).rejects.toBeInstanceOf(InvalidInputError);
   });
 });
 

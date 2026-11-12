@@ -13,6 +13,7 @@ import {
   stopImageThreads,
 } from "./image-thread";
 import type { Turn } from "./prepare-worker";
+import type { Quad } from "@/lib/receipt-quad";
 
 export { bestReading } from "./reading-choice";
 
@@ -512,6 +513,37 @@ export async function readReceiptPhoto(
     return turned.articles > 0 ? turned.text : best.text;
   } finally {
     // After a success nothing is waiting; after a failure, this drops it.
+    failed.abort();
+  }
+}
+
+/**
+ * The lines a person framed on the photograph (`quad`, in its proportions),
+ * read on their own: the region straightened, then read every way
+ * `OCR_READINGS` lists and the reading the others agree with kept, as a
+ * whole ticket is. Not turned or flattened: the person framed it the right
+ * way up, and flattening blanks dark ink near the edge (ISSUES OCR-11),
+ * which in a few lines is all of it.
+ */
+export async function readFramedLines(
+  image: Buffer,
+  quad: Quad,
+  recognise: Recognise = recogniseWithTesseract,
+): Promise<string> {
+  const failed = new AbortController();
+  try {
+    const region = sent(
+      await onImageThread("ocr", {
+        step: "region",
+        image,
+        quad,
+        width: OCR_TICKET_WIDTH,
+      }),
+      "grey",
+    );
+    const { texts } = await readEveryWay(region, recognise, failed.signal);
+    return (await chosen(texts)).text;
+  } finally {
     failed.abort();
   }
 }

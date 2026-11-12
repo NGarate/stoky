@@ -1729,7 +1729,12 @@ publishing an instance:
   already authenticated and a household behind one NAT would otherwise share a
   budget for work each member does separately. A refused upload still counts —
   otherwise sending rubbish and being rejected would be the cheapest way to
-  spend the server's CPU, and it would be outside the limit.
+  spend the server's CPU, and it would be outside the limit. Re-reading the
+  lines of one article framed on a stored photo (`receipt.readRegion`) runs
+  Tesseract too, on a budget of its own: 120 per account per hour
+  (`regionReadRateLimit`), so correcting a ticket does not spend the next
+  upload. It reads only a photo the household already stored; the frame is
+  four numbers between 0 and 1.
 - **Barcode lookups that reach Open Food Facts are limited**, at 60 per
   account per hour (`productLookupRateLimit`). They are the one thing an
   account can make this instance ask of somebody else: every `scanBarcode` or
@@ -1914,7 +1919,8 @@ publishing an instance:
   `RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS`, `RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS`,
   `RATE_LIMIT_LOGIN_DEVICE_WINDOW_SECONDS`, `RATE_LIMIT_REGISTER_ATTEMPTS`,
   `RATE_LIMIT_REGISTER_WINDOW_SECONDS`, `RATE_LIMIT_UPLOAD_ATTEMPTS`,
-  `RATE_LIMIT_UPLOAD_WINDOW_SECONDS`, `RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS`,
+  `RATE_LIMIT_UPLOAD_WINDOW_SECONDS`, `RATE_LIMIT_REGION_READ_ATTEMPTS`,
+  `RATE_LIMIT_REGION_READ_WINDOW_SECONDS`, `RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS`,
   `RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS`, `RATE_LIMIT_ADD_MEMBER_ATTEMPTS`,
   `RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS`, `RATE_LIMIT_REAUTH_ATTEMPTS`,
   `RATE_LIMIT_REAUTH_WINDOW_SECONDS`, `RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS`,
@@ -2394,7 +2400,7 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 (`AppSession`) non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 76 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+and all 77 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
 pinning every one against the matrix rather than sampling, and failing when the
 count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the session, so a

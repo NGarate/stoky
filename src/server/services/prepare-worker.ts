@@ -22,6 +22,7 @@ import {
   croppedTicket,
   dewarped,
   flattenedLight,
+  framedRegion,
   greyPng,
   reencodeAsJpeg,
   greyPngs,
@@ -31,6 +32,7 @@ import {
   turnedHalf,
   turnedQuarter,
 } from "./image";
+import type { Quad } from "@/lib/receipt-quad";
 import { bestReading } from "./reading-choice";
 import { parseReceiptText } from "./receiptParser";
 
@@ -54,6 +56,14 @@ export type PreparationRequest =
        */
       step: "ticket";
       image: Uint8Array;
+      width: number;
+    }
+  | {
+      id: number;
+      /** The lines a person framed (`framedRegion`), grey and straightened. */
+      step: "region";
+      image: Uint8Array;
+      quad: Quad;
       width: number;
     }
   | {
@@ -145,6 +155,18 @@ async function answer(request: PreparationRequest): Promise<{
       );
       return { grey, images };
     }
+    case "region":
+      return {
+        grey: await framedRegion(
+          Buffer.from(
+            request.image.buffer,
+            request.image.byteOffset,
+            request.image.byteLength,
+          ),
+          request.quad,
+          request.width,
+        ),
+      };
     case "upright":
       return { grey: dewarped(turned(request.grey, request.turn)) };
     case "readings": {

@@ -138,6 +138,17 @@ function unboundedPaths(schema: z.ZodType, path: string): string[] {
         ...unboundedPaths(def.right as z.ZodType, path),
       ];
 
+    // As long as its items, unless it has a rest: an array with no maximum.
+    case "tuple": {
+      const items = (def.items as z.ZodType[]).flatMap((item, index) =>
+        unboundedPaths(item, `${path}[${index}]`),
+      );
+      const rest = def.rest as z.ZodType | null;
+      return rest
+        ? [...items, path || "(root)", ...unboundedPaths(rest, `${path}[]`)]
+        : items;
+    }
+
     // A discriminated union is a union with a discriminator in Zod 4.
     case "union":
       return (def.options as z.ZodType[]).flatMap((option) =>
@@ -207,6 +218,18 @@ describe("the walk itself", () => {
     expect(unboundedPaths(z.object({}).passthrough(), "")).toEqual([
       "(root).* (passthrough)",
     ]);
+  });
+
+  it("bounds a tuple by its items, and names one with a rest", () => {
+    expect(
+      unboundedPaths(z.object({ quad: z.tuple([z.number(), z.string()]) }), ""),
+    ).toEqual(["quad[1]"]);
+    expect(
+      unboundedPaths(
+        z.object({ quad: z.tuple([z.number()]).rest(z.number()) }),
+        "",
+      ),
+    ).toEqual(["quad"]);
   });
 
   it("refuses to pass a type it does not understand", () => {

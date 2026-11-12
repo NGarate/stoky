@@ -64,7 +64,7 @@ and the bench are not in git: they are the owner's receipts.
 | PaddleOCR as a second voter | Unmeasured; ~258 MB of native binaries | Only if fine-tuning fails |
 | Several photos per ticket | Merge works; the reading of the parts did not beat the whole | More long tickets, whole and in parts |
 | The ticket's own arithmetic (VAT subtotals, printed count, repeated codes, price history) | Sound as a pointer, not as a corrector | §5 |
-| Re-reading a doubtful part | Unmeasured | After §5 |
+| Re-reading a doubtful part | Done 2026-11-12 on the stored photo, not a new one: in review the person frames one article's lines (`receipt.readRegion`) and they are read alone. On the owner's Costco ticket (`1793995353694.HEIC`), three framed articles, about 3 s each: Moras and LEGO read their prices right (5,49, 39,99); Flor de Vetu read 6,93 for 6,99 and took its code line for its name, and Moras's «340g» read «3409» — OCR-9's digits | Re-photographing a part stays open |
 
 ### Six readings need the image pipeline
 

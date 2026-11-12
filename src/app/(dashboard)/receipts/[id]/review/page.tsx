@@ -342,6 +342,7 @@ export default function ReviewPage() {
             {receipt.items.map((item) => (
               <ReviewCard
                 key={item.id}
+                receiptId={receiptId}
                 item={{
                   ...item,
                   candidates: item.candidates || [],

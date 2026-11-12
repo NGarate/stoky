@@ -2412,6 +2412,33 @@ function normalizeText(value: string): string {
     .toLowerCase();
 }
 
+/**
+ * The one article whose lines a person framed on the photograph, from what
+ * those lines read (`receipt.readRegion`) — or null when no article came of
+ * them.
+ *
+ * The person said the lines are one article, so when the parser makes
+ * several of them (a name and a weight line it did not join, say) their
+ * prices are added and the first one names it. A discount printed under it
+ * is already off its price (`parseReceiptText`).
+ */
+export function framedArticle(
+  text: string,
+): { name: string; price?: number; quantity: number } | null {
+  const { items } = parseReceiptText(text);
+  const first = items[0];
+  if (!first) return null;
+  const cents = items.reduce(
+    (total, item) => total + Math.round(item.parsedPrice * 100),
+    0,
+  );
+  return {
+    name: first.parsedName,
+    ...(cents > 0 && { price: cents / 100 }),
+    quantity: first.parsedQuantity ?? 1,
+  };
+}
+
 export async function saveParsedItems(
   receiptId: string,
   parsed: ParsedReceipt,

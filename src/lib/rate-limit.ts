@@ -194,6 +194,26 @@ export function uploadRateLimit(): RateLimit {
 }
 
 /**
+ * Re-reading the lines of one article a person framed on a receipt's photo
+ * (`receipt.readRegion`), per account.
+ *
+ * Its own budget, not the upload's: correcting a long ticket line by line is
+ * a dozen reads, and should not stop the next ticket being sent. Each read is
+ * the stored photo decoded and a few lines through Tesseract six ways — a
+ * small fraction of a receipt — so a hundred and twenty an hour is several
+ * long tickets corrected while bounding an account to minutes of OCR.
+ */
+export function regionReadRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:region-read",
+    "RATE_LIMIT_REGION_READ_ATTEMPTS",
+    "RATE_LIMIT_REGION_READ_WINDOW_SECONDS",
+    120,
+    60 * 60,
+  );
+}
+
+/**
  * Barcode lookups that leave for Open Food Facts, per account.
  *
  * Not the work this instance does — the work it asks of somebody else, from

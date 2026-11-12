@@ -696,11 +696,18 @@
     "uploadStoreNew": "The store “{name}” will be added when the receipt is uploaded.",
     "frame": {
       "cropHint": "Drag the corners to the edges of the receipt. Tapping the photo moves the frame there. With a keyboard, pick a corner and move it with the arrow keys.",
+      "linesHint": "Frame only this item’s lines, with its price and its discounts. Tapping the photo moves the frame there; drag the corners to adjust it.",
       "send": "Send receipt",
       "topLeft": "Top left corner",
       "topRight": "Top right corner",
       "bottomRight": "Bottom right corner",
-      "bottomLeft": "Bottom left corner"
+      "bottomLeft": "Bottom left corner",
+      "pickLines": "Pick the lines on the receipt",
+      "readLines": "Read these lines",
+      "reading": "Reading…",
+      "read": "Read again. Check the product and the amount, then save the correction.",
+      "nothingRead": "No item was read in those lines. Adjust the frame or type it in.",
+      "readFailed": "Those lines could not be read. Try again."
     }
   },
   "shopping": {

@@ -33,7 +33,12 @@
 import libheif from "libheif-js/wasm-bundle";
 import { inflateSync } from "node:zlib";
 import { InvalidInputError } from "./errors";
-import { type Point, sourceOf } from "@/lib/receipt-quad";
+import {
+  type Point,
+  type Quad,
+  sourceOf,
+  straightenedSize,
+} from "@/lib/receipt-quad";
 
 /** Past any phone camera, far short of what the byte cap cannot see. */
 export const MAX_PIXELS = 50_000_000;
@@ -1480,6 +1485,40 @@ function warpedGrey(
     }
   }
   return { width, height, pixels: out };
+}
+
+/**
+ * The part of the photograph a person framed (`quad`, in proportions of the
+ * photo), straightened and grey, its width scaled to `width`: the lines of
+ * one article, read again on their own (`receipt.readRegion`). The framed
+ * lines are taken to run the ticket's width, so they are scaled as the whole
+ * ticket is before it is read.
+ */
+export async function framedRegion(
+  image: Buffer,
+  quad: Quad,
+  width: number,
+): Promise<Grey> {
+  const { width: photoWidth } = await readImageMetadata(image);
+  if (!photoWidth) throw new InvalidInputError("Image has no dimensions");
+  const source = await decodedRows(image, photoWidth, true);
+  const corners = quad.map(
+    ([x, y]) => [x * source.width, y * source.height] as Point,
+  );
+  const size = straightenedSize(corners);
+  if (size.width < 1 || size.height < 1) {
+    throw new InvalidInputError("The framed region is empty");
+  }
+  const scale = Math.min(
+    width / size.width,
+    Math.sqrt(TICKET_MAX_PIXELS / (size.width * size.height)),
+  );
+  return warpedGrey(
+    source,
+    corners,
+    Math.max(1, Math.round(size.width * scale)),
+    Math.max(1, Math.round(size.height * scale)),
+  );
 }
 
 /** Least squares `y = c₀ + c₁x + c₂x²` up to `degree`; all zero when it cannot be solved. */

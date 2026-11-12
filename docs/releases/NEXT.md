@@ -16,6 +16,7 @@
 * Escanea el producto donde lo eliges
 * Los tickets se leen mucho mejor
 * Encuadra el ticket al hacerle la foto
+* Vuelve a leer las líneas de un artículo
 
 ### Marca, categoría y unidad te sugieren lo que ya usas
 
@@ -128,6 +129,15 @@ ticket**: se envía solo el ticket, ya enderezado, sin la mesa de alrededor.
 Si no mueves las esquinas, se envía la foto entera y Stoky busca el ticket en
 ella como hasta ahora. Las fotos HEIC que el navegador no sabe mostrar se
 envían enteras.
+
+### Vuelve a leer las líneas de un artículo
+
+Al **Corregir** un artículo del ticket, **Elegir las líneas en el ticket**
+abre la foto con un recuadro: tócala para llevarlo a las líneas de ese
+artículo, ajusta las esquinas para que entren su nombre, su precio y sus
+descuentos, y pulsa **Leer estas líneas**. Stoky lee solo esas líneas y
+rellena con ello el producto, el importe y la cantidad; revísalos y guarda la
+corrección.
 
 ### Corrige la tienda, la fecha y el total de un ticket
 
@@ -287,6 +297,14 @@ four-cornered frame. Move the corners to the paper's corners and press
 table around it. If you leave the corners alone, the whole photo is sent and
 Stoky finds the receipt in it as before. HEIC photos the browser cannot show
 are sent whole.
+
+### Read an item's lines again
+
+When you **Correct** a receipt item, **Pick the lines on the receipt** opens
+the photo with a frame: tap it to carry the frame to that item's lines,
+adjust the corners so its name, price and discounts are inside, and press
+**Read these lines**. Stoky reads only those lines and fills in the product,
+amount and quantity from them; check them and save the correction.
 
 ### Correct a receipt's store, date and total
 

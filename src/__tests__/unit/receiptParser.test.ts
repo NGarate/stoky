@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import {
+  framedArticle,
   parseEsAmount,
   parseReceiptText,
 } from "@/server/services/receiptParser";
@@ -1696,5 +1697,43 @@ GRACIAS POR SU VISITA
         2000,
       );
     });
+  });
+});
+
+describe("framedArticle", () => {
+  it("takes the article and its price from one framed line", () => {
+    expect(framedArticle("LECHE ENTERA 1L 1,05")).toEqual({
+      name: "leche entera 1l",
+      price: 1.05,
+      quantity: 1,
+    });
+  });
+
+  it("takes the discount framed under the article off its price", () => {
+    expect(framedArticle("TENDERS POLLO 18,49\nMVM P2 562292 4,50-B")).toEqual({
+      name: "tenders pollo",
+      price: 13.99,
+      quantity: 1,
+    });
+  });
+
+  it("keeps the quantity of a framed count line", () => {
+    expect(framedArticle("2 x 1,50\nYOGUR NATURAL 3,00")).toEqual({
+      name: "yogur natural",
+      price: 3,
+      quantity: 2,
+    });
+  });
+
+  it("adds up lines the parser split, since the person framed one article", () => {
+    expect(framedArticle("PAN 1,00\nLECHE 2,05")).toEqual({
+      name: "pan",
+      price: 3.05,
+      quantity: 1,
+    });
+  });
+
+  it("says nothing came of lines with no article", () => {
+    expect(framedArticle("GRACIAS POR SU VISITA")).toBeNull();
   });
 });

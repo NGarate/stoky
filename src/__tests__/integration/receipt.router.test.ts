@@ -1093,6 +1093,68 @@ describe("receipt.updateItem", () => {
   });
 });
 
+describe("receipt.readRegion — what it refuses", () => {
+  const WHOLE: [number, number][] = [
+    [0, 0],
+    [1, 0],
+    [1, 1],
+    [0, 1],
+  ];
+  const quad = WHOLE as [
+    [number, number],
+    [number, number],
+    [number, number],
+    [number, number],
+  ];
+
+  it("is NOT_FOUND for another household's receipt and refused for a kitchen account", async () => {
+    // The photo is there, so only the household can make it NOT_FOUND.
+    const { receipt } = await seedReceipt({});
+    await mkdir(dirname(receipt.imagePath), { recursive: true });
+    await writeFile(receipt.imagePath, pngOf(40, 40));
+    try {
+      await expectCode(
+        () => outsider.receipt.readRegion({ receiptId: receipt.id, quad }),
+        "NOT_FOUND",
+      );
+      await expectCode(
+        () => kitchen.receipt.readRegion({ receiptId: receipt.id, quad }),
+        "FORBIDDEN",
+      );
+    } finally {
+      await rm(receipt.imagePath, { force: true });
+    }
+  });
+
+  it("is NOT_FOUND when the photograph is gone", async () => {
+    const { receipt } = await seedReceipt({});
+    await rm(receipt.imagePath, { force: true });
+
+    await expectCode(
+      () => caller.receipt.readRegion({ receiptId: receipt.id, quad }),
+      "NOT_FOUND",
+    );
+  });
+
+  it("refuses a corner outside the photograph", async () => {
+    const { receipt } = await seedReceipt({});
+
+    await expectCode(
+      () =>
+        caller.receipt.readRegion({
+          receiptId: receipt.id,
+          quad: [
+            [0, 0],
+            [1.5, 0],
+            [1, 1],
+            [0, 1],
+          ],
+        }),
+      "BAD_REQUEST",
+    );
+  });
+});
+
 describe("receipt.addItem", () => {
   const line = { name: "Huevos L", price: 2.95, quantity: 1 };
 

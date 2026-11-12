@@ -156,6 +156,8 @@ const EXPECTED: Record<string, Record<string, string>> = {
     confirmItem: "writeProcedure",
     updateItem: "writeProcedure",
     addItem: "writeProcedure",
+    // Reading a framed part of the photo again: a review's correction.
+    readRegion: "writeProcedure",
     updateDetails: "writeProcedure",
     confirmAll: "writeProcedure",
     applyReceipt: "writeProcedure",
