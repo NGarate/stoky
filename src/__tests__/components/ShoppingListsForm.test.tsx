@@ -25,6 +25,21 @@ let generateOptions: Options = {};
 
 const noop = (): void => {};
 
+// useBack reads the query string, and outside Next's router useSearchParams()
+// is null. Without this the file passed only when another file's mock of the
+// module happened to load first, so it failed alone and in some orders.
+mock.module("next/navigation", () => ({
+  useRouter: () => ({
+    push: () => {},
+    replace: () => {},
+    refresh: () => {},
+    back: () => {},
+  }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/",
+  useParams: () => ({}),
+}));
+
 mock.module("@/lib/offline/queue-context", () => ({
   WriteQueueContext: createContext(null),
   useWriteQueue: () => ({
