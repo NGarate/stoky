@@ -76,6 +76,12 @@ mock.module("@/lib/trpc/client", () => ({
       store: {
         list: { invalidate: async () => void invalidated.push("store.list") },
       },
+      receipt: {
+        getReceiptWithItems: {
+          invalidate: async ({ receiptId }: { receiptId: string }) =>
+            void invalidated.push(`review:${receiptId}`),
+        },
+      },
     }),
     store: {
       list: {
@@ -224,6 +230,8 @@ describe("following the receipt it sent", () => {
     await waitFor(() => {
       expect(replaced).toContain("/receipts/r1/review");
     });
+    // Asked for again, not drawn from a copy taken while it was being read.
+    expect(invalidated).toContain("review:r1");
   });
 
   it("stays to say so when the read failed", async () => {

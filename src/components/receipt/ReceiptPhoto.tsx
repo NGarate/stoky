@@ -136,7 +136,6 @@ function TicketFrame({
         { receiptId },
         (old) => old && { ...old, status: "UPLOADING" },
       );
-      void utils.receipt.getReceiptWithItems.invalidate({ receiptId });
       router.push(`/receipts/upload?receipt=${receiptId}`);
     },
     onError: () =>

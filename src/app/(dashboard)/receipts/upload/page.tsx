@@ -155,11 +155,19 @@ function UploadView() {
 
   // Read, so on to what was read. Replaced rather than pushed: back from the
   // review is the list, not a screen saying the wait is over.
+  //
+  // The review is marked stale first. A receipt read again (`reframe`) has
+  // one cached from before, and fresh for 30 s: fetched while its lines were
+  // gone and the reading had just begun, it opened with no line and no shop
+  // — what the owner saw on 2026-11-12, with twelve lines in the database.
   useEffect(() => {
     if (ready && uploadedReceiptId) {
+      void utils.receipt.getReceiptWithItems.invalidate({
+        receiptId: uploadedReceiptId,
+      });
       router.replace(`/receipts/${uploadedReceiptId}/review`);
     }
-  }, [ready, uploadedReceiptId, router]);
+  }, [ready, uploadedReceiptId, router, utils]);
 
   return (
     // No padding of its own: the layout's `p-4` is the gutter (ISSUES UI-5).
