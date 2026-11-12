@@ -101,16 +101,16 @@ attestation and anonymous-pull steps below depend on that (see
    does all of this, scan included, and writes nothing if any candidate is
    red; `release:prepare --refresh-images` commits its result on the release
    branch. By hand: for each, take the newest release of the same major, which is what
-   the floating tag (`postgres:16-alpine`, `valkey/valkey:8-alpine`, `traefik:v3`)
+   the floating tag (`postgres:18-alpine`, `valkey/valkey:8-alpine`, `traefik:v3`)
    names that day, and the digest of its multi-platform index, not one
    platform's manifest:
 
    ```bash
-   docker buildx imagetools inspect postgres:16-alpine   # Digest: sha256:…
-   docker buildx imagetools inspect postgres:16.15-alpine   # must print the same Digest
+   docker buildx imagetools inspect postgres:18-alpine   # Digest: sha256:…
+   docker buildx imagetools inspect postgres:18.6-alpine   # must print the same Digest
    ```
 
-   Write `image: postgres:16.15-alpine@sha256:<that digest>`, and the same for
+   Write `image: postgres:18.6-alpine@sha256:<that digest>`, and the same for
    `valkey/valkey` and `traefik`. A new major version is a decision with its own
    migration and release note, not a refresh. The release smoke then runs the
    builds operators will pull. `src/__tests__/unit/deployment.test.ts` fails if

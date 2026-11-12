@@ -32,7 +32,7 @@ there is no external service holding your data.
 ## Tech stack
 
 Next.js 16 (App Router) · TypeScript 7 strict · tRPC 11 · Prisma 7 ·
-PostgreSQL 16 (`pg_trgm`) · Valkey 8 · Better Auth 1.7 (Argon2id) ·
+PostgreSQL 18 (`pg_trgm`) · Valkey 8 · Better Auth 1.7 (Argon2id) ·
 Tailwind CSS 4 · TanStack Query v5 · next-intl v4 ·
 Tesseract.js · Bun.Image
 
