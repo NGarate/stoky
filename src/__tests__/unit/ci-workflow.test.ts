@@ -1157,3 +1157,80 @@ describe("the CI workflow's PostgreSQL services", () => {
     }
   });
 });
+
+// The bundle's PostgreSQL is our build of the official image (postgres.Dockerfile).
+// These hold what makes it safe to pin: only master publishes, nothing is
+// pushed before the scan passes, the push sends what was scanned, and the name
+// keeps the bundle scan's gosu rule (`*/postgres:*`) applying to it.
+describe("the PostgreSQL image workflow", () => {
+  type Step = {
+    name?: unknown;
+    uses?: unknown;
+    with?: Record<string, unknown>;
+  };
+  const source = readFileSync(
+    join(root, ".github/workflows/postgres-image.yml"),
+    "utf8",
+  );
+  const parsed = Bun.YAML.parse(source) as {
+    on?: Record<string, { branches?: unknown; paths?: unknown } | null>;
+    permissions?: unknown;
+    env?: Record<string, unknown>;
+    jobs?: Record<string, { if?: unknown; steps?: Step[] }>;
+  };
+  const jobs = Object.values(parsed.jobs ?? {});
+  const steps = jobs.flatMap((job) => job.steps ?? []);
+  const index = (name: string) => steps.findIndex((step) => step.name === name);
+
+  it("runs on master's pushes of the Dockerfile, a schedule and a dispatch", () => {
+    expect(Object.keys(parsed.on ?? {}).toSorted()).toEqual([
+      "push",
+      "schedule",
+      "workflow_dispatch",
+    ]);
+    expect(parsed.on?.push?.branches).toEqual(["master"]);
+    expect(parsed.on?.push?.paths).toContain("postgres.Dockerfile");
+    expect(parsed.permissions).toEqual({});
+  });
+
+  it("publishes only from master, whatever ref a dispatch selects", () => {
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].if).toBe("github.ref == 'refs/heads/master'");
+  });
+
+  it("scans the build before it pushes, and fails on a finding", () => {
+    const scan = steps[index("Fail on critical or high findings")];
+    expect(index("Build for scanning")).toBeGreaterThanOrEqual(0);
+    expect(index("Build for scanning")).toBeLessThan(
+      index("Fail on critical or high findings"),
+    );
+    expect(index("Fail on critical or high findings")).toBeLessThan(
+      index("Push"),
+    );
+    expect(scan.with?.["exit-code"]).toBe("1");
+    expect(scan.with?.cache).toBe(false);
+    expect(scan.with?.["skip-files"]).toBe("usr/local/bin/gosu");
+  });
+
+  it("pushes the scanned layers and never touches the Actions cache", () => {
+    const build = steps[index("Build for scanning")].with ?? {};
+    const push = steps[index("Push")].with ?? {};
+    expect(build["no-cache"]).toBe(true);
+    expect(String(build["cache-to"])).toStartWith("type=local,");
+    expect(String(push["cache-from"])).toStartWith("type=local,");
+    expect(source).not.toContain("type=gha");
+  });
+
+  it("is named so the bundle scan skips its gosu as upstream's", () => {
+    expect(parsed.env?.IMAGE_NAME).toBe("${{ github.repository }}/postgres");
+  });
+
+  it("builds from the official image, pinned by its index digest", () => {
+    const dockerfile = readFileSync(join(root, "postgres.Dockerfile"), "utf8");
+    expect(dockerfile.match(/^FROM .*$/gm)).toEqual([
+      expect.stringMatching(
+        /^FROM postgres:\d+\.\d+-alpine@sha256:[0-9a-f]{64}$/,
+      ),
+    ]);
+  });
+});

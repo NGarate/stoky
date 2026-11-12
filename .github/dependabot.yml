@@ -54,6 +54,9 @@ updates:
   # Dependabot does not edit, so its pull request arrives red from
   # bun-version.test.ts and is finished by hand. That is intended: the test is
   # what keeps CI's Bun and the image's Bun the same binary.
+  # Also postgres.Dockerfile's base: a merged bump publishes a new PostgreSQL
+  # image (postgres-image.yml). Never its major, for the reason given at the
+  # bundle's entry below.
   - package-ecosystem: docker
     directory: /
     schedule:
@@ -64,6 +67,9 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: build(docker)
 
