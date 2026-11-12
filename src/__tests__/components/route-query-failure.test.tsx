@@ -36,6 +36,21 @@ let queryStub: QueryStub;
 const noop = (): void => {};
 const idleMutation = { mutate: noop, isPending: false };
 
+// useBack reads the query string, and outside Next's router useSearchParams()
+// is null. Without this the file passed only when another file's mock of the
+// module happened to load first, so it failed alone and in some orders.
+mock.module("next/navigation", () => ({
+  useRouter: () => ({
+    push: () => {},
+    replace: () => {},
+    refresh: () => {},
+    back: () => {},
+  }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/",
+  useParams: () => ({}),
+}));
+
 // `/shopping/lists` reports its writes through the snackbar, so the provider
 // has to be here — `useSnackbar` throws outside it, deliberately, because
 // feedback outside the shell is a bug. The real one rather than a stub:

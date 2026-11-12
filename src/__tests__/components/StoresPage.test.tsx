@@ -56,6 +56,21 @@ function mutation(record: unknown[], result?: unknown) {
   };
 }
 
+// useBack reads the query string, and outside Next's router useSearchParams()
+// is null. Without this the file passed only when another file's mock of the
+// module happened to load first, so it failed alone and in some orders.
+mock.module("next/navigation", () => ({
+  useRouter: () => ({
+    push: () => {},
+    replace: () => {},
+    refresh: () => {},
+    back: () => {},
+  }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/",
+  useParams: () => ({}),
+}));
+
 // The real snackbar rather than a stub: `mock.module` replaces a module for
 // the whole bun process, so stubbing it here would also replace the component
 // `Snackbar.test.tsx` renders.

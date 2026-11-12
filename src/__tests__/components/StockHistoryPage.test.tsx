@@ -18,6 +18,21 @@ import { Decimal } from "@prisma/client-runtime-utils";
 type ChartRow = { date: string; total: number };
 let chartData: ChartRow[] = [];
 
+// useBack reads the query string, and outside Next's router useSearchParams()
+// is null. Without this the file passed only when another file's mock of the
+// module happened to load first, so it failed alone and in some orders.
+mock.module("next/navigation", () => ({
+  useRouter: () => ({
+    push: () => {},
+    replace: () => {},
+    refresh: () => {},
+    back: () => {},
+  }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/",
+  useParams: () => ({}),
+}));
+
 mock.module("recharts", () => ({
   ResponsiveContainer: ({ children }: { children: ReactNode }) => (
     <div data-testid="chart">{children}</div>
