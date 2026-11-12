@@ -699,8 +699,8 @@
     "uploadStorePlaceholder": "Elige una tienda o escribe una nueva",
     "uploadStoreNew": "Se añadirá la tienda «{name}» al subir el ticket.",
     "frame": {
-      "cropHint": "Arrastra las esquinas hasta los bordes del ticket. Si tocas la foto, el recuadro se mueve ahí. Con el teclado, elige una esquina y muévela con las flechas.",
-      "linesHint": "Encuadra solo las líneas de este artículo, con su precio y sus descuentos. Si tocas la foto, el recuadro se mueve ahí; arrastra las esquinas para ajustarlo.",
+      "cropHint": "Arrastra las esquinas hasta los bordes del ticket. Si tocas la foto, el recuadro se mueve ahí. Con el teclado, elige una esquina y muévela con las flechas. Para afinar, amplía la foto con los botones o con dos dedos.",
+      "linesHint": "Encuadra solo las líneas de este artículo, con su precio y sus descuentos. Si tocas la foto, el recuadro se mueve ahí; arrastra las esquinas para ajustarlo. Para afinar, amplía la foto con los botones o con dos dedos.",
       "send": "Enviar ticket",
       "topLeft": "Esquina superior izquierda",
       "topRight": "Esquina superior derecha",
@@ -713,9 +713,11 @@
       "nothingRead": "No se ha leído ningún artículo en esas líneas. Ajusta el recuadro o escríbelo a mano.",
       "readFailed": "No se han podido leer esas líneas. Vuelve a intentarlo.",
       "correct": "Corregir el recorte del ticket",
-      "reframeHint": "Lleva las esquinas a los bordes del ticket y vuelve a leerlo. Se sustituyen sus líneas: se pierden las correcciones, los productos elegidos y las líneas añadidas a mano.",
+      "reframeHint": "Lleva las esquinas a los bordes del ticket y vuelve a leerlo. Se sustituyen sus líneas: se pierden las correcciones, los productos elegidos y las líneas añadidas a mano. Para afinar, amplía la foto con los botones o con dos dedos.",
       "readAgain": "Volver a leer el ticket",
-      "reframeFailed": "No se ha podido volver a leer el ticket. Vuelve a intentarlo."
+      "reframeFailed": "No se ha podido volver a leer el ticket. Vuelve a intentarlo.",
+      "zoomIn": "Acercar la foto",
+      "zoomOut": "Alejar la foto"
     }
   },
   "shopping": {

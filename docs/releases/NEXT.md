@@ -127,7 +127,9 @@ Al elegir o hacer la foto de un ticket, Stoky la muestra con un recuadro
 de cuatro esquinas. Llévalas a las esquinas del papel y pulsa **Enviar
 ticket**: Stoky lee el ticket que encuadraste, enderezado, sin la mesa de
 alrededor. Si no mueves las esquinas, busca el ticket en la foto como hasta
-ahora. La foto se guarda entera, así que el recuadro se puede corregir
+ahora. Para afinar, amplía la foto con los botones de lupa o con dos dedos,
+aquí y al elegir las líneas de un artículo. La foto se guarda entera, así
+que el recuadro se puede corregir
 después: en la revisión, **Ver la foto del ticket → Corregir el recorte del
 ticket** lo muestra donde lo dejaste; al pulsar **Volver a leer el ticket**
 se lee otra vez con el nuevo recuadro. Eso sustituye sus líneas, y se
@@ -302,7 +304,9 @@ When you choose or take a receipt's photo, Stoky shows it with a
 four-cornered frame. Move the corners to the paper's corners and press
 **Send receipt**: Stoky reads the receipt you framed, straightened, without
 the table around it. If you leave the corners alone, it finds the receipt in
-the photo as before. The photo is kept whole, so the frame can be corrected
+the photo as before. To be precise, enlarge the photo with the magnifier
+buttons or two fingers, here and when picking an item's lines. The photo is
+kept whole, so the frame can be corrected
 later: in the review, **See the receipt photo → Correct the receipt's crop**
 shows it where you left it, and **Read the receipt again** reads it once more
 with the new frame. That replaces its lines, losing corrections, chosen

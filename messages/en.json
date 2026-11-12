@@ -699,8 +699,8 @@
     "uploadStorePlaceholder": "Pick a store or type a new one",
     "uploadStoreNew": "The store “{name}” will be added when the receipt is uploaded.",
     "frame": {
-      "cropHint": "Drag the corners to the edges of the receipt. Tapping the photo moves the frame there. With a keyboard, pick a corner and move it with the arrow keys.",
-      "linesHint": "Frame only this item’s lines, with its price and its discounts. Tapping the photo moves the frame there; drag the corners to adjust it.",
+      "cropHint": "Drag the corners to the edges of the receipt. Tapping the photo moves the frame there. With a keyboard, pick a corner and move it with the arrow keys. To be precise, enlarge the photo with the buttons or two fingers.",
+      "linesHint": "Frame only this item’s lines, with its price and its discounts. Tapping the photo moves the frame there; drag the corners to adjust it. To be precise, enlarge the photo with the buttons or two fingers.",
       "send": "Send receipt",
       "topLeft": "Top left corner",
       "topRight": "Top right corner",
@@ -713,9 +713,11 @@
       "nothingRead": "No item was read in those lines. Adjust the frame or type it in.",
       "readFailed": "Those lines could not be read. Try again.",
       "correct": "Correct the receipt’s crop",
-      "reframeHint": "Move the corners to the edges of the receipt and read it again. Its lines are replaced: corrections, chosen products and lines added by hand are lost.",
+      "reframeHint": "Move the corners to the edges of the receipt and read it again. Its lines are replaced: corrections, chosen products and lines added by hand are lost. To be precise, enlarge the photo with the buttons or two fingers.",
       "readAgain": "Read the receipt again",
-      "reframeFailed": "The receipt could not be read again. Try again."
+      "reframeFailed": "The receipt could not be read again. Try again.",
+      "zoomIn": "Zoom in on the photo",
+      "zoomOut": "Zoom out of the photo"
     }
   },
   "shopping": {
