@@ -13,7 +13,7 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1, TEST-9, PARSE-1 to PARSE-5 and OCR-4 to OCR-12.** PARSE-5 (2026-11-12) is the owner's requirement that what the parser knows of each chain move to the database. The PARSE and OCR entries (2026-11-07) are the review of PR #19 and what the receipt OCR bench measured; two of the review's findings closed with the preparation's rewrite (the crop repeated per reading, and image transforms outside `image.ts`). TEST-10 closed on 2026-10-27 with its spec deleted (PROGRESS D154). TEST-11 closed on 2026-10-23 (`cb08d9a`): every `bun test` now loads Next's environment baseline first. TEST-7 closed on 2026-09-12 by removing
+**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1, TEST-9, TEST-12, PARSE-1 to PARSE-5 and OCR-4 to OCR-12.** PARSE-5 (2026-11-12) is the owner's requirement that what the parser knows of each chain move to the database. The PARSE and OCR entries (2026-11-07) are the review of PR #19 and what the receipt OCR bench measured; two of the review's findings closed with the preparation's rewrite (the crop repeated per reading, and image transforms outside `image.ts`). TEST-10 closed on 2026-10-27 with its spec deleted (PROGRESS D154). TEST-11 closed on 2026-10-23 (`cb08d9a`): every `bun test` now loads Next's environment baseline first. TEST-7 closed on 2026-09-12 by removing
 two process-wide ProductRating mocks from unrelated component tests.
 TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
@@ -144,6 +144,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | TEST-9 | Nothing pins that the caller's own row has no reset button, and a self-reset would be reported as "too easy" | 🟡 Open — deferred by the final review of the 2026-10-12 security branch |
 | TEST-10 | The service worker's offline spec failed three full runs on the Better Auth branch | ✅ Closed 2026-10-27 — the spec was deleted, cause never found |
 | TEST-11 | `trpc-links.test.ts` failed once in CI with Next's "AsyncLocalStorage accessed in runtime where it is not available" | ✅ Resolved `cb08d9a` — the first file to import `next/headers` left Next's request storage broken for the rest of the process |
+| TEST-12 | The passkey integration tests stall about two seconds at a time in CI, and two stalls in one test exceed its five-second limit | 🟡 Open — seen 2026-11-12 on PR #20, on PostgreSQL 16 and 18 alike; cause not found |
 | PARSE-1 | A telephone number in the header is counted as a discount | 🟡 Open — found reviewing PR #19, 2026-11-06; reproduced |
 | PARSE-2 | An article whose price equals the sum of those above it is dropped as a damaged total | 🟡 Open — found reviewing PR #19; reproduced |
 | PARSE-3 | A weighed article with its name on the weight line is lost | 🟡 Open — found reviewing PR #19; reproduced |
@@ -1320,6 +1321,43 @@ record says whether it ever failed before the branch.
 **The fix** starts with a failing run under `--trace=retain-on-failure`: the
 trace says whether the offline navigation got the worker's page, the
 browser's own "no internet" page, or a page that went to `/login`.
+
+---
+
+### 🟡 TEST-12: The passkey integration tests stall about two seconds at a time in CI
+
+**File:** `src/__tests__/integration/passkeys.test.ts`
+**Severity:** LOW — a test that sometimes runs out of time in CI; nothing a
+person meets has been tied to it
+**Status:** OPEN — seen 2026-11-12 on PR #20 (PostgreSQL 18); cause not found
+
+Its tests take 0.3–1 s in CI. Now and then one takes about two seconds more,
+and a test that is hit twice runs past bun's five-second limit and fails.
+Three integration runs of PR #20 failed that way: "removing a passkey"
+twice and "a bearer token (D142) is no way round the step-up" once. The
+gap sits between `auth.signin.succeeded` and `auth.passkey.added`, so
+inside the sign-in, `confirmPassword` or the registration, and once the
+sign-in alone took 2.2 s instead of 0.2.
+
+It is not the PostgreSQL upgrade. Master on PostgreSQL 16 had one at 4.49 s
+("is refused when the authenticator did not verify the person", run
+43224041759, passing). An A/B on 2026-11-12, the PR's commit with the test
+job's PostgreSQL put back to 16, ran twice at 2.52 s and 2.83 s for the
+slowest passkey test, and the PR on 18 once at 2.70 s: all three stalled
+once, all three passed. Locally the file shows none in eleven runs: five
+on 18, and three each on 16 and 18 with the database held to half a CPU
+(8.2–8.7 s for the file).
+
+The steps of about two seconds match `commandTimeout: 2000` in
+`src/lib/valkey.ts`, which every sign-in meets through the rate limiter and
+the known-devices record, but that is a fit, not a finding. Ruled out: a
+module holding an old client (everything calls `valkey()`), and
+`product-cache.test.ts`'s Valkey-down tests leaving `VALKEY_URL` changed
+(they restore it and close the client).
+
+**The fix** starts with a CI run that says where the two seconds go: the
+Valkey commands' latency and timeouts around the passkey file, and whether
+the event loop was blocked instead.
 
 ---
 
