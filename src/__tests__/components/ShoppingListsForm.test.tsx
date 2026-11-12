@@ -38,6 +38,7 @@ mock.module("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => "/",
   useParams: () => ({}),
+  redirect: () => {},
 }));
 
 mock.module("@/lib/offline/queue-context", () => ({

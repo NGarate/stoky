@@ -108,6 +108,7 @@ mock.module("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => "/",
   useParams: () => ({}),
+  redirect: () => {},
 }));
 
 // The real snackbar rather than a stub: `mock.module` replaces a module for

@@ -31,6 +31,7 @@ mock.module("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => "/",
   useParams: () => ({}),
+  redirect: () => {},
 }));
 
 mock.module("recharts", () => ({
