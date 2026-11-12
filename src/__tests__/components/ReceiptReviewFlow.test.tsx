@@ -22,6 +22,14 @@ const confirmAllCalls: unknown[] = [];
 const addItemCalls: unknown[] = [];
 const removeItemCalls: unknown[] = [];
 const reframeCalls: unknown[] = [];
+/** What the review asked its query for: how often to ask again. */
+let reviewOptions:
+  | {
+      refetchInterval?: (query: {
+        state: { data?: { status: string } };
+      }) => number | false;
+    }
+  | undefined;
 const statusSet: unknown[] = [];
 const updateDetailsCalls: unknown[] = [];
 let applyCalls = 0;
@@ -130,7 +138,10 @@ mock.module("@/lib/trpc/client", () => ({
     },
     receipt: {
       getReceiptWithItems: {
-        useQuery: () => ({ data: receipt, isLoading: false }),
+        useQuery: (_input: unknown, options: typeof reviewOptions) => {
+          reviewOptions = options;
+          return { data: receipt, isLoading: false };
+        },
       },
       // Answers only when asked: a disabled query has no data.
       getImage: {
@@ -506,6 +517,38 @@ describe("the receipt photograph", () => {
     expect(
       screen.queryByRole("img", { name: es.receipts.photoAlt }),
     ).toBeAbsent();
+  });
+});
+
+describe("a receipt still being read", () => {
+  it("says so and offers nothing to edit, which the server would refuse", () => {
+    receipt.status = "PROCESSING";
+    render();
+
+    expect(screen.getByText(es.receipts.readingNow)).toBeInTheDocument();
+    for (const name of [
+      es.receipts.details.edit,
+      es.receipts.line.add,
+      es.receipts.applyToInventory,
+      "Corregir la línea «Leche entera»",
+    ]) {
+      expect(screen.queryByRole("button", { name })).toBeAbsent();
+    }
+    expect(
+      screen.queryByRole("button", { name: es.receipts.frame.correct }),
+    ).toBeAbsent();
+  });
+
+  it("asks again each second until it is read, and then stops", () => {
+    render();
+    const every = reviewOptions?.refetchInterval;
+
+    for (const status of ["UPLOADING", "PROCESSING", "PARSED"]) {
+      expect(every?.({ state: { data: { status } } })).toBe(1000);
+    }
+    expect(every?.({ state: { data: { status: "NEEDS_REVIEW" } } })).toBe(
+      false,
+    );
   });
 });
 

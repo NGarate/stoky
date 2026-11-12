@@ -718,7 +718,8 @@
       "reframeFailed": "No se ha podido volver a leer el ticket. Vuelve a intentarlo.",
       "zoomIn": "Acercar la foto",
       "zoomOut": "Alejar la foto"
-    }
+    },
+    "readingNow": "Se está leyendo el ticket. Cuando termine, aquí aparecerán sus líneas para revisarlas."
   },
   "shopping": {
     "title": "Listas de la compra",

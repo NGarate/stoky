@@ -16,9 +16,16 @@ import { ReceiptDetailsForm } from "@/components/receipt/ReceiptDetailsForm";
 import { ReceiptLineForm } from "@/components/receipt/ReceiptLineForm";
 import { ReceiptPhoto } from "@/components/receipt/ReceiptPhoto";
 import { ReviewCard } from "@/components/receipt/ReviewCard";
-import { ReceiptStatusStep } from "@/components/receipt/ReceiptStatus";
+import {
+  ReceiptStatusBadge,
+  ReceiptStatusStep,
+} from "@/components/receipt/ReceiptStatus";
 import { formatDate } from "@/lib/dates";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+
+/** The states between a photo arriving and its lines being there to review. */
+const isBeingRead = (status: string | undefined) =>
+  status === "UPLOADING" || status === "PROCESSING" || status === "PARSED";
 
 export default function ReviewPage() {
   const t = useTranslations("receipts");
@@ -31,9 +38,15 @@ export default function ReviewPage() {
   const utils = api.useUtils();
   const [addingLine, setAddingLine] = useState(false);
   const [editingDetails, setEditingDetails] = useState(false);
-  const receiptQuery = api.receipt.getReceiptWithItems.useQuery({
-    receiptId,
-  });
+  const receiptQuery = api.receipt.getReceiptWithItems.useQuery(
+    { receiptId },
+    // Asked again each second while it is being read, so its lines appear
+    // here when the reading ends.
+    {
+      refetchInterval: (query) =>
+        isBeingRead(query.state.data?.status) ? 1000 : false,
+    },
+  );
   const receipt = receiptQuery.data;
 
   const applyReceiptMutation = api.receipt.applyReceipt.useMutation({
@@ -187,6 +200,9 @@ export default function ReviewPage() {
   // count never moved and "Confirmar todos" — disabled while anything is
   // pending — was disabled permanently, which is to say the bulk action could
   // never be used at all (ISSUES UI-7).
+  // Uploaded or read again, and not read yet.
+  const reading = isBeingRead(receipt.status);
+
   const pendingItems = receipt.items.filter(
     (item) => !isItemReviewed(item.matchStatus),
   ).length;
@@ -266,12 +282,21 @@ export default function ReviewPage() {
 
       {/* Applied is final: the frame can no longer be read again. */}
       <ReceiptPhoto
-        reframable={receipt.status !== "APPLIED"}
+        reframable={receipt.status !== "APPLIED" && !reading}
         receiptId={receiptId}
         ticketQuad={receipt.ticketQuad}
       />
 
-      {receipt.status === "APPLIED" ? (
+      {reading ? (
+        // Nothing to edit while it is read: the server refuses every edit
+        // until it is, and the lines shown would be about to be replaced.
+        <div className="mb-6 space-y-3 rounded-lg border border-border bg-card p-4">
+          <ReceiptStatusBadge status={receipt.status} />
+          <p aria-live="polite" className="text-foreground" role="status">
+            {t("readingNow")}
+          </p>
+        </div>
+      ) : receipt.status === "APPLIED" ? (
         <div className="text-center py-8 rounded-lg border border-ok-foreground bg-ok mb-6">
           <Package
             aria-hidden="true"

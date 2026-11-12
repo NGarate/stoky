@@ -123,20 +123,20 @@ tickets.
 
 ### Encuadra el ticket al hacerle la foto
 
-Al elegir o hacer la foto de un ticket, Stoky la muestra con un recuadro
-de cuatro esquinas. Llévalas a las esquinas del papel y pulsa **Enviar
+Al elegir o hacer la foto de un ticket, Stoky la muestra con un recuadro de
+cuatro esquinas. Llévalas a las esquinas del papel y pulsa **Enviar
 ticket**: Stoky lee el ticket que encuadraste, enderezado, sin la mesa de
 alrededor. Si no mueves las esquinas, busca el ticket en la foto como hasta
 ahora. Para afinar, amplía la foto con los botones de lupa o con dos dedos,
 aquí y al elegir las líneas de un artículo. La foto se guarda entera, así
-que el recuadro se puede corregir
-después: en la revisión, **Ver la foto del ticket** la muestra con el recuadro
-con que se leyó, y **Corregir el recorte del ticket** lo deja mover; al
-pulsar **Volver a leer el ticket** se lee otra vez con el nuevo recuadro.
-Eso sustituye sus líneas, y se pierden las correcciones, los productos
-elegidos y las líneas añadidas a mano; ya aplicado al inventario no se
-puede. Las fotos HEIC que el navegador no sabe mostrar se envían sin
-recuadro.
+que el recuadro se puede corregir después: en la revisión, **Ver la foto del
+ticket** la muestra con el recuadro con que se leyó, y **Corregir el recorte
+del ticket** lo deja mover; al pulsar **Volver a leer el ticket** se lee
+otra vez con el nuevo recuadro. Eso sustituye sus líneas, y se pierden las
+correcciones, los productos elegidos y las líneas añadidas a mano; ya
+aplicado al inventario no se puede. Las fotos HEIC que el navegador no sabe
+mostrar se envían sin recuadro. Mientras se lee, su revisión lo dice y
+muestra las líneas en cuanto termina.
 
 ### Vuelve a leer las líneas de un artículo, o elimínalo
 
@@ -307,13 +307,14 @@ four-cornered frame. Move the corners to the paper's corners and press
 the table around it. If you leave the corners alone, it finds the receipt in
 the photo as before. To be precise, enlarge the photo with the magnifier
 buttons or two fingers, here and when picking an item's lines. The photo is
-kept whole, so the frame can be corrected
-later: in the review, **See the receipt photo** shows it with the frame it
-was read with, **Correct the receipt's crop** lets you move it, and **Read
-the receipt again** reads it once more
-with the new frame. That replaces its lines, losing corrections, chosen
-products and lines added by hand; once applied to the inventory it cannot be
-done. HEIC photos the browser cannot show are sent without a frame.
+kept whole, so the frame can be corrected later: in the review, **See the
+receipt photo** shows it with the frame it was read with, **Correct the
+receipt's crop** lets you move it, and **Read the receipt again** reads it
+once more with the new frame. That replaces its lines, losing corrections,
+chosen products and lines added by hand; once applied to the inventory it
+cannot be done. HEIC photos the browser cannot show are sent without a
+frame. While it is read, its review says so and shows the lines as soon as
+it finishes.
 
 ### Read an item's lines again, or delete it
 

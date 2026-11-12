@@ -718,7 +718,8 @@
       "reframeFailed": "The receipt could not be read again. Try again.",
       "zoomIn": "Zoom in on the photo",
       "zoomOut": "Zoom out of the photo"
-    }
+    },
+    "readingNow": "The receipt is being read. When it finishes, its lines appear here for review."
   },
   "shopping": {
     "title": "Shopping lists",
