@@ -7,7 +7,6 @@ import { Upload, Camera, Send, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { FULL_FRAME, isFullFrame, type Quad } from "@/lib/receipt-quad";
-import { croppedPhoto } from "./crop";
 import { QuadPicker } from "./QuadPicker";
 import {
   MAX_RECEIPT_BYTES,
@@ -15,7 +14,12 @@ import {
 } from "@/lib/validations/receipt";
 
 interface UploadZoneProps {
-  onUpload: (file: File) => void;
+  /**
+   * The photo, whole, and where the ticket is on it when the person framed
+   * it: none when the frame was left on the whole photo, and the server
+   * finds the paper itself.
+   */
+  onUpload: (file: File, quad?: Quad) => void;
   isUploading?: boolean;
 }
 
@@ -69,21 +73,11 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
   }, []);
 
   /**
-   * The ticket as framed, straightened on this device so that only the paper
-   * travels — or the photo as chosen when the frame is the whole of it, or
-   * when the crop fails: the server finds the ticket in a photo itself.
+   * The photo as chosen, never cut: the frame travels beside it, so it can
+   * be corrected after the ticket is read (`receipt.reframe`).
    */
-  const send = async () => {
-    if (!chosen) return;
-    if (!preview || isFullFrame(quad)) return onUpload(chosen);
-    let ticket: File = chosen;
-    try {
-      const jpeg = await croppedPhoto(preview, quad);
-      ticket = new File([jpeg], "ticket.jpg", { type: "image/jpeg" });
-    } catch (error) {
-      console.error("The photo could not be cropped:", error);
-    }
-    onUpload(ticket);
+  const send = () => {
+    if (chosen) onUpload(chosen, isFullFrame(quad) ? undefined : quad);
   };
 
   const onDrop = useCallback(
@@ -192,7 +186,7 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
             <Button
               className="flex-1 gap-2"
               disabled={isUploading}
-              onClick={() => void send()}
+              onClick={send}
               type="button"
             >
               <Send aria-hidden="true" className="size-5" />

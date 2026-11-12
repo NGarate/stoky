@@ -67,7 +67,7 @@ describe("UploadZone", () => {
   });
 
   it("frames the chosen photo first, and sends it as it is when the frame is the whole of it", async () => {
-    const onUpload = mock((_file: File) => {});
+    const onUpload = mock((_file: File, _quad?: unknown) => {});
     const { container } = renderWithIntl(<UploadZone onUpload={onUpload} />);
 
     await userEvent.upload(fileInput(container), jpeg());
@@ -91,6 +91,34 @@ describe("UploadZone", () => {
       expect(onUpload).toHaveBeenCalledTimes(1);
     });
     expect(onUpload.mock.calls[0]?.[0]?.name).toBe("ticket.jpg");
+    // No frame: the server finds the paper itself.
+    expect(onUpload.mock.calls[0]?.[1]).toBeUndefined();
+  });
+
+  it("sends the photo whole, with the frame beside it, when the corners were moved", async () => {
+    const onUpload = mock((_file: File, _quad?: unknown) => {});
+    const { container } = renderWithIntl(<UploadZone onUpload={onUpload} />);
+    const photo = jpeg();
+
+    await userEvent.upload(fileInput(container), photo);
+    (
+      await screen.findByRole("button", { name: "Esquina superior izquierda" })
+    ).focus();
+    await userEvent.keyboard("{Shift>}{ArrowRight}{ArrowDown}{/Shift}");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Enviar ticket" }),
+    );
+
+    // The very file chosen, not a crop of it: the frame can be corrected.
+    expect(onUpload.mock.calls[0]?.[0]).toBe(photo);
+    const [[x, y], ...rest] = onUpload.mock.calls[0]![1] as number[][];
+    expect(x).toBeCloseTo(0.05);
+    expect(y).toBeCloseTo(0.05);
+    expect(rest).toEqual([
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ]);
   });
 
   it("refuses a photograph larger than the server will take", async () => {

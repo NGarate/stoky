@@ -1,9 +1,9 @@
 /**
  * A four-cornered selection on a receipt photograph, in the photograph's own
  * proportions: each corner is `[x, y]` from 0 to 1, top-left first and then
- * clockwise. The warp is shared: the browser straightens the ticket out of
- * the photo before sending it with the same math the server straightens with
- * (`src/server/services/image.ts`).
+ * clockwise. The photo is kept whole and the frame beside it
+ * (`Receipt.ticketQuad`), so a frame can always be corrected; the server
+ * straightens what a frame holds (`src/server/services/image.ts`).
  */
 export type Point = [number, number];
 export type Quad = [Point, Point, Point, Point];
@@ -15,6 +15,28 @@ export const FULL_FRAME: Quad = [
   [1, 1],
   [0, 1],
 ];
+
+/** A rectangle of the photo, in its proportions. */
+export interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** The smallest rectangle of the photo that holds `quad`. */
+export function boundsOf(quad: Quad): Box {
+  const xs = quad.map(([x]) => x);
+  const ys = quad.map(([, y]) => y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return {
+    x,
+    y,
+    width: Math.max(...xs) - x,
+    height: Math.max(...ys) - y,
+  };
+}
 
 export const isFullFrame = (quad: Quad) =>
   quad.every(([x, y], i) => x === FULL_FRAME[i]![0] && y === FULL_FRAME[i]![1]);

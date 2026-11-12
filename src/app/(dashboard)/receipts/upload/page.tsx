@@ -8,6 +8,7 @@ import { UploadZone } from "@/components/receipt/UploadZone";
 import { ReceiptPhoto } from "@/components/receipt/ReceiptPhoto";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 import { api } from "@/lib/trpc/client";
+import type { Quad } from "@/lib/receipt-quad";
 import { Button } from "@/components/ui/button";
 import { Combobox, foldText } from "@/components/ui/combobox";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
@@ -100,7 +101,7 @@ function UploadView() {
     },
   );
 
-  const handleUpload = async (file: File) => {
+  const handleUpload = async (file: File, quad?: Quad) => {
     setIsUploading(true);
     // The React Compiler cannot yet memoise a component containing this
     // `try`/`catch` around an await, so it declines to optimise the whole
@@ -114,6 +115,7 @@ function UploadView() {
       const result = await uploadMutation.mutateAsync({
         fileBase64: base64,
         mimeType: file.type,
+        ...(quad && { quad }),
         ...(pickedStore
           ? { storeId: pickedStore.id }
           : newStoreName

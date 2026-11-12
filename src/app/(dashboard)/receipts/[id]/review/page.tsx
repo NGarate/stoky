@@ -357,6 +357,7 @@ export default function ReviewPage() {
               <ReviewCard
                 key={item.id}
                 receiptId={receiptId}
+                ticketQuad={receipt.ticketQuad}
                 onRemove={() =>
                   removeItemMutation.mutate(
                     { receiptItemId: item.id },

@@ -1489,15 +1489,19 @@ function warpedGrey(
 
 /**
  * The part of the photograph a person framed (`quad`, in proportions of the
- * photo), straightened and grey, its width scaled to `width`: the lines of
- * one article, read again on their own (`receipt.readRegion`). The framed
- * lines are taken to run the ticket's width, so they are scaled as the whole
- * ticket is before it is read.
+ * photo), straightened and grey, scaled so that its width — or, for a whole
+ * ticket that may be lying on its side, its short side — is `width`.
+ *
+ * - **The whole ticket** (`Receipt.ticketQuad`): what the corners a person
+ *   put on the paper replace `straightenedTicket`'s guess at them with.
+ * - **One article's lines** (`receipt.readRegion`): taken to run the
+ *   ticket's width, so scaled as the whole ticket is before it is read.
  */
 export async function framedRegion(
   image: Buffer,
   quad: Quad,
   width: number,
+  shortSide = false,
 ): Promise<Grey> {
   const { width: photoWidth } = await readImageMetadata(image);
   if (!photoWidth) throw new InvalidInputError("Image has no dimensions");
@@ -1510,7 +1514,7 @@ export async function framedRegion(
     throw new InvalidInputError("The framed region is empty");
   }
   const scale = Math.min(
-    width / size.width,
+    width / (shortSide ? Math.min(size.width, size.height) : size.width),
     Math.sqrt(TICKET_MAX_PIXELS / (size.width * size.height)),
   );
   return warpedGrey(

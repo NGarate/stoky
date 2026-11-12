@@ -289,6 +289,29 @@ describe("the receipt's store", () => {
     await waitFor(() => expect(invalidated).toContain("store.list"));
   });
 
+  it("sends the frame put on the ticket with the photo", async () => {
+    const container = mount();
+    const input = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    await userEvent.upload(
+      input,
+      new File(["receipt"], "ticket.jpg", { type: "image/jpeg" }),
+    );
+    (
+      await screen.findByRole("button", { name: "Esquina inferior derecha" })
+    ).focus();
+    await userEvent.keyboard("{Shift>}{ArrowLeft}{/Shift}");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Enviar ticket" }),
+    );
+
+    await waitFor(() => expect(uploads).toHaveLength(1));
+    const quad = uploads[0]!.quad as number[][];
+    expect(quad[2]![0]).toBeCloseTo(0.95);
+    expect(quad[0]).toEqual([0, 0]);
+  });
+
   it("sends no store when the field is left empty", async () => {
     const container = mount();
 

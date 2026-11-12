@@ -93,6 +93,7 @@ describe("leaving a line out", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        ticketQuad={null}
         onRemove={() => {}}
         item={line()}
         onConfirm={(action) => skipped.push(action)}
@@ -117,6 +118,7 @@ describe("correcting what OCR read", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        ticketQuad={null}
         onRemove={() => {}}
         item={line({ parsedQuantity: new Decimal(2) })}
         onConfirm={() => {}}
@@ -158,6 +160,7 @@ describe("correcting what OCR read", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        ticketQuad={null}
         onRemove={() => {}}
         item={line()}
         onConfirm={() => {}}
@@ -183,6 +186,7 @@ describe("correcting what OCR read", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        ticketQuad={null}
         onRemove={() => {}}
         item={line({ matchStatus: "USER_CONFIRMED" })}
         onConfirm={() => {}}
@@ -202,6 +206,7 @@ describe("ReviewCard status", () => {
     const { container } = renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        ticketQuad={null}
         onRemove={() => {}}
         item={line({ matchStatus: "AUTO_MATCHED", matchConfidence: 0.9 })}
         onConfirm={() => {}}
@@ -224,6 +229,7 @@ describe("ReviewCard status", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        ticketQuad={null}
         onRemove={() => {}}
         item={line({ matchStatus: "USER_CONFIRMED" })}
         onConfirm={() => {}}
@@ -241,6 +247,7 @@ describe("ReviewCard status", () => {
     const { container } = renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        ticketQuad={null}
         onRemove={() => {}}
         item={line({ matchStatus: "SKIPPED" })}
         onConfirm={() => {}}
@@ -267,6 +274,7 @@ describe("scanning the packet for a line", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        ticketQuad={null}
         onRemove={() => {}}
         item={line({ matchedProductId: null, matchedProduct: null })}
         onConfirm={(...args) => confirmed.push(args)}
@@ -307,6 +315,7 @@ describe("correcting from the lines framed on the photo", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        ticketQuad={null}
         onRemove={() => {}}
         item={line()}
         onConfirm={() => {}}
@@ -353,11 +362,49 @@ describe("correcting from the lines framed on the photo", () => {
     ]);
   });
 
+  it("frames the lines inside the ticket's part of the photo when it was framed", async () => {
+    framed.length = 0;
+    framedLine = null;
+    renderWithIntl(
+      <ReviewCard
+        receiptId="r1"
+        ticketQuad={[
+          [0.3, 0.1],
+          [0.6, 0.1],
+          [0.6, 0.9],
+          [0.3, 0.9],
+        ]}
+        onRemove={() => {}}
+        item={line()}
+        onConfirm={() => {}}
+        onCorrect={() => {}}
+      />,
+      { locale: "es" },
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Corregir la línea «Leche entera»" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Elegir las líneas en el ticket" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Leer estas líneas" }),
+    );
+
+    // A band across the middle of the ticket, in the photo's proportions.
+    const { quad } = framed[0] as { quad: number[][] };
+    expect(quad.map(([x]) => x)).toEqual([0.3, 0.6, 0.6, 0.3]);
+    expect(quad[0]![1]).toBeCloseTo(0.1 + 0.8 * 0.46);
+    expect(quad[2]![1]).toBeCloseTo(0.1 + 0.8 * 0.54);
+  });
+
   it("says so when no article came of the framed lines, and keeps the frame", async () => {
     framedLine = null;
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        ticketQuad={null}
         onRemove={() => {}}
         item={line()}
         onConfirm={() => {}}
@@ -388,6 +435,7 @@ describe("correcting from the lines framed on the photo", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        ticketQuad={null}
         onRemove={() => {}}
         item={line()}
         onConfirm={() => {}}
@@ -422,6 +470,7 @@ describe("deleting a line that was never an article", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        ticketQuad={null}
         onRemove={() => removed++}
         item={line()}
         onConfirm={() => {}}

@@ -14,6 +14,7 @@ import {
 } from "./image-thread";
 import type { Turn } from "./prepare-worker";
 import type { Quad } from "@/lib/receipt-quad";
+import { receiptQuadSchema } from "@/lib/validations/receipt";
 
 export { bestReading } from "./reading-choice";
 
@@ -397,7 +398,8 @@ export interface PreparedTicket extends Grey {
  * frame, evenly lit, the right way up and with its lines straight. The stored
  * photograph is not changed — this is a copy, made every time OCR runs.
  *
- * 1. **Straightened** from its four corners when they can be trusted
+ * 1. **Straightened** from the four corners a person framed (`quad`), or
+ *    else from those found when they can be trusted
  *    (`straightenedTicket`), otherwise **cropped** to the paper, so the table
  *    around a ticket is not read as text. A crop wider than tall is taken on
  *    its side, so that the ticket's width is what is scaled.
@@ -416,11 +418,13 @@ export async function prepareForOcr(
   image: Buffer,
   confidence: Confidence = noConfidence,
   signal?: AbortSignal,
+  quad?: Quad,
 ): Promise<PreparedTicket> {
   const ticket = await onImageThread("ocr", {
     step: "ticket",
     image,
     width: OCR_TICKET_WIDTH,
+    quad,
   });
   const grey = sent(ticket, "grey");
   const { turn, sure } = await upright(
@@ -499,10 +503,16 @@ export async function readReceiptPhoto(
   image: Buffer,
   recognise: Recognise,
   confidence: Confidence = noConfidence,
+  quad?: Quad,
 ): Promise<string> {
   const failed = new AbortController();
   try {
-    const prepared = await prepareForOcr(image, confidence, failed.signal);
+    const prepared = await prepareForOcr(
+      image,
+      confidence,
+      failed.signal,
+      quad,
+    );
     const first = await readEveryWay(prepared, recognise, failed.signal);
     const best = await chosen(first.texts);
     if (prepared.sure || best.articles > 0) return best.text;
@@ -680,7 +690,15 @@ export async function processReceiptOcr(
     // than through the procedure that checked them.
     await readImageMetadata(imageBuffer);
 
-    const text = await readReceiptPhoto(imageBuffer, recognise, confidence);
+    // The corners the person framed, when they did: checked again here, as
+    // the row is read back rather than taken from the procedure that checked.
+    const framed = receiptQuadSchema.safeParse(receipt.ticketQuad);
+    const text = await readReceiptPhoto(
+      imageBuffer,
+      recognise,
+      confidence,
+      framed.success ? framed.data : undefined,
+    );
     if (text.trim().length === 0) {
       throw new InvalidInputError("No text recognised in the image");
     }

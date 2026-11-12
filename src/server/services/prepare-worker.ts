@@ -52,11 +52,13 @@ export type PreparationRequest =
       /**
        * The ticket straightened or cropped, standing, with its light
        * flattened — and, as PNGs indexed by `Turn`, its middle band turned
-       * each way, for Tesseract to say which way up it reads.
+       * each way, for Tesseract to say which way up it reads. Straightened
+       * from the corners a person framed (`quad`) when there are some.
        */
       step: "ticket";
       image: Uint8Array;
       width: number;
+      quad?: Quad;
     }
   | {
       id: number;
@@ -141,8 +143,10 @@ async function answer(request: PreparationRequest): Promise<{
         request.image.byteLength,
       );
       const ticket = flattenedLight(
-        (await straightenedTicket(image, request.width)) ??
-          (await croppedTicket(image, request.width)),
+        request.quad
+          ? await framedRegion(image, request.quad, request.width, true)
+          : ((await straightenedTicket(image, request.width)) ??
+              (await croppedTicket(image, request.width))),
       );
       // A ticket is longer than it is wide: one wider than tall lies on its side.
       const grey =

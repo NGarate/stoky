@@ -2176,7 +2176,11 @@ describe("what a receipt read sends", () => {
       receiptId: receipt.id,
     });
 
-    expect(Object.keys(review).sort()).toEqual([...HEADER, "items"].sort());
+    // And where the ticket is on its photo: eight numbers, nothing it prints,
+    // which the review frames an article's lines inside.
+    expect(Object.keys(review).sort()).toEqual(
+      [...HEADER, "ticketQuad", "items"].sort(),
+    );
     expect(Object.keys(review.store ?? {}).sort()).toEqual(["id", "name"]);
     expectNothingPrivate(review);
   });

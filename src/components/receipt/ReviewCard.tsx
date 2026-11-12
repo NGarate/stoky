@@ -9,6 +9,7 @@ import { isItemReviewed } from "@/lib/receipts";
 import { MatchSelector } from "./MatchSelector";
 import { CreateProductInline } from "./CreateProductInline";
 import { FramedLines } from "./FramedLines";
+import type { Quad } from "@/lib/receipt-quad";
 import { ReceiptLineForm, type ReceiptLine } from "./ReceiptLineForm";
 import {
   ScanProductDialog,
@@ -42,6 +43,8 @@ interface ReceiptItem {
 interface ReviewCardProps {
   /** The receipt the line is on: its photo is where the line is framed. */
   receiptId: string;
+  /** Where the ticket is on that photo, when it was framed. */
+  ticketQuad: Quad | null;
   item: ReceiptItem;
   onConfirm: (
     action: "MATCH" | "CREATE" | "SKIP",
@@ -56,6 +59,7 @@ interface ReviewCardProps {
 
 export function ReviewCard({
   receiptId,
+  ticketQuad,
   item,
   onConfirm,
   onCorrect,
@@ -187,6 +191,7 @@ export function ReviewCard({
             setIsFraming(false);
           }}
           receiptId={receiptId}
+          ticketQuad={ticketQuad}
         />
       ) : isCorrecting ? (
         <div className="space-y-3">

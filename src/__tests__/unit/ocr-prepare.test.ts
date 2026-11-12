@@ -436,6 +436,42 @@ describe("prepareForOcr", () => {
   );
 
   it(
+    "reads the ticket from the corners a person framed, not from where it finds paper",
+    async () => {
+      // The table beside the ticket, framed: no paper is looked for, and
+      // what was framed is what is prepared — wood, with no ink rows.
+      const table = await prepareForOcr(
+        ticketOnATable(),
+        undefined,
+        undefined,
+        [
+          [0, 0.1],
+          [0.3, 0.1],
+          [0.3, 0.9],
+          [0, 0.9],
+        ],
+      );
+      // The ticket itself, framed: its short side scaled as a ticket's is.
+      const ticket = await prepareForOcr(
+        ticketOnATable(),
+        undefined,
+        undefined,
+        [
+          [0.375, 0.1],
+          [0.625, 0.1],
+          [0.625, 0.9],
+          [0.375, 0.9],
+        ],
+      );
+
+      expect(inkShare(table)).toBeLessThan(0.01);
+      expect(ticket.width).toBe(OCR_TICKET_WIDTH);
+      expect(inkShare(ticket)).toBeGreaterThan(0.05);
+    },
+    PREPARING,
+  );
+
+  it(
     "with no judge of text, goes by the proportions alone",
     async () => {
       const prepared = await prepareForOcr(leftAlignedTicket(180));

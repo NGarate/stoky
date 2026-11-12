@@ -9,7 +9,8 @@ import {
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
-import type { PrismaClient, Prisma } from "@/generated/prisma/client";
+import { Prisma, type PrismaClient } from "@/generated/prisma/client";
+import { type Quad, isFullFrame } from "@/lib/receipt-quad";
 import {
   ReceiptStatus,
   MatchStatus,
@@ -40,6 +41,7 @@ import {
   receiptItemMatchSchema,
   receiptItemRemoveSchema,
   receiptItemUpdateSchema,
+  receiptQuadSchema,
   receiptRegionSchema,
 } from "@/lib/validations/receipt";
 
@@ -253,6 +255,14 @@ async function lockReceiptStatus(
   return current.status;
 }
 
+/**
+ * What `Receipt.ticketQuad` holds for a frame: none for the whole photo,
+ * which is "find the paper in it", as it is for no frame at all.
+ */
+function ticketFrame(quad: Quad | undefined): Quad | typeof Prisma.DbNull {
+  return quad && !isFullFrame(quad) ? quad : Prisma.DbNull;
+}
+
 export const receiptRouter = createTRPCRouter({
   /**
    * Takes the photograph. The only procedure here that accepts arbitrary bytes.
@@ -289,6 +299,9 @@ export const receiptRouter = createTRPCRouter({
           storeId: z.string().max(MAX_ID_LENGTH).optional(),
           // A shop typed rather than picked, found or created by `storeNamed`.
           storeName: z.string().trim().min(1).max(MAX_NAME_LENGTH).optional(),
+          // Where the ticket is on the photo, as the person framed it. The
+          // photo is kept whole either way, so the frame can be corrected.
+          quad: receiptQuadSchema.optional(),
         })
         .refine((input) => !(input.storeId && input.storeName), {
           message: "Send a storeId or a storeName, not both",
@@ -401,6 +414,7 @@ export const receiptRouter = createTRPCRouter({
             householdId,
             uploadedBy: user.id,
             storeId,
+            ticketQuad: ticketFrame(input.quad),
             status: ReceiptStatus.UPLOADING,
           },
         });
@@ -523,6 +537,7 @@ export const receiptRouter = createTRPCRouter({
         where: { id: input.receiptId, householdId: ctx.householdId },
         select: {
           ...RECEIPT_HEADER,
+          ticketQuad: true,
           items: {
             include: {
               matchedProduct: true,
@@ -557,6 +572,11 @@ export const receiptRouter = createTRPCRouter({
 
       return {
         ...receipt,
+        // Checked as it is read back: what the screens draw a frame from.
+        ticketQuad: receiptQuadSchema
+          .nullable()
+          .catch(null)
+          .parse(receipt.ticketQuad),
         items: itemsWithCandidates,
       };
     }),

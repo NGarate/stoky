@@ -125,10 +125,10 @@ tickets.
 
 Al elegir o hacer la foto de un ticket, Stoky la muestra con un recuadro
 de cuatro esquinas. Llévalas a las esquinas del papel y pulsa **Enviar
-ticket**: se envía solo el ticket, ya enderezado, sin la mesa de alrededor.
-Si no mueves las esquinas, se envía la foto entera y Stoky busca el ticket en
-ella como hasta ahora. Las fotos HEIC que el navegador no sabe mostrar se
-envían enteras.
+ticket**: Stoky lee el ticket que encuadraste, enderezado, sin la mesa de
+alrededor. Si no mueves las esquinas, busca el ticket en la foto como hasta
+ahora. La foto se guarda entera, sin recortar. Las fotos HEIC que el
+navegador no sabe mostrar se envían sin recuadro.
 
 ### Vuelve a leer las líneas de un artículo, o elimínalo
 
@@ -295,10 +295,10 @@ too.
 
 When you choose or take a receipt's photo, Stoky shows it with a
 four-cornered frame. Move the corners to the paper's corners and press
-**Send receipt**: only the receipt is sent, already straightened, without the
-table around it. If you leave the corners alone, the whole photo is sent and
-Stoky finds the receipt in it as before. HEIC photos the browser cannot show
-are sent whole.
+**Send receipt**: Stoky reads the receipt you framed, straightened, without
+the table around it. If you leave the corners alone, it finds the receipt in
+the photo as before. The photo is kept whole, uncut. HEIC photos the browser
+cannot show are sent without a frame.
 
 ### Read an item's lines again, or delete it
 
