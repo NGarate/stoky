@@ -19,6 +19,8 @@ const SVG_ALLOWED: Record<string, string> = {
     "the torch toggle's two states carry a <title> each and are what its tests address",
   "components/receipt/QuadPicker.tsx":
     "the ticket's frame is not a glyph: a polygon drawn from the four corners being placed, which carry the names",
+  "components/receipt/ReceiptPhoto.tsx":
+    "the ticket's frame is not a glyph: a polygon drawn from the corners it was read with, over the photo it frames",
   "components/security/TotpQr.tsx":
     "a QR code is not a glyph: it is drawn from the data it encodes, and named with role=img",
 };

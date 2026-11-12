@@ -61,11 +61,31 @@ export function ReceiptPhoto({
         />
       ) : (
         <>
-          <img
-            alt={t("photoAlt")}
-            className="w-full rounded-b bg-card object-contain"
-            src={image.data}
-          />
+          {/* With the frame the ticket was read from drawn on it, when it
+              was framed: what "Corregir el recorte" would start from. */}
+          <div className="relative">
+            <img
+              alt={t("photoAlt")}
+              className="block w-full rounded-b bg-card"
+              src={image.data}
+            />
+            {ticketQuad && (
+              <svg
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 size-full"
+                data-slot="ticket-frame"
+                preserveAspectRatio="none"
+                viewBox="0 0 1 1"
+              >
+                <polygon
+                  className="fill-primary/10 stroke-primary"
+                  points={ticketQuad.map(([x, y]) => `${x},${y}`).join(" ")}
+                  strokeWidth={3}
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
+            )}
+          </div>
           {reframable && (
             <div className="p-3">
               <Button

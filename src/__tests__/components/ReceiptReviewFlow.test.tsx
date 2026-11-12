@@ -510,6 +510,27 @@ describe("the receipt photograph", () => {
 });
 
 describe("correcting where the ticket is on its photo", () => {
+  it("shows the frame the ticket was read with on its photo", () => {
+    receipt.ticketQuad = [
+      [0.3, 0.1],
+      [0.6, 0.1],
+      [0.6, 0.9],
+      [0.3, 0.9],
+    ];
+    const { container } = render();
+
+    const frame = container.querySelector('[data-slot="ticket-frame"] polygon');
+    expect(frame?.getAttribute("points")).toBe(
+      "0.3,0.1 0.6,0.1 0.6,0.9 0.3,0.9",
+    );
+  });
+
+  it("draws no frame on a photo the ticket was found in unframed", () => {
+    const { container } = render();
+
+    expect(container.querySelector('[data-slot="ticket-frame"]')).toBeNull();
+  });
+
   it("starts from the frame it has, warns the lines are replaced, and follows the new reading", async () => {
     receipt.ticketQuad = [
       [0.3, 0.1],
