@@ -12,6 +12,15 @@
  * receipt being read, whose pixel loops hold their thread for seconds. Each
  * is started on first use and again after it fails, and lets the process
  * exit while idle.
+ *
+ * **Under `next dev` an idle thread stops** (`stopThreadsIdleFor`). A thread
+ * runs the code it was started with, and this module, which holds it, is not
+ * reloaded when only `prepare-worker.ts` or `image.ts` change: on 2026-11-12
+ * a receipt uploaded with a frame was read by a thread started that morning,
+ * before frames existed, which ignored the frame and read the keyboard
+ * beside the ticket. Stopped when idle, the next receipt starts a thread
+ * from the code as it is. A production server's code does not change under
+ * it, so its threads are kept.
  */
 import { Worker as Thread } from "node:worker_threads";
 import { InvalidInputError, UpstreamError } from "./errors";
@@ -31,8 +40,28 @@ type Waiting = Map<
 >;
 
 /** Each lane's thread, while there is one. */
-const threads = new Map<Lane, { thread: Thread; waiting: Waiting }>();
+const threads = new Map<
+  Lane,
+  { thread: Thread; waiting: Waiting; idle?: ReturnType<typeof setTimeout> }
+>();
 let nextRequest = 0;
+
+/**
+ * How long a thread may sit idle before it stops, or null to keep it. Longer
+ * than the gaps inside one receipt's reading (Tesseract's turn between two
+ * steps), so a receipt keeps its thread; a thread stopped between steps would
+ * only be started again, since a thread keeps nothing between requests.
+ */
+let idleStop: number | null =
+  process.env.NODE_ENV === "development" ? 30_000 : null;
+
+/** How long a thread may sit idle before it stops; null keeps it. */
+export function stopThreadsIdleFor(ms: number | null): void {
+  idleStop = ms;
+}
+
+/** Whether `lane` has a thread now. */
+export const isRunning = (lane: Lane) => threads.has(lane);
 
 /**
  * `request` answered by `lane`'s thread. What `transfer` names is handed
@@ -61,7 +90,19 @@ export function onImageThread(
       const asked = waiting.get(reply.id);
       waiting.delete(reply.id);
       // Idle, the thread must not keep the process alive.
-      if (waiting.size === 0) thread.unref();
+      if (waiting.size === 0) {
+        thread.unref();
+        const current = threads.get(lane);
+        if (idleStop !== null && current?.thread === thread) {
+          current.idle = setTimeout(() => {
+            // Out of the map first, a request arriving now starting
+            // another — and only itself: this lane may have a newer one.
+            if (threads.get(lane)?.thread === thread) threads.delete(lane);
+            void thread.terminate();
+          }, idleStop);
+          current.idle.unref();
+        }
+      }
       if (!asked) return;
       if ("error" in reply) {
         asked.reject(
@@ -81,6 +122,7 @@ export function onImageThread(
     threads.set(lane, running);
   }
   const { thread, waiting } = running;
+  clearTimeout(running.idle);
   const id = nextRequest++;
   return new Promise((resolve, reject) => {
     waiting.set(id, { resolve, reject });
