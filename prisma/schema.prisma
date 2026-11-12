@@ -365,6 +365,11 @@ model Receipt {
   purchaseDate  DateTime?
   totalAmount   Decimal?      @db.Decimal(12, 2)
   rawOcrText    String?
+  /// The ticket's four corners on the photo, as the person framed it:
+  /// `[[x, y], …]` from 0 to 1, top-left first and clockwise
+  /// (`src/lib/receipt-quad.ts`). The photo itself is kept whole; null is
+  /// "find the paper in it" (`straightenedTicket`, `croppedTicket`).
+  ticketQuad    Json?
   items         ReceiptItem[]
   householdId   String
   household     Household     @relation(fields: [householdId], references: [id])

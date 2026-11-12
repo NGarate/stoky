@@ -397,6 +397,40 @@ Producto completamente diferente xyz123 5,00
       expect(updated?.rawOcrText).toBe("LECHE 1,25\n");
     });
 
+    it("reads the ticket from the frame stored with the receipt", async () => {
+      const receiptDir = join(testDir, randomUUID());
+      await mkdir(receiptDir, { recursive: true });
+      const imagePath = join(receiptDir, "receipt.png");
+      await writeFile(imagePath, pngOf(400, 300));
+
+      // A band 400 x 60 framed on a 400 x 300 photo: read standing, it is
+      // nearly seven times as tall as it is wide; the whole photo, 4:3.
+      const receipt = await prisma.receipt.create({
+        data: {
+          imagePath,
+          status: ReceiptStatus.UPLOADING,
+          householdId: testHouseholdId,
+          uploadedBy: testUserId,
+          ticketQuad: [
+            [0, 0.4],
+            [1, 0.4],
+            [1, 0.6],
+            [0, 0.6],
+          ],
+        },
+      });
+
+      const shapes: number[] = [];
+      await processReceiptOcr(receipt.id, async (image) => {
+        const { width, height } = await new Bun.Image(image).metadata();
+        shapes.push(height! / width!);
+        return "LECHE 1,25\n";
+      });
+
+      expect(shapes.length).toBeGreaterThan(0);
+      for (const shape of shapes) expect(shape).toBeGreaterThan(5);
+    });
+
     it("moves to FAILED when recognition runs out of time", async () => {
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });

@@ -14,6 +14,7 @@ import {
   registerRateLimit,
   twoFactorCodeRateLimit,
   uploadRateLimit,
+  regionReadRateLimit,
 } from "@/lib/rate-limit";
 
 /**
@@ -488,6 +489,19 @@ describe("the configured limits", () => {
       attempts: 60,
       windowSeconds: 3600,
     });
+  });
+
+  it("meters a hundred and twenty line re-reads an hour, apart from uploads", () => {
+    delete process.env.RATE_LIMIT_REGION_READ_ATTEMPTS;
+    delete process.env.RATE_LIMIT_REGION_READ_WINDOW_SECONDS;
+
+    expect(regionReadRateLimit()).toEqual({
+      prefix: "rl:region-read",
+      attempts: 120,
+      windowSeconds: 3600,
+    });
+    // Correcting a ticket line by line must not spend the next upload.
+    expect(regionReadRateLimit().prefix).not.toBe(uploadRateLimit().prefix);
   });
 
   it("counts lookups apart from every other limit", () => {

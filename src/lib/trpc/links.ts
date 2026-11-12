@@ -1,6 +1,7 @@
 import {
   httpLink,
   loggerLink,
+  type LoggerLinkOptions,
   splitLink,
   unstable_httpBatchStreamLink,
   type TRPCLink,
@@ -32,6 +33,32 @@ export interface LinkOptions {
 }
 
 /**
+ * A call's line in the console, with a failure's code and message in the
+ * text itself.
+ *
+ * tRPC's own logger styles its line with `%c` and puts the error in a `%O`
+ * argument. Next's development overlay shows neither: a failed
+ * `receipt.getImage` reached it as `[[ << query #13 ]receipt.getImage {}`,
+ * with nothing to say what had failed.
+ */
+function logOperation(
+  op: Parameters<NonNullable<LoggerLinkOptions<AppRouter>["logger"]>>[0],
+): void {
+  const call = `${op.type} #${op.id} ${op.path}`;
+  if (op.direction === "up") {
+    console.log(`>> ${call}`, op.input);
+  } else if (op.result instanceof Error) {
+    const code = (op.result as { data?: { code?: string } }).data?.code;
+    console.error(
+      `<< ${call} failed after ${op.elapsedMs} ms: ${code ?? op.result.name}: ${op.result.message}`,
+      op.result,
+    );
+  } else {
+    console.log(`<< ${call} in ${op.elapsedMs} ms`, op.result);
+  }
+}
+
+/**
  * The browser client's links, in one place so a test can build them.
  *
  * Every call but the ones above goes through the streaming batch link, split
@@ -48,6 +75,7 @@ export function trpcLinks({ url, fetch }: LinkOptions): TRPCLink<AppRouter>[] {
         if (op.direction === "down" && op.result instanceof Error) return true;
         return false;
       },
+      logger: logOperation,
     }),
     splitLink({
       condition: (op) => UNSTREAMED_PATHS.has(op.path),

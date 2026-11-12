@@ -134,6 +134,8 @@ export const dataRouter = createTRPCRouter({
           select: {
             id: true,
             imagePath: true,
+            // Where the ticket is on that photo, which is kept whole.
+            ticketQuad: true,
             status: true,
             storeId: true,
             purchaseDate: true,

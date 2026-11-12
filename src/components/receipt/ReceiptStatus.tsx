@@ -55,7 +55,9 @@ export function ReceiptStatusBadge({ status, progress }: ReceiptStatusProps) {
           className={`h-4 w-4 ${config.spin ? "animate-spin" : ""}`}
         />
         {t(status.toLowerCase())}
-        {progress && status !== ReceiptStatus.APPLIED ? (
+        {/* Lines matched of lines read: while the photo is being read there
+            are none, and "(0/0)" said nothing at all. */}
+        {progress && progress.total > 0 && status !== ReceiptStatus.APPLIED ? (
           <span>
             ({progress.processed}/{progress.total})
           </span>

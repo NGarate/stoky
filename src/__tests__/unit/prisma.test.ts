@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
-import { $Enums } from "@/generated/prisma/client";
-import { prisma } from "@/lib/prisma";
+import { $Enums, PrismaClient } from "@/generated/prisma/client";
+import { prisma, reusableClient } from "@/lib/prisma";
 
 describe("Prisma Client", () => {
   it("should export prisma client singleton", () => {
@@ -43,5 +43,25 @@ describe("Prisma Client", () => {
     // Re-import should return same instance
     const { prisma: prisma2 } = require("@/lib/prisma");
     expect(prisma).toBe(prisma2);
+  });
+
+  it("keeps the client across a hot reload while its class is the one generated now", () => {
+    expect(reusableClient({ client: prisma, generatedBy: PrismaClient })).toBe(
+      prisma,
+    );
+  });
+
+  it("drops a client kept from before the client was regenerated, closing its pool", () => {
+    // What a reload after `prisma generate` finds on `global`: a client made
+    // by the previous generated class, which is not this one.
+    let closed = 0;
+    const stale = {
+      client: { $disconnect: async () => void closed++ } as never,
+      generatedBy: class Previous {},
+    };
+
+    expect(reusableClient(stale)).toBeUndefined();
+    expect(closed).toBe(1);
+    expect(reusableClient(undefined)).toBeUndefined();
   });
 });

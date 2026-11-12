@@ -436,7 +436,7 @@ Verified against the files named in each row.
 - What remains is concurrency: a body may still be up to 15 MiB, held more
   than once while it is read and parsed — the bytes, then the text, then the
   parsed value — and nothing limits how many arrive at once. The app
-  container's limit in `deploy/docker-compose.yml` is 1 GiB. How many
+  container's limit in `deploy/docker-compose.yml` is 2 GiB. How many
   concurrent 15 MiB requests that takes has not been measured.
 
 ### Batched calls — `src/lib/trpc/batch.ts`
@@ -1269,8 +1269,16 @@ Verified against the files named in each row.
   what could have been sent; storage still grows without bound over time,
   because nothing is deleted and there is no per-household quota
   (`docs/SECURITY_REVIEW.md` finding 16).
-- **Recognition is bounded in time** (`src/server/services/ocr.ts`): one image
-  may hold the Tesseract worker for `OCR_TIMEOUT_MS`, 120 seconds unless the
+- **Recognition is bounded in time** (`src/server/services/ocr.ts`): there
+  are `OCR_WORKERS` Tesseract workers, 3 unless set and never more than the
+  host's processors. Images wait in one queue and each goes to whichever
+  worker is free when its turn comes, and each worker has its own limit, so
+  what follows holds for each one, and one stuck image holds one worker
+  while the rest of the queue goes through the others. When one of a
+  receipt's readings fails or runs out its time, the receipt becomes FAILED
+  and its readings still waiting are dropped unread, so the queue moves on
+  to the next receipt. One image
+  may hold its worker for `OCR_TIMEOUT_MS`, 120 seconds unless the
   variable is set to a positive whole number of milliseconds no larger than a
   timer can hold, 2 147 483 647 (the release bundle does not pass it). Past
   that the worker is terminated, the receipt becomes FAILED, and the next one
@@ -1292,6 +1300,20 @@ Verified against the files named in each row.
   shorten the queue: each image that runs out the limit costs everyone behind
   it 120 s, and the 30 uploads an account may make in an hour can fill an hour
   of OCR.
+- **Preparing a photo cannot stall the server** (`src/server/services/prepare-worker.ts`):
+  straightening, flattening, turning and dewarping are pixel loops in
+  JavaScript, and on the server's thread they held every request for up to
+  2.5 s per photo. They run on one thread of their own, which receipts share
+  in turn, and the server's thread handles no pixels; the
+  longest stall left on the server's thread was measured at 0.09 s. That
+  thread has no time limit of its own: its work is bounded by the pixel caps,
+  `MAX_PIXELS` on decode and 20 megapixels for a prepared ticket.
+- **Storing an upload cannot stall the server either**
+  (`src/server/services/image-thread.ts`): decoding a phone's HEIC is
+  libheif's WebAssembly, which held the server's thread for 0.9 s per photo.
+  The re-encode every upload goes through runs on a second thread, its own,
+  so an upload never waits behind a receipt being read; the longest stall
+  left was 3 ms on three phone photos.
 - **A restart does not strand a receipt** (`src/server/services/receipt-recovery.ts`,
   called from `src/instrumentation.ts`). A receipt is read inside the process
   that took its upload, so one that process was still reading when it stopped
@@ -1707,7 +1729,12 @@ publishing an instance:
   already authenticated and a household behind one NAT would otherwise share a
   budget for work each member does separately. A refused upload still counts —
   otherwise sending rubbish and being rejected would be the cheapest way to
-  spend the server's CPU, and it would be outside the limit.
+  spend the server's CPU, and it would be outside the limit. Re-reading the
+  lines of one article framed on a stored photo (`receipt.readRegion`) runs
+  Tesseract too, on a budget of its own: 120 per account per hour
+  (`regionReadRateLimit`), so correcting a ticket does not spend the next
+  upload. It reads only a photo the household already stored; the frame is
+  four numbers between 0 and 1.
 - **Barcode lookups that reach Open Food Facts are limited**, at 60 per
   account per hour (`productLookupRateLimit`). They are the one thing an
   account can make this instance ask of somebody else: every `scanBarcode` or
@@ -1892,7 +1919,8 @@ publishing an instance:
   `RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS`, `RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS`,
   `RATE_LIMIT_LOGIN_DEVICE_WINDOW_SECONDS`, `RATE_LIMIT_REGISTER_ATTEMPTS`,
   `RATE_LIMIT_REGISTER_WINDOW_SECONDS`, `RATE_LIMIT_UPLOAD_ATTEMPTS`,
-  `RATE_LIMIT_UPLOAD_WINDOW_SECONDS`, `RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS`,
+  `RATE_LIMIT_UPLOAD_WINDOW_SECONDS`, `RATE_LIMIT_REGION_READ_ATTEMPTS`,
+  `RATE_LIMIT_REGION_READ_WINDOW_SECONDS`, `RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS`,
   `RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS`, `RATE_LIMIT_ADD_MEMBER_ATTEMPTS`,
   `RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS`, `RATE_LIMIT_REAUTH_ATTEMPTS`,
   `RATE_LIMIT_REAUTH_WINDOW_SECONDS`, `RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS`,
@@ -2372,7 +2400,7 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 (`AppSession`) non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 76 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+and all 79 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
 pinning every one against the matrix rather than sampling, and failing when the
 count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the session, so a

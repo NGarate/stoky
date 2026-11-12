@@ -1093,6 +1093,242 @@ describe("receipt.updateItem", () => {
   });
 });
 
+describe("receipt.getReceiptWithItems — the count the ticket prints", () => {
+  it("is read from the ticket's text, which is not sent", async () => {
+    const { receipt } = await seedReceipt({});
+    await prisma.receipt.update({
+      where: { id: receipt.id },
+      data: {
+        rawOcrText: `${RAW_OCR_TEXT}\nNÚM TOTAL ARTÍCULOS VENDIDOS = 3`,
+      },
+    });
+
+    const review = await caller.receipt.getReceiptWithItems({
+      receiptId: receipt.id,
+    });
+
+    expect(review.printedArticles).toBe(3);
+    expect(JSON.stringify(review)).not.toContain("VENDIDOS");
+  });
+
+  it("is none for a ticket that prints none", async () => {
+    const { receipt } = await seedReceipt({});
+
+    const review = await caller.receipt.getReceiptWithItems({
+      receiptId: receipt.id,
+    });
+
+    expect(review.printedArticles).toBeNull();
+  });
+});
+
+describe("receipt.removeItem", () => {
+  it("takes the line out of the receipt and leaves the others", async () => {
+    const { receipt, first, second } = await seedReceipt({});
+
+    await caller.receipt.removeItem({ receiptItemId: second.id });
+
+    const left = await prisma.receiptItem.findMany({
+      where: { receiptId: receipt.id },
+      select: { id: true },
+    });
+    expect(left).toEqual([{ id: first.id }]);
+  });
+
+  it("is refused once the receipt is applied", async () => {
+    const { second } = await seedReceipt({ status: ReceiptStatus.APPLIED });
+
+    await expectCode(
+      () => caller.receipt.removeItem({ receiptItemId: second.id }),
+      "BAD_REQUEST",
+    );
+    expect(await prisma.receiptItem.count({ where: { id: second.id } })).toBe(
+      1,
+    );
+  });
+
+  it("is NOT_FOUND for another household's line and refused for a kitchen account", async () => {
+    const { second } = await seedReceipt({});
+
+    await expectCode(
+      () => outsider.receipt.removeItem({ receiptItemId: second.id }),
+      "NOT_FOUND",
+    );
+    await expectCode(
+      () => kitchen.receipt.removeItem({ receiptItemId: second.id }),
+      "FORBIDDEN",
+    );
+    expect(await prisma.receiptItem.count({ where: { id: second.id } })).toBe(
+      1,
+    );
+  });
+});
+
+describe("receipt.readRegion — what it refuses", () => {
+  const WHOLE: [number, number][] = [
+    [0, 0],
+    [1, 0],
+    [1, 1],
+    [0, 1],
+  ];
+  const quad = WHOLE as [
+    [number, number],
+    [number, number],
+    [number, number],
+    [number, number],
+  ];
+
+  it("is NOT_FOUND for another household's receipt and refused for a kitchen account", async () => {
+    // The photo is there, so only the household can make it NOT_FOUND.
+    const { receipt } = await seedReceipt({});
+    await mkdir(dirname(receipt.imagePath), { recursive: true });
+    await writeFile(receipt.imagePath, pngOf(40, 40));
+    try {
+      await expectCode(
+        () => outsider.receipt.readRegion({ receiptId: receipt.id, quad }),
+        "NOT_FOUND",
+      );
+      await expectCode(
+        () => kitchen.receipt.readRegion({ receiptId: receipt.id, quad }),
+        "FORBIDDEN",
+      );
+    } finally {
+      await rm(receipt.imagePath, { force: true });
+    }
+  });
+
+  it("is NOT_FOUND when the photograph is gone", async () => {
+    const { receipt } = await seedReceipt({});
+    await rm(receipt.imagePath, { force: true });
+
+    await expectCode(
+      () => caller.receipt.readRegion({ receiptId: receipt.id, quad }),
+      "NOT_FOUND",
+    );
+  });
+
+  it("refuses a corner outside the photograph", async () => {
+    const { receipt } = await seedReceipt({});
+
+    await expectCode(
+      () =>
+        caller.receipt.readRegion({
+          receiptId: receipt.id,
+          quad: [
+            [0, 0],
+            [1.5, 0],
+            [1, 1],
+            [0, 1],
+          ],
+        }),
+      "BAD_REQUEST",
+    );
+  });
+});
+
+describe("receipt.reframe", () => {
+  const FRAMED: [number, number][] = [
+    [0.3, 0.05],
+    [0.6, 0.05],
+    [0.62, 0.95],
+    [0.28, 0.95],
+  ];
+  const quad = FRAMED as Parameters<typeof caller.receipt.reframe>[0]["quad"];
+
+  /** Until the reading it started has ended: its photo is not on disk. */
+  async function settled(receiptId: string) {
+    for (let i = 0; i < 50; i++) {
+      const { status } = await prisma.receipt.findUniqueOrThrow({
+        where: { id: receiptId },
+      });
+      if (status === ReceiptStatus.FAILED) return;
+      await Bun.sleep(100);
+    }
+  }
+
+  it("keeps the new frame and sends the receipt back to be read", async () => {
+    const { receipt } = await seedReceipt({});
+
+    await caller.receipt.reframe({ receiptId: receipt.id, quad });
+
+    const row = await prisma.receipt.findUniqueOrThrow({
+      where: { id: receipt.id },
+    });
+    expect(row.ticketQuad).toEqual(FRAMED);
+    expect(row.status).not.toBe(ReceiptStatus.NEEDS_REVIEW);
+    // Its lines go with the old reading, not when the new one lands.
+    expect(
+      await prisma.receiptItem.count({ where: { receiptId: receipt.id } }),
+    ).toBe(0);
+    await settled(receipt.id);
+    // And the review reads it back, for the frame to start from.
+    const review = await caller.receipt.getReceiptWithItems({
+      receiptId: receipt.id,
+    });
+    expect(review.ticketQuad).toEqual(quad);
+  });
+
+  it("keeps no frame for one on the whole photo", async () => {
+    const { receipt } = await seedReceipt({ status: ReceiptStatus.FAILED });
+    await prisma.receipt.update({
+      where: { id: receipt.id },
+      data: { ticketQuad: FRAMED },
+    });
+
+    await caller.receipt.reframe({
+      receiptId: receipt.id,
+      quad: [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 1],
+      ],
+    });
+
+    const row = await prisma.receipt.findUniqueOrThrow({
+      where: { id: receipt.id },
+    });
+    expect(row.ticketQuad).toBeNull();
+    await settled(receipt.id);
+  });
+
+  it("is refused once applied, and while a reading runs, and keeps the frame it had", async () => {
+    for (const status of [ReceiptStatus.APPLIED, ReceiptStatus.PROCESSING]) {
+      const { receipt } = await seedReceipt({ status });
+
+      await expectCode(
+        () => caller.receipt.reframe({ receiptId: receipt.id, quad }),
+        "BAD_REQUEST",
+      );
+      const row = await prisma.receipt.findUniqueOrThrow({
+        where: { id: receipt.id },
+      });
+      expect(row.ticketQuad).toBeNull();
+      expect(row.status).toBe(status);
+      expect(
+        await prisma.receiptItem.count({ where: { receiptId: receipt.id } }),
+      ).toBe(2);
+    }
+  });
+
+  it("is NOT_FOUND for another household's receipt and refused for a kitchen account", async () => {
+    const { receipt } = await seedReceipt({});
+
+    await expectCode(
+      () => outsider.receipt.reframe({ receiptId: receipt.id, quad }),
+      "NOT_FOUND",
+    );
+    await expectCode(
+      () => kitchen.receipt.reframe({ receiptId: receipt.id, quad }),
+      "FORBIDDEN",
+    );
+    const row = await prisma.receipt.findUniqueOrThrow({
+      where: { id: receipt.id },
+    });
+    expect(row.status).toBe(ReceiptStatus.NEEDS_REVIEW);
+  });
+});
+
 describe("receipt.addItem", () => {
   const line = { name: "Huevos L", price: 2.95, quantity: 1 };
 
@@ -2072,7 +2308,11 @@ describe("what a receipt read sends", () => {
       receiptId: receipt.id,
     });
 
-    expect(Object.keys(review).sort()).toEqual([...HEADER, "items"].sort());
+    // And where the ticket is on its photo: eight numbers, nothing it prints,
+    // which the review frames an article's lines inside.
+    expect(Object.keys(review).sort()).toEqual(
+      [...HEADER, "ticketQuad", "printedArticles", "items"].sort(),
+    );
     expect(Object.keys(review.store ?? {}).sort()).toEqual(["id", "name"]);
     expectNothingPrivate(review);
   });

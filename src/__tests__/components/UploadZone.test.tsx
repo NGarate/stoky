@@ -1,6 +1,6 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, mock } from "bun:test";
-import { screen, cleanup, waitFor } from "@testing-library/react";
+import { screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
 import { minimumHeight } from "../setup/tailwind";
@@ -66,16 +66,59 @@ describe("UploadZone", () => {
     expect(accept).not.toContain(".");
   });
 
-  it("hands the selected file to onUpload", async () => {
-    const onUpload = mock((_file: File) => {});
+  it("frames the chosen photo first, and sends it as it is when the frame is the whole of it", async () => {
+    const onUpload = mock((_file: File, _quad?: unknown) => {});
     const { container } = renderWithIntl(<UploadZone onUpload={onUpload} />);
 
     await userEvent.upload(fileInput(container), jpeg());
+    await screen.findByAltText("Vista previa del ticket");
+    // Nothing leaves before the frame is accepted.
+    expect(onUpload).toHaveBeenCalledTimes(0);
+    for (const corner of [
+      "Esquina superior izquierda",
+      "Esquina superior derecha",
+      "Esquina inferior derecha",
+      "Esquina inferior izquierda",
+    ]) {
+      expect(screen.getByRole("button", { name: corner })).toBeInTheDocument();
+    }
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Enviar ticket" }),
+    );
 
     await waitFor(() => {
       expect(onUpload).toHaveBeenCalledTimes(1);
     });
     expect(onUpload.mock.calls[0]?.[0]?.name).toBe("ticket.jpg");
+    // No frame: the server finds the paper itself.
+    expect(onUpload.mock.calls[0]?.[1]).toBeUndefined();
+  });
+
+  it("sends the photo whole, with the frame beside it, when the corners were moved", async () => {
+    const onUpload = mock((_file: File, _quad?: unknown) => {});
+    const { container } = renderWithIntl(<UploadZone onUpload={onUpload} />);
+    const photo = jpeg();
+
+    await userEvent.upload(fileInput(container), photo);
+    (
+      await screen.findByRole("button", { name: "Esquina superior izquierda" })
+    ).focus();
+    await userEvent.keyboard("{Shift>}{ArrowRight}{ArrowDown}{/Shift}");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Enviar ticket" }),
+    );
+
+    // The very file chosen, not a crop of it: the frame can be corrected.
+    expect(onUpload.mock.calls[0]?.[0]).toBe(photo);
+    const [[x, y], ...rest] = onUpload.mock.calls[0]![1] as number[][];
+    expect(x).toBeCloseTo(0.05);
+    expect(y).toBeCloseTo(0.05);
+    expect(rest).toEqual([
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ]);
   });
 
   it("refuses a photograph larger than the server will take", async () => {
@@ -142,6 +185,9 @@ describe("UploadZone", () => {
     await screen.findByText(/máximo/);
 
     await userEvent.upload(fileInput(container), jpeg());
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Enviar ticket" }),
+    );
 
     await waitFor(() => {
       expect(onUpload).toHaveBeenCalledTimes(1);
@@ -162,17 +208,32 @@ describe("UploadZone", () => {
     ).toBeAbsent();
   });
 
+  it("draws no broken image when the browser cannot show what was chosen, and sends it unframed", async () => {
+    const onUpload = mock((_file: File) => {});
+    const { container } = renderWithIntl(<UploadZone onUpload={onUpload} />);
+
+    await userEvent.upload(
+      fileInput(container),
+      new File(["heic-bytes"], "IMG_0001.HEIC", { type: "image/heic" }),
+    );
+    // What a browser without a HEIC decoder does with the data URL.
+    fireEvent.error(await screen.findByAltText("Vista previa del ticket"));
+
+    expect(screen.queryByAltText("Vista previa del ticket")).toBeAbsent();
+    // It cannot be framed, so the server finds the ticket in it, as before.
+    expect(onUpload).toHaveBeenCalledTimes(1);
+    expect(onUpload.mock.calls[0]?.[0]?.name).toBe("IMG_0001.HEIC");
+  });
+
   it("lets the user clear the preview and choose again", async () => {
     const { container } = renderWithIntl(<UploadZone onUpload={() => {}} />);
 
     await userEvent.upload(fileInput(container), jpeg());
     await screen.findByAltText("Vista previa del ticket");
 
-    // The clear control is the only button besides the camera action.
-    const clear = screen
-      .getAllByRole("button")
-      .find((button) => button.className.includes("bg-destructive"));
-    await userEvent.click(clear as HTMLElement);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Quitar la foto" }),
+    );
 
     expect(screen.queryByAltText("Vista previa del ticket")).toBeAbsent();
     expect(

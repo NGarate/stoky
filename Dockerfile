@@ -64,11 +64,16 @@ RUN printf '%s  %s\n' \
     | sha256sum -c - \
     && test "$(find /opt/prisma /app/.next/standalone \( -name 'schema-engine*' -o -name 'query-engine*' -o -name '*.so.node' \) | wc -l)" = 1
 
-# Bundle the Spanish OCR model so receipt scanning needs no runtime download.
-ARG TESSDATA_SPA_SHA256=6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464
+# Bundle the Spanish OCR model so receipt scanning needs no runtime download:
+# the LSTM-only `best_int` model tesseract.js itself downloads in development,
+# which every OCR setting was measured with (ISSUES.md OCR-1). Pinned to the
+# npm package's version and checked after decompressing: a failed download
+# fails the checksum, as the pipe alone would not.
+ARG TESSDATA_SPA_SHA256=0062377729b81cc268b1822f09eb1c08c09f3f7f1c6b422540b51555a7eeea70
 RUN mkdir -p /app/tessdata \
-    && wget -q -O /app/tessdata/spa.traineddata \
-       https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/spa.traineddata \
+    && wget -q -O - \
+       https://cdn.jsdelivr.net/npm/@tesseract.js-data/spa@1.0.0/4.0.0_best_int/spa.traineddata.gz \
+       | gunzip > /app/tessdata/spa.traineddata \
     && echo "${TESSDATA_SPA_SHA256}  /app/tessdata/spa.traineddata" | sha256sum -c -
 
 # COPY keeps the build context's modes, so a checkout made under umask 077 put

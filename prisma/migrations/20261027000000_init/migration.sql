@@ -206,6 +206,7 @@ CREATE TABLE "Receipt" (
     "purchaseDate" TIMESTAMP(3),
     "totalAmount" DECIMAL(12,2),
     "rawOcrText" TEXT,
+    "ticketQuad" JSONB,
     "householdId" TEXT NOT NULL,
     "uploadedBy" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

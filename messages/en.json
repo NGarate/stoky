@@ -584,7 +584,11 @@
       "priceHint": "What the whole line cost, not each unit. Leave it empty if it cannot be read.",
       "quantityLabel": "Quantity",
       "saveFailed": "The correction could not be saved. Try again.",
-      "addFailed": "The line could not be added. Try again."
+      "addFailed": "The line could not be added. Try again.",
+      "remove": "Delete item",
+      "removeOf": "Delete the item “{name}”",
+      "removed": "Item deleted",
+      "removeFailed": "The item could not be deleted. Try again."
     },
     "store": "Store",
     "purchaseDate": "Purchase date",
@@ -693,7 +697,30 @@
     "skipLineOf": "Don't add this line: “{name}”",
     "uploadStoreList": "Your household's stores",
     "uploadStorePlaceholder": "Pick a store or type a new one",
-    "uploadStoreNew": "The store “{name}” will be added when the receipt is uploaded."
+    "uploadStoreNew": "The store “{name}” will be added when the receipt is uploaded.",
+    "frame": {
+      "cropHint": "Drag the corners to the edges of the receipt. Tapping the photo moves the frame there. With a keyboard, pick a corner and move it with the arrow keys. To be precise, enlarge the photo with the buttons or two fingers.",
+      "linesHint": "Frame only this item’s lines, with its price and its discounts. Tapping the photo moves the frame there; drag the corners to adjust it. To be precise, enlarge the photo with the buttons or two fingers.",
+      "send": "Send receipt",
+      "topLeft": "Top left corner",
+      "topRight": "Top right corner",
+      "bottomRight": "Bottom right corner",
+      "bottomLeft": "Bottom left corner",
+      "pickLines": "Pick the lines on the receipt",
+      "readLines": "Read these lines",
+      "reading": "Reading…",
+      "read": "Read again. Check the product and the amount, then save the correction.",
+      "nothingRead": "No item was read in those lines. Adjust the frame or type it in.",
+      "readFailed": "Those lines could not be read. Try again.",
+      "correct": "Correct the receipt’s crop",
+      "reframeHint": "Move the corners to the edges of the receipt and read it again. Its lines are replaced: corrections, chosen products and lines added by hand are lost. To be precise, enlarge the photo with the buttons or two fingers.",
+      "readAgain": "Read the receipt again",
+      "reframeFailed": "The receipt could not be read again. Try again.",
+      "zoomIn": "Zoom in on the photo",
+      "zoomOut": "Zoom out of the photo"
+    },
+    "readingNow": "The receipt is being read. When it finishes, its lines appear here for review.",
+    "countOff": "The receipt says {printed, plural, one {# item} other {# items}} and the lines add up to {read}. Check whether one is missing or extra."
   },
   "shopping": {
     "title": "Shopping lists",

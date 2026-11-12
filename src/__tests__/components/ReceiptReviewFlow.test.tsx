@@ -2,6 +2,7 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Decimal } from "@prisma/client-runtime-utils";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
 import { axeViolations } from "../utils/axe";
@@ -20,6 +21,17 @@ import es from "../../../messages/es.json";
 const invalidated: string[] = [];
 const confirmAllCalls: unknown[] = [];
 const addItemCalls: unknown[] = [];
+const removeItemCalls: unknown[] = [];
+const reframeCalls: unknown[] = [];
+/** What the review asked its query for: how often to ask again. */
+let reviewOptions:
+  | {
+      refetchInterval?: (query: {
+        state: { data?: { status: string } };
+      }) => number | false;
+    }
+  | undefined;
+const statusSet: unknown[] = [];
 const updateDetailsCalls: unknown[] = [];
 let applyCalls = 0;
 
@@ -34,30 +46,35 @@ interface Callbacks {
   onError?: () => void;
 }
 
+/** The receipt's one line, confirmed: whatever the tests vary starts from it. */
+const firstItem = {
+  id: "i1",
+  rawText: "LECHE ENTERA 1,19",
+  parsedName: "Leche entera",
+  quantity: 1,
+  unitPrice: 1.19,
+  totalPrice: 1.19,
+  // `isItemReviewed` reads matchStatus, not a boolean — the page counts
+  // pending items by that rule, and the button is disabled while any
+  // remain.
+  matchStatus: "USER_CONFIRMED",
+  productId: "p1",
+  matchedProductId: "p1",
+  product: { id: "p1", name: "Leche entera", defaultUnit: "L" },
+  matchConfidence: 0.9,
+} as {
+  [field: string]: unknown;
+};
+
 const receipt = {
   id: "r1",
   status: "NEEDS_REVIEW",
   createdAt: new Date("2026-08-01T10:00:00.000Z"),
   totalAmount: 12.5,
   store: { id: "st1", name: "Mercadona" },
-  items: [
-    {
-      id: "i1",
-      rawText: "LECHE ENTERA 1,19",
-      parsedName: "Leche entera",
-      quantity: 1,
-      unitPrice: 1.19,
-      totalPrice: 1.19,
-      // `isItemReviewed` reads matchStatus, not a boolean — the page counts
-      // pending items by that rule, and the button is disabled while any
-      // remain.
-      matchStatus: "USER_CONFIRMED",
-      productId: "p1",
-      matchedProductId: "p1",
-      product: { id: "p1", name: "Leche entera", defaultUnit: "L" },
-      matchConfidence: 0.9,
-    },
-  ],
+  ticketQuad: null as number[][] | null,
+  printedArticles: null as number | null,
+  items: [firstItem],
 };
 
 mock.module("next/navigation", () => ({
@@ -104,6 +121,12 @@ mock.module("@/lib/trpc/client", () => ({
         getReceiptWithItems: {
           invalidate: async () => void invalidated.push("getReceiptWithItems"),
         },
+        getStatus: {
+          setData: (
+            input: unknown,
+            update: (old: { status: string }) => unknown,
+          ) => statusSet.push([input, update({ status: "NEEDS_REVIEW" })]),
+        },
       },
       inventory: { invalidate: async () => void invalidated.push("inventory") },
       product: { invalidate: async () => void invalidated.push("product") },
@@ -120,7 +143,10 @@ mock.module("@/lib/trpc/client", () => ({
     },
     receipt: {
       getReceiptWithItems: {
-        useQuery: () => ({ data: receipt, isLoading: false }),
+        useQuery: (_input: unknown, options: typeof reviewOptions) => {
+          reviewOptions = options;
+          return { data: receipt, isLoading: false };
+        },
       },
       // Answers only when asked: a disabled query has no data.
       getImage: {
@@ -144,6 +170,33 @@ mock.module("@/lib/trpc/client", () => ({
       },
       updateItem: {
         useMutation: () => ({ mutate: () => {}, isPending: false }),
+      },
+      reframe: {
+        useMutation: (opts?: Callbacks) => ({
+          mutate: (input: unknown) => {
+            reframeCalls.push(input);
+            if (failing) {
+              opts?.onError?.();
+              return;
+            }
+            void opts?.onSuccess?.();
+          },
+          isPending: false,
+        }),
+      },
+      removeItem: {
+        useMutation: (opts?: Callbacks) => ({
+          mutate: (input: unknown, call?: Callbacks) => {
+            removeItemCalls.push(input);
+            if (failing) {
+              opts?.onError?.();
+              return;
+            }
+            void opts?.onSuccess?.();
+            void call?.onSuccess?.();
+          },
+          isPending: false,
+        }),
       },
       updateDetails: {
         useMutation: (opts?: Callbacks) => ({
@@ -210,6 +263,13 @@ beforeEach(() => {
   invalidated.length = 0;
   confirmAllCalls.length = 0;
   addItemCalls.length = 0;
+  removeItemCalls.length = 0;
+  reframeCalls.length = 0;
+  statusSet.length = 0;
+  receipt.ticketQuad = null;
+  receipt.printedArticles = null;
+  receipt.items = [firstItem];
+  receipt.status = "NEEDS_REVIEW";
   updateDetailsCalls.length = 0;
   applyCalls = 0;
   failing = false;
@@ -217,6 +277,48 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+describe("deleting a line that was never an article", () => {
+  it("takes it out, says so, and puts it back as it read on undo", async () => {
+    render();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Corregir la línea «Leche entera»" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Eliminar el artículo «Leche entera»",
+      }),
+    );
+
+    expect(removeItemCalls).toEqual([{ receiptItemId: "i1" }]);
+    expect(invalidated).toContain("getReceiptWithItems");
+    expect(await screen.findByText("Artículo eliminado")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Deshacer" }));
+    expect(addItemCalls).toEqual([
+      { receiptId: "r1", name: "Leche entera", price: undefined, quantity: 1 },
+    ]);
+  });
+
+  it("says a refused deletion failed", async () => {
+    failing = true;
+    render();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Corregir la línea «Leche entera»" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Eliminar el artículo «Leche entera»",
+      }),
+    );
+
+    expect(
+      await screen.findByText(es.receipts.line.removeFailed),
+    ).toBeInTheDocument();
+  });
+});
 
 describe("finishing a receipt review", () => {
   it("adds it to the inventory with one press once every line is reviewed", async () => {
@@ -422,6 +524,178 @@ describe("the receipt photograph", () => {
     expect(
       screen.queryByRole("img", { name: es.receipts.photoAlt }),
     ).toBeAbsent();
+  });
+});
+
+describe("the count of articles the ticket prints", () => {
+  const countSays = /El ticket dice/;
+
+  it("warns when what was read does not add up to it", () => {
+    receipt.printedArticles = 3;
+    render();
+
+    expect(
+      screen.getByText(
+        "El ticket dice 3 artículos y las líneas suman 1. Comprueba si falta o sobra alguno.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("counts four of an article as four and a weighed one as one, as Costco does", () => {
+    receipt.printedArticles = 5;
+    receipt.items = [
+      { ...firstItem, id: "i1", parsedQuantity: new Decimal(4) },
+      { ...firstItem, id: "i2", parsedQuantity: new Decimal(1.886) },
+    ];
+    render();
+
+    expect(screen.queryByText(countSays)).toBeAbsent();
+  });
+
+  it("accepts a count of lines, which other tickets print", () => {
+    receipt.printedArticles = 2;
+    receipt.items = [
+      { ...firstItem, id: "i1", parsedQuantity: new Decimal(4) },
+      { ...firstItem, id: "i2", parsedQuantity: new Decimal(1) },
+    ];
+    render();
+
+    expect(screen.queryByText(countSays)).toBeAbsent();
+  });
+
+  it("says nothing for a ticket that prints no count", () => {
+    render();
+
+    expect(screen.queryByText(countSays)).toBeAbsent();
+  });
+});
+
+describe("a receipt still being read", () => {
+  it("says so and offers nothing to edit, which the server would refuse", () => {
+    receipt.status = "PROCESSING";
+    render();
+
+    expect(screen.getByText(es.receipts.readingNow)).toBeInTheDocument();
+    for (const name of [
+      es.receipts.details.edit,
+      es.receipts.line.add,
+      es.receipts.applyToInventory,
+      "Corregir la línea «Leche entera»",
+    ]) {
+      expect(screen.queryByRole("button", { name })).toBeAbsent();
+    }
+    expect(
+      screen.queryByRole("button", { name: es.receipts.frame.correct }),
+    ).toBeAbsent();
+  });
+
+  it("asks again each second until it is read, and then stops", () => {
+    render();
+    const every = reviewOptions?.refetchInterval;
+
+    for (const status of ["UPLOADING", "PROCESSING", "PARSED"]) {
+      expect(every?.({ state: { data: { status } } })).toBe(1000);
+    }
+    expect(every?.({ state: { data: { status: "NEEDS_REVIEW" } } })).toBe(
+      false,
+    );
+  });
+});
+
+describe("correcting where the ticket is on its photo", () => {
+  it("shows the frame the ticket was read with on its photo", () => {
+    receipt.ticketQuad = [
+      [0.3, 0.1],
+      [0.6, 0.1],
+      [0.6, 0.9],
+      [0.3, 0.9],
+    ];
+    const { container } = render();
+
+    const frame = container.querySelector('[data-slot="ticket-frame"] polygon');
+    expect(frame?.getAttribute("points")).toBe(
+      "0.3,0.1 0.6,0.1 0.6,0.9 0.3,0.9",
+    );
+  });
+
+  it("draws no frame on a photo the ticket was found in unframed", () => {
+    const { container } = render();
+
+    expect(container.querySelector('[data-slot="ticket-frame"]')).toBeNull();
+  });
+
+  it("starts from the frame it has, warns the lines are replaced, and follows the new reading", async () => {
+    receipt.ticketQuad = [
+      [0.3, 0.1],
+      [0.6, 0.1],
+      [0.6, 0.9],
+      [0.3, 0.9],
+    ];
+    render();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.frame.correct }),
+    );
+    expect(screen.getByText(es.receipts.frame.reframeHint)).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.frame.readAgain }),
+    );
+
+    expect(reframeCalls).toEqual([
+      { receiptId: "r1", quad: receipt.ticketQuad },
+    ]);
+    // The cached "read" status must not send the upload screen straight back.
+    expect(statusSet).toEqual([[{ receiptId: "r1" }, { status: "UPLOADING" }]]);
+    expect(pushes).toEqual(["/receipts/upload?receipt=r1"]);
+  });
+
+  it("starts from the whole photo when the ticket was never framed", async () => {
+    render();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.frame.correct }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.frame.readAgain }),
+    );
+
+    expect(reframeCalls).toEqual([
+      {
+        receiptId: "r1",
+        quad: [
+          [0, 0],
+          [1, 0],
+          [1, 1],
+          [0, 1],
+        ],
+      },
+    ]);
+  });
+
+  it("is not offered once the receipt is applied", () => {
+    receipt.status = "APPLIED";
+    render();
+
+    expect(
+      screen.queryByRole("button", { name: es.receipts.frame.correct }),
+    ).toBeAbsent();
+  });
+
+  it("says a refused reading failed, and stays", async () => {
+    failing = true;
+    render();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.frame.correct }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.frame.readAgain }),
+    );
+
+    expect(
+      await screen.findByText(es.receipts.frame.reframeFailed),
+    ).toBeInTheDocument();
+    expect(pushes).toEqual([]);
   });
 });
 

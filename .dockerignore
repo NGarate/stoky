@@ -68,3 +68,7 @@ uploads
 # OS files
 .DS_Store
 Thumbs.db
+
+# The owner's receipt photos and OCR bench (.gitignore says why): private, and
+# nothing the image is built from.
+test-tickets

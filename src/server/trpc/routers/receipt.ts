@@ -9,25 +9,29 @@ import {
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
-import type { PrismaClient, Prisma } from "@/generated/prisma/client";
+import { Prisma, type PrismaClient } from "@/generated/prisma/client";
+import { type Quad, isFullFrame } from "@/lib/receipt-quad";
 import {
   ReceiptStatus,
   MatchStatus,
   StockOperation,
 } from "@/generated/prisma/client";
 import { randomUUID } from "node:crypto";
-import { processReceiptOcr } from "@/server/services/ocr";
+import { processReceiptOcr, readFramedLines } from "@/server/services/ocr";
 import {
+  framedArticle,
   parseReceiptText,
+  printedArticleCount,
   saveParsedItems,
 } from "@/server/services/receiptParser";
 import {
   matchReceiptItems,
   getItemCandidates,
 } from "@/server/services/productMatcher";
-import { uploadRateLimit } from "@/lib/rate-limit";
+import { regionReadRateLimit, uploadRateLimit } from "@/lib/rate-limit";
 import { enforceRateLimit } from "../throttle";
-import { HEIF_BRANDS, reencodeAsJpeg } from "@/server/services/image";
+import { HEIF_BRANDS, readImageMetadata } from "@/server/services/image";
+import { reencodedAsJpeg } from "@/server/services/image-thread";
 import { describeError } from "@/server/log-error";
 import {
   MAX_RECEIPT_BASE64_LENGTH,
@@ -36,7 +40,11 @@ import {
   receiptDetailsSchema,
   receiptItemAddSchema,
   receiptItemMatchSchema,
+  receiptItemRemoveSchema,
   receiptItemUpdateSchema,
+  receiptQuadSchema,
+  receiptReframeSchema,
+  receiptRegionSchema,
 } from "@/lib/validations/receipt";
 
 const VALID_MIME_TYPES: readonly string[] = RECEIPT_IMAGE_TYPES;
@@ -249,6 +257,14 @@ async function lockReceiptStatus(
   return current.status;
 }
 
+/**
+ * What `Receipt.ticketQuad` holds for a frame: none for the whole photo,
+ * which is "find the paper in it", as it is for no frame at all.
+ */
+function ticketFrame(quad: Quad | undefined): Quad | typeof Prisma.DbNull {
+  return quad && !isFullFrame(quad) ? quad : Prisma.DbNull;
+}
+
 export const receiptRouter = createTRPCRouter({
   /**
    * Takes the photograph. The only procedure here that accepts arbitrary bytes.
@@ -285,6 +301,9 @@ export const receiptRouter = createTRPCRouter({
           storeId: z.string().max(MAX_ID_LENGTH).optional(),
           // A shop typed rather than picked, found or created by `storeNamed`.
           storeName: z.string().trim().min(1).max(MAX_NAME_LENGTH).optional(),
+          // Where the ticket is on the photo, as the person framed it. The
+          // photo is kept whole either way, so the frame can be corrected.
+          quad: receiptQuadSchema.optional(),
         })
         .refine((input) => !(input.storeId && input.storeName), {
           message: "Send a storeId or a storeName, not both",
@@ -345,9 +364,11 @@ export const receiptRouter = createTRPCRouter({
       // orientation is applied to the pixels. Bounded in pixels as well as
       // bytes — see the module, which the OCR path reads the same bound from.
       // An output the metadata strip cannot parse throws, and is refused here.
+      // On a thread of its own: decoding a HEIC is libheif's WebAssembly,
+      // which held the server's thread for 0.9 s on a phone photo.
       let processedBuffer: Buffer;
       try {
-        processedBuffer = await reencodeAsJpeg(buffer);
+        processedBuffer = await reencodedAsJpeg(buffer);
       } catch {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -395,6 +416,7 @@ export const receiptRouter = createTRPCRouter({
             householdId,
             uploadedBy: user.id,
             storeId,
+            ticketQuad: ticketFrame(input.quad),
             status: ReceiptStatus.UPLOADING,
           },
         });
@@ -409,6 +431,66 @@ export const receiptRouter = createTRPCRouter({
       );
 
       return receipt;
+    }),
+
+  /**
+   * Frames the ticket on its photo again and reads it again — the frame put
+   * on it at upload was wrong, or there was none and the paper was not found.
+   *
+   * The photo was kept whole for this: only the frame changes. **Reading
+   * again replaces the receipt's lines**, corrections and decisions included,
+   * which the screen says before the person presses it; so it is refused once
+   * applied, and while a reading is already running. The lines go now, not
+   * when the reading lands: kept, the upload screen counted them as the new
+   * reading's progress ("2/4"), and a failed reading left them under a
+   * receipt that said it could not be read.
+   * The receipt goes back to UPLOADING and on as after an upload, which is
+   * what the upload screen follows. A whole receipt read again costs what an
+   * upload does, so it spends the upload budget.
+   */
+  reframe: writeProcedure
+    .input(receiptReframeSchema)
+    .mutation(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        uploadRateLimit(),
+        ctx.session.user.id,
+        "Too many receipts uploaded. Try again in a little while.",
+      );
+
+      const receipt = await ctx.db.receipt.findFirst({
+        where: { id: input.receiptId, householdId: ctx.householdId },
+        select: { id: true, status: true },
+      });
+
+      if (!receipt) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Receipt not found",
+        });
+      }
+
+      assertOpenForTyping(receipt.status);
+
+      await ctx.db.$transaction(async (tx) => {
+        assertOpenForTyping(await lockReceiptStatus(tx, receipt.id));
+        await tx.receiptItem.deleteMany({ where: { receiptId: receipt.id } });
+        await tx.receipt.update({
+          where: { id: receipt.id },
+          data: {
+            ticketQuad: ticketFrame(input.quad),
+            status: ReceiptStatus.UPLOADING,
+          },
+        });
+      });
+
+      processReceiptAsync(receipt.id).catch((error: unknown) =>
+        console.error(
+          "Failed to mark receipt as failed:",
+          describeError(error),
+        ),
+      );
+
+      return { success: true };
     }),
 
   /**
@@ -517,6 +599,9 @@ export const receiptRouter = createTRPCRouter({
         where: { id: input.receiptId, householdId: ctx.householdId },
         select: {
           ...RECEIPT_HEADER,
+          ticketQuad: true,
+          // Read here for the count it prints, and not sent.
+          rawOcrText: true,
           items: {
             include: {
               matchedProduct: true,
@@ -549,8 +634,17 @@ export const receiptRouter = createTRPCRouter({
         }),
       );
 
+      const { rawOcrText, ...header } = receipt;
       return {
-        ...receipt,
+        ...header,
+        // How many articles the ticket says were bought, for the review to
+        // check what was read against: a number, never the text it is in.
+        printedArticles: printedArticleCount(rawOcrText ?? "") ?? null,
+        // Checked as it is read back: what the screens draw a frame from.
+        ticketQuad: receiptQuadSchema
+          .nullable()
+          .catch(null)
+          .parse(receipt.ticketQuad),
         items: itemsWithCandidates,
       };
     }),
@@ -708,6 +802,91 @@ export const receiptRouter = createTRPCRouter({
       });
 
       return { success: true };
+    }),
+
+  /**
+   * Takes out a line that was never an article: a header, a payment, a total
+   * the reading took for one. Skipping keeps such a line on the receipt as a
+   * decision; this says it was not there.
+   *
+   * Open while the receipt is, and re-checked under the row lock like every
+   * line edit, so an apply in flight never books a line deleted under it.
+   */
+  removeItem: writeProcedure
+    .input(receiptItemRemoveSchema)
+    .mutation(async ({ ctx, input }) => {
+      const item = await ctx.db.receiptItem.findFirst({
+        where: {
+          id: input.receiptItemId,
+          receipt: { householdId: ctx.householdId },
+        },
+        select: { receiptId: true, receipt: { select: { status: true } } },
+      });
+
+      if (!item) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Receipt item not found",
+        });
+      }
+
+      assertOpenForReview(item.receipt.status);
+
+      await ctx.db.$transaction(async (tx) => {
+        assertOpenForReview(await lockReceiptStatus(tx, item.receiptId));
+        await tx.receiptItem.delete({ where: { id: input.receiptItemId } });
+      });
+
+      return { success: true };
+    }),
+
+  /**
+   * Reads again only the lines a person framed on the receipt's photograph —
+   * one article, with its price and any discount under it — and answers
+   * with the article they make, for the person to check and save
+   * (`updateItem`). Nothing is written: a second reading is a suggestion.
+   *
+   * Only this household's stored photograph is read; the frame is four
+   * numbers. Tesseract on a few lines is a fraction of a receipt, metered on
+   * a budget of its own (`regionReadRateLimit`), counted before the photo is
+   * read. `writeProcedure`, like `getImage`: framing lines needs the photo.
+   */
+  readRegion: writeProcedure
+    .input(receiptRegionSchema)
+    .mutation(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        regionReadRateLimit(),
+        ctx.session.user.id,
+        "Too many lines read again. Try again in a little while.",
+      );
+
+      const receipt = await ctx.db.receipt.findFirst({
+        where: { id: input.receiptId, householdId: ctx.householdId },
+        select: { imagePath: true },
+      });
+
+      if (!receipt) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Receipt not found",
+        });
+      }
+
+      const fs = await import("node:fs");
+      let image: Buffer;
+      try {
+        image = await fs.promises.readFile(receipt.imagePath);
+      } catch {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Receipt image not found",
+        });
+      }
+      // Bounded in pixels before it is decoded, as the OCR path does.
+      await readImageMetadata(image);
+
+      const text = await readFramedLines(image, input.quad);
+      return { text, line: framedArticle(text) };
     }),
 
   /**

@@ -14,6 +14,9 @@
 * La barra del móvil muestra dónde estás
 * Tu cuenta y cerrar sesión, a un toque
 * Escanea el producto donde lo eliges
+* Los tickets se leen mucho mejor
+* Encuadra el ticket al hacerle la foto
+* Vuelve a leer las líneas de un artículo, o elimínalo
 
 ### Marca, categoría y unidad te sugieren lo que ya usas
 
@@ -108,7 +111,9 @@ Cada línea del ticket tiene ahora **Corregir**: cambia el nombre, el
 importe o la cantidad cuando la lectura automática se equivoca, también en
 una línea ya confirmada. Si cambias el nombre de una línea que Stoky había
 reconocido sola, vuelve a quedar pendiente para que elijas el producto,
-porque lo reconoció por el nombre mal leído.
+porque lo reconoció por el nombre mal leído. Si el ticket imprime cuántos
+artículos se compraron (en Costco, «TOTAL ARTS»), la revisión avisa cuando
+las líneas leídas no suman eso, para que busques la que falta o sobra.
 
 ### Añade a mano lo que el ticket no leyó
 
@@ -118,12 +123,68 @@ automática se saltó. Y un ticket que no se pudo leer ya no hay que repetirlo:
 y lo termines como cualquier otro. También se llega desde la lista de
 tickets.
 
+### Encuadra el ticket al hacerle la foto
+
+Al elegir o hacer la foto de un ticket, Stoky la muestra con un recuadro de
+cuatro esquinas. Llévalas a las esquinas del papel y pulsa **Enviar
+ticket**: Stoky lee el ticket que encuadraste, enderezado, sin la mesa de
+alrededor. Si no mueves las esquinas, busca el ticket en la foto como hasta
+ahora. Para afinar, amplía la foto con los botones de lupa o con dos dedos,
+aquí y al elegir las líneas de un artículo. La foto se guarda entera, así
+que el recuadro se puede corregir después: en la revisión, **Ver la foto del
+ticket** la muestra con el recuadro con que se leyó, y **Corregir el recorte
+del ticket** lo deja mover; al pulsar **Volver a leer el ticket** se lee
+otra vez con el nuevo recuadro. Eso sustituye sus líneas, y se pierden las
+correcciones, los productos elegidos y las líneas añadidas a mano; ya
+aplicado al inventario no se puede. Las fotos HEIC que el navegador no sabe
+mostrar se envían sin recuadro. Mientras se lee, su revisión lo dice y
+muestra las líneas en cuanto termina.
+
+### Vuelve a leer las líneas de un artículo, o elimínalo
+
+Al **Corregir** un artículo del ticket, **Elegir las líneas en el ticket**
+abre la foto con un recuadro: tócala para llevarlo a las líneas de ese
+artículo, ajusta las esquinas para que entren su nombre, su precio y sus
+descuentos, y pulsa **Leer estas líneas**. Stoky lee solo esas líneas y
+rellena con ello el producto, el importe y la cantidad; revísalos y guarda la
+corrección. Si el artículo no es tal (una línea del pago, un total leído como
+producto), **Eliminar artículo** lo quita del ticket, y **Deshacer** lo
+devuelve.
+
 ### Corrige la tienda, la fecha y el total de un ticket
 
 **Corregir los datos del ticket**, en la revisión, cambia la tienda, la fecha
 de compra y el importe total cuando no se leyeron o se leyeron mal. La tienda
 se elige o se escribe como al subirlo. Importa sobre todo: sin tienda, los
 precios del ticket no se guardan. La revisión muestra ahora también el total.
+
+### Los tickets se leen mucho mejor
+
+La lectura automática de los tickets entiende ahora cómo imprimen las
+cadenas españolas sus líneas: el nombre en una línea y el precio en la
+siguiente (Costco), los productos a peso (Mercadona, Lidl, DIA, Costco), las
+cantidades como «2 x 0,89» encima o debajo del producto, los descuentos y
+las ofertas, y los tickets en catalán. Ya no apunta como producto nada de
+lo que va después del total —el pago, el desglose del IVA—, y el total se
+toma de donde el ticket coincide consigo mismo: la línea TOTAL, el pago con
+tarjeta o en efectivo, el desglose del IVA y la suma de los productos.
+Además, antes de leer la foto se endereza el ticket (si está inclinado o
+torcido se convierte en un rectángulo), se recorta para que la mesa no se lea
+como texto (también la que queda junto a un ticket inclinado o curvado), se igualan la luz, las sombras y los pliegues, se gira solo
+(de lado o del revés, según la forma del ticket y lo legible del texto) y se
+estiran las líneas curvadas. Luego se lee de seis maneras y se queda la
+lectura en la que coinciden las demás. Medido con 63 tickets reales de once
+cadenas leídos a mano: los productos leídos con nombre y precio correctos
+pasan del 34 % al 60 %, y el total correcto, del 13 % al 58 %. Con diez
+tickets más y treinta copias suyas giradas, oscurecidas, reducidas y con
+sombra, la nota (precios de los artículos, total y fecha) pasa del 32 % al
+93 %, y leer un ticket tarda menos que antes: unos 16 segundos, con tres
+lecturas a la vez. Cuántas a la vez lo decide
+`OCR_WORKERS` en `.env` (3 si no se pone; cada una usa unos 120 MB de
+memoria). El contenedor de la aplicación pasa por eso de 1 GiB a 2 GiB de
+memoria en `docker-compose.yml`. El precio que se guarda de cada producto es el que
+pagaste: un descuento impreso debajo de un producto se le resta. Lo que la
+lectura no acierte se sigue corrigiendo en la revisión.
 
 ### Sin conexión, lo último que viste sigue ahí aunque recargues
 
@@ -230,7 +291,10 @@ prints, such as the card or the loyalty card.
 Each receipt line now has **Correct**: change the name, the amount or the
 quantity when the automatic reading gets it wrong, on a confirmed line too.
 Renaming a line Stoky had recognised on its own sends it back to pending so
-you choose the product, because it was recognised from the misread name.
+you choose the product, because it was recognised from the misread name. If
+the receipt prints how many items were bought (at Costco, "TOTAL ARTS"), the
+review warns when the lines read do not add up to it, so you look for the
+one missing or extra.
 
 ### Add by hand what the receipt reading missed
 
@@ -240,12 +304,67 @@ uploaded again: **Add the lines by hand** opens it with its photo so you can
 type its lines and finish it like any other. The receipts list leads there
 too.
 
+### Frame the receipt when you photograph it
+
+When you choose or take a receipt's photo, Stoky shows it with a
+four-cornered frame. Move the corners to the paper's corners and press
+**Send receipt**: Stoky reads the receipt you framed, straightened, without
+the table around it. If you leave the corners alone, it finds the receipt in
+the photo as before. To be precise, enlarge the photo with the magnifier
+buttons or two fingers, here and when picking an item's lines. The photo is
+kept whole, so the frame can be corrected later: in the review, **See the
+receipt photo** shows it with the frame it was read with, **Correct the
+receipt's crop** lets you move it, and **Read the receipt again** reads it
+once more with the new frame. That replaces its lines, losing corrections,
+chosen products and lines added by hand; once applied to the inventory it
+cannot be done. HEIC photos the browser cannot show are sent without a
+frame. While it is read, its review says so and shows the lines as soon as
+it finishes.
+
+### Read an item's lines again, or delete it
+
+When you **Correct** a receipt item, **Pick the lines on the receipt** opens
+the photo with a frame: tap it to carry the frame to that item's lines,
+adjust the corners so its name, price and discounts are inside, and press
+**Read these lines**. Stoky reads only those lines and fills in the product,
+amount and quantity from them; check them and save the correction. If the
+item is not one (a payment line, a total read as a product), **Delete item**
+takes it off the receipt, and **Undo** brings it back.
+
 ### Correct a receipt's store, date and total
 
 **Correct the receipt's details**, in the review, changes the store, the
 purchase date and the total when they were not read or were misread. The
 store is picked or typed as when uploading. It matters most: without a store,
 the receipt's prices are not kept. The review now shows the total as well.
+
+### Receipts are read much better
+
+The automatic reading of receipts now understands how Spanish chains print
+their lines: the name on one line and the price on the next (Costco),
+weighed products (Mercadona, Lidl, DIA, Costco), quantities like "2 x 0,89" above
+or below the product, discounts and offers, and receipts in Catalan.
+Nothing printed after the total — the payment, the VAT breakdown — is
+booked as a product any more, and the total is taken from where the
+receipt agrees with itself: the TOTAL line, the card or cash payment, the
+VAT breakdown and the sum of the products. The photo is also cropped to the
+receipt before it is read — straightened into a rectangle when it is tilted
+or skewed, cropped so the table is not read as text (nor what the crop
+holds beside a leaning or curved ticket), its light, shadows and folds
+evened out, turned the right way up (on its side or upside down, by its
+shape and by how legible its text is) and its curled lines straightened —
+and it is read six ways, keeping the reading the others agree with. Measured
+on 63 real receipts from eleven chains, read by hand: products read with the
+right name and price went from 34% to 60%, and the right total from 13% to
+58%. On ten more receipts and thirty copies of them turned, darkened, shrunk
+and shadowed, the score (article prices, total and date) goes from 32% to
+93%, and reading a receipt takes less time than before: about 16 seconds,
+with three readings at a time. How many at a
+time is `OCR_WORKERS` in `.env` (3 when unset; each takes about 120 MB of
+memory). For that, the application container's memory goes from 1 GiB to
+2 GiB in `docker-compose.yml`. The price kept for each product is what you
+paid: a discount printed under a product is taken off it. Whatever the
+reading gets wrong can still be corrected in the review.
 
 ### What you last saw stays there offline, even after a reload
 

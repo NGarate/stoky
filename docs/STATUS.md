@@ -1055,7 +1055,7 @@ These are recorded because each one produced a confident, wrong number.
 
 **Backend — substantially complete.** 10 tRPC routers (`auth`, `data`,
 `household`, `product`, `location`, `inventory`, `receipt`, `store`, `price`,
-`shopping`) merged in `src/server/trpc/router.ts`, **76 procedures** — a count
+`shopping`) merged in `src/server/trpc/router.ts`, **79 procedures** — a count
 that has never held still (44 → 45 → 55 → 59 → 64 → 62 → 63 → 64 → 65 → 66 → 68 → 67 → 68 → 69 → 70 → 71 → 72 → 73 → 74 → 75 → 76: it reached 64
 unrecorded while this file said 59, fell to 62 when the two dead pipeline
 procedures were deleted, reached 63 with `product.resolveScan` on
@@ -1159,7 +1159,7 @@ which is what I18N-5 is.
 
 **Roles — enforced on the server, per procedure.** Four values
 (`OWNER`, `ADMIN`, `MEMBER`, `KITCHEN`), three procedure tiers in
-`src/server/trpc/trpc.ts`, and all 76 procedures assigned. Membership and role
+`src/server/trpc/trpc.ts`, and all 79 procedures assigned. Membership and role
 are read from the database on every call rather than from the session, so a
 demotion takes effect on the next request rather than whenever the session
 happens to end. `src/__tests__/unit/capabilities.test.ts` checks the assignment
@@ -1593,7 +1593,8 @@ Two things that sequence surfaced, both operational rather than defects:
   measured), so the upload decodes HEIC itself with `libheif-js` — libheif
   and libde265 as WebAssembly, no change to the image or to anyone's machine
   — and hands the pixels to the same `Bun.Image` re-encode every other upload
-  takes (`src/server/services/image.ts`, `heifAsBitmap`). Five sample files,
+  takes (`src/server/services/image.ts`, `heifAsBitmap`), on a thread of its
+  own (`image-thread.ts`, since 2026-11-09). Five sample files,
   iPhone and others, convert; real Android camera photographs were not among
   them. The pixel bound is read from the file's `ispe` boxes because libheif's
   own limit is not enforced in that build; a HEVC stream lying about its size
@@ -1677,10 +1678,10 @@ one-tap add-to-list. The per-journey evidence is in that file.
 
 - The `docker` group includes this user, but a login session started before that
   change will not have it. Re-login, or prefix with `sg docker -c "..."`.
-- Port 3000 is occupied on this machine by an unrelated application, and 3001
-  is routinely this project's own `bun run dev`. The browser suite defaults to
-  3100 and no longer conflicts with either — it may be run while a dev server
-  is up, and touches neither its port nor its data.
+- Port 3000 is this project's own `bun run dev`, and `tailscale serve`
+  proxies to it (`docs/LOCAL_BOOTSTRAP.md` §4). The browser suite defaults to
+  3100 and does not conflict with it — it may be run while a dev server is up,
+  and touches neither its port nor its data.
 - Next refuses a second dev server from the same directory — `next dev` only.
   The suite's standalone server takes no such lock, which is half of why the
   suite moved to it; the other half is `stoky_e2e`. Before the move, a suite

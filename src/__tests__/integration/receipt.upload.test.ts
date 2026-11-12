@@ -73,11 +73,16 @@ async function photographWithExif(): Promise<Buffer> {
   });
 }
 
-async function upload(): Promise<{ id: string; imagePath: string }> {
+async function upload(
+  quad?: [number, number][],
+): Promise<{ id: string; imagePath: string }> {
   const source = await photographWithExif();
   const receipt = await caller.receipt.upload({
     fileBase64: source.toString("base64"),
     mimeType: "image/jpeg",
+    ...(quad && {
+      quad: quad as Parameters<typeof caller.receipt.upload>[0]["quad"],
+    }),
   });
 
   written.push(receipt.imagePath);
@@ -198,6 +203,39 @@ describe("the row that points at it", () => {
     expect(row.householdId).toBe(householdId);
 
     await expect(readFile(row.imagePath)).resolves.toBeDefined();
+  });
+
+  it("keeps where the ticket was framed beside the photo, which stays whole", async () => {
+    const framed: [number, number][] = [
+      [0.3, 0.05],
+      [0.6, 0.05],
+      [0.62, 0.95],
+      [0.28, 0.95],
+    ];
+    const { id, imagePath } = await upload(framed);
+
+    const row = await prisma.receipt.findUniqueOrThrow({ where: { id } });
+    expect(row.ticketQuad).toEqual(framed);
+    // The photo as sent, whole: the frame is corrected later, not baked in.
+    const { width, height } = await new Bun.Image(
+      await readFile(imagePath),
+    ).metadata();
+    expect([width, height]).toEqual([60, 40]);
+  });
+
+  it("keeps no frame for none, or for one on the whole photo", async () => {
+    const none = await upload();
+    const whole = await upload([
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ]);
+
+    for (const { id } of [none, whole]) {
+      const row = await prisma.receipt.findUniqueOrThrow({ where: { id } });
+      expect(row.ticketQuad).toBeNull();
+    }
   });
 
   it("gives every upload its own file", async () => {

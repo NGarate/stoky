@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { UploadZone } from "@/components/receipt/UploadZone";
+import { ReceiptPhoto } from "@/components/receipt/ReceiptPhoto";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 import { api } from "@/lib/trpc/client";
+import type { Quad } from "@/lib/receipt-quad";
 import { Button } from "@/components/ui/button";
 import { Combobox, foldText } from "@/components/ui/combobox";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
@@ -31,14 +33,33 @@ function readAsDataUrl(file: File): Promise<string> {
   });
 }
 
+/**
+ * `useSearchParams` opts the subtree out of static rendering, so it sits
+ * under a Suspense boundary, as on /inventory.
+ */
 export default function UploadPage() {
+  return (
+    <Suspense fallback={null}>
+      <UploadView />
+    </Suspense>
+  );
+}
+
+/** Where the upload screen follows the receipt it sent, `?receipt=<id>`. */
+const UPLOAD_PATH = "/receipts/upload";
+
+function UploadView() {
   const t = useTranslations("receipts");
   const snackbar = useSnackbar();
   const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadedReceiptId, setUploadedReceiptId] = useState<string | null>(
-    null,
-  );
+  // In the address, not in React state. Held in state, a reload while the
+  // photo was being read — or the page being dropped from memory on a phone —
+  // put the person back in front of an empty form, with no word of the
+  // receipt they had just sent.
+  const uploadedReceiptId = useSearchParams().get("receipt");
+  const setUploadedReceiptId = (id: string | null) =>
+    router.replace(id ? `${UPLOAD_PATH}?receipt=${id}` : UPLOAD_PATH);
   const utils = api.useUtils();
   // "No store means no prices": applyReceipt writes a PriceRecord per line
   // only when the receipt has a store, and until Phase 8 no screen ever sent
@@ -80,7 +101,7 @@ export default function UploadPage() {
     },
   );
 
-  const handleUpload = async (file: File) => {
+  const handleUpload = async (file: File, quad?: Quad) => {
     setIsUploading(true);
     // The React Compiler cannot yet memoise a component containing this
     // `try`/`catch` around an await, so it declines to optimise the whole
@@ -94,6 +115,7 @@ export default function UploadPage() {
       const result = await uploadMutation.mutateAsync({
         fileBase64: base64,
         mimeType: file.type,
+        ...(quad && { quad }),
         ...(pickedStore
           ? { storeId: pickedStore.id }
           : newStoreName
@@ -130,6 +152,22 @@ export default function UploadPage() {
       router.push(`/receipts/${uploadedReceiptId}/review`);
     }
   };
+
+  // Read, so on to what was read. Replaced rather than pushed: back from the
+  // review is the list, not a screen saying the wait is over.
+  //
+  // The review is marked stale first. A receipt read again (`reframe`) has
+  // one cached from before, and fresh for 30 s: fetched while its lines were
+  // gone and the reading had just begun, it opened with no line and no shop
+  // — what the owner saw on 2026-11-12, with twelve lines in the database.
+  useEffect(() => {
+    if (ready && uploadedReceiptId) {
+      void utils.receipt.getReceiptWithItems.invalidate({
+        receiptId: uploadedReceiptId,
+      });
+      router.replace(`/receipts/${uploadedReceiptId}/review`);
+    }
+  }, [ready, uploadedReceiptId, router, utils]);
 
   return (
     // No padding of its own: the layout's `p-4` is the gutter (ISSUES UI-5).
@@ -190,6 +228,10 @@ export default function UploadPage() {
                 status={statusQuery.data.status}
                 progress={statusQuery.data.progress}
               />
+
+              {/* What is being read, as the server stored it: a JPEG every
+                  browser draws, where the phone's own HEIC was not. */}
+              <ReceiptPhoto defaultOpen receiptId={uploadedReceiptId} />
 
               {failed && (
                 <div className="rounded-lg border border-danger-foreground bg-danger p-4">

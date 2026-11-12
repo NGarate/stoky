@@ -231,6 +231,11 @@ Missing features, ease-of-use friction and a comparison with Grocy. It is input
 for `REDESIGN_PLAN.md`, not a schedule. It starts with the interface's false
 promises (household rename, password change), which are the cheapest fixes.
 
+**[`superpowers/plans/2026-11-06-long-receipts-in-parts.md`](superpowers/plans/2026-11-06-long-receipts-in-parts.md)**
+Long receipts in several overlapping photos (each read, the texts merged), a
+capture guide, a larger photo limit, and a review that points at what the
+reading doubts. Starts with what was measured on the owner's Costco photos.
+
 ### Historical — do not update, do not act on
 
 **[`DESIGN_PROPOSALS.md`](DESIGN_PROPOSALS.md)** · 159 lines

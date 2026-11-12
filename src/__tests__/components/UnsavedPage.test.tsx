@@ -5,6 +5,7 @@ import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl as renderWithIntlOnly } from "../utils/render";
 import { axeViolations } from "../utils/axe";
+import { findSnackbarAction } from "../utils/snackbar";
 import type { FailedOp, FailureReason } from "@/lib/offline/queue";
 
 /**
@@ -23,6 +24,16 @@ const discard = mock((id: string) => failed.find((op) => op.id === id) ?? null);
 const restore = mock((_op: FailedOp) => {});
 
 let failed: FailedOp[] = [];
+
+// The page's way back reads the search params (`useBack`). Without this the
+// file passed only after another file had mocked the module.
+mock.module("next/navigation", () => ({
+  useRouter: () => ({ replace: () => {}, push: () => {}, refresh: () => {} }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/settings/unsaved",
+  useParams: () => ({}),
+  redirect: () => {},
+}));
 
 mock.module("@/lib/offline/queue-context", () => ({
   WriteQueueContext: createContext(null),
@@ -296,7 +307,7 @@ describe("taking a discard back", () => {
         )
       ).length,
     ).toBeGreaterThan(0);
-    await userEvent.click(screen.getByRole("button", { name: "Deshacer" }));
+    await userEvent.click(await findSnackbarAction());
     expect(restore).toHaveBeenCalledWith(change);
   });
 });

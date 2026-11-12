@@ -109,10 +109,12 @@ describe("the image carries one", () => {
   });
 
   it("pins and verifies what it downloaded", () => {
-    // 2.3 MB of model data entering the image from the internet. This project
+    // 3.4 MB of model data entering the image from the internet. This project
     // scans with Trivy and attests provenance; an unpinned fetch would be the
     // weakest link in a chain it otherwise takes seriously.
-    expect(dockerfile).toMatch(/tessdata_fast\/raw\/\d+\.\d+\.\d+\//);
+    expect(dockerfile).toMatch(
+      /@tesseract\.js-data\/spa@\d+\.\d+\.\d+\/4\.0\.0_best_int\//,
+    );
     expect(dockerfile).toContain("sha256sum -c -");
   });
 });

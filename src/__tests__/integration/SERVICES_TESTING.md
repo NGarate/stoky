@@ -10,8 +10,10 @@ This document provides comprehensive documentation for the OCR pipeline and busi
 - **Purpose**: Processes receipt images using Tesseract.js OCR
 - **Key Functions**:
   - `processReceiptOcr(receiptId)`: Main entry point for OCR processing
-  - `sharedWorker()`: One Tesseract.js worker per process, shared by concurrent first scans
-  - `terminateWorker()`: Cleans up worker resources
+  - `readReceiptPhoto(image, recognise)`: Six readings of the photo (`OCR_READINGS`), the one the others agree with kept (`bestReading`)
+  - `sharedWorker()`: One Tesseract.js worker, created once however many scans ask for it first
+  - `pooledRecogniser()`: `OCR_WORKERS` of them (3 by default), each waiting image taken by the next one free
+  - `terminateWorker()`: Cleans up every worker
 - **Status Flow**: UPLOADING → PROCESSING → PARSED/FAILED
 
 ### Receipt Parser (`src/server/services/receiptParser.ts`)

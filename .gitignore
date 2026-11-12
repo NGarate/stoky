@@ -134,3 +134,9 @@ public/worker-*.js
 # id and an iteration counter, so committing it means the next checkout inherits
 # somebody else's half-finished loop.
 .claude/ralph-loop.local.md
+
+# The owner's own receipt photos and the OCR bench that reads them
+# (test-tickets/bench/README.md). Real receipts carry card digits, names and
+# places, so they stay on the machine they were taken on; ISSUES.md and the
+# plan in docs/superpowers/plans/ record what was measured on them.
+test-tickets/

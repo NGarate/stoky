@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Check, Pencil, Plus, ScanLine } from "lucide-react";
+import { Check, Crop, Pencil, Plus, ScanLine, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { isItemReviewed } from "@/lib/receipts";
 import { MatchSelector } from "./MatchSelector";
 import { CreateProductInline } from "./CreateProductInline";
+import { FramedLines } from "./FramedLines";
+import type { Quad } from "@/lib/receipt-quad";
 import { ReceiptLineForm, type ReceiptLine } from "./ReceiptLineForm";
 import {
   ScanProductDialog,
@@ -39,6 +41,10 @@ interface ReceiptItem {
 }
 
 interface ReviewCardProps {
+  /** The receipt the line is on: its photo is where the line is framed. */
+  receiptId: string;
+  /** Where the ticket is on that photo, when it was framed. */
+  ticketQuad: Quad | null;
   item: ReceiptItem;
   onConfirm: (
     action: "MATCH" | "CREATE" | "SKIP",
@@ -47,15 +53,27 @@ interface ReviewCardProps {
   ) => void;
   /** What OCR read, corrected: `receipt.updateItem`. */
   onCorrect: (line: ReceiptLine) => void;
+  /** The line was never an article: `receipt.removeItem`. */
+  onRemove: () => void;
 }
 
-export function ReviewCard({ item, onConfirm, onCorrect }: ReviewCardProps) {
+export function ReviewCard({
+  receiptId,
+  ticketQuad,
+  item,
+  onConfirm,
+  onCorrect,
+  onRemove,
+}: ReviewCardProps) {
   const t = useTranslations("receipts");
   const tScan = useTranslations("products.scanPick");
   const locale = useLocale();
   const [isCreating, setIsCreating] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isCorrecting, setIsCorrecting] = useState(false);
+  const [isFraming, setIsFraming] = useState(false);
+  /** What the framed lines read: the correction form starts from it. */
+  const [reread, setReread] = useState<ReceiptLine | null>(null);
   /**
    * The product the packet in hand turned out to be. A receipt's words are
    * often not enough to match on ("LCH ENT 1L"), and the packet is usually
@@ -104,6 +122,13 @@ export function ReviewCard({ item, onConfirm, onCorrect }: ReviewCardProps) {
     if (line.name !== item.parsedName) setSelectedProductId(null);
     onCorrect(line);
     setIsCorrecting(false);
+    setReread(null);
+  };
+
+  const stopCorrecting = () => {
+    setIsCorrecting(false);
+    setIsFraming(false);
+    setReread(null);
   };
 
   // Words, and the line's name in the accessible one, for the reason the
@@ -158,17 +183,67 @@ export function ReviewCard({ item, onConfirm, onCorrect }: ReviewCardProps) {
         ) : null}
       </div>
 
-      {isCorrecting ? (
-        <ReceiptLineForm
-          defaults={{
-            name: lineName,
-            price: item.parsedPrice?.toString() ?? "",
-            quantity: item.parsedQuantity?.toString() ?? "1",
+      {isCorrecting && isFraming ? (
+        <FramedLines
+          onCancel={() => setIsFraming(false)}
+          onRead={(line) => {
+            setReread(line);
+            setIsFraming(false);
           }}
-          onCancel={() => setIsCorrecting(false)}
-          onSubmit={handleCorrect}
-          submitLabel={t("line.save")}
+          receiptId={receiptId}
+          ticketQuad={ticketQuad}
         />
+      ) : isCorrecting ? (
+        <div className="space-y-3">
+          {/* Mounted empty, so the reading is announced when it lands. */}
+          <p
+            aria-live="polite"
+            className="text-sm text-foreground"
+            role="status"
+          >
+            {reread ? t("frame.read") : ""}
+          </p>
+          {/* Mounted again on the way back from framing, so it starts from
+              what the framed lines read. */}
+          <ReceiptLineForm
+            defaults={
+              reread
+                ? {
+                    name: reread.name,
+                    price: reread.price?.toString() ?? "",
+                    quantity: reread.quantity.toString(),
+                  }
+                : {
+                    name: lineName,
+                    price: item.parsedPrice?.toString() ?? "",
+                    quantity: item.parsedQuantity?.toString() ?? "1",
+                  }
+            }
+            onCancel={stopCorrecting}
+            onSubmit={handleCorrect}
+            submitLabel={t("line.save")}
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button
+              className="flex-1"
+              onClick={() => setIsFraming(true)}
+              type="button"
+              variant="outline"
+            >
+              <Crop aria-hidden="true" className="mr-1 size-5" />
+              {t("frame.pickLines")}
+            </Button>
+            <Button
+              aria-label={t("line.removeOf", { name: lineName })}
+              onClick={onRemove}
+              type="button"
+              variant="destructive"
+            >
+              <Trash2 aria-hidden="true" className="mr-1 size-5" />
+              {t("line.remove")}
+            </Button>
+          </div>
+        </div>
       ) : isConfirmed ? (
         correctButton
       ) : (

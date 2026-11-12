@@ -126,6 +126,12 @@ beforeAll(async () => {
       uploadedBy: ownerUser.id,
       storeId: store.id,
       rawOcrText: "TICKET COMPLETO SEGUN EL OCR",
+      ticketQuad: [
+        [0.3, 0.05],
+        [0.6, 0.05],
+        [0.62, 0.95],
+        [0.28, 0.95],
+      ],
     },
   });
   await prisma.receiptItem.create({
@@ -305,6 +311,13 @@ describe("what must be in it", () => {
     const exported = await owner.data.exportHousehold();
 
     expect(exported.receipts[0]?.imagePath).toContain("uploads/receipts/");
+    // With where the ticket is on it: the photo is kept whole.
+    expect(exported.receipts[0]?.ticketQuad).toEqual([
+      [0.3, 0.05],
+      [0.6, 0.05],
+      [0.62, 0.95],
+      [0.28, 0.95],
+    ]);
   });
 
   it("says which shape it is, from the first version", async () => {

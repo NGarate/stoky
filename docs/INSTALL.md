@@ -177,6 +177,22 @@ An unknown value, such as `Open` or `true`, stops the app starting, with the
 reason in `docker compose logs app`; it never falls back to `open`. To change it
 later, edit `.env` and run `docker compose up -d --wait` again.
 
+`OCR_WORKERS` is how many of a receipt's readings run at once. Every photo is
+read six ways and the reading the others agree with is kept. Each worker is a
+thread with its own copy of the OCR model, about 120 MB, and one core.
+
+| Value | Six readings of one long receipt, measured on an 8-core host |
+|---|---|
+| `1` | about 38 s |
+| `2` | about 21 s |
+| `3` (the default) | about 16 s |
+
+Past three it hardly gets faster. The application container is limited to
+2 GiB, which three hold; `1` or `2` suit a host short of memory or cores. A
+value that is not a positive whole number means `3`, and more than the host's
+processors means as many as it has. It is read when the app starts, so apply
+a change with `docker compose up -d --wait`.
+
 Use hex for the database password: it is inserted into a connection URL without
 percent-encoding. Do not reuse the development `.env.example`. Rotating the
 session secret signs everybody out, changes every account tag in the

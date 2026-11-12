@@ -3,16 +3,23 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { useTranslations } from "next-intl";
-import { Upload, Camera, X } from "lucide-react";
+import { Upload, Camera, Send, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { FULL_FRAME, isFullFrame, type Quad } from "@/lib/receipt-quad";
+import { QuadPicker } from "./QuadPicker";
 import {
   MAX_RECEIPT_BYTES,
   RECEIPT_IMAGE_TYPES,
 } from "@/lib/validations/receipt";
 
 interface UploadZoneProps {
-  onUpload: (file: File) => void;
+  /**
+   * The photo, whole, and where the ticket is on it when the person framed
+   * it: none when the frame was left on the whole photo, and the server
+   * finds the paper itself.
+   */
+  onUpload: (file: File, quad?: Quad) => void;
   isUploading?: boolean;
 }
 
@@ -24,6 +31,10 @@ function inMegabytes(bytes: number): number {
 export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
   const t = useTranslations("receipts");
   const [preview, setPreview] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<File | null>(null);
+  // The whole photo until the corners are moved: sent like that, the
+  // server finds the ticket in it itself, as it always has.
+  const [quad, setQuad] = useState<Quad>(FULL_FRAME);
   const [tooLarge, setTooLarge] = useState<number | null>(null);
 
   /**
@@ -40,25 +51,34 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
    *
    * Nothing is previewed and `onUpload` is not called, so a refused photograph
    * costs no encode and no request.
+   *
+   * An accepted one is not sent yet: it is shown with a frame to put on the
+   * ticket's corners, and sent with "Enviar ticket" (`send`).
    */
-  const accept = useCallback(
-    (file: File) => {
-      if (file.size > MAX_RECEIPT_BYTES) {
-        setTooLarge(file.size);
-        setPreview(null);
-        return;
-      }
+  const accept = useCallback((file: File) => {
+    if (file.size > MAX_RECEIPT_BYTES) {
+      setTooLarge(file.size);
+      setPreview(null);
+      return;
+    }
 
-      setTooLarge(null);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-      onUpload(file);
-    },
-    [onUpload],
-  );
+    setTooLarge(null);
+    setChosen(file);
+    setQuad(FULL_FRAME);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  /**
+   * The photo as chosen, never cut: the frame travels beside it, so it can
+   * be corrected after the ticket is read (`receipt.reframe`).
+   */
+  const send = () => {
+    if (chosen) onUpload(chosen, isFullFrame(quad) ? undefined : quad);
+  };
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -104,6 +124,17 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
 
   const clearPreview = () => {
     setPreview(null);
+    setChosen(null);
+  };
+
+  /**
+   * A browser that cannot draw what was chosen — a phone's HEIC anywhere but
+   * Safari — cannot frame it either, so it is sent as it is, as every photo
+   * once was, and the upload screen shows it as the server stored it.
+   */
+  const sendUndrawable = () => {
+    setPreview(null);
+    if (chosen) onUpload(chosen);
   };
 
   return (
@@ -132,25 +163,36 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
       </p>
 
       {preview ? (
-        <div className="relative">
-          <img
-            src={preview}
+        <div className="space-y-3">
+          <QuadPicker
             alt={t("previewAlt")}
-            className="w-full h-64 object-contain rounded-lg border border-border"
+            hint={t("frame.cropHint")}
+            onChange={setQuad}
+            onError={sendUndrawable}
+            quad={quad}
+            src={preview}
           />
-          {/* The icon primitive: a hand-styled 24px circle was half the
-              target floor, on the one control that throws the photo away. */}
-          <Button
-            type="button"
-            aria-label={t("clearPreview")}
-            onClick={clearPreview}
-            className="absolute top-2 right-2 rounded-full"
-            disabled={isUploading}
-            size="icon"
-            variant="destructive"
-          >
-            <X aria-hidden="true" className="size-5" />
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              className="gap-2"
+              disabled={isUploading}
+              onClick={clearPreview}
+              type="button"
+              variant="destructive"
+            >
+              <X aria-hidden="true" className="size-5" />
+              {t("clearPreview")}
+            </Button>
+            <Button
+              className="flex-1 gap-2"
+              disabled={isUploading}
+              onClick={send}
+              type="button"
+            >
+              <Send aria-hidden="true" className="size-5" />
+              {t("frame.send")}
+            </Button>
+          </div>
         </div>
       ) : (
         <div

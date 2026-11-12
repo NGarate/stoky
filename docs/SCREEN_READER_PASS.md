@@ -52,7 +52,7 @@ You do not need to be fluent. You need to be able to:
 
 ```bash
 # One terminal: the app
-bun run dev            # http://localhost:3001 on this machine (port 3000 is taken)
+bun run dev            # http://localhost:3000
 
 # Sign in with the seeded demo household
 #   demo@stoky.local  /  Demo1234!
@@ -71,7 +71,7 @@ per route. It needs the running server and nothing installed permanently.
 ```bash
 # One route, everything HTML CodeSniffer knows about AAA
 npx pa11y@8 --standard WCAG2AAA --include-notices --include-warnings \
-  --reporter json --timeout 60000 http://localhost:3001/login > pa11y-login.json
+  --reporter json --timeout 60000 http://localhost:3000/login > pa11y-login.json
 ```
 
 Read the output as **three separate things**:

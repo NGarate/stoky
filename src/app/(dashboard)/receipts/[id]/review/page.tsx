@@ -16,9 +16,16 @@ import { ReceiptDetailsForm } from "@/components/receipt/ReceiptDetailsForm";
 import { ReceiptLineForm } from "@/components/receipt/ReceiptLineForm";
 import { ReceiptPhoto } from "@/components/receipt/ReceiptPhoto";
 import { ReviewCard } from "@/components/receipt/ReviewCard";
-import { ReceiptStatusStep } from "@/components/receipt/ReceiptStatus";
+import {
+  ReceiptStatusBadge,
+  ReceiptStatusStep,
+} from "@/components/receipt/ReceiptStatus";
 import { formatDate } from "@/lib/dates";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+
+/** The states between a photo arriving and its lines being there to review. */
+const isBeingRead = (status: string | undefined) =>
+  status === "UPLOADING" || status === "PROCESSING" || status === "PARSED";
 
 export default function ReviewPage() {
   const t = useTranslations("receipts");
@@ -31,9 +38,15 @@ export default function ReviewPage() {
   const utils = api.useUtils();
   const [addingLine, setAddingLine] = useState(false);
   const [editingDetails, setEditingDetails] = useState(false);
-  const receiptQuery = api.receipt.getReceiptWithItems.useQuery({
-    receiptId,
-  });
+  const receiptQuery = api.receipt.getReceiptWithItems.useQuery(
+    { receiptId },
+    // Asked again each second while it is being read, so its lines appear
+    // here when the reading ends.
+    {
+      refetchInterval: (query) =>
+        isBeingRead(query.state.data?.status) ? 1000 : false,
+    },
+  );
   const receipt = receiptQuery.data;
 
   const applyReceiptMutation = api.receipt.applyReceipt.useMutation({
@@ -133,6 +146,20 @@ export default function ReviewPage() {
       }),
   });
 
+  // A line taken out says so, with a way to put it back: the line is added
+  // again as it read, though its decision on a product is not.
+  const removeItemMutation = api.receipt.removeItem.useMutation({
+    onSuccess: () => {
+      void utils.receipt.getReceiptWithItems.invalidate({ receiptId });
+    },
+    onError: () =>
+      snackbar.show({
+        kind: "confirm",
+        tone: "danger",
+        message: { key: "receipts.line.removeFailed" },
+      }),
+  });
+
   const updateDetailsMutation = api.receipt.updateDetails.useMutation({
     onSuccess: () => {
       setEditingDetails(false);
@@ -173,6 +200,23 @@ export default function ReviewPage() {
   // count never moved and "Confirmar todos" — disabled while anything is
   // pending — was disabled permanently, which is to say the bulk action could
   // never be used at all (ISSUES UI-7).
+  // Uploaded or read again, and not read yet.
+  const reading = isBeingRead(receipt.status);
+
+  // What was read, counted as the ticket counts its articles: four of one are
+  // four, a weighed one is one (Costco's `TOTAL ARTS`). A count that is
+  // neither that nor the number of lines says a line is missing or extra.
+  const unitsRead = receipt.items.reduce((sum, item) => {
+    const quantity =
+      item.parsedQuantity == null ? 1 : Number(item.parsedQuantity);
+    return sum + (Number.isInteger(quantity) ? quantity : 1);
+  }, 0);
+  const printed = receipt.printedArticles;
+  const countOff =
+    printed !== null &&
+    printed !== unitsRead &&
+    printed !== receipt.items.length;
+
   const pendingItems = receipt.items.filter(
     (item) => !isItemReviewed(item.matchStatus),
   ).length;
@@ -250,9 +294,23 @@ export default function ReviewPage() {
         <ReceiptStatusStep status={receipt.status} />
       </div>
 
-      <ReceiptPhoto receiptId={receiptId} />
+      {/* Applied is final: the frame can no longer be read again. */}
+      <ReceiptPhoto
+        reframable={receipt.status !== "APPLIED" && !reading}
+        receiptId={receiptId}
+        ticketQuad={receipt.ticketQuad}
+      />
 
-      {receipt.status === "APPLIED" ? (
+      {reading ? (
+        // Nothing to edit while it is read: the server refuses every edit
+        // until it is, and the lines shown would be about to be replaced.
+        <div className="mb-6 space-y-3 rounded-lg border border-border bg-card p-4">
+          <ReceiptStatusBadge status={receipt.status} />
+          <p aria-live="polite" className="text-foreground" role="status">
+            {t("readingNow")}
+          </p>
+        </div>
+      ) : receipt.status === "APPLIED" ? (
         <div className="text-center py-8 rounded-lg border border-ok-foreground bg-ok mb-6">
           <Package
             aria-hidden="true"
@@ -307,6 +365,12 @@ export default function ReviewPage() {
             )}
           </div>
 
+          {countOff && (
+            <p className="mb-4 rounded-lg border border-warn-foreground bg-warn px-4 py-3 text-sm text-warn-foreground">
+              {t("countOff", { printed, read: unitsRead })}
+            </p>
+          )}
+
           {/* Wraps: at 390px the sentence and the action do not fit on one line,
               and the action is what pushed the row past the viewport. */}
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -342,6 +406,31 @@ export default function ReviewPage() {
             {receipt.items.map((item) => (
               <ReviewCard
                 key={item.id}
+                receiptId={receiptId}
+                ticketQuad={receipt.ticketQuad}
+                onRemove={() =>
+                  removeItemMutation.mutate(
+                    { receiptItemId: item.id },
+                    {
+                      onSuccess: () =>
+                        snackbar.show({
+                          kind: "undo-inverse",
+                          message: { key: "receipts.line.removed" },
+                          undo: () =>
+                            addItemMutation.mutate({
+                              receiptId,
+                              name: item.parsedName || item.rawText,
+                              price: item.parsedPrice
+                                ? Number(item.parsedPrice)
+                                : undefined,
+                              quantity: item.parsedQuantity
+                                ? Number(item.parsedQuantity)
+                                : 1,
+                            }),
+                        }),
+                    },
+                  )
+                }
                 item={{
                   ...item,
                   candidates: item.candidates || [],

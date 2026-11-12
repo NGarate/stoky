@@ -73,6 +73,17 @@ describe("ReceiptStatusBadge", () => {
     expect(screen.queryByText("(8/8)")).toBeAbsent();
   });
 
+  it("omits the counter while there are no lines to count yet", () => {
+    const { container } = renderWithIntl(
+      <ReceiptStatusBadge
+        status={ReceiptStatus.PROCESSING}
+        progress={{ processed: 0, total: 0 }}
+      />,
+    );
+
+    expect(container.textContent).toBe("Leyendo el ticket");
+  });
+
   it("omits the counter entirely when no progress is supplied", () => {
     const { container } = renderWithIntl(
       <ReceiptStatusBadge status={ReceiptStatus.PROCESSING} />,
