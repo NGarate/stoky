@@ -49,6 +49,7 @@ mock.module("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => "/",
   useParams: () => ({}),
+  redirect: () => {},
 }));
 
 // `/shopping/lists` reports its writes through the snackbar, so the provider
