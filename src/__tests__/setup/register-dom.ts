@@ -37,3 +37,14 @@ if (!("ResizeObserver" in globalThis)) {
  * a fix nobody measured is worse than no comment.
  */
 process.env.DEBUG_PRINT_LIMIT ??= "8000";
+
+/**
+ * No component suite may reach a database: each mocks `@/lib/prisma`. When a
+ * mock does not take (a file order that loads the real module first), the
+ * real client is built from DATABASE_URL, which Bun reads from `.env`, so a
+ * local run would query the developer's own database and CI's its service
+ * container, and the test would fail on a wrong answer. Port 1 on loopback
+ * refuses at once, so such a test fails on a connection error that names the
+ * cause instead. Set unconditionally, because `.env` has already set it.
+ */
+process.env.DATABASE_URL = "postgresql://component-tests@127.0.0.1:1/none";
