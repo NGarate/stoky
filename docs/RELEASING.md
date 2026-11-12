@@ -127,6 +127,24 @@ attestation and anonymous-pull steps below depend on that (see
 
    A red image is not refreshed into the bundle. If no release of the same
    major is clean, the release waits for upstream; never widen the skip.
+
+   PostgreSQL need not wait. Upstream's Alpine images go red between its
+   rebuilds with fixes Alpine has already shipped (19 HIGH on 2026-11-12, every
+   tag), so `postgres.Dockerfile` is the official image plus `apk upgrade`, and
+   `.github/workflows/postgres-image.yml` builds it, scans it with the rule
+   above and, only when clean, publishes it as
+   `ghcr.io/ngarate/stoky/postgres:<version>-alpine` and `:<major>-alpine`,
+   attested like the application. It runs when the Dockerfile changes on
+   `master` (a merged Dependabot bump of its base included), every Monday when
+   the published build has gone red, and on demand:
+
+   ```bash
+   gh workflow run postgres-image.yml --repo NGarate/stoky --ref master
+   ```
+
+   GHCR creates a new package private, and an installation pulls it
+   anonymously: after its first publication, make `stoky/postgres` public in
+   the package's settings.
 5. Run `bun run verify:ci`, `bash scripts/check-ci.sh`, and the full Playwright suite
    for a release. New tests must be shown to fail against the broken behavior.
 6. Build and test the production image with fresh, isolated volumes. Check migrations,

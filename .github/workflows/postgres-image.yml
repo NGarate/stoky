@@ -1,0 +1,181 @@
+# Builds the PostgreSQL image the release bundle runs (postgres.Dockerfile:
+# the official Alpine image plus `apk upgrade`), scans it, and only then
+# publishes it as ghcr.io/<owner>/stoky/postgres under its exact version tag
+# (18.6-alpine) and its major's (18-alpine), the shape of upstream's tags, so
+# release:refresh-images and Dependabot read it as they read any service
+# image. The bundle pins it by digest; a new build reaches an installation
+# only with a release, as Valkey's and Traefik's do.
+#
+# Why our own image: upstream rebuilds on its own schedule, and between
+# rebuilds its images carry fixes Alpine has already shipped. On 2026-11-12
+# every postgres:*-alpine tag failed the bundle scan with 19 fixable HIGH
+# findings that `apk upgrade` clears.
+#
+# A push of the Dockerfile to master builds, and so does a dispatch. The
+# weekly run rebuilds only when the published image has gone red, so a quiet
+# week publishes nothing and Dependabot proposes nothing.
+name: PostgreSQL image
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - postgres.Dockerfile
+      - .github/workflows/postgres-image.yml
+  schedule:
+    # Before rescan.yml's 05:17, so a fixed image can be the next release's.
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+# Two runs racing would publish two builds under one tag in either order.
+concurrency:
+  group: postgres-image
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/postgres
+
+jobs:
+  publish:
+    name: Build, scan and publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # A dispatch selects any ref; publishing from one would put an unreviewed
+    # branch's build under the tags the bundle reads.
+    if: github.ref == 'refs/heads/master'
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+      id-token: write # provenance attestation
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # OCI names are lowercase; `github.repository` is NGarate/stoky. The
+      # exact and major tags come from the Dockerfile's base, and the build is
+      # checked against them below.
+      - name: Image name and tags
+        id: image
+        run: |
+          BASE="$(sed -nE 's/^FROM postgres:([^@[:space:]]+)@sha256:[0-9a-f]{64}$/\1/p' postgres.Dockerfile)"
+          if [[ ! "$BASE" =~ ^([0-9]+)\.[0-9]+-([a-z0-9.]+)$ ]]; then
+            echo "::error::postgres.Dockerfile must start FROM postgres:<major>.<minor>-<variant>@sha256:<digest>; read '$BASE'."
+            exit 1
+          fi
+          NAME="${REGISTRY}/${IMAGE_NAME,,}"
+          {
+            echo "name=$NAME"
+            echo "version=${BASE%%-*}"
+            echo "exact=$NAME:$BASE"
+            echo "major=$NAME:${BASH_REMATCH[1]}-${BASH_REMATCH[2]}"
+          } >> "$GITHUB_OUTPUT"
+
+      # The bundle scan's rule and scanner, on what the bundle would pull.
+      # 0 clean: nothing to do this week. 1 red: rebuild. 2 the scanner did
+      # not finish (or nothing is published yet): fail, since nothing is known.
+      - name: Is the published image still clean?
+        id: published
+        if: github.event_name == 'schedule'
+        env:
+          EXACT: ${{ steps.image.outputs.exact }}
+        run: |
+          set +e
+          bash scripts/scan-bundle-images.sh "$EXACT"
+          status=$?
+          set -e
+          case "$status" in
+            0) echo "rebuild=false" >> "$GITHUB_OUTPUT" ;;
+            1) echo "rebuild=true" >> "$GITHUB_OUTPUT" ;;
+            *) exit "$status" ;;
+          esac
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: steps.published.outputs.rebuild != 'false'
+
+      # Scanned before anyone can pull it. no-cache and pull, because running
+      # `apk upgrade` again on the newest base is the point of a build; the
+      # layers go to a cache local to this job, never the Actions cache, so
+      # the push below sends exactly what was scanned and nothing another
+      # workflow wrote.
+      - name: Build for scanning
+        if: steps.published.outputs.rebuild != 'false'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: postgres.Dockerfile
+          load: true
+          tags: stoky-postgres:scan
+          pull: true
+          no-cache: true
+          cache-to: type=local,dest=${{ runner.temp }}/layers,mode=max
+
+      # gosu is skipped as in the bundle scan (scripts/scan-bundle-images.sh):
+      # its findings are Go standard-library advisories in packages it does not
+      # link, and the bundle never runs it (the service starts as 70:70).
+      - name: Fail on critical or high findings
+        if: steps.published.outputs.rebuild != 'false'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: stoky-postgres:scan
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          skip-files: usr/local/bin/gosu
+          cache: false
+          version: v0.76.1
+
+      # The tag says which PostgreSQL it is, so the build must be that one.
+      - name: The build is the version its tag names
+        if: steps.published.outputs.rebuild != 'false'
+        env:
+          VERSION: ${{ steps.image.outputs.version }}
+        run: |
+          BUILT="$(docker run --rm --entrypoint printenv stoky-postgres:scan PG_VERSION)"
+          if [ "$BUILT" != "$VERSION" ]; then
+            echo "::error::The build is PostgreSQL $BUILT, but postgres.Dockerfile's tag names $VERSION."
+            exit 1
+          fi
+
+      - name: Log in to the registry
+        if: steps.published.outputs.rebuild != 'false'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Every platform upstream ships is not needed: the application image is
+      # amd64 only, so the bundle runs on amd64 only.
+      - name: Push
+        id: push
+        if: steps.published.outputs.rebuild != 'false'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: postgres.Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image.outputs.exact }}
+            ${{ steps.image.outputs.major }}
+          # Links the package to this repository.
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          sbom: true
+          provenance: mode=max
+          cache-from: type=local,src=${{ runner.temp }}/layers
+
+      # As the application image's (ci.yml, image-publish): gated for the
+      # same private-fork reason.
+      - name: Attest provenance
+        if: steps.published.outputs.rebuild != 'false' && github.event.repository.private == false
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
