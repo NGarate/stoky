@@ -584,7 +584,11 @@
       "priceHint": "Lo que costó la línea entera, no cada unidad. Déjalo vacío si no se lee.",
       "quantityLabel": "Cantidad",
       "saveFailed": "No se ha podido guardar la corrección. Vuelve a intentarlo.",
-      "addFailed": "No se ha podido añadir la línea. Vuelve a intentarlo."
+      "addFailed": "No se ha podido añadir la línea. Vuelve a intentarlo.",
+      "remove": "Eliminar artículo",
+      "removeOf": "Eliminar el artículo «{name}»",
+      "removed": "Artículo eliminado",
+      "removeFailed": "No se ha podido eliminar el artículo. Vuelve a intentarlo."
     },
     "store": "Tienda",
     "purchaseDate": "Fecha de compra",

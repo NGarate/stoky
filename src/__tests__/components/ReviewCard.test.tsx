@@ -93,6 +93,7 @@ describe("leaving a line out", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        onRemove={() => {}}
         item={line()}
         onConfirm={(action) => skipped.push(action)}
         onCorrect={() => {}}
@@ -116,6 +117,7 @@ describe("correcting what OCR read", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        onRemove={() => {}}
         item={line({ parsedQuantity: new Decimal(2) })}
         onConfirm={() => {}}
         onCorrect={(fixed) => corrected.push(fixed)}
@@ -156,6 +158,7 @@ describe("correcting what OCR read", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        onRemove={() => {}}
         item={line()}
         onConfirm={() => {}}
         onCorrect={(fixed) => corrected.push(fixed)}
@@ -180,6 +183,7 @@ describe("correcting what OCR read", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        onRemove={() => {}}
         item={line({ matchStatus: "USER_CONFIRMED" })}
         onConfirm={() => {}}
         onCorrect={() => {}}
@@ -198,6 +202,7 @@ describe("ReviewCard status", () => {
     const { container } = renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        onRemove={() => {}}
         item={line({ matchStatus: "AUTO_MATCHED", matchConfidence: 0.9 })}
         onConfirm={() => {}}
         onCorrect={() => {}}
@@ -219,6 +224,7 @@ describe("ReviewCard status", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        onRemove={() => {}}
         item={line({ matchStatus: "USER_CONFIRMED" })}
         onConfirm={() => {}}
         onCorrect={() => {}}
@@ -235,6 +241,7 @@ describe("ReviewCard status", () => {
     const { container } = renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        onRemove={() => {}}
         item={line({ matchStatus: "SKIPPED" })}
         onConfirm={() => {}}
         onCorrect={() => {}}
@@ -260,6 +267,7 @@ describe("scanning the packet for a line", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        onRemove={() => {}}
         item={line({ matchedProductId: null, matchedProduct: null })}
         onConfirm={(...args) => confirmed.push(args)}
         onCorrect={() => {}}
@@ -299,6 +307,7 @@ describe("correcting from the lines framed on the photo", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        onRemove={() => {}}
         item={line()}
         onConfirm={() => {}}
         onCorrect={(fixed) => corrected.push(fixed)}
@@ -349,6 +358,7 @@ describe("correcting from the lines framed on the photo", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        onRemove={() => {}}
         item={line()}
         onConfirm={() => {}}
         onCorrect={() => {}}
@@ -378,6 +388,7 @@ describe("correcting from the lines framed on the photo", () => {
     renderWithIntl(
       <ReviewCard
         receiptId="r1"
+        onRemove={() => {}}
         item={line()}
         onConfirm={() => {}}
         onCorrect={() => {}}
@@ -402,5 +413,32 @@ describe("correcting from the lines framed on the photo", () => {
     ];
     expect(x).toBeCloseTo(0.01);
     expect(y).toBeCloseTo(0.41);
+  });
+});
+
+describe("deleting a line that was never an article", () => {
+  it("is offered while correcting, named for its line", async () => {
+    let removed = 0;
+    renderWithIntl(
+      <ReviewCard
+        receiptId="r1"
+        onRemove={() => removed++}
+        item={line()}
+        onConfirm={() => {}}
+        onCorrect={() => {}}
+      />,
+      { locale: "es" },
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Corregir la línea «Leche entera»" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Eliminar el artículo «Leche entera»",
+      }),
+    );
+
+    expect(removed).toBe(1);
   });
 });

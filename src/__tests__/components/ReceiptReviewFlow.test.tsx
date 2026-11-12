@@ -20,6 +20,7 @@ import es from "../../../messages/es.json";
 const invalidated: string[] = [];
 const confirmAllCalls: unknown[] = [];
 const addItemCalls: unknown[] = [];
+const removeItemCalls: unknown[] = [];
 const updateDetailsCalls: unknown[] = [];
 let applyCalls = 0;
 
@@ -145,6 +146,20 @@ mock.module("@/lib/trpc/client", () => ({
       updateItem: {
         useMutation: () => ({ mutate: () => {}, isPending: false }),
       },
+      removeItem: {
+        useMutation: (opts?: Callbacks) => ({
+          mutate: (input: unknown, call?: Callbacks) => {
+            removeItemCalls.push(input);
+            if (failing) {
+              opts?.onError?.();
+              return;
+            }
+            void opts?.onSuccess?.();
+            void call?.onSuccess?.();
+          },
+          isPending: false,
+        }),
+      },
       updateDetails: {
         useMutation: (opts?: Callbacks) => ({
           mutate: (input: unknown) => {
@@ -210,6 +225,7 @@ beforeEach(() => {
   invalidated.length = 0;
   confirmAllCalls.length = 0;
   addItemCalls.length = 0;
+  removeItemCalls.length = 0;
   updateDetailsCalls.length = 0;
   applyCalls = 0;
   failing = false;
@@ -217,6 +233,48 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+describe("deleting a line that was never an article", () => {
+  it("takes it out, says so, and puts it back as it read on undo", async () => {
+    render();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Corregir la línea «Leche entera»" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Eliminar el artículo «Leche entera»",
+      }),
+    );
+
+    expect(removeItemCalls).toEqual([{ receiptItemId: "i1" }]);
+    expect(invalidated).toContain("getReceiptWithItems");
+    expect(await screen.findByText("Artículo eliminado")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Deshacer" }));
+    expect(addItemCalls).toEqual([
+      { receiptId: "r1", name: "Leche entera", price: undefined, quantity: 1 },
+    ]);
+  });
+
+  it("says a refused deletion failed", async () => {
+    failing = true;
+    render();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Corregir la línea «Leche entera»" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Eliminar el artículo «Leche entera»",
+      }),
+    );
+
+    expect(
+      await screen.findByText(es.receipts.line.removeFailed),
+    ).toBeInTheDocument();
+  });
+});
 
 describe("finishing a receipt review", () => {
   it("adds it to the inventory with one press once every line is reviewed", async () => {

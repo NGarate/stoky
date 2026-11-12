@@ -133,6 +133,20 @@ export default function ReviewPage() {
       }),
   });
 
+  // A line taken out says so, with a way to put it back: the line is added
+  // again as it read, though its decision on a product is not.
+  const removeItemMutation = api.receipt.removeItem.useMutation({
+    onSuccess: () => {
+      void utils.receipt.getReceiptWithItems.invalidate({ receiptId });
+    },
+    onError: () =>
+      snackbar.show({
+        kind: "confirm",
+        tone: "danger",
+        message: { key: "receipts.line.removeFailed" },
+      }),
+  });
+
   const updateDetailsMutation = api.receipt.updateDetails.useMutation({
     onSuccess: () => {
       setEditingDetails(false);
@@ -343,6 +357,29 @@ export default function ReviewPage() {
               <ReviewCard
                 key={item.id}
                 receiptId={receiptId}
+                onRemove={() =>
+                  removeItemMutation.mutate(
+                    { receiptItemId: item.id },
+                    {
+                      onSuccess: () =>
+                        snackbar.show({
+                          kind: "undo-inverse",
+                          message: { key: "receipts.line.removed" },
+                          undo: () =>
+                            addItemMutation.mutate({
+                              receiptId,
+                              name: item.parsedName || item.rawText,
+                              price: item.parsedPrice
+                                ? Number(item.parsedPrice)
+                                : undefined,
+                              quantity: item.parsedQuantity
+                                ? Number(item.parsedQuantity)
+                                : 1,
+                            }),
+                        }),
+                    },
+                  )
+                }
                 item={{
                   ...item,
                   candidates: item.candidates || [],

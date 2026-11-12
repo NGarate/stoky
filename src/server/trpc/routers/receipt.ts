@@ -38,6 +38,7 @@ import {
   receiptDetailsSchema,
   receiptItemAddSchema,
   receiptItemMatchSchema,
+  receiptItemRemoveSchema,
   receiptItemUpdateSchema,
   receiptRegionSchema,
 } from "@/lib/validations/receipt";
@@ -710,6 +711,42 @@ export const receiptRouter = createTRPCRouter({
             }),
           },
         });
+      });
+
+      return { success: true };
+    }),
+
+  /**
+   * Takes out a line that was never an article: a header, a payment, a total
+   * the reading took for one. Skipping keeps such a line on the receipt as a
+   * decision; this says it was not there.
+   *
+   * Open while the receipt is, and re-checked under the row lock like every
+   * line edit, so an apply in flight never books a line deleted under it.
+   */
+  removeItem: writeProcedure
+    .input(receiptItemRemoveSchema)
+    .mutation(async ({ ctx, input }) => {
+      const item = await ctx.db.receiptItem.findFirst({
+        where: {
+          id: input.receiptItemId,
+          receipt: { householdId: ctx.householdId },
+        },
+        select: { receiptId: true, receipt: { select: { status: true } } },
+      });
+
+      if (!item) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Receipt item not found",
+        });
+      }
+
+      assertOpenForReview(item.receipt.status);
+
+      await ctx.db.$transaction(async (tx) => {
+        assertOpenForReview(await lockReceiptStatus(tx, item.receiptId));
+        await tx.receiptItem.delete({ where: { id: input.receiptItemId } });
       });
 
       return { success: true };

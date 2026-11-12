@@ -1093,6 +1093,48 @@ describe("receipt.updateItem", () => {
   });
 });
 
+describe("receipt.removeItem", () => {
+  it("takes the line out of the receipt and leaves the others", async () => {
+    const { receipt, first, second } = await seedReceipt({});
+
+    await caller.receipt.removeItem({ receiptItemId: second.id });
+
+    const left = await prisma.receiptItem.findMany({
+      where: { receiptId: receipt.id },
+      select: { id: true },
+    });
+    expect(left).toEqual([{ id: first.id }]);
+  });
+
+  it("is refused once the receipt is applied", async () => {
+    const { second } = await seedReceipt({ status: ReceiptStatus.APPLIED });
+
+    await expectCode(
+      () => caller.receipt.removeItem({ receiptItemId: second.id }),
+      "BAD_REQUEST",
+    );
+    expect(await prisma.receiptItem.count({ where: { id: second.id } })).toBe(
+      1,
+    );
+  });
+
+  it("is NOT_FOUND for another household's line and refused for a kitchen account", async () => {
+    const { second } = await seedReceipt({});
+
+    await expectCode(
+      () => outsider.receipt.removeItem({ receiptItemId: second.id }),
+      "NOT_FOUND",
+    );
+    await expectCode(
+      () => kitchen.receipt.removeItem({ receiptItemId: second.id }),
+      "FORBIDDEN",
+    );
+    expect(await prisma.receiptItem.count({ where: { id: second.id } })).toBe(
+      1,
+    );
+  });
+});
+
 describe("receipt.readRegion — what it refuses", () => {
   const WHOLE: [number, number][] = [
     [0, 0],

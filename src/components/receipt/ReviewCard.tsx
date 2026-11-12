@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Check, Crop, Pencil, Plus, ScanLine } from "lucide-react";
+import { Check, Crop, Pencil, Plus, ScanLine, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { isItemReviewed } from "@/lib/receipts";
@@ -50,6 +50,8 @@ interface ReviewCardProps {
   ) => void;
   /** What OCR read, corrected: `receipt.updateItem`. */
   onCorrect: (line: ReceiptLine) => void;
+  /** The line was never an article: `receipt.removeItem`. */
+  onRemove: () => void;
 }
 
 export function ReviewCard({
@@ -57,6 +59,7 @@ export function ReviewCard({
   item,
   onConfirm,
   onCorrect,
+  onRemove,
 }: ReviewCardProps) {
   const t = useTranslations("receipts");
   const tScan = useTranslations("products.scanPick");
@@ -224,6 +227,15 @@ export function ReviewCard({
             >
               <Crop aria-hidden="true" className="mr-1 size-5" />
               {t("frame.pickLines")}
+            </Button>
+            <Button
+              aria-label={t("line.removeOf", { name: lineName })}
+              onClick={onRemove}
+              type="button"
+              variant="destructive"
+            >
+              <Trash2 aria-hidden="true" className="mr-1 size-5" />
+              {t("line.remove")}
             </Button>
           </div>
         </div>

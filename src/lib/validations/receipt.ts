@@ -130,6 +130,11 @@ export const receiptRegionSchema = z.object({
   quad: z.tuple([cornerSchema, cornerSchema, cornerSchema, cornerSchema]),
 });
 
+/** A line taken out of a receipt: one that was never an article. */
+export const receiptItemRemoveSchema = z.object({
+  receiptItemId: z.string().min(1).max(MAX_ID_LENGTH),
+});
+
 /** Correcting a line the receipt already has. */
 export const receiptItemUpdateSchema = receiptLineSchema.extend({
   receiptItemId: z.string().min(1).max(MAX_ID_LENGTH),
