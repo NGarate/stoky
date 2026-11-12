@@ -101,17 +101,17 @@ attestation and anonymous-pull steps below depend on that (see
    does all of this, scan included, and writes nothing if any candidate is
    red; `release:prepare --refresh-images` commits its result on the release
    branch. By hand: for each, take the newest release of the same major, which is what
-   the floating tag (`postgres:18-alpine`, `valkey/valkey:8-alpine`, `traefik:v3`)
-   names that day, and the digest of its multi-platform index, not one
-   platform's manifest:
+   the floating tag (`ghcr.io/ngarate/stoky/postgres:18-alpine`,
+   `valkey/valkey:8-alpine`, `traefik:v3`) names that day, and the digest of
+   its multi-platform index, not one platform's manifest:
 
    ```bash
-   docker buildx imagetools inspect postgres:18-alpine   # Digest: sha256:…
-   docker buildx imagetools inspect postgres:18.6-alpine   # must print the same Digest
+   docker buildx imagetools inspect valkey/valkey:8-alpine        # Digest: sha256:…
+   docker buildx imagetools inspect valkey/valkey:8.1.11-alpine   # must print the same Digest
    ```
 
-   Write `image: postgres:18.6-alpine@sha256:<that digest>`, and the same for
-   `valkey/valkey` and `traefik`. A new major version is a decision with its own
+   Write `image: valkey/valkey:8.1.11-alpine@sha256:<that digest>`, and the
+   same for PostgreSQL and `traefik`. A new major version is a decision with its own
    migration and release note, not a refresh. The release smoke then runs the
    builds operators will pull. `src/__tests__/unit/deployment.test.ts` fails if
    a service image loses its digest or goes back to a bare major tag.
@@ -128,7 +128,7 @@ attestation and anonymous-pull steps below depend on that (see
    A red image is not refreshed into the bundle. If no release of the same
    major is clean, the release waits for upstream; never widen the skip.
 
-   PostgreSQL need not wait. Upstream's Alpine images go red between its
+   PostgreSQL need not wait, and the bundle runs our build of it. Upstream's Alpine images go red between its
    rebuilds with fixes Alpine has already shipped (19 HIGH on 2026-11-12, every
    tag), so `postgres.Dockerfile` is the official image plus `apk upgrade`, and
    `.github/workflows/postgres-image.yml` builds it, scans it with the rule
@@ -142,9 +142,8 @@ attestation and anonymous-pull steps below depend on that (see
    gh workflow run postgres-image.yml --repo NGarate/stoky --ref master
    ```
 
-   GHCR creates a new package private, and an installation pulls it
-   anonymously: after its first publication, make `stoky/postgres` public in
-   the package's settings.
+   An installation pulls it anonymously, so `stoky/postgres` must stay a
+   public package.
 5. Run `bun run verify:ci`, `bash scripts/check-ci.sh`, and the full Playwright suite
    for a release. New tests must be shown to fail against the broken behavior.
 6. Build and test the production image with fresh, isolated volumes. Check migrations,

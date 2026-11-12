@@ -1087,9 +1087,13 @@ describe("Dependabot's update configuration", () => {
     const images = Object.values(bundle.services ?? {})
       .map((service) => String(service.image))
       .filter((image) => !image.includes("${"))
-      // postgres:16-alpine@sha256:… -> postgres
+      // ghcr.io/ngarate/stoky/postgres:18.6-alpine@sha256:… -> ghcr.io/ngarate/stoky/postgres
       .map((image) => image.split("@")[0].replace(/:[^:/]+$/, ""));
-    expect(images.toSorted()).toEqual(["postgres", "traefik", "valkey/valkey"]);
+    expect(images.toSorted()).toEqual([
+      "ghcr.io/ngarate/stoky/postgres",
+      "traefik",
+      "valkey/valkey",
+    ]);
     const ignored = (entry("docker-compose").ignore ?? [])
       .filter((rule) =>
         (rule["update-types"] as string[] | undefined)?.includes(

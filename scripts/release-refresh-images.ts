@@ -72,13 +72,13 @@ class Refused extends Error {}
 /**
  * Where each image says which version it is, measured with
  * `docker buildx imagetools inspect NAME:FLOATING --format '{{json .Image}}'`
- * (linux/amd64). postgres and valkey carry no version label but set the
- * version their Dockerfile builds; traefik sets no such variable but labels
- * the image with the tag, `v` included. postgres's index annotation
- * (`16.15-alpine3.24`) names the Alpine release, which the tag does not.
+ * (linux/amd64). postgres (our build, which keeps upstream's environment) and
+ * valkey carry no version label but set the version their Dockerfile builds;
+ * traefik sets no such variable but labels the image with the tag, `v`
+ * included.
  */
 const VERSION_SOURCES: Record<string, { env: string } | { label: string }> = {
-  postgres: { env: "PG_VERSION" },
+  "ghcr.io/ngarate/stoky/postgres": { env: "PG_VERSION" },
   "valkey/valkey": { env: "VALKEY_VERSION" },
   traefik: { label: "org.opencontainers.image.version" },
 };

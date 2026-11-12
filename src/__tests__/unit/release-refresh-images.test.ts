@@ -52,7 +52,7 @@ const digest = (n: number) =>
 
 /** The version source each image carries on the real registry (the script's VERSION_SOURCES). */
 function config(name: string, version: string) {
-  if (name === "postgres")
+  if (name === "ghcr.io/ngarate/stoky/postgres")
     return {
       Env: ["PATH=/usr/bin", "GOSU_VERSION=1.19", `PG_VERSION=${version}`],
     };
@@ -290,14 +290,17 @@ describe("refreshing the bundle's service images", () => {
     const { run, publish, content } = setup();
     const tag = parseTag(PINS.db.tag)!;
     publish(
-      "postgres",
+      PINS.db.name,
       [floatingTag(tag), PINS.db.tag],
       digest(2),
       tag.version,
     );
     expect(run().exitCode).toBe(0);
     expect(content()).toBe(
-      real.replace(PINS.db.image, `postgres:${PINS.db.tag}@${digest(2)}`),
+      real.replace(
+        PINS.db.image,
+        `${PINS.db.name}:${PINS.db.tag}@${digest(2)}`,
+      ),
     );
   });
 
