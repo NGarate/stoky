@@ -111,7 +111,9 @@ Cada línea del ticket tiene ahora **Corregir**: cambia el nombre, el
 importe o la cantidad cuando la lectura automática se equivoca, también en
 una línea ya confirmada. Si cambias el nombre de una línea que Stoky había
 reconocido sola, vuelve a quedar pendiente para que elijas el producto,
-porque lo reconoció por el nombre mal leído.
+porque lo reconoció por el nombre mal leído. Si el ticket imprime cuántos
+artículos se compraron (en Costco, «TOTAL ARTS»), la revisión avisa cuando
+las líneas leídas no suman eso, para que busques la que falta o sobra.
 
 ### Añade a mano lo que el ticket no leyó
 
@@ -289,7 +291,10 @@ prints, such as the card or the loyalty card.
 Each receipt line now has **Correct**: change the name, the amount or the
 quantity when the automatic reading gets it wrong, on a confirmed line too.
 Renaming a line Stoky had recognised on its own sends it back to pending so
-you choose the product, because it was recognised from the misread name.
+you choose the product, because it was recognised from the misread name. If
+the receipt prints how many items were bought (at Costco, "TOTAL ARTS"), the
+review warns when the lines read do not add up to it, so you look for the
+one missing or extra.
 
 ### Add by hand what the receipt reading missed
 

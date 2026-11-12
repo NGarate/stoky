@@ -719,7 +719,8 @@
       "zoomIn": "Zoom in on the photo",
       "zoomOut": "Zoom out of the photo"
     },
-    "readingNow": "The receipt is being read. When it finishes, its lines appear here for review."
+    "readingNow": "The receipt is being read. When it finishes, its lines appear here for review.",
+    "countOff": "The receipt says {printed, plural, one {# item} other {# items}} and the lines add up to {read}. Check whether one is missing or extra."
   },
   "shopping": {
     "title": "Shopping lists",

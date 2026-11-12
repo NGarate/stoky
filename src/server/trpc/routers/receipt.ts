@@ -21,6 +21,7 @@ import { processReceiptOcr, readFramedLines } from "@/server/services/ocr";
 import {
   framedArticle,
   parseReceiptText,
+  printedArticleCount,
   saveParsedItems,
 } from "@/server/services/receiptParser";
 import {
@@ -599,6 +600,8 @@ export const receiptRouter = createTRPCRouter({
         select: {
           ...RECEIPT_HEADER,
           ticketQuad: true,
+          // Read here for the count it prints, and not sent.
+          rawOcrText: true,
           items: {
             include: {
               matchedProduct: true,
@@ -631,8 +634,12 @@ export const receiptRouter = createTRPCRouter({
         }),
       );
 
+      const { rawOcrText, ...header } = receipt;
       return {
-        ...receipt,
+        ...header,
+        // How many articles the ticket says were bought, for the review to
+        // check what was read against: a number, never the text it is in.
+        printedArticles: printedArticleCount(rawOcrText ?? "") ?? null,
         // Checked as it is read back: what the screens draw a frame from.
         ticketQuad: receiptQuadSchema
           .nullable()

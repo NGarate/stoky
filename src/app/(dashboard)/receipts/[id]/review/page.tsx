@@ -203,6 +203,20 @@ export default function ReviewPage() {
   // Uploaded or read again, and not read yet.
   const reading = isBeingRead(receipt.status);
 
+  // What was read, counted as the ticket counts its articles: four of one are
+  // four, a weighed one is one (Costco's `TOTAL ARTS`). A count that is
+  // neither that nor the number of lines says a line is missing or extra.
+  const unitsRead = receipt.items.reduce((sum, item) => {
+    const quantity =
+      item.parsedQuantity == null ? 1 : Number(item.parsedQuantity);
+    return sum + (Number.isInteger(quantity) ? quantity : 1);
+  }, 0);
+  const printed = receipt.printedArticles;
+  const countOff =
+    printed !== null &&
+    printed !== unitsRead &&
+    printed !== receipt.items.length;
+
   const pendingItems = receipt.items.filter(
     (item) => !isItemReviewed(item.matchStatus),
   ).length;
@@ -350,6 +364,12 @@ export default function ReviewPage() {
               </Button>
             )}
           </div>
+
+          {countOff && (
+            <p className="mb-4 rounded-lg border border-warn-foreground bg-warn px-4 py-3 text-sm text-warn-foreground">
+              {t("countOff", { printed, read: unitsRead })}
+            </p>
+          )}
 
           {/* Wraps: at 390px the sentence and the action do not fit on one line,
               and the action is what pushed the row past the viewport. */}

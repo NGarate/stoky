@@ -719,7 +719,8 @@
       "zoomIn": "Acercar la foto",
       "zoomOut": "Alejar la foto"
     },
-    "readingNow": "Se está leyendo el ticket. Cuando termine, aquí aparecerán sus líneas para revisarlas."
+    "readingNow": "Se está leyendo el ticket. Cuando termine, aquí aparecerán sus líneas para revisarlas.",
+    "countOff": "El ticket dice {printed, plural, one {# artículo} other {# artículos}} y las líneas suman {read}. Comprueba si falta o sobra alguno."
   },
   "shopping": {
     "title": "Listas de la compra",

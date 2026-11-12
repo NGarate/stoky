@@ -2280,7 +2280,7 @@ const STOPS_THE_TOTAL = new RegExp(
  * after a word and whose amount the misread articles did not make.
  */
 const ARTICLE_COUNT =
-  /^\W*(?:\p{L}{1,3}\s+)?\d+\s+art(?:s|\.|iculos)?\b.*\d[.,]\d{2}/u;
+  /^\W*(?:\p{L}{1,3}\s+)?(\d+)\s+art(?:s|\.|iculos)?\b.*\d[.,]\d{2}/u;
 
 /**
  * The chain the ticket is from, trying the surest reading first:
@@ -2442,6 +2442,39 @@ function normalizeText(value: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+/**
+ * A line counting what was bought: `NÚM TOTAL ARTÍCULOS VENDIDOS = 13`,
+ * `TOTAL ARTS: 13` — a total or a number, then articles, then the count —
+ * as normalised. Not `Artículos bajo carro: 2`, which counts only those
+ * left in the trolley. The count printed with the sum is `ARTICLE_COUNT`.
+ */
+const COUNT_AFTER_LABEL =
+  /(?:\btotal\b|\bnum\b|\bnumero\b|\bn[º°]).*\b(?:arts?|articulos)\b\D*[=:]\s*(\d{1,3})\s*$/;
+
+/**
+ * How many articles the ticket says were bought, when it says so: the count
+ * most of its counting lines agree on, the last of equals. Costco counts
+ * units — four of one article are four — and a weighed article as one.
+ */
+export function printedArticleCount(text: string): number | undefined {
+  const counts = new Map<number, number>();
+  let last: number | undefined;
+  for (const line of text.split("\n").slice(0, MAX_LINES)) {
+    const normalised = normalizeText(line.slice(0, MAX_LINE_LENGTH)).trim();
+    const found =
+      COUNT_AFTER_LABEL.exec(normalised) ?? ARTICLE_COUNT.exec(normalised);
+    if (!found) continue;
+    last = Number(found[1]);
+    counts.set(last, (counts.get(last) ?? 0) + 1);
+  }
+  if (last === undefined) return undefined;
+  let best = last;
+  for (const [count, times] of counts) {
+    if (times > counts.get(best)!) best = count;
+  }
+  return best;
 }
 
 /**

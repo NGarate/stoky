@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import {
   framedArticle,
+  printedArticleCount,
   parseEsAmount,
   parseReceiptText,
 } from "@/server/services/receiptParser";
@@ -1761,5 +1762,43 @@ describe("framedArticle", () => {
 
   it("says nothing came of lines with no article", () => {
     expect(framedArticle("GRACIAS POR SU VISITA")).toBeNull();
+  });
+});
+
+describe("printedArticleCount", () => {
+  it("reads Costco's count, under either label, as the OCR left it", () => {
+    expect(
+      printedArticleCount(
+        [
+          "**Artículos bajo carro: 2",
+          "NúM TOTAL ARTÍCULOS VENDIDOS = 13",
+          "TOTAL PROMOCIONES: 40,00 €",
+          "TOJAL-ARTS: 13",
+        ].join("\n"),
+      ),
+    ).toBe(13);
+  });
+
+  it("does not take the articles under the trolley for the whole count", () => {
+    expect(printedArticleCount("**Artículos bajo carro: 2\nTOTAL 9,99")).toBe(
+      undefined,
+    );
+  });
+
+  it("takes the count most lines agree on", () => {
+    expect(
+      printedArticleCount(
+        // The last one misread: the two before it agree.
+        "Subtotal núm. articulos = 15\nNUM TOTAL ARTICULOS = 15\nTOTAL ARTS: 16",
+      ),
+    ).toBe(15);
+  });
+
+  it("reads the count printed with the sum", () => {
+    expect(printedArticleCount("12 ARTICULOS 25,30")).toBe(12);
+  });
+
+  it("says nothing for a ticket that prints no count", () => {
+    expect(printedArticleCount("PAN 1,00\nTOTAL 1,00")).toBeUndefined();
   });
 });

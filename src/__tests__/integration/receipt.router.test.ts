@@ -1093,6 +1093,35 @@ describe("receipt.updateItem", () => {
   });
 });
 
+describe("receipt.getReceiptWithItems — the count the ticket prints", () => {
+  it("is read from the ticket's text, which is not sent", async () => {
+    const { receipt } = await seedReceipt({});
+    await prisma.receipt.update({
+      where: { id: receipt.id },
+      data: {
+        rawOcrText: `${RAW_OCR_TEXT}\nNÚM TOTAL ARTÍCULOS VENDIDOS = 3`,
+      },
+    });
+
+    const review = await caller.receipt.getReceiptWithItems({
+      receiptId: receipt.id,
+    });
+
+    expect(review.printedArticles).toBe(3);
+    expect(JSON.stringify(review)).not.toContain("VENDIDOS");
+  });
+
+  it("is none for a ticket that prints none", async () => {
+    const { receipt } = await seedReceipt({});
+
+    const review = await caller.receipt.getReceiptWithItems({
+      receiptId: receipt.id,
+    });
+
+    expect(review.printedArticles).toBeNull();
+  });
+});
+
 describe("receipt.removeItem", () => {
   it("takes the line out of the receipt and leaves the others", async () => {
     const { receipt, first, second } = await seedReceipt({});
@@ -2282,7 +2311,7 @@ describe("what a receipt read sends", () => {
     // And where the ticket is on its photo: eight numbers, nothing it prints,
     // which the review frames an article's lines inside.
     expect(Object.keys(review).sort()).toEqual(
-      [...HEADER, "ticketQuad", "items"].sort(),
+      [...HEADER, "ticketQuad", "printedArticles", "items"].sort(),
     );
     expect(Object.keys(review.store ?? {}).sort()).toEqual(["id", "name"]);
     expectNothingPrivate(review);

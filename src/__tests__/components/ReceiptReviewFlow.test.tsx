@@ -2,6 +2,7 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Decimal } from "@prisma/client-runtime-utils";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
 import { axeViolations } from "../utils/axe";
@@ -45,6 +46,26 @@ interface Callbacks {
   onError?: () => void;
 }
 
+/** The receipt's one line, confirmed: whatever the tests vary starts from it. */
+const firstItem = {
+  id: "i1",
+  rawText: "LECHE ENTERA 1,19",
+  parsedName: "Leche entera",
+  quantity: 1,
+  unitPrice: 1.19,
+  totalPrice: 1.19,
+  // `isItemReviewed` reads matchStatus, not a boolean — the page counts
+  // pending items by that rule, and the button is disabled while any
+  // remain.
+  matchStatus: "USER_CONFIRMED",
+  productId: "p1",
+  matchedProductId: "p1",
+  product: { id: "p1", name: "Leche entera", defaultUnit: "L" },
+  matchConfidence: 0.9,
+} as {
+  [field: string]: unknown;
+};
+
 const receipt = {
   id: "r1",
   status: "NEEDS_REVIEW",
@@ -52,24 +73,8 @@ const receipt = {
   totalAmount: 12.5,
   store: { id: "st1", name: "Mercadona" },
   ticketQuad: null as number[][] | null,
-  items: [
-    {
-      id: "i1",
-      rawText: "LECHE ENTERA 1,19",
-      parsedName: "Leche entera",
-      quantity: 1,
-      unitPrice: 1.19,
-      totalPrice: 1.19,
-      // `isItemReviewed` reads matchStatus, not a boolean — the page counts
-      // pending items by that rule, and the button is disabled while any
-      // remain.
-      matchStatus: "USER_CONFIRMED",
-      productId: "p1",
-      matchedProductId: "p1",
-      product: { id: "p1", name: "Leche entera", defaultUnit: "L" },
-      matchConfidence: 0.9,
-    },
-  ],
+  printedArticles: null as number | null,
+  items: [firstItem],
 };
 
 mock.module("next/navigation", () => ({
@@ -262,6 +267,8 @@ beforeEach(() => {
   reframeCalls.length = 0;
   statusSet.length = 0;
   receipt.ticketQuad = null;
+  receipt.printedArticles = null;
+  receipt.items = [firstItem];
   receipt.status = "NEEDS_REVIEW";
   updateDetailsCalls.length = 0;
   applyCalls = 0;
@@ -517,6 +524,49 @@ describe("the receipt photograph", () => {
     expect(
       screen.queryByRole("img", { name: es.receipts.photoAlt }),
     ).toBeAbsent();
+  });
+});
+
+describe("the count of articles the ticket prints", () => {
+  const countSays = /El ticket dice/;
+
+  it("warns when what was read does not add up to it", () => {
+    receipt.printedArticles = 3;
+    render();
+
+    expect(
+      screen.getByText(
+        "El ticket dice 3 artículos y las líneas suman 1. Comprueba si falta o sobra alguno.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("counts four of an article as four and a weighed one as one, as Costco does", () => {
+    receipt.printedArticles = 5;
+    receipt.items = [
+      { ...firstItem, id: "i1", parsedQuantity: new Decimal(4) },
+      { ...firstItem, id: "i2", parsedQuantity: new Decimal(1.886) },
+    ];
+    render();
+
+    expect(screen.queryByText(countSays)).toBeAbsent();
+  });
+
+  it("accepts a count of lines, which other tickets print", () => {
+    receipt.printedArticles = 2;
+    receipt.items = [
+      { ...firstItem, id: "i1", parsedQuantity: new Decimal(4) },
+      { ...firstItem, id: "i2", parsedQuantity: new Decimal(1) },
+    ];
+    render();
+
+    expect(screen.queryByText(countSays)).toBeAbsent();
+  });
+
+  it("says nothing for a ticket that prints no count", () => {
+    render();
+
+    expect(screen.queryByText(countSays)).toBeAbsent();
   });
 });
 
