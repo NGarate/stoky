@@ -58,10 +58,16 @@ jobs:
 
       # OCI names are lowercase; `github.repository` is NGarate/stoky. The
       # exact and major tags come from the Dockerfile's base, and the build is
-      # checked against them below.
+      # checked against them below. Visibility from the API, as rescan.yml
+      # reads it: a scheduled run has no event payload, and the missing
+      # repository field the event would carry compares equal to false.
       - name: Image name and tags
         id: image
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
+          echo "private=$(gh api "repos/$GH_REPO" --jq .private)" >> "$GITHUB_OUTPUT"
           BASE="$(sed -nE 's/^FROM postgres:([^@[:space:]]+)@sha256:[0-9a-f]{64}$/\1/p' postgres.Dockerfile)"
           if [[ ! "$BASE" =~ ^([0-9]+)\.[0-9]+-([a-z0-9.]+)$ ]]; then
             echo "::error::postgres.Dockerfile must start FROM postgres:<major>.<minor>-<variant>@sha256:<digest>; read '$BASE'."
@@ -172,7 +178,7 @@ jobs:
       # As the application image's (ci.yml, image-publish): gated for the
       # same private-fork reason.
       - name: Attest provenance
-        if: steps.published.outputs.rebuild != 'false' && github.event.repository.private == false
+        if: steps.published.outputs.rebuild != 'false' && steps.image.outputs.private == 'false'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ${{ steps.image.outputs.name }}
