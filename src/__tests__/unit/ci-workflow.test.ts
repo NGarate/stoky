@@ -1221,6 +1221,14 @@ describe("the PostgreSQL image workflow", () => {
     expect(source).not.toContain("type=gha");
   });
 
+  // A scheduled run has no event payload: `github.event.repository.private`
+  // is missing there and compares equal to false, so a private fork would
+  // attest, and fail, after the push.
+  it("reads the repository's visibility from the API, not the event", () => {
+    expect(source).not.toContain("github.event.repository");
+    expect(source).toContain('gh api "repos/$GH_REPO" --jq .private');
+  });
+
   it("is named so the bundle scan skips its gosu as upstream's", () => {
     expect(parsed.env?.IMAGE_NAME).toBe("${{ github.repository }}/postgres");
   });
