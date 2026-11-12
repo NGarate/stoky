@@ -25,8 +25,39 @@ export function createPrismaClient(
   return new PrismaClient({ adapter });
 }
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+/** The client kept across hot reloads, and the generated class that made it. */
+interface Kept {
+  client: PrismaClient;
+  generatedBy: unknown;
+}
 
-export const prisma = globalForPrisma.prisma || createPrismaClient();
+/**
+ * The kept client when the class that made it is the one generated now;
+ * otherwise none, and the stale one's pool closed.
+ *
+ * The client is kept on `global` in development so a hot reload does not
+ * open another pool each time. But regenerating it after a schema change
+ * reloads the generated module as a new class, and the instance kept from
+ * before went on serving: it did not know the new column, so every query
+ * naming it was a 500 until `next dev` was restarted — on 2026-11-12, every
+ * receipt upload, once `Receipt.ticketQuad` existed. Compared by the class
+ * kept beside it, because `instanceof` cannot tell: the constructor hands
+ * back a proxy, which is an instance of no class.
+ */
+export function reusableClient(
+  kept: Kept | undefined,
+  generatedBy: unknown = PrismaClient,
+): PrismaClient | undefined {
+  if (kept && kept.generatedBy === generatedBy) return kept.client;
+  void kept?.client.$disconnect();
+  return undefined;
+}
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+const globalForPrisma = global as unknown as { prismaClient?: Kept };
+
+export const prisma =
+  reusableClient(globalForPrisma.prismaClient) ?? createPrismaClient();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prismaClient = { client: prisma, generatedBy: PrismaClient };
+}
