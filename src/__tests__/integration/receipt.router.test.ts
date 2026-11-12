@@ -1197,6 +1197,109 @@ describe("receipt.readRegion — what it refuses", () => {
   });
 });
 
+describe("receipt.reframe", () => {
+  const FRAMED: [number, number][] = [
+    [0.3, 0.05],
+    [0.6, 0.05],
+    [0.62, 0.95],
+    [0.28, 0.95],
+  ];
+  const quad = FRAMED as Parameters<typeof caller.receipt.reframe>[0]["quad"];
+
+  /** Until the reading it started has ended: its photo is not on disk. */
+  async function settled(receiptId: string) {
+    for (let i = 0; i < 50; i++) {
+      const { status } = await prisma.receipt.findUniqueOrThrow({
+        where: { id: receiptId },
+      });
+      if (status === ReceiptStatus.FAILED) return;
+      await Bun.sleep(100);
+    }
+  }
+
+  it("keeps the new frame and sends the receipt back to be read", async () => {
+    const { receipt } = await seedReceipt({});
+
+    await caller.receipt.reframe({ receiptId: receipt.id, quad });
+
+    const row = await prisma.receipt.findUniqueOrThrow({
+      where: { id: receipt.id },
+    });
+    expect(row.ticketQuad).toEqual(FRAMED);
+    expect(row.status).not.toBe(ReceiptStatus.NEEDS_REVIEW);
+    // Its lines go with the old reading, not when the new one lands.
+    expect(
+      await prisma.receiptItem.count({ where: { receiptId: receipt.id } }),
+    ).toBe(0);
+    await settled(receipt.id);
+    // And the review reads it back, for the frame to start from.
+    const review = await caller.receipt.getReceiptWithItems({
+      receiptId: receipt.id,
+    });
+    expect(review.ticketQuad).toEqual(quad);
+  });
+
+  it("keeps no frame for one on the whole photo", async () => {
+    const { receipt } = await seedReceipt({ status: ReceiptStatus.FAILED });
+    await prisma.receipt.update({
+      where: { id: receipt.id },
+      data: { ticketQuad: FRAMED },
+    });
+
+    await caller.receipt.reframe({
+      receiptId: receipt.id,
+      quad: [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 1],
+      ],
+    });
+
+    const row = await prisma.receipt.findUniqueOrThrow({
+      where: { id: receipt.id },
+    });
+    expect(row.ticketQuad).toBeNull();
+    await settled(receipt.id);
+  });
+
+  it("is refused once applied, and while a reading runs, and keeps the frame it had", async () => {
+    for (const status of [ReceiptStatus.APPLIED, ReceiptStatus.PROCESSING]) {
+      const { receipt } = await seedReceipt({ status });
+
+      await expectCode(
+        () => caller.receipt.reframe({ receiptId: receipt.id, quad }),
+        "BAD_REQUEST",
+      );
+      const row = await prisma.receipt.findUniqueOrThrow({
+        where: { id: receipt.id },
+      });
+      expect(row.ticketQuad).toBeNull();
+      expect(row.status).toBe(status);
+      expect(
+        await prisma.receiptItem.count({ where: { receiptId: receipt.id } }),
+      ).toBe(2);
+    }
+  });
+
+  it("is NOT_FOUND for another household's receipt and refused for a kitchen account", async () => {
+    const { receipt } = await seedReceipt({});
+
+    await expectCode(
+      () => outsider.receipt.reframe({ receiptId: receipt.id, quad }),
+      "NOT_FOUND",
+    );
+    await expectCode(
+      () => kitchen.receipt.reframe({ receiptId: receipt.id, quad }),
+      "FORBIDDEN",
+    );
+    const row = await prisma.receipt.findUniqueOrThrow({
+      where: { id: receipt.id },
+    });
+    expect(row.status).toBe(ReceiptStatus.NEEDS_REVIEW);
+  });
+});
+
 describe("receipt.addItem", () => {
   const line = { name: "Huevos L", price: 2.95, quantity: 1 };
 

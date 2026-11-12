@@ -42,6 +42,7 @@ import {
   receiptItemRemoveSchema,
   receiptItemUpdateSchema,
   receiptQuadSchema,
+  receiptReframeSchema,
   receiptRegionSchema,
 } from "@/lib/validations/receipt";
 
@@ -429,6 +430,66 @@ export const receiptRouter = createTRPCRouter({
       );
 
       return receipt;
+    }),
+
+  /**
+   * Frames the ticket on its photo again and reads it again — the frame put
+   * on it at upload was wrong, or there was none and the paper was not found.
+   *
+   * The photo was kept whole for this: only the frame changes. **Reading
+   * again replaces the receipt's lines**, corrections and decisions included,
+   * which the screen says before the person presses it; so it is refused once
+   * applied, and while a reading is already running. The lines go now, not
+   * when the reading lands: kept, the upload screen counted them as the new
+   * reading's progress ("2/4"), and a failed reading left them under a
+   * receipt that said it could not be read.
+   * The receipt goes back to UPLOADING and on as after an upload, which is
+   * what the upload screen follows. A whole receipt read again costs what an
+   * upload does, so it spends the upload budget.
+   */
+  reframe: writeProcedure
+    .input(receiptReframeSchema)
+    .mutation(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        uploadRateLimit(),
+        ctx.session.user.id,
+        "Too many receipts uploaded. Try again in a little while.",
+      );
+
+      const receipt = await ctx.db.receipt.findFirst({
+        where: { id: input.receiptId, householdId: ctx.householdId },
+        select: { id: true, status: true },
+      });
+
+      if (!receipt) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Receipt not found",
+        });
+      }
+
+      assertOpenForTyping(receipt.status);
+
+      await ctx.db.$transaction(async (tx) => {
+        assertOpenForTyping(await lockReceiptStatus(tx, receipt.id));
+        await tx.receiptItem.deleteMany({ where: { receiptId: receipt.id } });
+        await tx.receipt.update({
+          where: { id: receipt.id },
+          data: {
+            ticketQuad: ticketFrame(input.quad),
+            status: ReceiptStatus.UPLOADING,
+          },
+        });
+      });
+
+      processReceiptAsync(receipt.id).catch((error: unknown) =>
+        console.error(
+          "Failed to mark receipt as failed:",
+          describeError(error),
+        ),
+      );
+
+      return { success: true };
     }),
 
   /**

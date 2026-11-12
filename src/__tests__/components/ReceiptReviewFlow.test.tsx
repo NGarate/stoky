@@ -21,6 +21,8 @@ const invalidated: string[] = [];
 const confirmAllCalls: unknown[] = [];
 const addItemCalls: unknown[] = [];
 const removeItemCalls: unknown[] = [];
+const reframeCalls: unknown[] = [];
+const statusSet: unknown[] = [];
 const updateDetailsCalls: unknown[] = [];
 let applyCalls = 0;
 
@@ -41,6 +43,7 @@ const receipt = {
   createdAt: new Date("2026-08-01T10:00:00.000Z"),
   totalAmount: 12.5,
   store: { id: "st1", name: "Mercadona" },
+  ticketQuad: null as number[][] | null,
   items: [
     {
       id: "i1",
@@ -105,6 +108,12 @@ mock.module("@/lib/trpc/client", () => ({
         getReceiptWithItems: {
           invalidate: async () => void invalidated.push("getReceiptWithItems"),
         },
+        getStatus: {
+          setData: (
+            input: unknown,
+            update: (old: { status: string }) => unknown,
+          ) => statusSet.push([input, update({ status: "NEEDS_REVIEW" })]),
+        },
       },
       inventory: { invalidate: async () => void invalidated.push("inventory") },
       product: { invalidate: async () => void invalidated.push("product") },
@@ -145,6 +154,19 @@ mock.module("@/lib/trpc/client", () => ({
       },
       updateItem: {
         useMutation: () => ({ mutate: () => {}, isPending: false }),
+      },
+      reframe: {
+        useMutation: (opts?: Callbacks) => ({
+          mutate: (input: unknown) => {
+            reframeCalls.push(input);
+            if (failing) {
+              opts?.onError?.();
+              return;
+            }
+            void opts?.onSuccess?.();
+          },
+          isPending: false,
+        }),
       },
       removeItem: {
         useMutation: (opts?: Callbacks) => ({
@@ -226,6 +248,10 @@ beforeEach(() => {
   confirmAllCalls.length = 0;
   addItemCalls.length = 0;
   removeItemCalls.length = 0;
+  reframeCalls.length = 0;
+  statusSet.length = 0;
+  receipt.ticketQuad = null;
+  receipt.status = "NEEDS_REVIEW";
   updateDetailsCalls.length = 0;
   applyCalls = 0;
   failing = false;
@@ -480,6 +506,82 @@ describe("the receipt photograph", () => {
     expect(
       screen.queryByRole("img", { name: es.receipts.photoAlt }),
     ).toBeAbsent();
+  });
+});
+
+describe("correcting where the ticket is on its photo", () => {
+  it("starts from the frame it has, warns the lines are replaced, and follows the new reading", async () => {
+    receipt.ticketQuad = [
+      [0.3, 0.1],
+      [0.6, 0.1],
+      [0.6, 0.9],
+      [0.3, 0.9],
+    ];
+    render();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.frame.correct }),
+    );
+    expect(screen.getByText(es.receipts.frame.reframeHint)).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.frame.readAgain }),
+    );
+
+    expect(reframeCalls).toEqual([
+      { receiptId: "r1", quad: receipt.ticketQuad },
+    ]);
+    // The cached "read" status must not send the upload screen straight back.
+    expect(statusSet).toEqual([[{ receiptId: "r1" }, { status: "UPLOADING" }]]);
+    expect(pushes).toEqual(["/receipts/upload?receipt=r1"]);
+  });
+
+  it("starts from the whole photo when the ticket was never framed", async () => {
+    render();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.frame.correct }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.frame.readAgain }),
+    );
+
+    expect(reframeCalls).toEqual([
+      {
+        receiptId: "r1",
+        quad: [
+          [0, 0],
+          [1, 0],
+          [1, 1],
+          [0, 1],
+        ],
+      },
+    ]);
+  });
+
+  it("is not offered once the receipt is applied", () => {
+    receipt.status = "APPLIED";
+    render();
+
+    expect(
+      screen.queryByRole("button", { name: es.receipts.frame.correct }),
+    ).toBeAbsent();
+  });
+
+  it("says a refused reading failed, and stays", async () => {
+    failing = true;
+    render();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.frame.correct }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.frame.readAgain }),
+    );
+
+    expect(
+      await screen.findByText(es.receipts.frame.reframeFailed),
+    ).toBeInTheDocument();
+    expect(pushes).toEqual([]);
   });
 });
 

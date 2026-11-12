@@ -156,6 +156,8 @@ const EXPECTED: Record<string, Record<string, string>> = {
     confirmItem: "writeProcedure",
     updateItem: "writeProcedure",
     addItem: "writeProcedure",
+    // Framing the ticket again and reading it again: a review's correction.
+    reframe: "writeProcedure",
     // Taking out a line that was never an article: a review's correction.
     removeItem: "writeProcedure",
     // Reading a framed part of the photo again: a review's correction.

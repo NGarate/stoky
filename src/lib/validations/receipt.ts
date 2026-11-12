@@ -138,6 +138,9 @@ export const receiptRegionSchema = z.object({
   quad: receiptQuadSchema,
 });
 
+/** The ticket framed again on its photo, to be read again (`receipt.reframe`). */
+export const receiptReframeSchema = receiptRegionSchema;
+
 /** A line taken out of a receipt: one that was never an article. */
 export const receiptItemRemoveSchema = z.object({
   receiptItemId: z.string().min(1).max(MAX_ID_LENGTH),

@@ -711,7 +711,11 @@
       "reading": "Reading…",
       "read": "Read again. Check the product and the amount, then save the correction.",
       "nothingRead": "No item was read in those lines. Adjust the frame or type it in.",
-      "readFailed": "Those lines could not be read. Try again."
+      "readFailed": "Those lines could not be read. Try again.",
+      "correct": "Correct the receipt’s crop",
+      "reframeHint": "Move the corners to the edges of the receipt and read it again. Its lines are replaced: corrections, chosen products and lines added by hand are lost.",
+      "readAgain": "Read the receipt again",
+      "reframeFailed": "The receipt could not be read again. Try again."
     }
   },
   "shopping": {

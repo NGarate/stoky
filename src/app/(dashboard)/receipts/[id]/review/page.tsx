@@ -264,7 +264,12 @@ export default function ReviewPage() {
         <ReceiptStatusStep status={receipt.status} />
       </div>
 
-      <ReceiptPhoto receiptId={receiptId} />
+      {/* Applied is final: the frame can no longer be read again. */}
+      <ReceiptPhoto
+        reframable={receipt.status !== "APPLIED"}
+        receiptId={receiptId}
+        ticketQuad={receipt.ticketQuad}
+      />
 
       {receipt.status === "APPLIED" ? (
         <div className="text-center py-8 rounded-lg border border-ok-foreground bg-ok mb-6">

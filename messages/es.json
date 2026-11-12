@@ -711,7 +711,11 @@
       "reading": "Leyendo…",
       "read": "Leído de nuevo. Revisa el producto y el importe y guarda la corrección.",
       "nothingRead": "No se ha leído ningún artículo en esas líneas. Ajusta el recuadro o escríbelo a mano.",
-      "readFailed": "No se han podido leer esas líneas. Vuelve a intentarlo."
+      "readFailed": "No se han podido leer esas líneas. Vuelve a intentarlo.",
+      "correct": "Corregir el recorte del ticket",
+      "reframeHint": "Lleva las esquinas a los bordes del ticket y vuelve a leerlo. Se sustituyen sus líneas: se pierden las correcciones, los productos elegidos y las líneas añadidas a mano.",
+      "readAgain": "Volver a leer el ticket",
+      "reframeFailed": "No se ha podido volver a leer el ticket. Vuelve a intentarlo."
     }
   },
   "shopping": {

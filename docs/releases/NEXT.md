@@ -127,7 +127,12 @@ Al elegir o hacer la foto de un ticket, Stoky la muestra con un recuadro
 de cuatro esquinas. Llévalas a las esquinas del papel y pulsa **Enviar
 ticket**: Stoky lee el ticket que encuadraste, enderezado, sin la mesa de
 alrededor. Si no mueves las esquinas, busca el ticket en la foto como hasta
-ahora. La foto se guarda entera, sin recortar. Las fotos HEIC que el
+ahora. La foto se guarda entera, así que el recuadro se puede corregir
+después: en la revisión, **Ver la foto del ticket → Corregir el recorte del
+ticket** lo muestra donde lo dejaste; al pulsar **Volver a leer el ticket**
+se lee otra vez con el nuevo recuadro. Eso sustituye sus líneas, y se
+pierden las correcciones, los productos elegidos y las líneas añadidas a
+mano; ya aplicado al inventario no se puede. Las fotos HEIC que el
 navegador no sabe mostrar se envían sin recuadro.
 
 ### Vuelve a leer las líneas de un artículo, o elimínalo
@@ -297,8 +302,12 @@ When you choose or take a receipt's photo, Stoky shows it with a
 four-cornered frame. Move the corners to the paper's corners and press
 **Send receipt**: Stoky reads the receipt you framed, straightened, without
 the table around it. If you leave the corners alone, it finds the receipt in
-the photo as before. The photo is kept whole, uncut. HEIC photos the browser
-cannot show are sent without a frame.
+the photo as before. The photo is kept whole, so the frame can be corrected
+later: in the review, **See the receipt photo → Correct the receipt's crop**
+shows it where you left it, and **Read the receipt again** reads it once more
+with the new frame. That replaces its lines, losing corrections, chosen
+products and lines added by hand; once applied to the inventory it cannot be
+done. HEIC photos the browser cannot show are sent without a frame.
 
 ### Read an item's lines again, or delete it
 
