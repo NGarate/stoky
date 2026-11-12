@@ -413,6 +413,9 @@ export function parseReceiptText(
   let pendingName: string | undefined;
   // Alcampo prints `2 x 1,49` above the article it counts.
   let countAbove: CountLine | undefined;
+  // Costco opens a weighed article with `ARTPESO` and its kilos, `1,886 x
+  // 19,99 /kg`, above its name: the lines read so far, and the kilos.
+  let weighedBelow: { lines: string[]; kilos?: number } | undefined;
   // The article read from the line before this one, if any.
   let above: ParsedItem | undefined;
   // Where the articles end, and what came off them before that.
@@ -505,6 +508,21 @@ export function parseReceiptText(
     if (PER_KILO_LINE.test(normalizeText(line))) {
       checkAgainstPerKilo(previous, line);
       continue;
+    }
+    if (COSTCO_WEIGHED.test(normalizeText(line))) {
+      weighedBelow = { lines: [lines[i]] };
+      continue;
+    }
+    if (weighedBelow && weighedBelow.kilos === undefined) {
+      // Only straight after `ARTPESO`, where nothing else is printed: the
+      // `/kg` after the price a kilo reads as anything (`2`, `/ks`).
+      const kilos = COSTCO_KILOS.exec(line);
+      if (kilos) {
+        weighedBelow.lines.push(lines[i]);
+        weighedBelow.kilos = parseEsAmount(kilos[1]!);
+        continue;
+      }
+      weighedBelow = undefined;
     }
     // Skip lines that are likely headers, footers, or irrelevant
     if (
@@ -606,6 +624,11 @@ export function parseReceiptText(
       if (counting && countsFor(counting, item, undefined)) {
         item.rawText = `${lines[i - 1]}\n${item.rawText}`;
       }
+      if (weighedBelow?.kilos !== undefined) {
+        item.parsedQuantity = weighedBelow.kilos;
+        item.rawText = `${weighedBelow.lines.join("\n")}\n${item.rawText}`;
+      }
+      weighedBelow = undefined;
       result.items.push(item);
       above = item;
     } else if (!amountPattern().test(line) && hasAWord(line)) {
@@ -1957,6 +1980,15 @@ function stripTrailingNoise(line: string): string {
 }
 
 const KILOS = /(?<![\d.,])(\d+[.,]\d{3})\s*(?:kgs?|kilos?|k[g9o0q])\b/i;
+
+/** Costco's line opening a weighed article: `ARTPESO`, as normalised. */
+const COSTCO_WEIGHED = /^art\s?pes[o0]$/;
+
+/**
+ * The kilos on the line after `ARTPESO`: `1,886 x 19,99 /kg`, with whatever
+ * the OCR made of the sign between (`»x`).
+ */
+const COSTCO_KILOS = /^(\d{1,3}[.,]\d{3})\s*\S?\s*[x×]\s*\d+[.,]\d{2}/i;
 
 /** The price a kilo's unit, as the OCR reads `€/kg`: `EUR/kg`, `€/KO`. */
 const PER_KILO = /\/\s*k[g9o0q]\b/i;

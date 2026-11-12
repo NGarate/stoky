@@ -794,6 +794,32 @@ GRACIAS POR SU VISITA
         item.parsedQuantity,
       ]);
 
+    it("reads Costco's ARTPESO block as the kilos of the article under it", () => {
+      // The owner's ticket of 2026-11-09, as the OCR read it: the weight
+      // line's `/kg` read as `2` and `/ks`, and each article less its REMISE.
+      const text = [
+        "COSTCO WHOLESALE SPAIN, S.L.U.",
+        "ARTPESO",
+        "1,886 »x 19,99 2",
+        "Rodabal lo Eviscera",
+        "11196 V 1x 19,99 37,70 B",
+        "va REMISE P3W3 11196",
+        "9140925 1x 20,00 20,00-B",
+        "ARTPESO",
+        "1,711 x 19,99 /ks",
+        "Rodaballo Eviscera",
+        "11196 V 1x 19,99 34,21 B",
+        "Mango Deshidratado",
+        "1946954V 4x 15,99 63,96 B",
+      ].join("\n");
+
+      expect(summary(text)).toEqual([
+        ["rodabal lo eviscera", 17.7, 1.886],
+        ["rodaballo eviscera", 34.21, 1.711],
+        ["mango deshidratado", 63.96, 4],
+      ]);
+    });
+
     it("reads DIA's kilos on the article line, and books no price a kilo", () => {
       expect(
         summary("COSTILLA TRASERO ÁN 0.545 KILOS 3.79B\nPRECIO KILO 6.95 -"),

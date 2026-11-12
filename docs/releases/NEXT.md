@@ -160,7 +160,7 @@ precios del ticket no se guardan. La revisión muestra ahora también el total.
 
 La lectura automática de los tickets entiende ahora cómo imprimen las
 cadenas españolas sus líneas: el nombre en una línea y el precio en la
-siguiente (Costco), los productos a peso (Mercadona, Lidl, DIA), las
+siguiente (Costco), los productos a peso (Mercadona, Lidl, DIA, Costco), las
 cantidades como «2 x 0,89» encima o debajo del producto, los descuentos y
 las ofertas, y los tickets en catalán. Ya no apunta como producto nada de
 lo que va después del total —el pago, el desglose del IVA—, y el total se
@@ -337,7 +337,7 @@ the receipt's prices are not kept. The review now shows the total as well.
 
 The automatic reading of receipts now understands how Spanish chains print
 their lines: the name on one line and the price on the next (Costco),
-weighed products (Mercadona, Lidl, DIA), quantities like "2 x 0,89" above
+weighed products (Mercadona, Lidl, DIA, Costco), quantities like "2 x 0,89" above
 or below the product, discounts and offers, and receipts in Catalan.
 Nothing printed after the total — the payment, the VAT breakdown — is
 booked as a product any more, and the total is taken from where the
