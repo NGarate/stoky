@@ -693,7 +693,15 @@
     "skipLineOf": "No añadir esta línea: «{name}»",
     "uploadStoreList": "Tiendas de tu hogar",
     "uploadStorePlaceholder": "Elige una tienda o escribe una nueva",
-    "uploadStoreNew": "Se añadirá la tienda «{name}» al subir el ticket."
+    "uploadStoreNew": "Se añadirá la tienda «{name}» al subir el ticket.",
+    "frame": {
+      "cropHint": "Arrastra las esquinas hasta los bordes del ticket. Si tocas la foto, el recuadro se mueve ahí. Con el teclado, elige una esquina y muévela con las flechas.",
+      "send": "Enviar ticket",
+      "topLeft": "Esquina superior izquierda",
+      "topRight": "Esquina superior derecha",
+      "bottomRight": "Esquina inferior derecha",
+      "bottomLeft": "Esquina inferior izquierda"
+    }
   },
   "shopping": {
     "title": "Listas de la compra",

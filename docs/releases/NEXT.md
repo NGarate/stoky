@@ -15,6 +15,7 @@
 * Tu cuenta y cerrar sesión, a un toque
 * Escanea el producto donde lo eliges
 * Los tickets se leen mucho mejor
+* Encuadra el ticket al hacerle la foto
 
 ### Marca, categoría y unidad te sugieren lo que ya usas
 
@@ -118,6 +119,15 @@ automática se saltó. Y un ticket que no se pudo leer ya no hay que repetirlo:
 **Añadir las líneas a mano** lo abre con su foto para que escribas sus líneas
 y lo termines como cualquier otro. También se llega desde la lista de
 tickets.
+
+### Encuadra el ticket al hacerle la foto
+
+Al elegir o hacer la foto de un ticket, Stoky la muestra con un recuadro
+de cuatro esquinas. Llévalas a las esquinas del papel y pulsa **Enviar
+ticket**: se envía solo el ticket, ya enderezado, sin la mesa de alrededor.
+Si no mueves las esquinas, se envía la foto entera y Stoky busca el ticket en
+ella como hasta ahora. Las fotos HEIC que el navegador no sabe mostrar se
+envían enteras.
 
 ### Corrige la tienda, la fecha y el total de un ticket
 
@@ -268,6 +278,15 @@ reading skipped. And a receipt that could not be read no longer has to be
 uploaded again: **Add the lines by hand** opens it with its photo so you can
 type its lines and finish it like any other. The receipts list leads there
 too.
+
+### Frame the receipt when you photograph it
+
+When you choose or take a receipt's photo, Stoky shows it with a
+four-cornered frame. Move the corners to the paper's corners and press
+**Send receipt**: only the receipt is sent, already straightened, without the
+table around it. If you leave the corners alone, the whole photo is sent and
+Stoky finds the receipt in it as before. HEIC photos the browser cannot show
+are sent whole.
 
 ### Correct a receipt's store, date and total
 

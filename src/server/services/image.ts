@@ -33,6 +33,7 @@
 import libheif from "libheif-js/wasm-bundle";
 import { inflateSync } from "node:zlib";
 import { InvalidInputError } from "./errors";
+import { type Point, sourceOf } from "@/lib/receipt-quad";
 
 /** Past any phone camera, far short of what the byte cap cannot see. */
 export const MAX_PIXELS = 50_000_000;
@@ -1060,8 +1061,6 @@ export function flattenedLight(grey: Grey): Grey {
   return { width, height, pixels: out };
 }
 
-type Point = [number, number];
-
 /** The brightest value within `radius` pixels of each pixel. */
 function windowMax(
   values: Uint8Array,
@@ -1312,30 +1311,6 @@ function inOrder(quad: Point[]): Point[] {
   return [0, 1, 2, 3].map((i) => sorted[(start + i) % 4]!);
 }
 
-/** The 3 × 3 homography taking `from[i]` to `to[i]`, as its 8 free numbers. */
-function homography(from: Point[], to: Point[]): number[] {
-  const rows: number[][] = [];
-  for (let i = 0; i < 4; i++) {
-    const [x, y] = from[i]!;
-    const [u, v] = to[i]!;
-    rows.push([x, y, 1, 0, 0, 0, -u * x, -u * y, u]);
-    rows.push([0, 0, 0, x, y, 1, -v * x, -v * y, v]);
-  }
-  for (let c = 0; c < 8; c++) {
-    let pivot = c;
-    for (let r = c + 1; r < 8; r++) {
-      if (Math.abs(rows[r]![c]!) > Math.abs(rows[pivot]![c]!)) pivot = r;
-    }
-    [rows[c], rows[pivot]] = [rows[pivot]!, rows[c]!];
-    for (let r = 0; r < 8; r++) {
-      if (r === c) continue;
-      const factor = rows[r]![c]! / rows[c]![c]!;
-      for (let k = c; k < 9; k++) rows[r]![k]! -= factor * rows[c]![k]!;
-    }
-  }
-  return rows.map((row, i) => row[8]! / row[i]!);
-}
-
 /** Pixels across the probe the corners are found on. */
 const CORNER_PROBE_WIDTH = 600;
 
@@ -1456,22 +1431,30 @@ export async function straightenedTicket(
     true,
   );
   const k = source.width / CORNER_PROBE_WIDTH;
-  const m = homography(
-    [
-      [0, 0],
-      [outWidth, 0],
-      [outWidth, outHeight],
-      [0, outHeight],
-    ],
+  return warpedGrey(
+    source,
     grown.map(([x, y]) => [x * k, y * k] as Point),
+    outWidth,
+    outHeight,
   );
-  const out = new Uint8Array(outWidth * outHeight);
+}
+
+/**
+ * `quad` of `source` (in its pixels) warped to an upright `width` × `height`,
+ * each pixel sampled between its four neighbours; white beyond the photo.
+ */
+function warpedGrey(
+  source: Awaited<ReturnType<typeof decodedRows>>,
+  quad: Point[],
+  width: number,
+  height: number,
+): Grey {
+  const at = sourceOf(quad, width, height);
+  const out = new Uint8Array(width * height);
   const channels = source.channels;
-  for (let y = 0; y < outHeight; y++) {
-    for (let x = 0; x < outWidth; x++) {
-      const d = m[6]! * x + m[7]! * y + 1;
-      const u = (m[0]! * x + m[1]! * y + m[2]!) / d;
-      const v = (m[3]! * x + m[4]! * y + m[5]!) / d;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const [u, v] = at(x, y);
       const x0 = Math.floor(u);
       const y0 = Math.floor(v);
       if (
@@ -1480,7 +1463,7 @@ export async function straightenedTicket(
         x0 >= source.width - 1 ||
         y0 >= source.height - 1
       ) {
-        out[y * outWidth + x] = 255;
+        out[y * width + x] = 255;
         continue;
       }
       const fx = u - x0;
@@ -1491,12 +1474,12 @@ export async function straightenedTicket(
       const b = r0[(x0 + 1) * channels]!;
       const c = r1[x0 * channels]!;
       const e = r1[(x0 + 1) * channels]!;
-      out[y * outWidth + x] = Math.round(
+      out[y * width + x] = Math.round(
         (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + e * fx) * fy,
       );
     }
   }
-  return { width: outWidth, height: outHeight, pixels: out };
+  return { width, height, pixels: out };
 }
 
 /** Least squares `y = c₀ + c₁x + c₂x²` up to `degree`; all zero when it cannot be solved. */

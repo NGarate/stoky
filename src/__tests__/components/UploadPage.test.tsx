@@ -130,6 +130,9 @@ async function upload(container: HTMLElement): Promise<void> {
     input,
     new File(["receipt"], "ticket.jpg", { type: "image/jpeg" }),
   );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Enviar ticket" }),
+  );
 }
 
 /** The polite region the page owns (the snackbar's is a different one). */

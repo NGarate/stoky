@@ -693,7 +693,15 @@
     "skipLineOf": "Don't add this line: “{name}”",
     "uploadStoreList": "Your household's stores",
     "uploadStorePlaceholder": "Pick a store or type a new one",
-    "uploadStoreNew": "The store “{name}” will be added when the receipt is uploaded."
+    "uploadStoreNew": "The store “{name}” will be added when the receipt is uploaded.",
+    "frame": {
+      "cropHint": "Drag the corners to the edges of the receipt. Tapping the photo moves the frame there. With a keyboard, pick a corner and move it with the arrow keys.",
+      "send": "Send receipt",
+      "topLeft": "Top left corner",
+      "topRight": "Top right corner",
+      "bottomRight": "Bottom right corner",
+      "bottomLeft": "Bottom left corner"
+    }
   },
   "shopping": {
     "title": "Shopping lists",
