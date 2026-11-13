@@ -378,7 +378,8 @@ lists. Neither is covered by re-scanning the image.
 for four things: `bun.lock` (`bun`), the workflows' `uses:` pins
 (`github-actions`), the Dockerfile's `oven/bun` base (`docker`) and the release
 bundle's service images in `deploy/docker-compose.yml` (`docker-compose`). It
-proposes a release only once it is seven days old. Minor and patch updates
+proposes a release only once it is three days old, the same window
+`bunfig.toml` gives `bun install`. Minor and patch updates
 share one pull request per ecosystem; each major arrives alone. Majors of
 PostgreSQL and Valkey are never proposed: a PostgreSQL major cannot
 open the previous major's data directory, so each of those is a release with
@@ -455,7 +456,7 @@ CodeQL's setup completes asynchronously, which is why `check` follows it. `src/_
 | Private vulnerability reporting | The form [Security](../SECURITY.md#reporting-a-vulnerability) sends reporters to exists for people outside the project only while this is on. |
 | Immutable releases | A published release's files and tag cannot be replaced. Drafts stay editable, so `release-draft` retries still work. Not retroactive: a release published before it was on stays mutable. |
 | Secret scanning and push protection | Free on a public repository; push protection refuses a push that carries a recognised credential. |
-| Dependabot alerts and security updates | Security updates skip the seven-day cooldown ([Dependency updates](#dependency-updates)). |
+| Dependabot alerts and security updates | Security updates skip the three-day cooldown ([Dependency updates](#dependency-updates)). |
 | CodeQL default setup, extended suite | Scans the TypeScript and the workflows themselves. |
 | Actions: GitHub's own plus `.github/selected-actions.json`, pinned by full commit SHA | Turns the pinning rule in `ci.yml` from a convention into a refusal. |
 | Fork pull requests need approval from every external contributor | The default covered first-time contributors only. |

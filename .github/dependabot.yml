@@ -8,9 +8,12 @@
 # file, and for the bun ecosystem GitHub does not offer them at all: `bun audit`
 # in ci.yml stays the gate that blocks a vulnerable lockfile.
 #
-# Every entry waits seven days after a release before proposing it, so a
-# compromised release that is pulled within its first week never reaches a
-# pull request. Security updates bypass the cooldown. Minor and patch updates
+# Every entry waits three days after a release before proposing it, the same
+# window bunfig.toml's minimumReleaseAge gives `bun install`. A hijacked
+# release is usually found and pulled within hours or a day or two; waiting
+# longer than that would hold back the fixes for advisories that land every
+# week, so three days is the owner's balance between the two (2026-11-13; it
+# was seven). Security updates bypass the cooldown. Minor and patch updates
 # share one pull request per ecosystem; a major arrives alone, because it is a
 # decision rather than a refresh.
 #
@@ -26,7 +29,7 @@ updates:
       interval: weekly
       day: monday
     cooldown:
-      default-days: 7
+      default-days: 3
     groups:
       minor-and-patch:
         update-types: [minor, patch]
@@ -43,7 +46,7 @@ updates:
       interval: weekly
       day: monday
     cooldown:
-      default-days: 7
+      default-days: 3
     groups:
       minor-and-patch:
         update-types: [minor, patch]
@@ -63,7 +66,7 @@ updates:
       interval: weekly
       day: monday
     cooldown:
-      default-days: 7
+      default-days: 3
     groups:
       minor-and-patch:
         update-types: [minor, patch]
@@ -88,7 +91,7 @@ updates:
       interval: weekly
       day: monday
     cooldown:
-      default-days: 7
+      default-days: 3
     groups:
       minor-and-patch:
         update-types: [minor, patch]

@@ -1420,7 +1420,8 @@ Verified against the files named in each row.
   `image-publish` needs) and part of `check:all`, runs zizmor 1.31.1 over
   `.github/` (both workflows and `dependabot.yml`): template injection, credentials persisted in the
   checkout, caches a release path restores, dangerous triggers, Dependabot
-  without a cooldown. It comes from `ghcr.io/zizmorcore/zizmor` pinned by
+  without a cooldown of at least three days (`.github/zizmor.yml` sets that
+  threshold, the project's own; zizmor's default is seven). It comes from `ghcr.io/zizmorcore/zizmor` pinned by
   index digest, runs with no network (`--offline`, `--network none`), and
   fails on any finding its `regular` persona reports, at any severity; an
   unparseable workflow fails it too (`--strict-collection`), where by default
@@ -1557,8 +1558,10 @@ Verified against the files named in each row.
   `(newer than --minimum-release-age)`, or through `--minimum-release-age 0` on
   that one command, which was measured to override the file. Neither lowers the
   gate for the next update; `minimumReleaseAgeExcludes` would, so it stays
-  empty. Dependabot's seven-day cooldown is longer than the gate, so a version
-  it proposes is already old enough to clear it. `package-overrides.test.ts`
+  empty. Dependabot's cooldown is the same three days (seven until
+  2026-11-13, when the owner shortened it: advisories land weekly, and a
+  week's wait held their fixes back), so a version it proposes is already old
+  enough to clear the gate. `package-overrides.test.ts`
   holds the value, the empty exclusion list and that ordering.
 - **Three packages may run install scripts**: `argon2`, `prisma` and
   `@prisma/engines` (`trustedDependencies` in `package.json`, which replaces

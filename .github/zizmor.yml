@@ -1,0 +1,12 @@
+# zizmor's own configuration, found here by its discovery (scripts/check-ci.sh
+# runs it over .github/).
+rules:
+  # zizmor's default asks Dependabot to wait seven days after a release. This
+  # project waits three, the same window bunfig.toml's minimumReleaseAge gives
+  # `bun install`: the owner's balance (2026-11-13) between a hijacked release,
+  # usually pulled within a day or two, and the fixes a longer wait holds back.
+  # The audit still runs, at three: an entry with a shorter cooldown, or none,
+  # fails it (measured: `days: 4` turns the same file red).
+  dependabot-cooldown:
+    config:
+      days: 3

@@ -1068,11 +1068,11 @@ describe("Dependabot's update configuration", () => {
   });
 
   it.each(updates.map((u) => [String(u["package-ecosystem"]), u]))(
-    "checks weekly and waits at least a week after a release: %s",
+    "checks weekly and waits at least three days after a release: %s",
     (_, update) => {
       expect(update.schedule?.interval).toBe("weekly");
       expect(Number(update.cooldown?.["default-days"])).toBeGreaterThanOrEqual(
-        7,
+        3,
       );
       // Exemptions would let a dependency skip the wait.
       expect(update.cooldown?.exclude).toBeUndefined();
