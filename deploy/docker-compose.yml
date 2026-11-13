@@ -94,6 +94,8 @@ services:
       STOKY_URLS: "https://${DOMAIN:?Define DOMAIN en .env sin https ni ruta}"
       STOKY_SECRET: "${STOKY_SECRET:-}"
       STOKY_REGISTRATION: "${STOKY_REGISTRATION:-first-user}"
+      # Whose X-Forwarded-For counts: Traefik's network, below, and nobody else.
+      STOKY_TRUSTED_PROXIES: "${STOKY_TRUSTED_PROXIES:-10.153.74.0/24}"
       OCR_WORKERS: "${OCR_WORKERS:-3}"
     volumes:
       - uploads:/app/uploads
@@ -183,3 +185,7 @@ networks:
   stoky:
     internal: true
   traefik:
+    # A fixed range, so that the app can be told which peers are Traefik.
+    ipam:
+      config:
+        - subnet: 10.153.74.0/24

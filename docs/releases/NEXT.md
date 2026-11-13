@@ -9,6 +9,12 @@
 > correcciones que Alpine ya publicó, sin los 19 avisos HIGH de `krb5` y
 > `libxslt` que tiene la oficial.
 >
+> Stoky ya solo cree las cabeceras `X-Forwarded-For` y `X-Forwarded-Proto`
+> de los proxies indicados en `STOKY_TRUSTED_PROXIES`, que el paquete ajusta
+> al Traefik incluido. Antes, quien llegara a la aplicación sin pasar por el
+> proxy podía elegir con una cabecera la dirección por la que se le contaban
+> los intentos de inicio de sesión.
+>
 > PostgreSQL pasa de la versión 16 a la 18, que no abre los datos de la 16:
 > una instalación anterior arranca con la base de datos vacía.
 
@@ -210,6 +216,12 @@ se descarta sin más.
 > to our own image (`ghcr.io/ngarate/stoky/postgres`): the official one with
 > the fixes Alpine has already shipped, without the official one's 19 HIGH
 > advisories in `krb5` and `libxslt`.
+>
+> Stoky now believes `X-Forwarded-For` and `X-Forwarded-Proto` only from
+> the proxies listed in `STOKY_TRUSTED_PROXIES`, which the bundle sets to
+> the Traefik it ships. Before, anyone who reached the application without
+> going through the proxy could choose, with one header, the address their
+> sign-in attempts were counted by.
 >
 > PostgreSQL moves from 16 to 18, which cannot open 16's data: an earlier
 > installation starts with an empty database.

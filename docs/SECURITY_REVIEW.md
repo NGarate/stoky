@@ -246,7 +246,11 @@ the four gaps Phase 3 left and Phase 7 was to close, and they are closed.
   identifier cannot know", so changing the trust model means changing those
   tests and that paragraph together. The remedy — a trusted-proxy allowlist, or
   refusing to start without one — is a decision with costs and stays with the
-  operator and the owner.
+  operator and the owner. **Since 2026-11-13 it is taken:** the production
+  entry believes forwarded headers only from the peers in
+  `STOKY_TRUSTED_PROXIES`, nobody by default, and a caller who sends the
+  header directly is counted by the address it connected from (`SECURITY.md`,
+  "Whose word that header is").
 - ~~The **registration limit is exercised by no test**.~~ **Verified and
   closed** (`33bdc14`). The finding was right about the cause: every test built
   its tRPC context without headers, and `auth.register` meters only

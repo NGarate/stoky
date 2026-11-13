@@ -1691,8 +1691,10 @@ authentication only from known devices":
   (not from using a session it already holds). That is accepted: not
   handing it an id keeps a cookie the client never sent off requests that
   are judged by whether they carry a cookie.
-- The set is deliberately not under `rl:login:`. Without a proxy the per-IP
-  counter is `rl:login:<whatever X-Forwarded-For says>`, and a forged header
+- The set is deliberately not under `rl:login:`. Wherever the caller's own
+  `X-Forwarded-For` is believed (`bun run dev`, or a `STOKY_TRUSTED_PROXIES`
+  drawn too wide) the per-IP counter is `rl:login:<whatever the header says>`,
+  and a forged header
   naming the set would plant a string at its key and, failing closed, stop
   every sign-in to that account. A test forges exactly that header.
 - A known device's own budget still runs out: a stolen device cookie is five
@@ -1810,35 +1812,70 @@ publishing an instance:
   2026-10-12 one request can also carry at most 100 calls ("Batched calls"
   above), so how many arrive at once is bounded by how many requests a caller
   sends — and nothing counts those.
-- **The identifier is an IP address**, read from the last hop of
-  `X-Forwarded-For`. Everyone behind one NAT therefore shares a bucket. An
-  attacker with a range of addresses gets one bucket per address, which is what
-  the per-account limit above exists to bound.
-- **That makes a proxy a requirement, not a recommendation.** The last hop is
-  the entry a client cannot forge *only when something in front of the app
-  appends to the header*. Reachable directly, the whole header is whatever the
-  caller sent — measured, not inferred: a request carrying
-  `X-Forwarded-For: 1.2.3.4` is counted against `1.2.3.4`, and one carrying
-  `9.9.9.9` gets a fresh counter. `X-Real-IP` is trusted the same way and for
-  the same reason. Nothing in the header distinguishes a proxy's entry from a
-  client's, so nothing in the application can either.
+- **The identifier is an IP address**, read from `X-Forwarded-For`. Everyone
+  behind one NAT therefore shares a bucket. An attacker with a range of
+  addresses gets one bucket per address, which is what the per-account limit
+  above exists to bound.
+- **Whose word that header is: the address that connected, or a proxy listed
+  in `STOKY_TRUSTED_PROXIES`.** `X-Forwarded-For` is a request header, so
+  whoever connects can write it, and nothing in it distinguishes a proxy's
+  entry from a client's. The socket does. The production entry
+  (`src/server/http/entry.ts`) runs in front of Next, the one place the
+  socket's address is still visible, and settles the headers of every request
+  before anything reads them (`src/server/http/trusted-proxies.ts`):
 
-  **So: do not expose this application without a reverse proxy that sets
-  `X-Forwarded-For` itself.** The release bundle (`deploy/`) puts Traefik in front
-  and Traefik does — the release smoke (`scripts/smoke-proxy.sh`) forges both
-  headers through it on every release and fails unless the limit still holds,
-  and `--live DOMAIN` runs the same check against a real installation's
-  ingress. A deployment that publishes the container's port directly has a
-  per-IP limit an attacker turns off with one header — bounded only by the
-  per-account limit above, which is what keeps that from being an open door
-  rather than what makes it safe.
+  - **A peer that is not listed is the client.** Its `X-Forwarded-For`,
+    `X-Real-IP`, `X-Forwarded-Proto`, `X-Forwarded-Host` and `Forwarded` are
+    deleted, and `X-Forwarded-For` is rewritten to the peer's own address.
+  - **A listed peer is believed.** The client is the first address, from the
+    right of `X-Forwarded-For`, that is not itself listed: each proxy appends,
+    so everything to the left of that entry is the client's own claim. A CDN
+    in front of the proxy is skipped the same way once its ranges are listed,
+    and shares one bucket per edge until they are. `X-Forwarded-Proto` and
+    `X-Forwarded-Host` are kept; `X-Real-IP` is deleted, so there is one
+    header that names the client and one place that wrote it.
 
-  Recorded as a deployment requirement rather than fixed, because the fixes are
-  choices with costs — an allowlist of trusted proxy addresses, or refusing to
-  start without one — and they are the operator's and the owner's to make.
-  `src/__tests__/unit/rate-limit.test.ts` pins the current behaviour under
-  "what the identifier cannot know", so changing the trust model means changing
-  those tests and this paragraph together.
+  The list is comma-separated addresses and CIDR ranges, IPv4 or IPv6, and
+  **empty by default: nobody is trusted**. Not loopback and not the private
+  ranges, which other servers offer as a preset: a LAN client of a published
+  port arrives from a private address, and that preset would let anyone on
+  the LAN choose their own. An entry that is neither an address nor a range
+  stops the server at start-up with a `[proxy] refusing to start:` line that
+  names it — `10.0.0.0/` is not read as `/0`. The release bundle sets the
+  list to the network it gives Traefik (`10.153.74.0/24`).
+
+  Measured on the production build (Next 16.4.3, 2026-11-13) with a request
+  from `127.0.0.1` forging `X-Forwarded-For: 203.0.113.9`: served by
+  `bun server.js` alone the security log names `203.0.113.9`; through the
+  entry it names `127.0.0.1`; and it names `203.0.113.9` again only with
+  `STOKY_TRUSTED_PROXIES=127.0.0.1`. A forged `X-Forwarded-Proto: https`
+  stops adding `upgrade-insecure-requests` to the policy in the same step.
+  `src/__tests__/unit/trusted-proxies.test.ts` covers the decision and
+  `proxy-entry.test.ts` starts the entry and forges the header at it.
+
+  What that leaves:
+
+  - **The list is the operator's claim, and the application cannot check
+    it.** A range wider than the proxy — the whole LAN, `0.0.0.0/0` — hands
+    everyone inside it a per-address limit they turn off with one header,
+    bounded only by the per-account limit above. `scripts/smoke-proxy.sh
+    --live DOMAIN` forges the header through a real installation's ingress
+    and fails unless the limit still holds.
+  - **Behind a proxy that is not listed, every visitor is the proxy.** They
+    share one sign-in and one registration budget and the security log names
+    the proxy for all of them: over-restrictive, which is the safe direction,
+    and visible. The server says so at start-up when the list is empty.
+  - **`bun run dev` does not go through the entry.** There the header is the
+    caller's, as it was everywhere until 2026-11-13.
+    `src/__tests__/unit/rate-limit.test.ts` pins that under "what the
+    identifier cannot know".
+  - **The entry is a listener on the `node:http` server Next creates**, added
+    by a preload, because Next's standalone server takes no hook and its
+    custom-server API does not work with standalone output. A Next upgrade
+    that stopped serving through `node:http` would leave the entry running
+    and deciding nothing; `scripts/smoke-proxy.sh --live` is the check that
+    would say so, and `image-posture.test.ts` pins that the image starts
+    through the entry at all.
 - **An IPv6 client is counted by its /64, and logged by its address.** One
   IPv6 subscriber is at least a whole /64 — the smallest block a line is
   given — and a host picks addresses inside it at will, so counted per address
@@ -2911,7 +2948,8 @@ The app rejects short signing keys and the published development placeholder.
 
 Use the release bundle, which exposes only Traefik. Development Compose files
 publish local infrastructure and carry known passwords; they are not deployments.
-A proxy that sanitizes forwarded addresses remains mandatory for per-IP limits.
+Forwarded addresses are believed only from `STOKY_TRUSTED_PROXIES`, which the
+bundle sets to Traefik's network.
 If the hostname has an AAAA record, read
 [Clients on IPv6](docs/INSTALL.md#clients-on-ipv6) first.
 

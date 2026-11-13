@@ -289,11 +289,15 @@ http://127.0.0.1:3000`, which is the configuration above.
 bun run build
 cp -r .next/static .next/standalone/.next/static
 cp -r public .next/standalone/public
-NODE_ENV=production PORT=3000 HOSTNAME=127.0.0.1 bun .next/standalone/server.js
+NODE_ENV=production PORT=3000 HOSTNAME=127.0.0.1 \
+  bun --preload ./src/server/http/entry.ts .next/standalone/server.js
 ```
 
 These are the steps the browser suite runs (`playwright.config.ts`,
-`webServer`) and the image runs. `bun run start` *appears* to work, but it warns
+`webServer`) and the image runs. The preload is the production entry: it is
+what makes the server ignore an `X-Forwarded-For` from anyone not listed in
+`STOKY_TRUSTED_PROXIES`, which behind `tailscale serve` (row 4) is
+`127.0.0.1`, since here nothing of Docker's stands in between. `bun run start` *appears* to work, but it warns
 `"next start" does not work with "output: standalone"` and serves `.next/`
 rather than the bundle the image ships, so it can hide a tracing defect.
 `STOKY_SECRET` must not be the example value, because production refuses to

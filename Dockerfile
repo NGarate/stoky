@@ -84,6 +84,7 @@ RUN mkdir -p /app/tessdata \
 # BusyBox clears the bits before testing X, so it strips execute from files.
 RUN chmod -R a+rX,go-w /app/.next/standalone /app/.next/static /app/public \
       /app/prisma /app/prisma.config.ts /app/package.json /app/tessdata \
+      /app/src/server/http/entry.ts /app/src/server/http/trusted-proxies.ts \
       /opt/ocr /opt/prisma
 
 FROM bun AS production
@@ -98,6 +99,10 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+# The entry runs before server.js and outside Next's bundle, so the trace
+# cannot bring it: it and the one module it imports, side by side.
+COPY --from=builder /app/src/server/http/entry.ts ./entry.ts
+COPY --from=builder /app/src/server/http/trusted-proxies.ts ./trusted-proxies.ts
 # Migrations need the schema and the migrations directory, nothing else in
 # prisma/. The demo seed stays out: it hard-codes an OWNER with a password the
 # README publishes, and nothing at runtime reads it. Two COPYs, because a
@@ -137,4 +142,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 EXPOSE 3000
 USER bun
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["sh", "-c", "bun /opt/prisma/node_modules/prisma/build/index.js migrate deploy --schema=/app/prisma/schema.prisma && exec bun server.js"]
+CMD ["sh", "-c", "bun /opt/prisma/node_modules/prisma/build/index.js migrate deploy --schema=/app/prisma/schema.prisma && exec bun --preload ./entry.ts server.js"]

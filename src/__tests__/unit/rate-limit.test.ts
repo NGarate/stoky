@@ -59,9 +59,11 @@ describe("rateLimitIdentifier", () => {
     expect(rateLimitIdentifier(headers)).toBe("10.0.0.7");
   });
 
-  it("falls back to X-Real-IP", () => {
+  it("does not read X-Real-IP", () => {
+    // A second header naming the client is a second answer. The entry deletes
+    // it (`src/server/http/trusted-proxies.ts`); nothing here falls back to it.
     expect(rateLimitIdentifier(new Headers({ "x-real-ip": "10.0.0.8" }))).toBe(
-      "10.0.0.8",
+      "unknown",
     );
   });
 
@@ -149,7 +151,7 @@ describe("clientAddress", () => {
       clientAddress(new Headers({ "x-forwarded-for": "1.1.1.1, 10.0.0.7" })),
     ).toBe("10.0.0.7");
     expect(clientAddress(new Headers({ "x-real-ip": "10.0.0.8" }))).toBe(
-      "10.0.0.8",
+      "unknown",
     );
     expect(clientAddress(new Headers())).toBe("unknown");
   });
@@ -167,15 +169,16 @@ describe("clientAddress", () => {
  *
  * This is not a defect in the function. HTTP gives it nothing to tell "the
  * proxy wrote this" from "the client wrote this" — the distinction lives in the
- * deployment, not in the header. What these tests do is stop the requirement
- * being invisible: they state the exposure as behaviour, so it cannot be
- * discovered later as a surprise, and they go red if somebody changes the trust
- * model without changing `SECURITY.md` with it.
+ * socket, which this function never sees. What these tests do is stop the
+ * requirement being invisible: they state it as behaviour, and they go red if
+ * somebody changes the trust model without changing `SECURITY.md` with it.
  *
- * The remedy is an owner's decision and is not taken here: an allowlist of
- * trusted proxy addresses, refusing to start without one, or accepting the
- * exposure and documenting the deployment requirement — which is what is done
- * for now.
+ * The remedy was taken on 2026-11-13, in front of this function rather than
+ * in it: the production entry (`src/server/http/entry.ts`) sees the socket,
+ * and rewrites the header to one address before anything here reads it — the
+ * peer's, or what a proxy listed in `STOKY_TRUSTED_PROXIES` said
+ * (`trusted-proxies.test.ts`, `proxy-entry.test.ts`). So what follows is true
+ * of the function and of `next dev`, and no longer of an installation.
  */
 describe("what the identifier cannot know", () => {
   it("honours a header the caller wrote, when nothing has appended to it", () => {
@@ -197,14 +200,6 @@ describe("what the identifier cannot know", () => {
     );
 
     expect(first).not.toBe(second);
-  });
-
-  it("trusts X-Real-IP the same way, and for the same reason", () => {
-    // The fallback is not safer than the header it falls back from; it is the
-    // same trust placed in a different name.
-    expect(rateLimitIdentifier(new Headers({ "x-real-ip": "5.5.5.5" }))).toBe(
-      "5.5.5.5",
-    );
   });
 
   it("is bounded by the per-account limit, which is what makes this survivable", () => {

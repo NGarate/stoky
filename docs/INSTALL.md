@@ -193,6 +193,17 @@ value that is not a positive whole number means `3`, and more than the host's
 processors means as many as it has. It is read when the app starts, so apply
 a change with `docker compose up -d --wait`.
 
+`STOKY_TRUSTED_PROXIES` is whose `X-Forwarded-For` Stoky believes, as
+comma-separated addresses and CIDR ranges. Stoky counts sign-in attempts per
+address, and only a listed proxy may say what a visitor's address is: from
+anyone else the header is ignored and the address that connected is counted.
+The bundle sets it to the network it gives Traefik (`10.153.74.0/24`), so
+leave it unset unless you put another proxy in front or change that network.
+Keep it as narrow as the proxy itself, because every address in it can choose
+the address it is counted by. A value that is neither an address nor a range
+stops the app starting, with a `[proxy] refusing to start:` line in
+`docker compose logs app`.
+
 Use hex for the database password: it is inserted into a connection URL without
 percent-encoding. Do not reuse the development `.env.example`. Rotating the
 session secret signs everybody out, changes every account tag in the

@@ -36,8 +36,9 @@ import { valkey } from "@/lib/valkey";
 
 /**
  * Not under `rl:login:`, on purpose. The per-address counter is
- * `rl:login:<identifier>`, and without a proxy in front of the app the
- * identifier is whatever `X-Forwarded-For` says (SECURITY.md). A known-device
+ * `rl:login:<identifier>`, and wherever the caller's own `X-Forwarded-For` is
+ * believed — `bun run dev`, or a `STOKY_TRUSTED_PROXIES` drawn too wide — the
+ * identifier is whatever that header says (SECURITY.md). A known-device
  * set under that prefix could be pre-empted by a forged header: the per-address
  * `INCR` would create a *string* at the set's key, every later read of it would
  * fail with `WRONGTYPE`, and — failing closed — nobody could sign in to that

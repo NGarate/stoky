@@ -219,10 +219,13 @@ export default defineConfig({
    * the developer's database. The standalone server takes no lock, reads
    * `stoky_e2e`, and is the artefact a self-hosted install actually runs.
    *
-   * **`node .next/standalone/server.js`, not `next start`** — `next.config.ts`
+   * **`.next/standalone/server.js`, not `next start`** — `next.config.ts`
    * sets `output: "standalone"` and `next start` refuses it. The two `cp`
    * lines are what the Dockerfile does with `COPY --from=builder`: standalone
-   * output deliberately excludes `.next/static` and `public/`.
+   * output deliberately excludes `.next/static` and `public/`. The preload is
+   * the image's too (`src/server/http/entry.ts`): with no
+   * `STOKY_TRUSTED_PROXIES` here, the server names every request by the
+   * address that connected, as an installation with no proxy does.
    *
    * `reuseExistingServer` is off everywhere now: adopting whatever holds the
    * port means testing a stale build, or somebody else's server entirely.
@@ -232,7 +235,7 @@ export default defineConfig({
       "bun run build" +
       " && cp -r .next/static .next/standalone/.next/static" +
       " && cp -r public .next/standalone/public" +
-      " && bun .next/standalone/server.js",
+      " && bun --preload ./src/server/http/entry.ts .next/standalone/server.js",
     url: BASE_URL,
     reuseExistingServer: false,
     env: {
