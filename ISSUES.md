@@ -13,7 +13,7 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1, TEST-9, TEST-12, PARSE-1 to PARSE-5 and OCR-4 to OCR-12.** PARSE-5 (2026-11-12) is the owner's requirement that what the parser knows of each chain move to the database. The PARSE and OCR entries (2026-11-07) are the review of PR #19 and what the receipt OCR bench measured; two of the review's findings closed with the preparation's rewrite (the crop repeated per reading, and image transforms outside `image.ts`). TEST-10 closed on 2026-10-27 with its spec deleted (PROGRESS D154). TEST-11 closed on 2026-10-23 (`cb08d9a`): every `bun test` now loads Next's environment baseline first. TEST-7 closed on 2026-09-12 by removing
+**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1, TEST-9, TEST-12, TEST-13, PARSE-1 to PARSE-5 and OCR-4 to OCR-12.** PARSE-5 (2026-11-12) is the owner's requirement that what the parser knows of each chain move to the database. The PARSE and OCR entries (2026-11-07) are the review of PR #19 and what the receipt OCR bench measured; two of the review's findings closed with the preparation's rewrite (the crop repeated per reading, and image transforms outside `image.ts`). TEST-10 closed on 2026-10-27 with its spec deleted (PROGRESS D154). TEST-11 closed on 2026-10-23 (`cb08d9a`): every `bun test` now loads Next's environment baseline first. TEST-7 closed on 2026-09-12 by removing
 two process-wide ProductRating mocks from unrelated component tests.
 TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
@@ -145,6 +145,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | TEST-10 | The service worker's offline spec failed three full runs on the Better Auth branch | ✅ Closed 2026-10-27 — the spec was deleted, cause never found |
 | TEST-11 | `trpc-links.test.ts` failed once in CI with Next's "AsyncLocalStorage accessed in runtime where it is not available" | ✅ Resolved `cb08d9a` — the first file to import `next/headers` left Next's request storage broken for the rest of the process |
 | TEST-12 | The passkey integration tests stall about two seconds at a time in CI, and two stalls in one test exceed its five-second limit | 🟡 Open — seen 2026-11-12 on PR #20, on PostgreSQL 16 and 18 alike; cause not found |
+| TEST-13 | Receipt readings left running by earlier integration files fail the security log's "nothing else" test, when the files run in alphabetical order | 🟡 Open — found 2026-11-13; fails on `master` too in that order |
 | PARSE-1 | A telephone number in the header is counted as a discount | 🟡 Open — found reviewing PR #19, 2026-11-06; reproduced |
 | PARSE-2 | An article whose price equals the sum of those above it is dropped as a damaged total | 🟡 Open — found reviewing PR #19; reproduced |
 | PARSE-3 | A weighed article with its name on the weight line is lost | 🟡 Open — found reviewing PR #19; reproduced |
@@ -1358,6 +1359,44 @@ module holding an old client (everything calls `valkey()`), and
 **The fix** starts with a CI run that says where the two seconds go: the
 Valkey commands' latency and timeouts around the passkey file, and whether
 the event loop was blocked instead.
+
+---
+
+### 🟡 TEST-13: Receipt readings left running by earlier files fail the security log's "nothing else" test
+
+**File:** `src/__tests__/integration/security-log.test.ts` ("ten wrong
+passwords write ten lines of the security log and nothing else"), and the
+files that upload receipts before it
+**Severity:** LOW — a test that fails depending on the order its suite runs
+in; nothing a person meets
+**Status:** OPEN — found 2026-11-13 while gating
+`feat/proxy-outside-the-bundle-2026-11-13`; not caused by that branch
+
+The test spies on `console.error` and `console.log` for the length of ten
+sign-ins and expects nothing from them. `receipt.router.test.ts`,
+`receipt.upload.test.ts` and `routers.test.ts` upload receipts whose reading
+goes on in the background after each test has deleted its rows; when a
+reading finishes it logs `Failed to process receipt: … P2025` and `Failed to
+mark receipt as failed: … P2025`. If those files run just before
+`security-log.test.ts`, the lines land inside its window and the test fails
+with them as its diff.
+
+Whether they do depends on the order `bun test src/__tests__/integration`
+visits the files, which is the directory's own. In a Git checkout on this
+machine's disk it is alphabetical, and the test failed in four runs of four
+on the branch. `git archive master` extracted to a tmpfs ran the files in
+reverse and passed it in two of two; the same archive extracted beside the
+checkout ran them alphabetically and failed the same test. So it is
+`master`'s, and the order's. The five files alone, in either order, pass:
+the full suite's backlog of readings is needed. Measured against a
+PostgreSQL 18 and a Valkey on spare ports, at a load average of 4 to 6; CI's
+runs of `master` pass, in whatever order and at whatever speed they have
+there.
+
+**The fix** is for the files that upload receipts to wait for, or stop, the
+readings they started before they end, so that nothing they began outlives
+them. Loosening the "nothing else" assertion would hide the next library
+line it exists to catch.
 
 ---
 
