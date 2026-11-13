@@ -73,7 +73,9 @@ household directly.
   and 7). An OWNER or ADMIN can rename the household, and set two more
   names:
   - **The name in the browser tab** — its own field, independent of the
-    household's name. Empty, the tab says `Stoky` as today. **It is shown
+    household's name. Empty, the tab says `Stoky` as today — never the
+    household's name (owner, 2026-11-13: "muestra Stoky o el campo
+    personalizado"). **It is shown
     without a session too** (`/login`, `/register`): whoever reaches the
     sign-in page sees it. The owner chose that knowingly.
   - **The name of the installed app** (the PWA manifest's `name` and
@@ -258,9 +260,24 @@ What the 2026-11-13 measurements found:
 - **Neither can see an unused export.** oxlint 1.89 has no
   `import/no-unused-modules`, and TypeScript does not check exports. That
   needs a whole-project tool: **knip**, which understands Next.js's file
-  conventions, Playwright and package.json dependencies.
+  conventions, Playwright and package.json dependencies. knip 6 parses with
+  oxc and does not load TypeScript, so TypeScript 7 is no obstacle; it runs
+  under Bun alone, in the Alpine CI image too.
+- **What knip does not see**, and stays a manual check (or a test of its
+  own): tRPC procedures nothing calls (they are members of a router
+  object), props no caller passes, `package.json` scripts nothing names,
+  and catalogue keys (0.5's test).
+- **What knip found on landing that the sweep had not:** a duplicate export
+  (`receiptRegionSchema` and `receiptReframeSchema`,
+  `validations/receipt.ts`), `scripts/release-notes.ts` exporting its
+  internals, and, in production mode, `src/lib/readability.ts` used only by
+  its test — a measuring tool for the catalogues' Spanish, not application
+  code: move it under `src/__tests__/` rather than delete it. Its count that
+  day: default mode 59 unused exports, 49 unused types, 1 duplicate, nothing
+  else; production mode adds the test-only seams (167 exports, 71 types,
+  2 files).
 
-So three commits:
+So, in order:
 
 - `build: fail lint on warnings, and typecheck unused locals and parameters`
   — `--deny-warnings` on the `lint` script (and wherever CI and
@@ -274,19 +291,29 @@ So three commits:
   `src/components/ui/*` prop types, the `*Input` types 0.2 left, …). Drop
   the keyword. **Exports read only by tests stay**: they are deliberate
   seams, and the checker below counts tests as users.
-- `build(deps): check for unused files, exports and dependencies with knip`
-  — a new devDependency, pinned exactly, in a commit of its own (`CLAUDE.md`
-  and the atomic-dependency rule); a `knip` config naming the entry points
-  knip cannot infer (`src/server/http/entry.ts` and `trusted-proxies.ts`,
-  which the Dockerfile copies and runs; `src/proxy.ts`;
-  `src/instrumentation.ts`; `src/i18n/request.ts`; `public/sw.js`;
-  `prisma/seed.ts`; `scripts/*`); a `check:unused` script; and a step in
-  `bun run verify:ci` and CI's quality job. Clean on the tree it lands on,
-  and seen red with one unused export added. **Check first that knip runs
-  against this project's TypeScript 7**: it loads TypeScript's compiler
-  API, which TypeScript 7's native port may not provide. If it does not,
-  land the first two commits, record the gap in this plan, and ask the
-  owner rather than pick an unmaintained substitute.
+- **knip itself landed on 2026-11-13, ahead of this plan** (`build(deps):
+  add knip …`, `025b88f6`, pinned at 6.45.0, the newest version past
+  bunfig's three-day `minimumReleaseAge` that day): `knip.jsonc` (plugins
+  enabled from what the repository holds, the entry points knip cannot
+  infer, a production mode) and the `check:unused` and
+  `check:unused:production` scripts,
+  **deliberately not a gate yet**, because the tree it landed on still held
+  everything 0.1–0.8 removes. Read its configuration and commit message
+  before this step; they say what each entry and ignore is for.
+- `ci: make knip a gate` — the last commit of 0.9, once `bun run
+  check:unused` is clean on the tree after 0.1–0.8 and the two commits
+  above. Wire it where the other static checks run: `bun run verify:ci`
+  (`scripts/verify-local.sh`), `scripts/check-scope.sh` if the others are
+  there, and CI's quality job in `.github/workflows/ci.yml`, run inside the
+  Alpine image like the rest (`scripts/ci-in-image.sh`) — knip must run
+  under Bun alone, with no Node.js. `src/__tests__/unit/ci-workflow.test.ts`
+  holds the jobs' shape: make it fail if the step is removed. Prove the gate:
+  an unused export added on a scratch branch must turn the job red. The
+  default mode is the gate; `--production` (exports only tests read) stays
+  informational, since those are deliberate seams.
+- Whatever knip still reports at that point is either fixed in this step
+  or given an ignore with a comment saying which runtime, framework or
+  Dockerfile path loads it. Never an ignore to make it pass.
 - `docs/VERIFICATION_SEQUENCE.md` gains the new check, and any document
   that says what `lint` covers says it now fails on warnings.
 
@@ -543,7 +570,8 @@ The owner's decisions are in §2. This is the one schema change in the plan.
   name (and, when it is empty, the household's name) is public as well.
   The form says so next to each field, and `SECURITY.md` records it with
   the decision.
-- Tests: the fallbacks (empty tab name → `Stoky`; empty app name → the
+- Tests: the fallbacks (empty tab name → `Stoky`, even with a household
+  name set; empty app name → the
   household's name; no household → `Stoky`), the title on `/login`, and
   the manifest's name. `docs/releases/NEXT.md`: a household notices.
 
