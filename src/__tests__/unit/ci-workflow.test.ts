@@ -373,6 +373,18 @@ describe("the CI workflow's release path restores no cache", () => {
     expect(input(push(), "no-cache", master)).not.toBe("true");
   });
 
+  // From the cache `apk upgrade` never runs again while the base digest
+  // stands still, so the scan and `latest` kept Alpine packages with fixes
+  // already published (zlib, CVE-2026-4738).
+  it("rebuilds the production stage of master's image, so Alpine's fixes arrive", () => {
+    const scan = job("image-build").steps?.find(
+      (s) => s.name === "Build for scanning",
+    );
+    if (!scan) throw new Error("image-build has no `Build for scanning` step");
+    expect(input(scan, "no-cache-filters", master)).toBe("production");
+    expect(input(push(), "no-cache-filters", master)).toBe("production");
+  });
+
   it("gives a tag's clean build a longer limit than master's cached one", () => {
     const limit = job("image-publish")["timeout-minutes"];
     expect(resolve(limit, tag)).toBe(30);

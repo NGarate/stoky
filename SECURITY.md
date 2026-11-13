@@ -1503,7 +1503,11 @@ Verified against the files named in each row.
   a judgement no test holds; `audit` installs nothing, so the cache saved it
   nothing. `latest` and `sha-`
   images still rebuild from the layer cache: they are the development channel,
-  and an installation runs an exact version tag. `ci-workflow.test.ts` holds each
+  and an installation runs an exact version tag. All but the production stage,
+  which they rebuild every time: its `apk upgrade` is what fetches Alpine's
+  fixes, and from the cache it never ran again while the base digest stood
+  still (zlib CVE-2026-4738, fixed in Alpine and still in every master scan,
+  2026-11-13). `ci-workflow.test.ts` holds each
   setting. `v0.1.0-alpha.3` was assembled from that cache: in run
   `38178388250` every Dockerfile step of its publish build but the last was
   `CACHED`, and `release-draft` logged a cache hit for Bun.

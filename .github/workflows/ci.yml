@@ -525,6 +525,12 @@ jobs:
       # cache-to here is what makes image-publish cheap on master: it rebuilds
       # this same commit from these layers. A tag's image-publish does not read
       # them — see there.
+      #
+      # Except the production stage, which is rebuilt every time: its
+      # `apk upgrade` is the only thing that fetches Alpine's fixes, and from
+      # the cache it never ran again while the base digest stood still. zlib
+      # 1.4-r0 was in Alpine 3.24 for days while every master scan still found
+      # 1.3.2-r1 (CVE-2026-4738).
       - name: Build for scanning
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -534,6 +540,7 @@ jobs:
           tags: stoky:scan
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          no-cache-filters: production
 
       # The SARIF pair below is reporting, not enforcement — the gate that
       # fails the build on findings is the separate Trivy step underneath, and
@@ -680,7 +687,9 @@ jobs:
 
       # cache-from only: image-build already exported these layers, and
       # re-exporting identical ones here would spend upload time saying
-      # nothing new. Neither on a tag: see the comment above this job.
+      # nothing new. Neither on a tag: see the comment above this job. The
+      # production stage is rebuilt as image-build's is, so `latest` gets the
+      # Alpine fixes the scan saw rather than a cached `apk upgrade`.
       - name: Push
         id: push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -694,6 +703,7 @@ jobs:
           provenance: mode=max
           cache-from: ${{ github.ref_type != 'tag' && 'type=gha' || '' }}
           no-cache: ${{ github.ref_type == 'tag' }}
+          no-cache-filters: production
 
       # Lets an operator verify the image they are about to self-host really
       # was built from this repository, by this workflow, from this commit.
