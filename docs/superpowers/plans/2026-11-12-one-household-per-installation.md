@@ -93,7 +93,7 @@ household directly.
 
 ## 4. The commits
 
-Step 0 comes first, then commits 1–7, in order. Work on a branch cut from
+Step 0 comes first (0.1–0.10), then commits 1–7, in order. Work on a branch cut from
 `master` after PR #25 has merged, named
 `feat/one-household-<the date it is cut>`, and open a pull request
 (`CLAUDE.md`, Git Workflow: unattended agent work). If the owner is watching
@@ -113,20 +113,23 @@ grep -rn "\"open\"\|STOKY_REGISTRATION\|registrationAllows\|registrationOpen" sr
 grep -rn "removeMember" src e2e messages
 ```
 
-### Step 0 — remove the dead code (added 2026-11-13)
+### Step 0 — clean up, and keep it clean (added 2026-11-13)
 
-A sweep of every file on 2026-11-13 (eight read-only agents, each finding
-then re-checked by grep) found code nothing runs. It goes first, so the
-commits below do not carry it along or step around it. One commit per kind
-of thing, each standing alone. Every item was true at `4df104c4`; **grep
-each again before deleting it**, and keep a deletion out of a commit if
-anything now reads it.
+**The goal is not only to delete dead code but to leave the code better,
+with rules that keep it that way** (owner, 2026-11-13). A sweep of every
+file that day (eight read-only agents, each finding re-checked by grep)
+found what nothing runs; the steps below delete it, then add the checks
+that would have caught it, then retire the obsolete plan the code still
+cites. Every item was true at `4df104c4`: **grep each again before
+deleting it**, and keep a deletion out of its commit if anything now reads
+it. One commit per kind of thing, each standing alone.
 
-There is no iOS app (`../stoky-ios` is an empty project, owner,
-2026-11-13), so a procedure with no web caller is dead, not "kept for the
-app".
+Two facts from the owner the sweep relies on: there is **no iOS app**
+(`../stoky-ios` is an empty project), so a procedure with no web caller is
+dead; and **`docs/REDESIGN_PLAN.md` is an obsolete plan**, so being listed
+in it ("Already implemented", §2) is no reason to keep code.
 
-#### 0.1 — `refactor: drop four tRPC procedures no client calls`
+#### 0.1 — `refactor: drop six tRPC procedures no client calls`
 
 - `auth.logout` (`routers/auth.ts` ~626). Signing out is Better Auth's
   (`/api/auth/*`, `src/lib/auth/client.ts`). Its doc comment (~605) explains
@@ -134,23 +137,30 @@ app".
   `trpc.ts` ~252 point at it: move that explanation to where it is still
   read, do not lose it.
 - `product.count` (`routers/product.ts` ~257).
+- `product.searchByName` (`routers/product.ts` ~483), one of the few
+  `$queryRaw` calls; with it goes its only input, `productSearchSchema` and
+  `ProductSearchInput` (`validations/product.ts` ~48, ~101), and their
+  cases in `unit/validation-bounds.test.ts` (~180–207). `validations/bounds.ts`
+  (~13) uses it as its example of an unbounded page size: give the comment
+  another example or drop the line.
 - `price.recordPrice` (`routers/price.ts` ~54). Comments cite it as the
   write that already guarded a field (`shopping.ts` ~58, `inventory.ts`
-  ~361 and ~419, `receipt.ts` ~112); reword them so they do not name a
+  ~361 and ~419, `receipt.ts` ~112): reword them so they do not name a
   procedure that no longer exists.
 - `shopping.update`, the list-level one (`routers/shopping.ts` ~192), not
   `shopping.updateItem`.
+- `inventory.transferStock` (`routers/inventory.ts` ~766). It is the only
+  writer of the `TRANSFER` operation; 0.3 removes that.
 - **Kept on purpose:** `household.current` has no web caller either, but
-  commit 6's form reads the name through it. `inventory.transferStock` and
-  `product.searchByName` have none, but `REDESIGN_PLAN.md` (the "Already
-  implemented" table, ~32) lists them as the backend of screens never
-  built. **Owner's decision whether they stay**; until then they do.
-- Tests that name the removed ones: `unit/procedure-inputs.test.ts`
-  (~41, ~51), `integration/capabilities.refusals.test.ts` (~511, ~532),
-  `unit/replayable.test.ts` (~49), `unit/capabilities.test.ts` (their rows),
-  and whatever `bun test` names when run on the router files' tests. The
-  documented procedure count drops by four in `SECURITY.md` and
-  `docs/STATUS.md` (the sentences `capabilities.test.ts` matches).
+  commit 6's form reads the name through it.
+- Tests that name the removed ones: `unit/procedure-inputs.test.ts` (~41,
+  ~51), `integration/capabilities.refusals.test.ts` (~491, ~511, ~532),
+  `unit/replayable.test.ts` (~46, ~49), `unit/procedure-input-bounds.test.ts`
+  (~261–267), `unit/capabilities.test.ts` (their rows), and whatever else
+  `grep -rn` finds. The documented procedure count drops by six in
+  `SECURITY.md` and `docs/STATUS.md` (the sentences `capabilities.test.ts`
+  matches); `SECURITY.md` ~1387 lists `transferStock` among guarded writes.
+  `ISSUES.md` entries about them are history: leave them.
 
 #### 0.2 — `refactor: drop validation schemas no procedure uses`
 
@@ -168,12 +178,24 @@ whatever its unit tests say.
 - The inferred `*Input` types nothing imports (about thirty, e.g.
   `AddStockInput`, `PriceQueryInput`, `ProductListInput`,
   `ShoppingListInput`, `UpdateStoreInput`, `LoginInput`, `RegisterInput`):
-  list them with `grep -rnw` per name rather than trusting this sentence.
+  0.9's checker lists them exactly; until then `grep -rnw` per name.
 - Their cases in `unit/household.validation.test.ts`,
   `unit/auth.validation.test.ts`, `unit/shopping-item.test.ts`,
   `unit/update-schemas.test.ts` and `unit/validation-bounds.test.ts`.
 
-#### 0.3 — `refactor: drop helpers only their own tests call`
+#### 0.3 — `refactor(db): drop the TRANSFER stock operation, which nothing writes`
+
+After 0.1 no code writes `TRANSFER`. Remove it from the `StockOperation`
+enum (`prisma/schema.prisma` ~460), the `opTRANSFER` key from both
+catalogues (the history screen builds `op${operationType}` dynamically, so
+the key dies with the enum value), and any `switch`/table arm on it.
+Pre-beta, this **regenerates the single baseline migration** (as in
+commit 7: keep its header and hand-written tail) and the local `stoky` and
+`stoky_e2e` databases need resetting, **with the owner's consent at that
+moment**. If a local database holds `TRANSFER` rows, that is what the reset
+is for; no data migration.
+
+#### 0.4 — `refactor: drop helpers only their own tests call`
 
 - `src/lib/inventory/usualLocation.ts`, the whole module, and
   `unit/usual-location.test.ts`.
@@ -185,7 +207,7 @@ whatever its unit tests say.
   (`src/__tests__/utils/test-helpers.ts`), which no test calls (also true on
   PR #25's branch).
 
-#### 0.4 — `refactor(i18n): drop catalogue keys nothing reads`
+#### 0.5 — `refactor(i18n): drop catalogue keys nothing reads`
 
 From both `messages/es.json` and `messages/en.json`: `auth.logout`,
 `common.barcode`, `common.error`, `common.no`, `common.price`,
@@ -197,18 +219,23 @@ From both `messages/es.json` and `messages/en.json`: `auth.logout`,
 loosely, so this list is a floor, not a census, and each key needs its
 namespace checked, not just its last word grepped. Dynamic keys
 (`` t(`role${…}`) ``, `op${…}`, `screen${…}`, `steps.${…}`, the receipt
-statuses) are used whatever a grep says. `unit/messages.test.ts` and
-`unit/message-usage.test.ts` must stay green.
+statuses) are used whatever a grep says.
 
-#### 0.5 — `refactor(ui): drop props no caller passes`
+`unit/message-usage.test.ts` already fails on a key a component asks for
+and no catalogue has. **Add the converse** to it: a key the catalogues have
+and no component asks for fails, with the dynamic prefixes above as its
+one explicit allow-list. Seen red with one of the keys above put back.
+
+#### 0.6 — `refactor(ui): drop props no caller passes`
 
 - `cancelLabel` on `ConfirmDialog` (`src/components/ui/dialog.tsx` ~201,
   ~213, ~226).
 - `placeholder` and `className` on `StoreSelector`
   (`src/components/store/StoreSelector.tsx`). Grep multi-line JSX before
-  trusting this; the sweep sampled props rather than checking every one.
+  trusting this; the sweep sampled props rather than checking every one,
+  so look at every component in `src/components/` once, not only these.
 
-#### 0.6 and 0.7 — the package manifest, one commit each
+#### 0.7 and 0.8 — the package manifest, one commit each
 
 - `chore: drop the db:migrate script` — nothing names it; the documents use
   `bunx --bun prisma migrate dev` directly. Or keep it and point the
@@ -218,12 +245,76 @@ statuses) are used whatever a grep says. `unit/messages.test.ts` and
   component suite still pass without it (it may be a peer something
   resolves), and only in a commit of its own.
 
-**Not in step 0:** about a hundred types and constants are exported but only
-read in their own file, and some functions are exported only so their tests
-can reach them (deliberate seams). Dropping an unneeded `export` changes
-nothing that runs; leave them, unless the owner wants a lint rule for it.
+#### 0.9 — the rules that keep it clean
 
-### Commit 1 — `test(auth): give the browser specs their accounts without registering`
+What the 2026-11-13 measurements found:
+
+- **oxlint already reports unused imports and locals** (`no-unused-vars`,
+  on by default), but as warnings, and `bun run lint` exits 0 on
+  warnings, so nothing fails. There are none today.
+- **TypeScript's `noUnusedLocals` and `noUnusedParameters`** are off;
+  turned on, the whole project has **one** error
+  (`openFoodFacts.comprehensive.test.ts` ~9, a file PR #25 deletes).
+- **Neither can see an unused export.** oxlint 1.89 has no
+  `import/no-unused-modules`, and TypeScript does not check exports. That
+  needs a whole-project tool: **knip**, which understands Next.js's file
+  conventions, Playwright and package.json dependencies.
+
+So three commits:
+
+- `build: fail lint on warnings, and typecheck unused locals and parameters`
+  — `--deny-warnings` on the `lint` script (and wherever CI and
+  `scripts/check-scope.sh` call oxlint directly), `noUnusedLocals` and
+  `noUnusedParameters` in `tsconfig.json`. Prove each can fail: an unused
+  import must turn `bun run lint` red, an unused parameter `bun run
+  typecheck`.
+- `refactor: export only what another module imports` — about a hundred
+  types and constants are exported but read only in their own file (the
+  sweep's lists: `src/lib/auth/*`, `src/server/services/ocr.ts`,
+  `src/components/ui/*` prop types, the `*Input` types 0.2 left, …). Drop
+  the keyword. **Exports read only by tests stay**: they are deliberate
+  seams, and the checker below counts tests as users.
+- `build(deps): check for unused files, exports and dependencies with knip`
+  — a new devDependency, pinned exactly, in a commit of its own (`CLAUDE.md`
+  and the atomic-dependency rule); a `knip` config naming the entry points
+  knip cannot infer (`src/server/http/entry.ts` and `trusted-proxies.ts`,
+  which the Dockerfile copies and runs; `src/proxy.ts`;
+  `src/instrumentation.ts`; `src/i18n/request.ts`; `public/sw.js`;
+  `prisma/seed.ts`; `scripts/*`); a `check:unused` script; and a step in
+  `bun run verify:ci` and CI's quality job. Clean on the tree it lands on,
+  and seen red with one unused export added. **Check first that knip runs
+  against this project's TypeScript 7**: it loads TypeScript's compiler
+  API, which TypeScript 7's native port may not provide. If it does not,
+  land the first two commits, record the gap in this plan, and ask the
+  owner rather than pick an unmaintained substitute.
+- `docs/VERIFICATION_SEQUENCE.md` gains the new check, and any document
+  that says what `lint` covers says it now fails on warnings.
+
+#### 0.10 — `docs: retire REDESIGN_PLAN.md, keeping the decisions it holds`
+
+The plan is obsolete (owner, 2026-11-13), but parts of it still govern the
+code, and about 68 files cite it:
+
+- **Still in force, so they move:** §5 "Decisions taken" (5.1 screen
+  choice, 5.2 roles, 5.4 PWA, 5.5 offline, 5.6 languages, 5.7 client state,
+  5.8 the compiler) and §7–§8 (usability and accessibility rules).
+  `CLAUDE.md` cites §3 (why `/kitchen` and `/shopping` take the `touch`
+  density), §5, §5.7 and §8. Move these to one current document that owns
+  "why the application is built this way" — a new `docs/DECISIONS.md` is
+  the obvious shape; keep each decision's wording and date, and give each a
+  stable anchor so citations can point at it.
+- **Obsolete, so they go:** the screens as a plan (§3–4, beyond the reasons
+  `CLAUDE.md` cites), the phases (§9; `docs/PROGRESS.md` is the record of
+  what was done), the "Already implemented" table (§2), and §10 "Carried
+  forward" — move anything in §10 that is still a real defect to
+  `ISSUES.md`, the rest is gone.
+- Repoint every citation (`grep -rn REDESIGN_PLAN`: code comments, tests,
+  `CLAUDE.md`, `docs/README.md`'s ownership table and reading order, the
+  other documents), then delete the file. `bun run check:links` must pass.
+  `docs/README.md` says who now answers "what comes next" — `docs/STATUS.md`
+  if nothing else does.
+
+### Commit 1 — `test(auth): give the browser specs their accounts without registering`### Commit 1 — `test(auth): give the browser specs their accounts without registering`
 
 Six specs register a fresh account with a household of its own through
 `/register` (`e2e/account.ts` `register()`): `auth`, `password`, `passkeys`,
