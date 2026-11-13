@@ -235,6 +235,10 @@ const signedInAs = async (jar: string) =>
 const twoFactorRow = (userId: string) =>
   prisma.twoFactor.findUniqueOrThrow({ where: { userId } });
 
+/** The backup codes as Better Auth stores them. */
+const storedCodes = async (userId: string) =>
+  JSON.parse((await twoFactorRow(userId)).backupCodes) as string[];
+
 /** The security events written while `run` ran, parsed; every value a string. */
 async function eventsDuring(run: () => Promise<unknown>) {
   const warn = spyOn(console, "warn").mockImplementation(() => {});
@@ -846,10 +850,6 @@ describe("the sessions a two-step sign-in ends", () => {
 });
 
 describe("backup codes (ASVS 5.0.0 6.5.2)", () => {
-  /** The list as Better Auth stores it. */
-  const storedCodes = async (userId: string) =>
-    JSON.parse((await twoFactorRow(userId)).backupCodes) as string[];
-
   /** How a person types a code off paper: lower case, spaces for dashes. */
   const typedCasually = (code: string) =>
     code.toLowerCase().replaceAll("-", " ");
@@ -913,30 +913,6 @@ describe("backup codes (ASVS 5.0.0 6.5.2)", () => {
     expect(answer.status).toBe(401);
     expect(answer.code).toBe("INVALID_BACKUP_CODE");
     expect(await storedCodes(ana.id)).toHaveLength(10);
-  });
-
-  it("are all replaced by a new set, and the old ones stop working", async () => {
-    const ana = await enrolled("regenerate");
-    const regenerated = await getAuth().api.generateBackupCodes({
-      body: { password: PASSWORD },
-      headers: new Headers({ cookie: ana.jar }),
-    });
-    expect(regenerated.backupCodes).toHaveLength(10);
-    expect(regenerated.backupCodes).not.toContain(ana.backupCodes[0]);
-    for (const entry of await storedCodes(ana.id))
-      expect(entry).toMatch(/^sha256:[0-9a-f]{64}$/);
-
-    const old = await secondStep("backup-code", await challenge(ana), {
-      code: ana.backupCodes[0],
-    });
-    expect(old.status).toBe(401);
-    expect(old.code).toBe("INVALID_BACKUP_CODE");
-
-    const fresh = await secondStep("backup-code", await challenge(ana), {
-      code: regenerated.backupCodes[0],
-    });
-    expect(fresh.status).toBe(200);
-    expect(await signedInAs(fresh.jar)).toBe(ana.id);
   });
 
   it("count a wrong one toward the account's lockout", async () => {
@@ -1184,15 +1160,19 @@ describe("setting it up from the settings screen", () => {
       userId: ana.id,
     });
     for (const shown of codes) expect(log.raw).not.toContain(shown);
+    for (const entry of await storedCodes(ana.id))
+      expect(entry).toMatch(/^sha256:[0-9a-f]{64}$/);
 
     const old = await secondStep("backup-code", await challenge(ana), {
       code: ana.backupCodes[0],
     });
     expect(old.status).toBe(401);
+    expect(old.code).toBe("INVALID_BACKUP_CODE");
     const fresh = await secondStep("backup-code", await challenge(ana), {
       code: codes[0],
     });
     expect(fresh.status).toBe(200);
+    expect(await signedInAs(fresh.jar)).toBe(ana.id);
   });
 
   it("refuses a browser that is not signed in, before any password", async () => {
