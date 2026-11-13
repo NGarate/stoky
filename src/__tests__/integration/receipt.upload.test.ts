@@ -6,6 +6,7 @@ import { pngNoise, pngOf } from "../utils/png";
 import { reencodeAsJpeg } from "@/server/services/image";
 import { MAX_RECEIPT_BYTES } from "@/lib/validations/receipt";
 import { appRouter } from "@/server/trpc/router";
+import { replaceReceiptReading } from "@/server/trpc/routers/receipt";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import {
@@ -50,6 +51,7 @@ let caller: Caller;
 let householdId: string;
 /** Everything written during this file, removed in `afterAll` whatever happens. */
 const written: string[] = [];
+let restoreReading: () => void;
 
 /**
  * A JPEG carrying what a phone attaches, so "stripped" can mean something.
@@ -90,6 +92,8 @@ async function upload(
 }
 
 beforeAll(async () => {
+  // What is checked here is the upload, not what Tesseract reads.
+  restoreReading = replaceReceiptReading(async () => {});
   const household = await createTestHousehold({ name: HOUSEHOLD });
   householdId = household.id;
 
@@ -108,6 +112,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  restoreReading();
   for (const path of written) {
     await rm(path, { force: true });
   }
@@ -118,6 +123,22 @@ afterAll(async () => {
   await prisma.receipt.deleteMany({ where: { householdId } });
   await prisma.user.deleteMany({ where: { name: { startsWith: PREFIX } } });
   await prisma.household.deleteMany({ where: { id: householdId } });
+});
+
+describe("the reading an upload starts", () => {
+  it("goes through replaceReceiptReading, which is what keeps Tesseract out of this file", async () => {
+    const read: string[] = [];
+    const restore = replaceReceiptReading(async (id) => {
+      read.push(id);
+    });
+    try {
+      const { id } = await upload();
+      expect(read).toEqual([id]);
+    } finally {
+      restore();
+      restoreReading = replaceReceiptReading(async () => {});
+    }
+  });
 });
 
 describe("where an accepted photograph is put", () => {

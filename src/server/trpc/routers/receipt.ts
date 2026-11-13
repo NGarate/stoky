@@ -422,13 +422,7 @@ export const receiptRouter = createTRPCRouter({
         });
       });
 
-      // Trigger async processing
-      processReceiptAsync(receipt.id).catch((error: unknown) =>
-        console.error(
-          "Failed to mark receipt as failed:",
-          describeError(error),
-        ),
-      );
+      startProcessing(receipt.id);
 
       return receipt;
     }),
@@ -483,12 +477,7 @@ export const receiptRouter = createTRPCRouter({
         });
       });
 
-      processReceiptAsync(receipt.id).catch((error: unknown) =>
-        console.error(
-          "Failed to mark receipt as failed:",
-          describeError(error),
-        ),
-      );
+      startProcessing(receipt.id);
 
       return { success: true };
     }),
@@ -1503,4 +1492,30 @@ async function processReceiptAsync(receiptId: string): Promise<void> {
       data: { status: ReceiptStatus.FAILED },
     });
   }
+}
+
+/** What an upload or a reframe starts once it has answered. */
+let readReceipt: (receiptId: string) => Promise<void> = processReceiptAsync;
+
+function startProcessing(receiptId: string): void {
+  readReceipt(receiptId).catch((error: unknown) =>
+    console.error("Failed to mark receipt as failed:", describeError(error)),
+  );
+}
+
+/**
+ * Swaps the background reading for `read` until the returned function is
+ * called. For tests of the upload itself: a real reading keeps three
+ * Tesseract workers busy for seconds after the call returns, and left
+ * running, on a four-core CI runner it starved the next file's Argon2
+ * sign-ins past bun's five-second limit (ISSUES TEST-12). Reading is
+ * `ocr.pipeline.test.ts`'s to test.
+ */
+export function replaceReceiptReading(
+  read: (receiptId: string) => Promise<void>,
+): () => void {
+  readReceipt = read;
+  return () => {
+    readReceipt = processReceiptAsync;
+  };
 }
