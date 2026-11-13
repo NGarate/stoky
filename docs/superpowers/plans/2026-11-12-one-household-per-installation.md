@@ -69,6 +69,17 @@ household directly.
   (`adminProcedure`). This is what unblocks `ISSUES.md` PARSE-5 (the
   receipt parser's keywords moving to the database, edited by "the
   administrator"); PARSE-5 itself is not part of this plan.
+- **Added 2026-11-13: the household's names are editable** (commits 6
+  and 7). An OWNER or ADMIN can rename the household, and set two more
+  names:
+  - **The name in the browser tab** — its own field, independent of the
+    household's name. Empty, the tab says `Stoky` as today. **It is shown
+    without a session too** (`/login`, `/register`): whoever reaches the
+    sign-in page sees it. The owner chose that knowingly.
+  - **The name of the installed app** (the PWA manifest's `name` and
+    `short_name`) — another field of its own. Empty, it is the household's
+    name; with no household yet (a fresh installation before its first
+    registration), `Stoky`.
 
 ## 3. Out of scope
 
@@ -76,9 +87,6 @@ household directly.
 - Making `User.householdId` non-nullable, or removing `householdId` anywhere.
 - An instance-admin role, a households screen, account blocking, quotas
   (`ISSUES.md` UPLOAD-1 stays open; only its severity reasoning may change).
-- Renaming the household. No procedure does it today, though the form
-  commit 4 removes promises it ("podrás cambiarle el nombre más adelante");
-  the promise goes with the form. A rename is a feature of its own.
 - Rewording every comment that mentions "an account with no household".
   Change a comment only where the code beside it changes, or where it is now
   false in a way that would mislead.
@@ -195,21 +203,23 @@ is sent; without one it makes a householdless MEMBER.
 ### Commit 4 — `feat(household)!: stop creating a household from an account without one`
 
 - Remove `household.create` from `src/server/trpc/routers/household.ts`
-  (~238), and the schemas that then validate nothing:
-  - `householdSchema` (`src/lib/validations/household.ts` ~10), whose only
-    procedure was `create`;
-  - `updateHouseholdSchema` (~14), built from it and already used by no
-    procedure — there is no rename (see §3);
-  - `createHouseholdSchema` (`src/lib/validations/auth.ts` ~118), already
-    used by no procedure;
-  - their types `HouseholdInput`, `UpdateHouseholdInput` (~206–207) and
-    `CreateHouseholdInput` (~132).
+  (~238), and the schemas that validate nothing:
+  - `updateHouseholdSchema` (`src/lib/validations/household.ts` ~14) and its
+    type `UpdateHouseholdInput` (~207): already used by no procedure, and
+    shaped wrong for commit 6 (it takes an `id`; the household is the
+    caller's);
+  - `createHouseholdSchema` and `CreateHouseholdInput`
+    (`src/lib/validations/auth.ts` ~118, ~132), already used by no procedure.
 
-  With them, the tests that exercise only those schemas:
-  `unit/household.validation.test.ts`'s two `describe`s for them,
-  `unit/auth.validation.test.ts`'s `createHouseholdSchema` block, the
-  `household` row of `unit/update-schemas.test.ts` (~24), and three rows of
-  `unit/validation-bounds.test.ts` (~471–473).
+  With them, the tests that exercise only those: the `updateHouseholdSchema`
+  `describe` of `unit/household.validation.test.ts`, the
+  `createHouseholdSchema` block of `unit/auth.validation.test.ts`, the
+  `household` row of `unit/update-schemas.test.ts` (~24) and two rows of
+  `unit/validation-bounds.test.ts` (~471, ~473).
+
+  **Keep `householdSchema`** (~10): between this commit and commit 6 it
+  validates nothing, and commit 6 makes it the rename's input. Its tests
+  stay.
 - `src/components/household/RouteState.tsx`: remove `CreateHousehold` and the
   no-household branch of `RouteState`. `isNoHouseholdError` goes if nothing
   else uses it; an account without a household can no longer be made, so
@@ -276,6 +286,69 @@ Delete the account instead, in the same transaction, after the same guards
 - Docs: `SECURITY.md` where member removal is described (~799–811); `docs/releases/NEXT.md`
   (a household notices: a removed person's account no longer exists).
 
+### Commit 6 — `feat(household): let an admin rename the household`
+
+The form commit 4 removes promised a rename ("podrás cambiarle el nombre más
+adelante") that never existed. Now it does.
+
+- `household.update`, an `adminProcedure` taking `householdSchema`
+  (`{ name }`), writing the caller's own household (`ctx.householdId`, never
+  an id from the input). Follow the shape of `store.update`
+  (`src/server/trpc/routers/store.ts` ~57), the closest existing rename.
+- Where it lives on screen: a "Hogar" section on the settings hub
+  (`src/app/(dashboard)/settings/page.tsx`), shown to OWNER and ADMIN only,
+  built from `src/components/ui/` primitives (`CLAUDE.md`, Design System). If
+  it becomes a route of its own instead, it needs a `ROUTE_TITLES` entry
+  (`src/lib/route-titles.ts`) and a row in `src/lib/back.ts`.
+- Whether it queues offline: decide by what the settings screens already do,
+  and say which in the commit message; an admin rename is not a Phase 4
+  write unless the stores rename is one.
+- After saving, invalidate what shows the name. Note that `household.current`
+  has **no web caller today** (only, possibly, the iOS client); find where
+  the web reads the household's name before assuming.
+- `capabilities.test.ts` gains `update: "adminProcedure"`; the procedure
+  count in `SECURITY.md` and `docs/STATUS.md` goes back up by one.
+- Tests: integration — an ADMIN renames, a MEMBER and a KITCHEN account are
+  refused, a blank or over-long name is refused, and another household's
+  row is untouched. Each seen red with the guard removed.
+- `docs/releases/NEXT.md`: a household notices.
+
+### Commit 7 — `feat(household): name the browser tab and the installed app`
+
+The owner's decisions are in §2. This is the one schema change in the plan.
+
+- `prisma/schema.prisma`: `Household.tabName String?` and
+  `Household.appName String?` (the names are suggestions). Pre-beta, a
+  schema change **regenerates the single baseline migration** rather than
+  adding one: `prisma migrate diff --from-empty --to-schema
+  prisma/schema.prisma --script`, keeping its header (pg_trgm) and its
+  hand-written tail (the `lower(email)` unique index and the
+  `StockEntry_batch_balance` CHECK, which the diff cannot see). Resetting
+  the local `stoky` and `stoky_e2e` databases needs the owner's consent at
+  that moment.
+- `householdSchema` gains both, optional, trimmed, bounded like the name;
+  an empty string stores `null`. `household.update` writes them.
+- **The tab.** `TITLE_SUFFIX` (`src/lib/route-titles.ts` ~60) becomes the
+  fallback; `documentTitle` takes the name. `RouteTitle`
+  (`src/components/ui/route-title.tsx`) is mounted once in the root layout,
+  a Server Component, which can read the name and pass it down — that keeps
+  the title right on `/login` and on a no-JavaScript `/start`, and needs no
+  public tRPC procedure. It must not cost the routes their static or
+  `instant` configuration without saying so.
+- **The installed app.** `src/app/manifest.ts` is static and prerendered
+  today (its comment says why); reading the name makes it per-request.
+  `pwa-manifest.test.ts` holds its shape. An installed app picks up a new
+  name only when the browser re-reads the manifest (Chrome on its own
+  schedule, iOS only on reinstall): the form's hint says so.
+- **Both names are public.** The tab name is served before sign-in by
+  decision, and the manifest is fetched without credentials, so the app
+  name (and, when it is empty, the household's name) is public as well.
+  The form says so next to each field, and `SECURITY.md` records it with
+  the decision.
+- Tests: the fallbacks (empty tab name → `Stoky`; empty app name → the
+  household's name; no household → `Stoky`), the title on `/login`, and
+  the manifest's name. `docs/releases/NEXT.md`: a household notices.
+
 ## 5. Gates
 
 Per commit (`CLAUDE.md` rule 4, as the owner narrowed it):
@@ -314,6 +387,8 @@ job on this branch is this branch's.
   except a hand edit. Making it required would let the database hold the
   invariant (`ISSUES.md` DB-1's class), but touches every test that creates a
   user without a household — a separate decision, not this plan.
+- **Commits 6 and 7 are not breaking** and need not wait for, or hold back,
+  a release; only commits 3 and 4 are.
 - **The release.** If `v0.1.0-alpha.5` is cut before this lands, commits 3
   and 4 become the next release's breaking changes; `docs/releases/NEXT.md`
   is then a new file, not the one being renamed.
