@@ -1,5 +1,5 @@
+import * as argon2 from "argon2";
 import { prisma } from "@/lib/prisma";
-import { hashPassword } from "@/lib/auth/password-hash";
 import { createCredentialUser } from "@/lib/auth/credentials";
 import type {
   User,
@@ -54,10 +54,40 @@ export interface TestLocationData {
 }
 
 /**
+ * A test account's stored hash: Argon2id at its minimum cost, once per
+ * password for the whole process.
+ *
+ * Sign-in verifies at whatever cost the stored hash names, so a production
+ * hash here (64 MiB, three passes) made every sign-in of the integration
+ * suite pay a quarter of a second for a cost nothing asserts. The cost
+ * itself is pinned where it matters: `unit/password-hash.test.ts`, and the
+ * accounts the application hashes itself (registration, a reset, a
+ * password change) keep it. A test that needs a full-cost account, such as
+ * the timing of a wrong password against an unknown address, hashes with
+ * `hashPassword`.
+ */
+const testHashes = new Map<string, Promise<string>>();
+function testPasswordHash(password: string): Promise<string> {
+  let hash = testHashes.get(password);
+  if (!hash) {
+    hash = argon2.hash(password, {
+      type: argon2.argon2id,
+      memoryCost: 1024,
+      timeCost: 1,
+      parallelism: 1,
+    });
+    testHashes.set(password, hash);
+  }
+  return hash;
+}
+
+/**
  * Creates a test user with optional household
  */
 export async function createTestUser(data: TestUserData): Promise<User> {
-  const passwordHash = await hashPassword(data.password ?? "TestPassword123!");
+  const passwordHash = await testPasswordHash(
+    data.password ?? "TestPassword123!",
+  );
 
   return createCredentialUser(
     prisma,
