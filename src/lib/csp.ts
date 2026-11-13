@@ -58,7 +58,7 @@ export function buildCsp(
     // plain-http self-hosted install (or the browser suite's standalone
     // server) every tRPC call became a TLS handshake against a server with
     // no TLS, and the application died on Safari while the page rendered.
-    // Behind Traefik the request arrives as https and the directive stays.
+    // Behind a TLS proxy the request arrives as https and the directive stays.
     ...(!isDev && isHttps ? ["upgrade-insecure-requests"] : []),
   ].join("; ");
 }

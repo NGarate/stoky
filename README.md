@@ -50,8 +50,9 @@ constraint for the MVP.
 
 Follow **[Install with Docker Compose](docs/INSTALL.md)**. Run the `install.sh`
 attached to `v0.1.0-alpha.4` (it downloads and verifies the files and generates
-the secrets, and starts nothing), set the hostname and certificate email, then
-run `docker compose up -d --wait`. The release runs from a public, prebuilt Linux
+the secrets, and starts nothing), set the hostname, run
+`docker compose up -d --wait`, and put your own reverse proxy with TLS in front
+of port 3000. The release runs from a public, prebuilt Linux
 amd64 image; it needs no GitHub account, source checkout or local Node/Bun
 installation. The guide covers first registration, backup/restore, upgrades and
 troubleshooting.
@@ -219,7 +220,9 @@ Code is organised by **domain**, not by technical layer.
 - Receipt uploads are validated by MIME type and magic bytes, re-encoded with
   `Bun.Image` to strip EXIF, stored under UUID filenames in an isolated volume, and
   served only through authenticated tRPC queries.
-- Only Traefik exposes ports in production; PostgreSQL and Valkey have none.
+- Only the app publishes a port in production, plain HTTP for the operator's
+  proxy; PostgreSQL and Valkey have none. Forwarded headers count only from
+  the proxies in `STOKY_TRUSTED_PROXIES`.
 - Raw SQL only through parameterised tagged template literals.
 
 **Rate limiting** is in place and layered — 5 sign-ins per 15 minutes and 3

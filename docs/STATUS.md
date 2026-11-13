@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-10-19
+Updated: 2026-11-13
 
 Single source of truth for where the project actually is.
 
@@ -11,6 +11,79 @@ say what measured it.
 ---
 
 ## Gate status
+
+**2026-11-13 the reverse proxy leaves the bundle**
+(`feat/proxy-outside-the-bundle-2026-11-13`). The bundle is db, cache and
+app; the app publishes port 3000 over plain HTTP for the operator's proxy and
+believes forwarded headers only from `STOKY_TRUSTED_PROXIES`. Measured on
+this branch, host Bun 1.4.4, Docker Engine 29.9.3, with the production image
+built from the working tree and the bundle under a throwaway Compose project
+on loopback ports, removed afterwards:
+
+- **The entry, on the production build** (`bun --preload
+  src/server/http/entry.ts .next/standalone/server.js`, Next 16.4.3). A
+  request from `127.0.0.1` forging `X-Forwarded-For: 203.0.113.9` and
+  `X-Forwarded-Proto: https` was logged as `203.0.113.9` by `server.js`
+  alone, as `127.0.0.1` through the entry, and as `203.0.113.9` again only
+  with `STOKY_TRUSTED_PROXIES=127.0.0.1`; the policy carried
+  `upgrade-insecure-requests` in the first and third cases only. SIGTERM
+  ended the server in under 30 ms with exit 143 with and without the entry.
+- **Who the app sees**, read from its security log with nothing trusted:
+  the host at `127.0.0.1:PORT`, at `[::1]:PORT` and at the container's own
+  address arrives as the `web` network's gateway; the host at its LAN or
+  Tailscale address arrives as that address; a container on `web` as itself;
+  a container on another bridge, through the host's port, as the gateway.
+  A second machine was not available, so a LAN client's address is Docker's
+  documented behaviour, not a measurement.
+- **Where the port answers**, `/api/health` on port 3317: with `STOKY_BIND`
+  unset (`0.0.0.0`) the host's loopback, its LAN address and a container on
+  another bridge got 200 and `[::1]` was refused; with
+  `STOKY_BIND=127.0.0.1` only loopback connected; with `STOKY_BIND=[::1]`
+  only `[::1]`; with the host's LAN address only that address, loopback and
+  the Tailscale address refused.
+- **A name the proxy was not given**, asked of each in front of the bundle
+  (another name, its own name with another `Host`, the bare address): nginx
+  1.31 with INSTALL's two `server` blocks answered all three with Stoky's
+  `/api/health`, and none once a `default_server` with
+  `ssl_reject_handshake on` and `return 444` was added; Caddy 2.11 refused
+  the handshake for two and answered the other with an empty 200 of its own;
+  Traefik 3.7.14 answered `404 page not found`.
+- **Not measured: Kubernetes.** INSTALL's section on it is written from
+  Kubernetes' documentation; its manifests were checked against the API
+  schemas, not applied to a cluster.
+- **Three proxies in front of it**, each forging the header: Caddy 2.11 and
+  nginx 1.31 on the host network (gateway trusted) and Traefik 3.7.14 in a
+  container with labels from an override file (its network's range trusted)
+  all gave the app the address they saw, never `203.0.113.9`. nginx without
+  its `X-Forwarded-For` line passed the forged header on and the app logged
+  it; without `client_max_body_size` it refused a 2 MB body with 413; without
+  `Host` a Server Action request got 500 `Invalid Server Actions request`.
+  `tailscale serve` was not run against it: what INSTALL says of its headers
+  is from Tailscale's source.
+- **INSTALL's Compose arrangements again, with `STOKY_BIND=127.0.0.1`.**
+  Proxy on the host, gateway trusted: through Caddy and through nginx (with
+  its default server) a forged request was counted as `127.0.0.1`, the
+  address the proxy saw; `/login` 200 with `upgrade-insecure-requests`; a
+  2 MB body reached the app; `smoke-proxy.sh --live` ended `Proxy smoke: OK`
+  through each; the LAN address refused. Traefik in a container with the
+  override's labels, its network's range trusted: 200 for its name, 404 for
+  another, the forged request counted as the address Traefik saw. In both a
+  request sent **straight to the published port** with a forged header was
+  believed, as INSTALL warns: the port's traffic arrives from a trusted
+  gateway (the `web` network's in the first, the proxy network's in the
+  second, where the app is on both).
+- **The release smoke's new commands**, copied out of `ci.yml` and run
+  against the bundle: `/api/health` 200 on the published port with HSTS,
+  `nosniff`, `X-Frame-Options` and the CSP; against a port nothing listens
+  on, curl's exit 7. The smoke itself runs only on a tag.
+- **`scripts/smoke-proxy.sh --live`**, run against the bundle behind Caddy
+  with its internal CA (curl sent to loopback and given that CA through a
+  `.curlrc`, the script unchanged): `Proxy smoke: OK`, throttled at attempt 6,
+  and the same with nothing listening on port 80. It failed, each with its
+  own message, against a Caddy that passed the client's `X-Forwarded-For` on
+  (20 attempts never throttled), one that served the application over plain
+  HTTP, one that removed `Strict-Transport-Security`, and without the CA
+  (curl's exit 60).
 
 **2026-10-18 both branches landed on `master`.** The security branch (PR #11)
 and the Better Auth branch on top of it (PR #12) landed as `e9d62eb..d68ffd1`:
@@ -178,7 +251,7 @@ lock. What it measured:
   and read-only root filesystems for the app and Traefik are in place; only
   Traefik publishes ports. Valkey is capped at 160 MiB with `allkeys-lru`. Two
   limits on what this proves: ACME cannot issue for a test domain, so Traefik
-  served its default certificate; and the image carries no revision label, so
+  (which the bundle shipped until 2026-11-13) served its default certificate; and the image carries no revision label, so
   that it was built from that head is known from the build step, not from
   the image.
 
@@ -1299,7 +1372,7 @@ touched `bun.lock`, the first being the move from pnpm, four answered an
 advisory. Dependabot version updates are now configured
 (`.github/dependabot.yml`) for `bun.lock`, the workflows' action pins, the
 Dockerfile's base and the release bundle's service images: weekly, seven days
-after a release, minor and patch grouped, no PostgreSQL, Valkey or Traefik
+after a release, minor and patch grouped, no PostgreSQL or Valkey
 major. **Not yet in effect:** the branch ruleset does not let Dependabot create
 its branches, which no version update can open without; Dependabot security
 updates are separately off. Both are owner settings, which
@@ -1328,7 +1401,6 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 | bun | 1.4.4 — `.bun-version` and the Dockerfile pin (tag and index digest `sha256:4cf82f56…`); all application image stages use Bun. Released 2026-10-22, taken on 2026-10-25, the first day the three-day `minimumReleaseAge` allows, for its security fixes and `bun fmt` |
 | node | No separate runtime installed in application images; upstream compatibility command resolves to Bun (2026-09-25) |
 | sharp | 0.35.5, **devDependency only** — not shipped, not loaded at runtime |
-| traefik | v3.7.17 — `deploy/docker-compose.yml`, the release bundle's proxy, since 2026-10-31: v3.7.16 has a HIGH in go-jose 4.1.5 (CVE-2026-116587) and two x/net advisories, fixed in 4.1.6 and 0.62.0, which v3.7.17 links. Clean under `scripts/scan-bundle-images.sh` that day. Pinned by hand: `traefik:v3` names the same image on every platform but its index adds riscv64, so `release:refresh-images` refuses the exact tag's different index digest |
 
 **The runtime changed on 2026-08-26 and this is the row that says so.** `next
 dev` and `next start` run under `bun --bun` (`b81102d`), the production image

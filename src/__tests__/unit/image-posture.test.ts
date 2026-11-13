@@ -72,7 +72,16 @@ describe("the application images use only the Bun runtime", () => {
     expect(stage).toContain(
       "bun /opt/prisma/node_modules/prisma/build/index.js migrate deploy",
     );
-    expect(stage).toContain("&& exec bun server.js");
+    // Through the entry, which is what makes a forged X-Forwarded-For
+    // nobody's but a trusted proxy's (`src/server/http/entry.ts`). `bun
+    // server.js` alone serves, and believes every caller about its address.
+    expect(stage).toContain("&& exec bun --preload ./entry.ts server.js");
+    expect(stage).toContain(
+      "COPY --from=builder /app/src/server/http/entry.ts ./entry.ts",
+    );
+    expect(stage).toContain(
+      "COPY --from=builder /app/src/server/http/trusted-proxies.ts ./trusted-proxies.ts",
+    );
   });
 });
 
@@ -254,7 +263,7 @@ describe("the production compose runs read-only", () => {
 
   it("builds from source without restating, and so without drifting from, that definition", () => {
     // docker-compose.prod.yml used to be a full second copy of the hardening
-    // and had already diverged (an older Traefik with the Docker socket). It
+    // and had already diverged. It
     // may now only add the build. Anything else here would override deploy/.
     const override = Bun.YAML.parse(
       readFileSync(join(ROOT, "docker-compose.prod.yml"), "utf8"),

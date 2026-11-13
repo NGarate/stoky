@@ -116,7 +116,6 @@ function repository() {
     "deploy/docker-compose.yml",
     `# ${guide}\nservices:\n  db:\n    image: postgres:16.14-alpine\n  app:\n${appImage}\n`,
   );
-  write("deploy/traefik.yml", "http: {}\n");
   write("README.md", readme(previous));
   write("docs/INSTALL.md", install(previous));
   write(`docs/releases/${previous}.md`, "The previous release.\n");

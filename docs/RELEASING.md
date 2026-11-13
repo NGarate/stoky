@@ -16,7 +16,7 @@ hold, and says what to do. What each one checks, and why, is the rest of this
 document.
 
 ```bash
-bun run release:refresh-images --check       # optional: newer PostgreSQL/Valkey/Traefik of the same major, scanned
+bun run release:refresh-images --check       # optional: newer PostgreSQL/Valkey of the same major, scanned
 bun run release:prepare prerelease           # or prepatch|preminor|premajor|patch|minor|major|release|vX.Y.Z[-alpha.N]
 #   → opens the pull request "chore: prepare vVERSION" from release/vVERSION;
 #     add --refresh-images to take the newer service images in the same PR
@@ -90,11 +90,11 @@ attestation and anonymous-pull steps below depend on that (see
      are not listed. Edit the subjects in history, never in the list.
    - **`## English`**: the same release, shorter.
 3. Update the installation guide and owning documents whenever configuration or
-   support changes. Keep release assets self-contained: Compose, `example.env`,
-   `traefik.yml` and `install.sh` must work without a checkout. `install.sh` only
+   support changes. Keep release assets self-contained: Compose, `example.env`
+   and `install.sh` must work without a checkout. `install.sh` only
    downloads, verifies and creates missing configuration; it never starts Stoky.
-4. Refresh the service images. `deploy/docker-compose.yml` names PostgreSQL,
-   Valkey and Traefik by exact version and index digest, and between releases
+4. Refresh the service images. `deploy/docker-compose.yml` names PostgreSQL
+   and Valkey by exact version and index digest, and between releases
    only a merged Dependabot pull request moves them ([Dependency
    updates](#dependency-updates)), a week behind upstream at best, so a release
    that skips this can ship stale builds. `bun run release:refresh-images`
@@ -102,7 +102,7 @@ attestation and anonymous-pull steps below depend on that (see
    red; `release:prepare --refresh-images` commits its result on the release
    branch. By hand: for each, take the newest release of the same major, which is what
    the floating tag (`ghcr.io/ngarate/stoky/postgres:18-alpine`,
-   `valkey/valkey:8-alpine`, `traefik:v3`) names that day, and the digest of
+   `valkey/valkey:8-alpine`) names that day, and the digest of
    its multi-platform index, not one platform's manifest:
 
    ```bash
@@ -111,7 +111,7 @@ attestation and anonymous-pull steps below depend on that (see
    ```
 
    Write `image: valkey/valkey:8.1.11-alpine@sha256:<that digest>`, and the
-   same for PostgreSQL and `traefik`. A new major version is a decision with its own
+   same for PostgreSQL. A new major version is a decision with its own
    migration and release note, not a refresh. The release smoke then runs the
    builds operators will pull. `src/__tests__/unit/deployment.test.ts` fails if
    a service image loses its digest or goes back to a bare major tag.
@@ -122,7 +122,7 @@ attestation and anonymous-pull steps below depend on that (see
 
    ```bash
    bash scripts/scan-bundle-images.sh                         # what deploy/docker-compose.yml names
-   bash scripts/scan-bundle-images.sh traefik:v3.7.16@sha256:…   # candidates, before moving a pin
+   bash scripts/scan-bundle-images.sh valkey/valkey:8.1.11-alpine@sha256:…   # candidates, before moving a pin
    ```
 
    A red image is not refreshed into the bundle. If no release of the same
@@ -214,7 +214,7 @@ git push origin vVERSION
 
 The `v*` tag runs the complete CI pipeline and validates the package/environment
 version. The image is built and scanned before publication, and `release-images`
-scans the bundle's PostgreSQL, Valkey and Traefik with `scripts/scan-bundle-images.sh`
+scans the bundle's PostgreSQL and Valkey with `scripts/scan-bundle-images.sh`
 (step 4); `release-draft` needs it, so a fixable CRITICAL or HIGH in any of them
 stops the release before promotion, as one in the application does. After all gates pass
 it is pushed only as `ghcr.io/ngarate/stoky:candidate-vVERSION`; the `release-draft`
@@ -242,7 +242,7 @@ attestation, which is the check operators are offered in
 [the guide](INSTALL.md#optional-check-who-published-the-files):
 
 ```bash
-for asset in docker-compose.yml example.env traefik.yml install.sh SHA256SUMS; do
+for asset in docker-compose.yml example.env install.sh SHA256SUMS; do
   gh attestation verify "$asset" --repo NGarate/stoky \
     --signer-workflow NGarate/stoky/.github/workflows/ci.yml \
     --source-ref refs/tags/vVERSION || echo "NOT ATTESTED: $asset"
@@ -303,7 +303,8 @@ non-draft release (prereleases included: GitHub's `releases/latest` route
 answers 404 while every release is an alpha), downloads that release's
 `docker-compose.yml`, and scans each image `docker compose config` resolves from
 it — the application at the digest the file names (by tag for bundles up to
-`v0.1.0-alpha.3`), and PostgreSQL, Valkey and Traefik as named. The scanner is
+`v0.1.0-alpha.3`), and its service images as named: PostgreSQL and Valkey,
+and Traefik in the releases that shipped one. The scanner is
 `release-draft`'s: Trivy 0.76.1 pinned, from the registry, no Actions cache. One
 job per image uploads the full report to code scanning under
 `trivy-release-<service>` and then fails on a fixable CRITICAL or HIGH finding.
@@ -375,7 +376,7 @@ for four things: `bun.lock` (`bun`), the workflows' `uses:` pins
 bundle's service images in `deploy/docker-compose.yml` (`docker-compose`). It
 proposes a release only once it is seven days old. Minor and patch updates
 share one pull request per ecosystem; each major arrives alone. Majors of
-PostgreSQL, Valkey and Traefik are never proposed: a PostgreSQL major cannot
+PostgreSQL and Valkey are never proposed: a PostgreSQL major cannot
 open the previous major's data directory, so each of those is a release with
 upgrade notes, written by hand. `src/__tests__/unit/ci-workflow.test.ts` holds
 that shape.
@@ -485,17 +486,19 @@ get an identity without the owner's bypass.
 
 ## Verification boundaries
 
-The release smoke (`scripts/smoke-proxy.sh`) runs the shipped bundle on the CI
-runner. It proves the routing — HTTP redirects, only the configured host reaches
-the application, by TLS name and by `Host` header — that TLS 1.1 and the
-CBC/SHA-1 suites at TLS 1.2 are refused while TLS 1.2 with an AEAD suite is
-not, and that Traefik discards a client's forged `X-Forwarded-For`/`X-Real-IP`,
-so the per-address sign-in limit cannot be sidestepped through the front door.
-It cannot prove that the network in front of a real installation behaves the
-same, and it does not verify the certificate, which a smoke host cannot obtain.
-For that, run `bash scripts/smoke-proxy.sh --live DOMAIN` against the
-installation, from an address nobody signs in from: the check spends that
-address's sign-in window.
+The release smoke runs the shipped bundle on the CI runner, on fresh volumes,
+and asks its published port for `/api/health`. It proves that the published
+image migrates and starts under the shipped Compose file, that the port
+mapping reaches it, and that the answer carries the security headers the
+application sets itself (HSTS, `nosniff`, `X-Frame-Options`, the CSP). It
+proves nothing about TLS, routing by host or forwarded headers: the bundle
+ships no proxy, so those belong to each installation's own
+([INSTALL](INSTALL.md#4-your-proxy)). That the application believes forwarded
+headers only from `STOKY_TRUSTED_PROXIES` is proven by
+`src/__tests__/unit/trusted-proxies.test.ts` and `proxy-entry.test.ts`, not
+by the smoke. An installation's own front door is checked by its operator,
+with `bash scripts/smoke-proxy.sh --live DOMAIN` from an address nobody signs
+in from: the check spends that address's sign-in window.
 
 The image pipeline scans one build and publishes a second; it does not compare
 the two image digests. On a tag, `release-draft` therefore scans the pushed

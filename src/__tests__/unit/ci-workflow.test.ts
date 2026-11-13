@@ -610,7 +610,7 @@ describe("the CI workflow's release attests its installation files", () => {
 
   it("attests exactly the files the draft attaches, SHA256SUMS included", () => {
     const assets = draftAssets();
-    expect(assets).toHaveLength(5);
+    expect(assets).toHaveLength(4);
     expect(assets).toContain(`${runnerTemp}/release/SHA256SUMS`);
     expect(attested().toSorted()).toEqual(assets.toSorted());
   });
@@ -1091,7 +1091,6 @@ describe("Dependabot's update configuration", () => {
       .map((image) => image.split("@")[0].replace(/:[^:/]+$/, ""));
     expect(images.toSorted()).toEqual([
       "ghcr.io/ngarate/stoky/postgres",
-      "traefik",
       "valkey/valkey",
     ]);
     const ignored = (entry("docker-compose").ignore ?? [])

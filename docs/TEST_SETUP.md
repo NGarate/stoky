@@ -179,7 +179,8 @@ enough: it reset the household the owner was actively testing with. The suite
 can now be run at any time without touching anything a person is using.
 
 **It serves the production artefact.** The `webServer` runs `bun run build` and
-then `bun .next/standalone/server.js` — the same thing the Docker image runs —
+then `bun --preload ./src/server/http/entry.ts .next/standalone/server.js` —
+the same thing the Docker image runs —
 on port **3100** by default (`PLAYWRIGHT_PORT` overrides). `next dev` sat there
 until 2026-08-17 and hid an entire defect class: production auth broken under
 green suites, and `upgrade-insecure-requests` killing every fetch on WebKit

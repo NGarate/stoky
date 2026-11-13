@@ -4,7 +4,7 @@
 # (18.6-alpine) and its major's (18-alpine), the shape of upstream's tags, so
 # release:refresh-images and Dependabot read it as they read any service
 # image. The bundle pins it by digest; a new build reaches an installation
-# only with a release, as Valkey's and Traefik's do.
+# only with a release, as Valkey's does.
 #
 # Why our own image: upstream rebuilds on its own schedule, and between
 # rebuilds its images carry fixes Alpine has already shipped. On 2026-11-12

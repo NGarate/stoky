@@ -97,7 +97,7 @@ mkdir -p "$ASSET_DIR"
 # The templates link to the guide on master, which is right for a checkout and
 # wrong for a download: once the next release lands, master's guide describes
 # that release. Each asset points at the guide written for its own tag.
-for asset in docker-compose.yml example.env traefik.yml install.sh; do
+for asset in docker-compose.yml example.env install.sh; do
   sed "s#/blob/master/#/blob/$RELEASE_TAG/#g" "deploy/$asset" > "$ASSET_DIR/$asset"
 done
 # Tag and digest: the tag keeps the line readable, the digest decides what is
@@ -111,6 +111,6 @@ fi
 (
   cd "$ASSET_DIR"
   chmod 755 install.sh
-  sha256sum docker-compose.yml example.env traefik.yml install.sh > SHA256SUMS
+  sha256sum docker-compose.yml example.env install.sh > SHA256SUMS
   sha256sum -c SHA256SUMS
 )

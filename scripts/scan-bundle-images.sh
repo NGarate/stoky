@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# Scans the release bundle's service images — PostgreSQL, Valkey, Traefik, as
+# Scans the release bundle's service images — PostgreSQL and Valkey, as
 # deploy/docker-compose.yml names them — with the release gate's scanner and
 # its rule: Trivy 0.76.1, fixable CRITICAL or HIGH fails, read from the
 # registry, postgres's gosu left out (RELEASING.md, weekly re-scans, has the
 # measurement behind that one file).
 #
 # Exists because these images were scanned only by the weekly rescan.yml,
-# after a release was published: v0.1.0-alpha.3 shipped traefik:v3.7.13 with
-# four HIGH advisories, and the first anyone heard of it was a red Monday run.
+# after a release was published: v0.1.0-alpha.3 shipped the Traefik the bundle
+# then included (v3.7.13) with four HIGH advisories, and the first anyone heard of it was a red Monday run.
 # ci.yml's release-images job runs this on a tag, and release-draft waits for
 # it, so a bundle with a fixable HIGH never becomes a draft. Run it by hand
 # before tagging, and on candidate images before moving a pin.

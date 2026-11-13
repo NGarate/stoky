@@ -1,8 +1,11 @@
 #
 # WARNING: To install Stoky, follow our guide: https://github.com/NGarate/stoky/blob/master/docs/INSTALL.md
 #
-# Make sure to use the docker-compose.yml, traefik.yml and example.env of the
-# same release, and rename example.env to .env. Requires Docker Compose 2.23.1+.
+# Make sure to use the docker-compose.yml and example.env of the same release,
+# and rename example.env to .env. Requires Docker Compose 2.23.1+.
+#
+# Stoky serves plain HTTP on one port. TLS is your reverse proxy's: the guide's
+# "Your proxy" section has an example for Traefik, Caddy, nginx and Tailscale.
 #
 
 name: stoky-release
@@ -94,92 +97,33 @@ services:
       STOKY_URLS: "https://${DOMAIN:?Define DOMAIN en .env sin https ni ruta}"
       STOKY_SECRET: "${STOKY_SECRET:-}"
       STOKY_REGISTRATION: "${STOKY_REGISTRATION:-first-user}"
+      # Whose X-Forwarded-* headers count: your proxy's address. Nobody's
+      # until you set it.
+      STOKY_TRUSTED_PROXIES: "${STOKY_TRUSTED_PROXIES:-}"
       OCR_WORKERS: "${OCR_WORKERS:-3}"
+    # The only published port in this file. Plain HTTP, for your proxy.
+    # STOKY_BIND is the address of this host it answers on.
+    ports:
+      - "${STOKY_BIND:-0.0.0.0}:${STOKY_PORT:-3000}:3000"
     volumes:
       - uploads:/app/uploads
     networks:
       - stoky
-      - traefik
+      - web
     depends_on:
       db:
         condition: service_healthy
       cache:
         condition: service_healthy
 
-  traefik:
-    image: traefik:v3.7.17@sha256:30ff62491aacdb862ceb8c9edcf2627da638d7deafdd4b6dab32fe34f8aa3e90
-    restart: unless-stopped
-    logging: *logging
-    security_opt:
-      - no-new-privileges:true
-    cap_drop: [ALL]
-    cap_add: [NET_BIND_SERVICE]
-    read_only: true
-    tmpfs:
-      - /tmp
-    deploy:
-      resources:
-        limits:
-          memory: 256m
-          pids: 128
-    environment:
-      DOMAIN: "${DOMAIN:?Define DOMAIN en .env sin https ni ruta}"
-    command:
-      - --api.dashboard=false
-      - --global.checkNewVersion=false
-      - --global.sendAnonymousUsage=false
-      - --providers.file.filename=/etc/traefik/dynamic.yml
-      - --providers.file.watch=false
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
-      - --entrypoints.web.http.redirections.entryPoint.to=websecure
-      - --entrypoints.web.http.redirections.entryPoint.scheme=https
-      - --entrypoints.web.transport.respondingTimeouts.idleTimeout=60s
-      - --entrypoints.web.transport.respondingTimeouts.readTimeout=60s
-      - --entrypoints.websecure.transport.respondingTimeouts.idleTimeout=60s
-      - --entrypoints.websecure.transport.respondingTimeouts.readTimeout=60s
-      - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
-      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?Define ACME_EMAIL en .env}"
-      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
-      - --entrypoints.health.address=:8082
-      - --ping=true
-      - --ping.entrypoint=health
-      - --log.level=INFO
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - letsencrypt:/letsencrypt
-    configs:
-      - source: traefik_dynamic
-        target: /etc/traefik/dynamic.yml
-    networks:
-      - traefik
-    healthcheck:
-      test:
-        [
-          CMD,
-          traefik,
-          healthcheck,
-          --ping,
-          --ping.entrypoint=health,
-          --entrypoints.health.address=:8082,
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-configs:
-  traefik_dynamic:
-    file: ./traefik.yml
-
 volumes:
   postgres_data:
   valkey_data:
   uploads:
-  letsencrypt:
 
 networks:
   stoky:
     internal: true
-  traefik:
+  # Docker publishes no port for a container that is only on an internal
+  # network. The app is on this one too; the database and the cache are not.
+  web:

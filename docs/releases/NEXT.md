@@ -1,13 +1,28 @@
 # Stoky: próxima versión
 
 > [!CAUTION]
-> Trae correcciones de seguridad que conviene instalar cuanto antes. El
-> Traefik de alpha.4 (`v3.7.16`) tiene un aviso HIGH en `go-jose` y dos en
-> `golang.org/x/net`; esta versión instala `v3.7.17`, que no tiene ninguno.
-> Valkey pasa a `8.1.11`, con `zlib` y `musl` corregidos. PostgreSQL pasa a
-> una imagen propia (`ghcr.io/ngarate/stoky/postgres`): la oficial con las
-> correcciones que Alpine ya publicó, sin los 19 avisos HIGH de `krb5` y
-> `libxslt` que tiene la oficial.
+> **El paquete ya no incluye Traefik ni pide certificados.** Stoky atiende
+> por HTTP en el puerto 3000 de tu servidor y el TLS lo pone tu proxy inverso:
+> Traefik, Caddy, nginx o `tailscale serve`. La guía de instalación tiene un
+> ejemplo de cada uno en «Your proxy». Antes de actualizar, pon un proxy con
+> TLS delante del puerto 3000 y dile a Stoky cuál es con
+> `STOKY_TRUSTED_PROXIES` en `.env`; `ACME_EMAIL` ya no se usa. Arranca con
+> `docker compose up -d --wait --remove-orphans`, que elimina el contenedor
+> del Traefik anterior. El volumen `stoky-release_letsencrypt` se puede
+> borrar después. `scripts/smoke-proxy.sh --live TU_DOMINIO`, desde otra red,
+> comprueba que tu proxy quedó bien puesto.
+>
+> Trae correcciones de seguridad que conviene instalar cuanto antes. Stoky
+> ya solo cree las cabeceras `X-Forwarded-For` y `X-Forwarded-Proto` de los
+> proxies indicados en `STOKY_TRUSTED_PROXIES`, y de ninguno hasta que lo
+> definas. Antes, quien llegara a la aplicación sin pasar por el proxy podía
+> elegir con una cabecera la dirección por la que se le contaban los intentos
+> de inicio de sesión. Valkey pasa a `8.1.11`, con `zlib` y `musl`
+> corregidos. PostgreSQL pasa a una imagen propia
+> (`ghcr.io/ngarate/stoky/postgres`): la oficial con las correcciones que
+> Alpine ya publicó, sin los 19 avisos HIGH de `krb5` y `libxslt` que tiene
+> la oficial. El Traefik de alpha.4 (`v3.7.16`), con un aviso HIGH en
+> `go-jose` y dos en `golang.org/x/net`, desaparece con el paquete nuevo.
 >
 > PostgreSQL pasa de la versión 16 a la 18, que no abre los datos de la 16:
 > una instalación anterior arranca con la base de datos vacía.
@@ -203,13 +218,28 @@ se descarta sin más.
 ## English
 
 > [!CAUTION]
-> Carries security fixes worth installing soon. alpha.4's Traefik
-> (`v3.7.16`) has a HIGH advisory in `go-jose` and two in
-> `golang.org/x/net`; this release installs `v3.7.17`, which has none.
+> **The bundle no longer includes Traefik or requests certificates.** Stoky
+> answers plain HTTP on port 3000 of your server, and TLS is your reverse
+> proxy's: Traefik, Caddy, nginx or `tailscale serve`. The installation
+> guide has an example of each under "Your proxy". Before upgrading, put a
+> proxy with TLS in front of port 3000 and tell Stoky which it is with
+> `STOKY_TRUSTED_PROXIES` in `.env`; `ACME_EMAIL` is no longer used. Start
+> with `docker compose up -d --wait --remove-orphans`, which removes the
+> previous Traefik container. The `stoky-release_letsencrypt` volume can be
+> deleted afterwards. `scripts/smoke-proxy.sh --live YOUR_DOMAIN`, run from
+> another network, checks that your proxy is set up right.
+>
+> Carries security fixes worth installing soon. Stoky now believes
+> `X-Forwarded-For` and `X-Forwarded-Proto` only from the proxies listed in
+> `STOKY_TRUSTED_PROXIES`, and from none until you set it. Before, anyone
+> who reached the application without going through the proxy could choose,
+> with one header, the address their sign-in attempts were counted by.
 > Valkey moves to `8.1.11`, with `zlib` and `musl` fixed. PostgreSQL moves
 > to our own image (`ghcr.io/ngarate/stoky/postgres`): the official one with
 > the fixes Alpine has already shipped, without the official one's 19 HIGH
-> advisories in `krb5` and `libxslt`.
+> advisories in `krb5` and `libxslt`. alpha.4's Traefik (`v3.7.16`), with a
+> HIGH advisory in `go-jose` and two in `golang.org/x/net`, goes with the
+> new bundle.
 >
 > PostgreSQL moves from 16 to 18, which cannot open 16's data: an earlier
 > installation starts with an empty database.

@@ -566,40 +566,33 @@ export async function refundRateLimit(
 }
 
 /**
- * The client's address, from the proxy headers a self-hosted deployment puts
- * in front of the app — in full, as the proxy wrote it. This is what the
- * security log records; what a limit is *counted* against is
- * `rateLimitIdentifier` below, which is coarser on purpose.
+ * The client's address, in full. This is what the security log records; what
+ * a limit is *counted* against is `rateLimitIdentifier` below, which is
+ * coarser on purpose.
  *
- * **The last entry of `X-Forwarded-For`, not the first.** The header is a list
- * each proxy appends to, so the leftmost entry is whatever the client sent —
- * and an attacker who sets a different value on every request turns a per-IP
- * limit into no limit at all. The rightmost entry is written by the proxy
- * closest to this app, which in this deployment is Traefik, and is the only
- * entry a client cannot forge.
+ * **Read from `X-Forwarded-For`, which in production is not the client's to
+ * write.** The entry in front of Next (`src/server/http/entry.ts`) rewrites
+ * it on every request to exactly one address: the peer that connected, or,
+ * when that peer is listed in `STOKY_TRUSTED_PROXIES`, the client that proxy
+ * named. It also deletes `X-Real-IP`, so there is one place that decides who
+ * the client is and one header that says it.
  *
- * With no proxy header at all — reaching the app directly, which is how it
- * runs in development — every caller is `unknown`, and so shares one bucket.
- * That is deliberate and it is the safe direction: a shared bucket
- * over-restricts, and the alternative of treating an unidentifiable caller as
- * unlimited is the hole this module closes.
+ * **The last entry, not the first**, for the one server the entry is not in
+ * front of: `next dev`. The header is a list each proxy appends to, so the
+ * leftmost entry is whatever the client sent.
+ *
+ * With no header at all — a request whose socket had already closed, or a
+ * caller that is not an HTTP request — every caller is `unknown`, and so
+ * shares one bucket. That is deliberate and it is the safe direction: a
+ * shared bucket over-restricts, and the alternative of treating an
+ * unidentifiable caller as unlimited is the hole this module closes.
  */
 export function clientAddress(headers: Headers): string {
-  const forwarded = headers.get("x-forwarded-for");
-  if (forwarded) {
-    const hops = forwarded
-      .split(",")
-      .map((hop) => hop.trim())
-      .filter((hop) => hop.length > 0);
-    if (hops.length > 0) {
-      return hops[hops.length - 1];
-    }
-  }
-
-  const real = headers.get("x-real-ip")?.trim();
-  if (real) return real;
-
-  return "unknown";
+  const hops = (headers.get("x-forwarded-for") ?? "")
+    .split(",")
+    .map((hop) => hop.trim())
+    .filter((hop) => hop.length > 0);
+  return hops.at(-1) ?? "unknown";
 }
 
 /**
