@@ -491,6 +491,26 @@ proxy's, or a Docker gateway such as `172.20.0.1`, `STOKY_TRUSTED_PROXIES` is
 not the address Stoky sees the proxy at: that address is the one the line
 shows.
 
+Last, check the whole front door from **another network**: a laptop on a
+phone's hotspot will do. The repository keeps a script for it, which needs
+only bash and curl:
+
+```bash
+STOKY_RELEASE=v0.1.0-alpha.4
+curl --proto '=https' --tlsv1.2 --fail --location --output smoke-proxy.sh \
+  "https://raw.githubusercontent.com/NGarate/stoky/${STOKY_RELEASE}/scripts/smoke-proxy.sh"
+less smoke-proxy.sh      # read what you are about to run; q to quit
+bash smoke-proxy.sh --live stoky.example.com
+```
+
+It checks that plain `http://` does not serve Stoky, that `https://` reaches
+it with a certificate that machine trusts and with Stoky's security headers
+intact, and that a forged `X-Forwarded-For` buys nothing: it signs in wrongly,
+forging a new address each time, until Stoky refuses it. It ends with
+`Proxy smoke: OK`, or with the one thing to fix. **For up to 15 minutes
+afterwards nobody can sign in from the address it ran from**, which is the
+other reason to run it from somewhere else.
+
 ## 5. Register and check
 
 **Register straight away**, at `https://YOUR_DOMAIN/register`. With

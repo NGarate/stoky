@@ -834,7 +834,7 @@ jobs:
       # Run the downloaded registry image, including its migrations, against
       # new volumes. This checks the actual publication, beyond the build and
       # source tests. TLS and the proxy are the operator's, and so is their
-      # check (scripts/smoke-proxy.sh --live).
+      # check: scripts/smoke-proxy.sh --live, against their own installation.
       - name: Verify the published image on a fresh database
         env:
           # The candidate tag image-publish pushed; the version tag does not

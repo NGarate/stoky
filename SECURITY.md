@@ -1867,7 +1867,10 @@ publishing an instance:
     everyone inside it a per-address limit they turn off with one header,
     bounded only by the per-account limit above. `scripts/smoke-proxy.sh
     --live DOMAIN` forges the header through a real installation's ingress
-    and fails unless the limit still holds.
+    and fails unless the limit still holds. That catches a proxy that passes
+    the client's header on, and a list too wide behind a proxy that appends
+    to it (nginx); behind one that replaces the header (Caddy, Traefik) a
+    wide list is reachable only by a client that gets to the port itself.
   - **Behind a proxy that is not listed, every visitor is the proxy.** They
     share one sign-in and one registration budget and the security log names
     the proxy for all of them: over-restrictive, which is the safe direction,

@@ -9,7 +9,8 @@
 > `STOKY_TRUSTED_PROXIES` en `.env`; `ACME_EMAIL` ya no se usa. Arranca con
 > `docker compose up -d --wait --remove-orphans`, que elimina el contenedor
 > del Traefik anterior. El volumen `stoky-release_letsencrypt` se puede
-> borrar después.
+> borrar después. `scripts/smoke-proxy.sh --live TU_DOMINIO`, desde otra red,
+> comprueba que tu proxy quedó bien puesto.
 >
 > Trae correcciones de seguridad que conviene instalar cuanto antes. Stoky
 > ya solo cree las cabeceras `X-Forwarded-For` y `X-Forwarded-Proto` de los
@@ -225,7 +226,8 @@ se descarta sin más.
 > `STOKY_TRUSTED_PROXIES` in `.env`; `ACME_EMAIL` is no longer used. Start
 > with `docker compose up -d --wait --remove-orphans`, which removes the
 > previous Traefik container. The `stoky-release_letsencrypt` volume can be
-> deleted afterwards.
+> deleted afterwards. `scripts/smoke-proxy.sh --live YOUR_DOMAIN`, run from
+> another network, checks that your proxy is set up right.
 >
 > Carries security fixes worth installing soon. Stoky now believes
 > `X-Forwarded-For` and `X-Forwarded-Proto` only from the proxies listed in

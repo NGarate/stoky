@@ -49,6 +49,14 @@ on loopback ports, removed afterwards:
   against the bundle: `/api/health` 200 on the published port with HSTS,
   `nosniff`, `X-Frame-Options` and the CSP; against a port nothing listens
   on, curl's exit 7. The smoke itself runs only on a tag.
+- **`scripts/smoke-proxy.sh --live`**, run against the bundle behind Caddy
+  with its internal CA (curl sent to loopback and given that CA through a
+  `.curlrc`, the script unchanged): `Proxy smoke: OK`, throttled at attempt 6,
+  and the same with nothing listening on port 80. It failed, each with its
+  own message, against a Caddy that passed the client's `X-Forwarded-For` on
+  (20 attempts never throttled), one that served the application over plain
+  HTTP, one that removed `Strict-Transport-Security`, and without the CA
+  (curl's exit 60).
 
 **2026-10-18 both branches landed on `master`.** The security branch (PR #11)
 and the Better Auth branch on top of it (PR #12) landed as `e9d62eb..d68ffd1`:

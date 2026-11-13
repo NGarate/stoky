@@ -496,7 +496,9 @@ ships no proxy, so those belong to each installation's own
 ([INSTALL](INSTALL.md#4-your-proxy)). That the application believes forwarded
 headers only from `STOKY_TRUSTED_PROXIES` is proven by
 `src/__tests__/unit/trusted-proxies.test.ts` and `proxy-entry.test.ts`, not
-by the smoke.
+by the smoke. An installation's own front door is checked by its operator,
+with `bash scripts/smoke-proxy.sh --live DOMAIN` from an address nobody signs
+in from: the check spends that address's sign-in window.
 
 The image pipeline scans one build and publishes a second; it does not compare
 the two image digests. On a tag, `release-draft` therefore scans the pushed
