@@ -188,12 +188,18 @@ value that is not a positive whole number means `3`, and more than the host's
 processors means as many as it has. It is read when the app starts, so apply
 a change with `docker compose up -d --wait`.
 
-`STOKY_PORT` is where Stoky answers on this host: `3000` unless you set it.
-It is plain HTTP, meant for your proxy and for nobody else. With the proxy on
-this same host, set `STOKY_PORT=127.0.0.1:3000`, and the port answers only to
-programs on this host. Left as a bare port it answers on every address the
-host has, which a proxy on another machine needs; close it to everything but
-that machine with your firewall.
+`STOKY_BIND` and `STOKY_PORT` are where Stoky answers on this host: every
+IPv4 address it has, port `3000`, unless you set them. It is plain HTTP,
+meant for your proxy and for nobody else.
+
+| Setting | Unset | Set it when |
+|---|---|---|
+| `STOKY_BIND` | `0.0.0.0`: every IPv4 address of this host | The proxy runs on this host: `STOKY_BIND=127.0.0.1`, and only programs on this host reach the port. Or to one address of this host, to keep the port off its other networks |
+| `STOKY_PORT` | `3000` | Something else on this host already uses 3000 |
+
+Left unset the port answers the whole network, which a proxy on another
+machine needs; [Your proxy](#a-proxy-on-another-machine) says how to close it
+to everything but that machine.
 
 `STOKY_TRUSTED_PROXIES` is whose `X-Forwarded-For` and `X-Forwarded-Proto`
 Stoky believes: your proxy's address as Stoky sees it, or several addresses
@@ -318,8 +324,8 @@ a connection arrives from, and Docker changes that:
 
 | The proxy runs | It forwards to | Stoky sees it arrive from | Set |
 |---|---|---|---|
-| On this host (Caddy, nginx, `tailscale serve`) | `127.0.0.1:3000` | The gateway of the bundle's `web` network, **not** `127.0.0.1` | `STOKY_PORT=127.0.0.1:3000`, and that gateway |
-| In a container on this host (Traefik in Docker) | Stoky's container, port 3000, over a Docker network both are on | The proxy container's address on that network | `STOKY_PORT=127.0.0.1:3000`, and that address or the network's range |
+| On this host (Caddy, nginx, `tailscale serve`) | `127.0.0.1:3000` | The gateway of the bundle's `web` network, **not** `127.0.0.1` | `STOKY_BIND=127.0.0.1`, and that gateway |
+| In a container on this host (Traefik in Docker) | Stoky's container, port 3000, over a Docker network both are on | The proxy container's address on that network | `STOKY_BIND=127.0.0.1`, and that address or the network's range |
 | On another machine | This host's address, port 3000 | That machine's address | That address, and a firewall rule so that nothing else reaches port 3000 |
 
 The first two rows were measured on Docker Engine 29 with this bundle
@@ -336,11 +342,10 @@ docker network inspect stoky-release_web --format '{{(index .IPAM.Config 0).Gate
 ```
 
 Put what that prints (`172.20.0.1`, say) in `STOKY_TRUSTED_PROXIES`, **and set
-`STOKY_PORT=127.0.0.1:3000`**. The two belong together. That gateway is also
-the address of everything else on this host that reaches the published port:
-another container, or a client on IPv6, which Docker hands over itself. Bound
-to `127.0.0.1`, the port is reached by programs on this host and by nothing
-else.
+`STOKY_BIND=127.0.0.1`**. The two belong together. That gateway is also the
+address of everything else on this host that reaches the published port, such
+as a container on another Docker network. Bound to `127.0.0.1`, the port is
+reached by programs on this host and by nothing else.
 
 Docker picks the network's range when it creates the network, and may pick
 another after `docker compose down`. To choose it yourself, create
@@ -460,8 +465,25 @@ docker network inspect proxy --format '{{(index .IPAM.Config 0).Subnet}}'
 ```
 
 The range trusts every container on that network, so each of them could
-choose the address Stoky counts it by. Set `STOKY_PORT=127.0.0.1:3000` here
-too: the proxy no longer uses the published port, and nothing else should.
+choose the address Stoky counts it by. Set `STOKY_BIND=127.0.0.1` here too:
+the proxy no longer uses the published port, and nothing else should.
+
+### A proxy on another machine
+
+Leave `STOKY_BIND` unset, or set it to the one address of this host that the
+proxy reaches it by (a LAN or VPN address), which keeps the port off the
+host's other networks. `STOKY_TRUSTED_PROXIES` is the proxy machine's
+address.
+
+Everything else that can reach that address and port reaches Stoky over
+plain HTTP, past your proxy, so close the port to all but the proxy machine.
+A `ufw` rule on this host does not do it:
+[Docker's documentation](https://docs.docker.com/engine/network/packet-filtering-firewalls/#docker-and-ufw)
+says traffic to a published port is diverted before it reaches `ufw`'s
+rules. Put the rule where that page says, or on the router or the network
+between the two machines, and test it from a third device.
+The network between proxy and Stoky carries every password and session
+cookie unencrypted, so keep it one you trust.
 
 ### A CDN in front of the proxy
 
@@ -771,8 +793,9 @@ Whether that touches you depends on where your proxy runs:
 
 - **A proxy installed on this host** (Caddy, nginx, `tailscale serve`) accepts
   the connection itself and sees the client's own address. There is nothing to
-  do, provided `STOKY_PORT=127.0.0.1:3000` keeps IPv6 clients from reaching
-  Stoky's port directly ([Your proxy](#a-proxy-on-this-host)).
+  do: Stoky's own port is published on IPv4 only, so no IPv6 client reaches
+  it past the proxy (measured 2026-11-13: `[::1]` was refused with
+  `STOKY_BIND` unset).
 - **A proxy in a container** sees the gateway for every IPv6 client and tells
   Stoky so. Every IPv6 client then shares one budget: 5 sign-in attempts per
   15 minutes and 3 registrations per hour. One of them spending it makes the

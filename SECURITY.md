@@ -207,7 +207,8 @@ Verified against the files named in each row.
   `uploads` volume plus tmpfs mounts for `/tmp` and `/app/.next/cache`.
 - Postgres and Valkey sit on an `internal: true` bridge network and publish **no
   ports**. **Only the app publishes one**: 3000, plain HTTP, for the
-  operator's proxy (`STOKY_PORT` moves it, or binds it to one address). Docker
+  operator's proxy, on the host's IPv4 addresses (`STOKY_PORT` moves it,
+  `STOKY_BIND` narrows it to one address). Docker
   publishes nothing for a container that is only on an internal network, so
   the app is also on an ordinary one, `web`, which the database and the cache
   are not on. `src/__tests__/unit/deployment.test.ts` pins all of it.
@@ -283,10 +284,12 @@ Verified against the files named in each row.
   but the proxy.
 - **The published port answers anyone who can reach it**, with no TLS and,
   until `STOKY_TRUSTED_PROXIES` names a proxy, with every visitor counted by
-  their own address. `STOKY_PORT=127.0.0.1:3000` leaves it to programs on the
+  their own address. `STOKY_BIND=127.0.0.1` leaves it to programs on the
   host, which is what a proxy on that host needs and all it needs. Measured on
   Docker Engine 29 (2026-11-13): bound to `127.0.0.1`, the port refused the
   host's LAN address, its Tailscale address, `[::1]` and another container.
+  Unset, `STOKY_BIND` is `0.0.0.0`, not every address: the port then refused
+  `[::1]` and answered the other three.
 - **HSTS does not send `preload`.** The token is
   the domain owner's consent to the browsers' built-in HSTS lists:
   hstspreload.org checks the header, not who submits, and leaving the list is
@@ -1908,8 +1911,9 @@ publishing an instance:
   They share one sign-in and one registration budget, so anyone on IPv6 can
   keep every other IPv6 visitor waiting, and the security log names the
   gateway for all of them. Measured on 2026-11-13 against the app's own
-  published port: a request to `[::1]:3000` arrived from the `web` network's
-  gateway. A proxy installed on the host accepts the connection itself and is
+  port while it was published on IPv6 too: a request to `[::1]:3000` arrived
+  from the `web` network's gateway. A proxy installed on the host accepts
+  the connection itself and is
   not affected. [The installation guide](docs/INSTALL.md#clients-on-ipv6)
   says how to give the proxy's network IPv6, how to avoid the question with
   an A record only, and how to tell from the log which applies. The /64
@@ -1918,9 +1922,11 @@ publishing an instance:
   on the host reaches the app through the same gateway, so the operator lists
   it in `STOKY_TRUSTED_PROXIES`. So does everything else on the host that
   reaches the published port: another container, and an IPv6 client handed
-  over by the userland proxy. With the port open to the network, such a
-  client would be believed about its own address. The installation guide
-  therefore pairs a trusted gateway with `STOKY_PORT=127.0.0.1:3000`.
+  over by the userland proxy. Such a client would be believed about its own
+  address. The bundle therefore publishes the port on IPv4 only
+  (`STOKY_BIND` is `0.0.0.0` unless set), which shuts out the IPv6 client,
+  and the installation guide pairs a trusted gateway with
+  `STOKY_BIND=127.0.0.1`, which shuts out the other container.
 - **A refusal says how long to wait.** A 429 from tRPC carries `Retry-After`,
   read off the refusal rather than recomputed, so the header and the message
   cannot disagree — RFC 9110 §10.2.3. Two things deliberately do not carry it:
@@ -2965,7 +2971,7 @@ The app rejects short signing keys and the published development placeholder.
 Use the release bundle, which publishes one port: the app's, plain HTTP, for
 your proxy. Development Compose files
 publish local infrastructure and carry known passwords; they are not deployments.
-Put a proxy with TLS in front, bind the port to it (`STOKY_PORT`), and name it
+Put a proxy with TLS in front, bind the port to it (`STOKY_BIND`), and name it
 in `STOKY_TRUSTED_PROXIES`: forwarded addresses are believed from nobody else,
 and from nobody at all until you do
 ([Your proxy](docs/INSTALL.md#4-your-proxy)).

@@ -33,9 +33,14 @@ on loopback ports, removed afterwards:
   address arrives as the `web` network's gateway; the host at its LAN or
   Tailscale address arrives as that address; a container on `web` as itself;
   a container on another bridge, through the host's port, as the gateway.
-  With `STOKY_PORT=127.0.0.1:3317` only the first of those connects. A
-  second machine was not available, so a LAN client's address is Docker's
+  A second machine was not available, so a LAN client's address is Docker's
   documented behaviour, not a measurement.
+- **Where the port answers**, `/api/health` on port 3317: with `STOKY_BIND`
+  unset (`0.0.0.0`) the host's loopback, its LAN address and a container on
+  another bridge got 200 and `[::1]` was refused; with
+  `STOKY_BIND=127.0.0.1` only loopback connected; with `STOKY_BIND=[::1]`
+  only `[::1]`; with the host's LAN address only that address, loopback and
+  the Tailscale address refused.
 - **Three proxies in front of it**, each forging the header: Caddy 2.11 and
   nginx 1.31 on the host network (gateway trusted) and Traefik 3.7.14 in a
   container with labels from an override file (its network's range trusted)

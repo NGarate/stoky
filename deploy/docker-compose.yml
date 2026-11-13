@@ -102,8 +102,9 @@ services:
       STOKY_TRUSTED_PROXIES: "${STOKY_TRUSTED_PROXIES:-}"
       OCR_WORKERS: "${OCR_WORKERS:-3}"
     # The only published port in this file. Plain HTTP, for your proxy.
+    # STOKY_BIND is the address of this host it answers on.
     ports:
-      - "${STOKY_PORT:-3000}:3000"
+      - "${STOKY_BIND:-0.0.0.0}:${STOKY_PORT:-3000}:3000"
     volumes:
       - uploads:/app/uploads
     networks:

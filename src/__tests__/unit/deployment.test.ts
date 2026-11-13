@@ -144,9 +144,11 @@ describe("the downloadable installation", () => {
   });
 
   it("publishes one port, the application's, and nothing of the database or the cache", () => {
-    // Plain HTTP for the operator's proxy, on a port they can move or bind to
-    // one address (STOKY_PORT=127.0.0.1:3000).
-    expect(compose.services.app.ports).toEqual(["${STOKY_PORT:-3000}:3000"]);
+    // Plain HTTP for the operator's proxy, on a port they can move
+    // (STOKY_PORT) and an address they can narrow (STOKY_BIND=127.0.0.1).
+    expect(compose.services.app.ports).toEqual([
+      "${STOKY_BIND:-0.0.0.0}:${STOKY_PORT:-3000}:3000",
+    ]);
     expect(compose.services.db.ports).toBeUndefined();
     expect(compose.services.cache.ports).toBeUndefined();
     expect(compose.networks.stoky?.internal).toBe(true);
@@ -189,6 +191,7 @@ describe("the downloadable installation", () => {
       "${STOKY_TRUSTED_PROXIES:-}",
     );
     expect(template).toMatch(/^# STOKY_TRUSTED_PROXIES=$/m);
+    expect(template).toMatch(/^# STOKY_BIND=127\.0\.0\.1$/m);
     expect(template).toMatch(/^# STOKY_PORT=3000$/m);
   });
 
