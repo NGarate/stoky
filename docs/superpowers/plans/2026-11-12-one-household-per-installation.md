@@ -93,7 +93,8 @@ household directly.
 
 ## 4. The commits
 
-Work on a branch cut from `master` after PR #25 has merged, named
+Step 0 comes first, then commits 1–7, in order. Work on a branch cut from
+`master` after PR #25 has merged, named
 `feat/one-household-<the date it is cut>`, and open a pull request
 (`CLAUDE.md`, Git Workflow: unattended agent work). If the owner is watching
 each commit land instead, it goes straight to `master`; the owner says which. Each commit
@@ -111,6 +112,116 @@ grep -rn "household\.create\|CreateHousehold\|isNoHouseholdError\|noHousehold" s
 grep -rn "\"open\"\|STOKY_REGISTRATION\|registrationAllows\|registrationOpen" src e2e scripts deploy playwright.config.ts .env.example
 grep -rn "removeMember" src e2e messages
 ```
+
+### Step 0 — remove the dead code (added 2026-11-13)
+
+A sweep of every file on 2026-11-13 (eight read-only agents, each finding
+then re-checked by grep) found code nothing runs. It goes first, so the
+commits below do not carry it along or step around it. One commit per kind
+of thing, each standing alone. Every item was true at `4df104c4`; **grep
+each again before deleting it**, and keep a deletion out of a commit if
+anything now reads it.
+
+There is no iOS app (`../stoky-ios` is an empty project, owner,
+2026-11-13), so a procedure with no web caller is dead, not "kept for the
+app".
+
+#### 0.1 — `refactor: drop four tRPC procedures no client calls`
+
+- `auth.logout` (`routers/auth.ts` ~626). Signing out is Better Auth's
+  (`/api/auth/*`, `src/lib/auth/client.ts`). Its doc comment (~605) explains
+  `z.void()` for procedures that take nothing, and `shopping.ts` ~479 and
+  `trpc.ts` ~252 point at it: move that explanation to where it is still
+  read, do not lose it.
+- `product.count` (`routers/product.ts` ~257).
+- `price.recordPrice` (`routers/price.ts` ~54). Comments cite it as the
+  write that already guarded a field (`shopping.ts` ~58, `inventory.ts`
+  ~361 and ~419, `receipt.ts` ~112); reword them so they do not name a
+  procedure that no longer exists.
+- `shopping.update`, the list-level one (`routers/shopping.ts` ~192), not
+  `shopping.updateItem`.
+- **Kept on purpose:** `household.current` has no web caller either, but
+  commit 6's form reads the name through it. `inventory.transferStock` and
+  `product.searchByName` have none, but `REDESIGN_PLAN.md` (the "Already
+  implemented" table, ~32) lists them as the backend of screens never
+  built. **Owner's decision whether they stay**; until then they do.
+- Tests that name the removed ones: `unit/procedure-inputs.test.ts`
+  (~41, ~51), `integration/capabilities.refusals.test.ts` (~511, ~532),
+  `unit/replayable.test.ts` (~49), `unit/capabilities.test.ts` (their rows),
+  and whatever `bun test` names when run on the router files' tests. The
+  documented procedure count drops by four in `SECURITY.md` and
+  `docs/STATUS.md` (the sentences `capabilities.test.ts` matches).
+
+#### 0.2 — `refactor: drop validation schemas no procedure uses`
+
+A schema no procedure's `.input()` and no form reads validates nothing,
+whatever its unit tests say.
+
+- `stockOperationSchema` (`validations/inventory.ts` ~11),
+  `priceQuerySchema` (`validations/price.ts` ~26), `productListSchema`
+  (`validations/product.ts` ~93): no user at all.
+- `shoppingItemSchema` (`validations/shopping.ts` ~51),
+  `householdMemberSchema` (`validations/household.ts` ~18),
+  `inviteMemberSchema` (`validations/auth.ts` ~122): only their tests.
+- `updateHouseholdSchema` and `createHouseholdSchema`, moved here from
+  commit 4 because they are already dead: see there.
+- The inferred `*Input` types nothing imports (about thirty, e.g.
+  `AddStockInput`, `PriceQueryInput`, `ProductListInput`,
+  `ShoppingListInput`, `UpdateStoreInput`, `LoginInput`, `RegisterInput`):
+  list them with `grep -rnw` per name rather than trusting this sentence.
+- Their cases in `unit/household.validation.test.ts`,
+  `unit/auth.validation.test.ts`, `unit/shopping-item.test.ts`,
+  `unit/update-schemas.test.ts` and `unit/validation-bounds.test.ts`.
+
+#### 0.3 — `refactor: drop helpers only their own tests call`
+
+- `src/lib/inventory/usualLocation.ts`, the whole module, and
+  `unit/usual-location.test.ts`.
+- `pendingProductIds` (`src/lib/offline/project.ts` ~228) and its cases in
+  `unit/offline.project.test.ts`.
+- `OpenFoodFactsResponse` (`src/server/services/openFoodFacts.ts` ~160), a
+  type nothing references.
+- `cleanupAllTestData` and `createTestScenario`
+  (`src/__tests__/utils/test-helpers.ts`), which no test calls (also true on
+  PR #25's branch).
+
+#### 0.4 — `refactor(i18n): drop catalogue keys nothing reads`
+
+From both `messages/es.json` and `messages/en.json`: `auth.logout`,
+`common.barcode`, `common.error`, `common.no`, `common.price`,
+`common.store`, `common.total`, `common.currency`, `inventory.quantity`,
+`prices.recordPrice`, `products.adjust.retry`, `products.detail.retry`,
+`products.edit.retry`, `products.history.retry`, `receipts.applied.retry`,
+`shopping.checked`, `shopping.days`, `shopping.year`, `stores.delete`, and
+`receipts.store` (the least certain). The sweep matched keys to namespaces
+loosely, so this list is a floor, not a census, and each key needs its
+namespace checked, not just its last word grepped. Dynamic keys
+(`` t(`role${…}`) ``, `op${…}`, `screen${…}`, `steps.${…}`, the receipt
+statuses) are used whatever a grep says. `unit/messages.test.ts` and
+`unit/message-usage.test.ts` must stay green.
+
+#### 0.5 — `refactor(ui): drop props no caller passes`
+
+- `cancelLabel` on `ConfirmDialog` (`src/components/ui/dialog.tsx` ~201,
+  ~213, ~226).
+- `placeholder` and `className` on `StoreSelector`
+  (`src/components/store/StoreSelector.tsx`). Grep multi-line JSX before
+  trusting this; the sweep sampled props rather than checking every one.
+
+#### 0.6 and 0.7 — the package manifest, one commit each
+
+- `chore: drop the db:migrate script` — nothing names it; the documents use
+  `bunx --bun prisma migrate dev` directly. Or keep it and point the
+  documents at it; either way, not both.
+- `build(deps): drop postcss` — no file imports it; `postcss.config.mjs`
+  names only `@tailwindcss/postcss`. Only if `bun run build` and the
+  component suite still pass without it (it may be a peer something
+  resolves), and only in a commit of its own.
+
+**Not in step 0:** about a hundred types and constants are exported but only
+read in their own file, and some functions are exported only so their tests
+can reach them (deliberate seams). Dropping an unneeded `export` changes
+nothing that runs; leave them, unless the owner wants a lint rule for it.
 
 ### Commit 1 — `test(auth): give the browser specs their accounts without registering`
 
@@ -203,19 +314,14 @@ is sent; without one it makes a householdless MEMBER.
 ### Commit 4 — `feat(household)!: stop creating a household from an account without one`
 
 - Remove `household.create` from `src/server/trpc/routers/household.ts`
-  (~238), and the schemas that validate nothing:
-  - `updateHouseholdSchema` (`src/lib/validations/household.ts` ~14) and its
-    type `UpdateHouseholdInput` (~207): already used by no procedure, and
-    shaped wrong for commit 6 (it takes an `id`; the household is the
-    caller's);
-  - `createHouseholdSchema` and `CreateHouseholdInput`
-    (`src/lib/validations/auth.ts` ~118, ~132), already used by no procedure.
-
-  With them, the tests that exercise only those: the `updateHouseholdSchema`
-  `describe` of `unit/household.validation.test.ts`, the
-  `createHouseholdSchema` block of `unit/auth.validation.test.ts`, the
-  `household` row of `unit/update-schemas.test.ts` (~24) and two rows of
-  `unit/validation-bounds.test.ts` (~471, ~473).
+  (~238). The schemas that already validated nothing went in step 0.2:
+  `updateHouseholdSchema` (`src/lib/validations/household.ts` ~14, with
+  `UpdateHouseholdInput`; it takes an `id`, and the household is the
+  caller's) and `createHouseholdSchema` (`src/lib/validations/auth.ts` ~118,
+  with `CreateHouseholdInput`), with their cases in
+  `unit/household.validation.test.ts`, `unit/auth.validation.test.ts`,
+  `unit/update-schemas.test.ts` (~24) and `unit/validation-bounds.test.ts`
+  (~471, ~473).
 
   **Keep `householdSchema`** (~10): between this commit and commit 6 it
   validates nothing, and commit 6 makes it the rename's input. Its tests
@@ -303,9 +409,10 @@ adelante") that never existed. Now it does.
 - Whether it queues offline: decide by what the settings screens already do,
   and say which in the commit message; an admin rename is not a Phase 4
   write unless the stores rename is one.
-- After saving, invalidate what shows the name. Note that `household.current`
-  has **no web caller today** (only, possibly, the iOS client); find where
-  the web reads the household's name before assuming.
+- The web shows the household's name **nowhere** today; only the forms
+  that create one ask for it. The form reads the current name through
+  `household.current`, which step 0.1 kept for exactly this and which gets
+  its first web caller here; saving invalidates it.
 - `capabilities.test.ts` gains `update: "adminProcedure"`; the procedure
   count in `SECURITY.md` and `docs/STATUS.md` goes back up by one.
 - Tests: integration — an ADMIN renames, a MEMBER and a KITCHEN account are
