@@ -183,6 +183,67 @@ describe("what it refuses to hand back", () => {
   });
 });
 
+describe("what it shares", () => {
+  const found = (code: string) =>
+    new Response(
+      JSON.stringify({
+        code,
+        product: { code, product_name: "Leche entera" },
+        status: 1,
+        status_verbose: "product found",
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+
+  it("serves a hit to a second replica without asking again", async () => {
+    const realFetch = globalThis.fetch;
+    let fetches = 0;
+    globalThis.fetch = (async () => {
+      fetches += 1;
+      return found("8480000123456");
+    }) as unknown as typeof fetch;
+
+    try {
+      await new OpenFoodFactsClient().getProductByBarcode("8480000123456");
+      const second = await new OpenFoodFactsClient().getProductByBarcode(
+        "8480000123456",
+      );
+
+      expect(fetches).toBe(1);
+      expect(second?.product_name).toBe("Leche entera");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("drops a stub an earlier version cached as a product", async () => {
+    // As the previous release wrote it: the parsed stub, stored as a hit.
+    await valkeyProductCache.set(
+      "9990000000017",
+      JSON.stringify({ code: "9990000000017" }),
+    );
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          code: "9990000000017",
+          status: 0,
+          status_verbose: "product not found",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      )) as unknown as typeof fetch;
+
+    try {
+      expect(
+        await new OpenFoodFactsClient().getProductByBarcode("9990000000017"),
+      ).toBeNull();
+      expect(await valkeyProductCache.get("9990000000017")).toBeNull();
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+});
+
 describe("a barcode Open Food Facts does not know", () => {
   /**
    * Remembered for a day, so the same unknown code is not fetched again and
