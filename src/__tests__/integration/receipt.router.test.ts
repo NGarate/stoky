@@ -15,6 +15,7 @@ import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 import { MatchStatus, ReceiptStatus } from "@/generated/prisma/client";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { appRouter } from "@/server/trpc/router";
+import { replaceReceiptReading } from "@/server/trpc/routers/receipt";
 import { ThrottledError } from "@/server/trpc/throttle";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
@@ -199,7 +200,11 @@ const ONE_PIXEL_PNG = Buffer.from(
   "base64",
 );
 
+let restoreReading: () => void;
+
 beforeAll(async () => {
+  // What is checked here is the procedures, not what Tesseract reads.
+  restoreReading = replaceReceiptReading(async () => {});
   const household = await createTestHousehold({ name: HOUSEHOLD });
   householdId = household.id;
   const other = await createTestHousehold({ name: OTHER_HOUSEHOLD });
@@ -246,6 +251,7 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
+  restoreReading();
   const ids = [householdId, otherHouseholdId];
   await prisma.stockEntry.deleteMany({
     where: { product: { householdId: { in: ids } } },
@@ -1235,17 +1241,6 @@ describe("receipt.reframe", () => {
   ];
   const quad = FRAMED as Parameters<typeof caller.receipt.reframe>[0]["quad"];
 
-  /** Until the reading it started has ended: its photo is not on disk. */
-  async function settled(receiptId: string) {
-    for (let i = 0; i < 50; i++) {
-      const { status } = await prisma.receipt.findUniqueOrThrow({
-        where: { id: receiptId },
-      });
-      if (status === ReceiptStatus.FAILED) return;
-      await Bun.sleep(100);
-    }
-  }
-
   it("keeps the new frame and sends the receipt back to be read", async () => {
     const { receipt } = await seedReceipt({});
 
@@ -1260,7 +1255,6 @@ describe("receipt.reframe", () => {
     expect(
       await prisma.receiptItem.count({ where: { receiptId: receipt.id } }),
     ).toBe(0);
-    await settled(receipt.id);
     // And the review reads it back, for the frame to start from.
     const review = await caller.receipt.getReceiptWithItems({
       receiptId: receipt.id,
@@ -1289,7 +1283,6 @@ describe("receipt.reframe", () => {
       where: { id: receipt.id },
     });
     expect(row.ticketQuad).toBeNull();
-    await settled(receipt.id);
   });
 
   it("is refused once applied, and while a reading runs, and keeps the frame it had", async () => {

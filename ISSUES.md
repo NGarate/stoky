@@ -13,7 +13,7 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1, TEST-9, TEST-12, TEST-13, PARSE-1 to PARSE-5 and OCR-4 to OCR-12.** PARSE-5 (2026-11-12) is the owner's requirement that what the parser knows of each chain move to the database. The PARSE and OCR entries (2026-11-07) are the review of PR #19 and what the receipt OCR bench measured; two of the review's findings closed with the preparation's rewrite (the crop repeated per reading, and image transforms outside `image.ts`). TEST-10 closed on 2026-10-27 with its spec deleted (PROGRESS D154). TEST-11 closed on 2026-10-23 (`cb08d9a`): every `bun test` now loads Next's environment baseline first. TEST-7 closed on 2026-09-12 by removing
+**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1, TEST-9, TEST-13, PARSE-1 to PARSE-5 and OCR-4 to OCR-12.** PARSE-5 (2026-11-12) is the owner's requirement that what the parser knows of each chain move to the database. The PARSE and OCR entries (2026-11-07) are the review of PR #19 and what the receipt OCR bench measured; two of the review's findings closed with the preparation's rewrite (the crop repeated per reading, and image transforms outside `image.ts`). TEST-12 closed on 2026-11-13: the stalls were OCR that the upload tests left running. TEST-10 closed on 2026-10-27 with its spec deleted (PROGRESS D154). TEST-11 closed on 2026-10-23 (`cb08d9a`): every `bun test` now loads Next's environment baseline first. TEST-7 closed on 2026-09-12 by removing
 two process-wide ProductRating mocks from unrelated component tests.
 TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
@@ -144,7 +144,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | TEST-9 | Nothing pins that the caller's own row has no reset button, and a self-reset would be reported as "too easy" | 🟡 Open — deferred by the final review of the 2026-10-12 security branch |
 | TEST-10 | The service worker's offline spec failed three full runs on the Better Auth branch | ✅ Closed 2026-10-27 — the spec was deleted, cause never found |
 | TEST-11 | `trpc-links.test.ts` failed once in CI with Next's "AsyncLocalStorage accessed in runtime where it is not available" | ✅ Resolved `cb08d9a` — the first file to import `next/headers` left Next's request storage broken for the rest of the process |
-| TEST-12 | The passkey integration tests stall about two seconds at a time in CI, and two stalls in one test exceed its five-second limit | 🟡 Open — seen 2026-11-12 on PR #20, on PostgreSQL 16 and 18 alike; cause not found |
+| TEST-12 | Sign-in-heavy integration tests run past their five-second limit in CI | ✅ Resolved 2026-11-13 — the upload tests left real OCR running into later files |
 | TEST-13 | Receipt readings left running by earlier integration files fail the security log's "nothing else" test, when the files run in alphabetical order | 🟡 Open — found 2026-11-13; fails on `master` too in that order |
 | PARSE-1 | A telephone number in the header is counted as a discount | 🟡 Open — found reviewing PR #19, 2026-11-06; reproduced |
 | PARSE-2 | An article whose price equals the sum of those above it is dropped as a damaged total | 🟡 Open — found reviewing PR #19; reproduced |
@@ -1325,12 +1325,44 @@ browser's own "no internet" page, or a page that went to `/login`.
 
 ---
 
-### 🟡 TEST-12: The passkey integration tests stall about two seconds at a time in CI
+### ✅ TEST-12: Sign-in-heavy integration tests run past their five-second limit in CI
 
-**File:** `src/__tests__/integration/passkeys.test.ts`
+**File:** `src/__tests__/integration/receipt.upload.test.ts` and
+`receipt.router.test.ts` (the cause); the failures landed in whichever
+sign-in-heavy file ran next — `passkeys`, `household.members`, `household`,
+`session.cap`
 **Severity:** LOW — a test that sometimes runs out of time in CI; nothing a
-person meets has been tied to it
-**Status:** OPEN — seen 2026-11-12 on PR #20 (PostgreSQL 18); cause not found
+person meets has been tied to it. It turned master red twice in two days
+and a pull request once, which is the cost
+**Status:** RESOLVED 2026-11-13 — seen 2026-11-12 on PR #20
+
+**Resolved 2026-11-13.** Not Valkey. `receipt.upload` and `receipt.reframe`
+start the receipt's reading after they answer, and every accepted upload in
+those two files started a real one: about 38 readings across three
+Tesseract workers, which nothing waited for. Measured with the files alone on
+four cores (`taskset -c 0-3`): the process kept 3.5–4 cores busy for 26 s
+after the last test ended. A CI runner has four, so the next file's Argon2id
+sign-ins (four lanes each) ran at 2–4 s instead of 0.1 and a test with a few
+of them crossed five seconds. Which file that was depended on bun's file
+order, hence the moving target.
+
+The evidence, from probe runs of the suite five at a time on the runner
+(branch `tmp/ci-stall-diag-2026-11-13`): the flake reproduced in 3 of 5
+copies; no Valkey command of the application's took over 150 ms outside a
+connect; a commit probe stayed at 1–9 ms; an Argon2id probe went from 100 ms
+to 1.9–4.1 s at the moment of each failure; and `top -H` showed `Worker`
+threads at 60–90 % each from the end of the receipt files onward.
+
+Those tests check the upload — validation, storage, status — not what
+Tesseract reads, which is `ocr.pipeline.test.ts`'s and terminates its
+workers after each test. So they now swap the reading for one that does
+nothing (`replaceReceiptReading` in `routers/receipt.ts`), which also took
+the polling `receipt.reframe` used to wait out a reading. The two files went
+from 266 CPU-seconds to 6. A test holds that the upload's reading goes
+through the swap.
+
+The original record follows; its two-second-step reading of the logs was a
+coincidence of Argon2id's cost under contention, not `commandTimeout`.
 
 Its tests take 0.3–1 s in CI. Now and then one takes about two seconds more,
 and a test that is hit twice runs past bun's five-second limit and fails.
