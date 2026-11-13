@@ -251,6 +251,7 @@ GRACIAS POR SU VISITA
         },
         { text: "15-03-2024", expected: { day: 15, month: 2, year: 2024 } },
         { text: "2024/03/15", expected: { day: 15, month: 2, year: 2024 } },
+        { text: "15032024", expected: { day: 15, month: 2, year: 2024 } },
       ];
 
       for (const { text, expected } of formats) {
@@ -1063,6 +1064,11 @@ GRACIAS POR SU VISITA
       expect(parseReceiptText("CONSUM S. COOP\nPAN 1,00").storeName).toBe(
         "consum",
       );
+      for (const chain of ["carrefour", "lidl", "aldi"]) {
+        expect(
+          parseReceiptText(`${chain.toUpperCase()}\nPAN 1,00`).storeName,
+        ).toBe(chain);
+      }
     });
 
     it("finds the chain by its column headers, tax number or a split word", () => {

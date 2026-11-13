@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import type { PrismaClient } from "@/generated/prisma/client";
 import type { AppSession } from "@/lib/auth/session";
 import { envelope } from "../utils/test-helpers";
+import { num } from "../utils/amount";
 
 /**
  * A purchase is one event told in two rows.
@@ -165,9 +166,13 @@ describe("addStock writes the entry and its price together", () => {
     expect(
       await prisma.stockEntry.count({ where: { productId: OWNER.productId } }),
     ).toBe(1);
+    // One row, and the purchase it says: what was paid, for how much, where.
+    const records = await prisma.priceRecord.findMany({
+      where: { productId: OWNER.productId },
+    });
     expect(
-      await prisma.priceRecord.count({ where: { productId: OWNER.productId } }),
-    ).toBe(1);
+      records.map((r) => [num(r.price), num(r.quantity), r.unit, r.storeId]),
+    ).toEqual([[purchase.price, purchase.quantity, "L", OWNER.storeId]]);
   });
 
   it("writes the entry alone when no price came with it", async () => {

@@ -508,7 +508,7 @@ Verified against the files named in each row.
   as `undefined`; a bare `{"json":null}` is `null`, and `z.void()` now
   refuses it with 400.
   `src/__tests__/unit/procedure-inputs.test.ts` walks the running router and
-  names any mutation without an input parser; `integration/routers.test.ts`
+  names any mutation without an input parser; `integration/auth.flow.test.ts`
   shows `auth.logout` refusing an object and a `FormData` on the running
   router. The nine queries that take no input do not declare one: they write
   nothing.

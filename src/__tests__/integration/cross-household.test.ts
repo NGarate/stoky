@@ -236,6 +236,28 @@ describe("reads never reach across households", () => {
     const error = await refusal(() => api.shopping.getById({ id: B.listId }));
     expect(error.code).toBe("NOT_FOUND");
   });
+
+  it("product.getById refuses another household's product", async () => {
+    const api = await callerFor(A);
+    const error = await refusal(() => api.product.getById({ id: B.productId }));
+    expect(error.code).toBe("NOT_FOUND");
+  });
+
+  it("product.list shows this household's products and none of another's", async () => {
+    const api = await callerFor(A);
+    const ids = (await api.product.list({ limit: 100 })).products.map(
+      (row) => row.id,
+    );
+    expect(ids).toContain(A.productId);
+    expect(ids).not.toContain(B.productId);
+  });
+
+  it("store.list shows this household's shops and none of another's", async () => {
+    const api = await callerFor(A);
+    const ids = (await api.store.list({ limit: 100 })).map((row) => row.id);
+    expect(ids).toContain(A.storeId);
+    expect(ids).not.toContain(B.storeId);
+  });
 });
 
 describe("writes never reach across households", () => {
@@ -357,6 +379,36 @@ describe("writes never reach across households", () => {
       }),
     );
     expect(error.code).toBe("NOT_FOUND");
+  });
+
+  it("price.recordPrice refuses a foreign product and a foreign store, recording nothing", async () => {
+    const api = await callerFor(A);
+    const sighting = { price: 9.99, unit: "L", quantity: 1 };
+
+    const foreignProduct = await refusal(() =>
+      api.price.recordPrice({
+        ...sighting,
+        productId: B.productId,
+        storeId: A.storeId,
+      }),
+    );
+    expect(foreignProduct.code).toBe("NOT_FOUND");
+
+    const foreignStore = await refusal(() =>
+      api.price.recordPrice({
+        ...sighting,
+        productId: A.productId,
+        storeId: B.storeId,
+      }),
+    );
+    expect(foreignStore.code).toBe("NOT_FOUND");
+
+    // A's own seeded record and B's, and nothing else.
+    expect(
+      await prisma.priceRecord.count({
+        where: { productId: { in: [A.productId, B.productId] } },
+      }),
+    ).toBe(2);
   });
 
   // The cases below are the ones `unit/tenant-scoped-ids.test.ts` cannot see:

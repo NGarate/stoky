@@ -9,6 +9,8 @@ import {
   spyOn,
 } from "bun:test";
 import { prisma } from "@/lib/prisma";
+import { hashPassword } from "@/lib/auth/password-hash";
+import { createCredentialUser } from "@/lib/auth/credentials";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import {
@@ -51,6 +53,24 @@ import { retryAfterSeconds } from "@/server/trpc/throttle";
 const RUN_MARKER = `authflow-${Date.now().toString(36)}`;
 const runEmail = (prefix: string) =>
   generateTestEmail(`${RUN_MARKER}-${prefix}`);
+
+/**
+ * The tRPC code a call was refused with, or why it was not.
+ *
+ * The code, not the wording: it is what a client acts on (ISSUES.md DEBT-4),
+ * and "accepted" makes a call that should have thrown fail loudly instead of
+ * leaving a `null` that `toBeDefined()` would wave through.
+ */
+async function codeOf(call: Promise<unknown>): Promise<string> {
+  try {
+    await call;
+    return "accepted";
+  } catch (error) {
+    return error instanceof TRPCError
+      ? error.code
+      : `not a TRPCError: ${String(error)}`;
+  }
+}
 
 describe("Authentication Flow Integration Tests", () => {
   let caller: ReturnType<typeof appRouter.createCaller>;
@@ -150,6 +170,16 @@ describe("Authentication Flow Integration Tests", () => {
 
       expect(error).toBeDefined();
       expect(error?.message).toContain("Email already registered");
+      // A conflict the client can act on, not a server fault.
+      expect(
+        await codeOf(
+          caller.auth.register({
+            email,
+            name: "Different Name",
+            password: "DifferentPassword123!",
+          }),
+        ),
+      ).toBe("CONFLICT");
     });
 
     it("treats an address in any case as one account", async () => {
@@ -211,36 +241,21 @@ describe("Authentication Flow Integration Tests", () => {
       const name = generateTestName("Invalid Email User");
       const password = "SecurePassword123!";
 
-      let error: Error | null = null;
-      try {
-        await caller.auth.register({
-          email: "not-an-email",
-          name,
-          password,
-        });
-      } catch (e) {
-        error = e as Error;
-      }
-
-      expect(error).toBeDefined();
+      expect(
+        await codeOf(
+          caller.auth.register({ email: "not-an-email", name, password }),
+        ),
+      ).toBe("BAD_REQUEST");
     });
 
     it("should fail to register with short password", async () => {
       const email = runEmail("short-password");
       const name = generateTestName("Short Password User");
 
-      let error: Error | null = null;
-      try {
-        await caller.auth.register({
-          email,
-          name,
-          password: "short",
-        });
-      } catch (e) {
-        error = e as Error;
-      }
-
-      expect(error).toBeDefined();
+      expect(
+        await codeOf(caller.auth.register({ email, name, password: "short" })),
+      ).toBe("BAD_REQUEST");
+      expect(await prisma.user.count({ where: { email } })).toBe(0);
     });
 
     it("refuses a password built from the address it is for, and creates nothing", async () => {
@@ -274,18 +289,10 @@ describe("Authentication Flow Integration Tests", () => {
       const email = runEmail("empty-name");
       const password = "SecurePassword123!";
 
-      let error: Error | null = null;
-      try {
-        await caller.auth.register({
-          email,
-          name: "",
-          password,
-        });
-      } catch (e) {
-        error = e as Error;
-      }
-
-      expect(error).toBeDefined();
+      expect(
+        await codeOf(caller.auth.register({ email, name: "", password })),
+      ).toBe("BAD_REQUEST");
+      expect(await prisma.user.count({ where: { email } })).toBe(0);
     });
   });
 
@@ -306,6 +313,8 @@ describe("Authentication Flow Integration Tests", () => {
 
       expect(result.status).toBe(200);
       expect(result.user?.email).toBe(email);
+      // The role has to come back, or no procedure downstream can check one.
+      expect(result.user?.role).toBe("MEMBER");
       expect(result.cookieHeader).toContain("stoky.session_token=");
     });
 
@@ -344,12 +353,14 @@ describe("Authentication Flow Integration Tests", () => {
       // A ratio rather than a number, and a generous one, so a slow machine
       // or a busy CI runner cannot make it flake: the difference it catches is
       // two orders of magnitude, not a few percent.
+      // At the production cost: `createTestUser`'s cheap hash would make the
+      // wrong password the fast one, and this pass whatever sign-in does.
       const email = runEmail("timing");
-      await createTestUser({
-        email,
-        name: generateTestName("Timing"),
-        password: "CorrectPassword123!",
-      });
+      await createCredentialUser(
+        prisma,
+        { email, name: generateTestName("Timing"), role: "MEMBER" },
+        await hashPassword("CorrectPassword123!"),
+      );
 
       const elapsed = async (address: string): Promise<number> => {
         const started = performance.now();
@@ -452,18 +463,15 @@ describe("Authentication Flow Integration Tests", () => {
       expect(result.role).toBe("OWNER");
       expect(result.household).toBeDefined();
       expect(result.household?.name).toBe(householdName);
+      // `/settings/security` reads it to say whether the second step is on.
+      expect(result.twoFactorEnabled).toBe(false);
+      // The security screen compares it with the page's origin (D151): the
+      // suite runs at http://localhost:3000, where passkeys can work.
+      expect(result.passkeyOrigin).toBe("http://localhost:3000");
     });
 
     it("should fail when not authenticated", async () => {
-      let error: Error | null = null;
-      try {
-        await caller.auth.me();
-      } catch (e) {
-        error = e as Error;
-      }
-
-      expect(error).toBeDefined();
-      expect(error?.message).toContain("Not signed in");
+      expect(await codeOf(caller.auth.me())).toBe("UNAUTHORIZED");
     });
 
     it("should return user without household when user has no household", async () => {
@@ -606,15 +614,31 @@ describe("Authentication Flow Integration Tests", () => {
     });
 
     it("should fail to logout when not authenticated", async () => {
-      let error: Error | null = null;
-      try {
-        await caller.auth.logout();
-      } catch (e) {
-        error = e as Error;
-      }
+      expect(await codeOf(caller.auth.logout())).toBe("UNAUTHORIZED");
+    });
 
-      expect(error).toBeDefined();
-      expect(error?.message).toContain("Not signed in");
+    it("refuses an input", async () => {
+      // It takes nothing, so it accepts nothing. Before `z.void()` it had no
+      // parser and ran on whatever arrived — a cross-site form's body
+      // included. `unit/procedure-inputs.test.ts` holds every mutation to
+      // having one; this shows the refusal happens on the running router.
+      const user = await createTestUser({
+        email: runEmail("logout-input"),
+        name: generateTestName("Logout Input User"),
+      });
+      const authCaller = appRouter.createCaller(
+        await createTRPCContext({ session: createMockSession(user) }),
+      );
+      const form = new FormData();
+      form.set("anything", "1");
+
+      // The cast is the point: the type already says no, the runtime must too.
+      const logout = authCaller.auth.logout as (
+        input: unknown,
+      ) => Promise<unknown>;
+      expect(await codeOf(logout({}))).toBe("BAD_REQUEST");
+      expect(await codeOf(logout(form))).toBe("BAD_REQUEST");
+      expect(await logout(undefined)).toEqual({ success: true });
     });
   });
 
@@ -638,24 +662,6 @@ describe("Authentication Flow Integration Tests", () => {
       expect(passwordHash).not.toBe(password);
       expect(passwordHash).toStartWith("$argon2id$");
       expect(await argon2.verify(passwordHash, password)).toBe(true);
-    });
-
-    it("should reject weak passwords during registration", async () => {
-      const email = runEmail("weak-password");
-      const name = generateTestName("Weak Password User");
-
-      let error: Error | null = null;
-      try {
-        await caller.auth.register({
-          email,
-          name,
-          password: "1234567", // Too short
-        });
-      } catch (e) {
-        error = e as Error;
-      }
-
-      expect(error).toBeDefined();
     });
   });
 

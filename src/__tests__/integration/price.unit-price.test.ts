@@ -245,3 +245,45 @@ describe("price.getProductPrices", () => {
     expect(last?.unitPrice).toEqual(last!.price.dividedBy(last!.quantity));
   });
 });
+
+describe("price.recordPrice", () => {
+  it("stores what was paid, for how much, and reads back at its unit price", async () => {
+    const api = await caller();
+    const { id: aceite } = await prisma.product.create({
+      data: {
+        name: "Aceite",
+        defaultUnit: "unidad",
+        householdId: OWNER.householdId,
+      },
+    });
+
+    try {
+      const recorded = await api.price.recordPrice({
+        productId: aceite,
+        storeId: mercadona,
+        price: 9.99,
+        currency: "EUR",
+        unit: "unidad",
+        quantity: 2,
+      });
+      expect(num(recorded.price)).toBe(9.99);
+      expect(recorded.currency).toBe("EUR");
+
+      const stored = await prisma.priceRecord.findUniqueOrThrow({
+        where: { id: recorded.id },
+      });
+      expect([num(stored.price), num(stored.quantity), stored.unit]).toEqual([
+        9.99,
+        2,
+        "unidad",
+      ]);
+
+      const [latest] = await api.price.getLatestPrices({ productId: aceite });
+      expect(latest?.storeId).toBe(mercadona);
+      expect(num(latest?.unitPrice)).toBe(4.995);
+    } finally {
+      await prisma.priceRecord.deleteMany({ where: { productId: aceite } });
+      await prisma.product.deleteMany({ where: { id: aceite } });
+    }
+  });
+});

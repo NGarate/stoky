@@ -142,6 +142,23 @@ describe("inputs declared beside their procedure", () => {
     ).toEqual(["quantity"]);
   });
 
+  it("refuses a purchase priced at zero rather than recording no price", async () => {
+    // PRICE-1's nuance: price 0 used to pass validation and write no
+    // PriceRecord — a save that looks like it worked and quietly did not.
+    expect(
+      await refusedFields(() =>
+        api.inventory.addStock({
+          ...envelope(userId),
+          productId: "p",
+          unit: "unidad",
+          quantity: 2,
+          price: 0,
+          storeId: "s",
+        }),
+      ),
+    ).toEqual(["price"]);
+  });
+
   it("refuses a review submission with more lines than a receipt has", async () => {
     const items = Array.from({ length: MAX_RECEIPT_LINES + 1 }, (_, index) => ({
       receiptItemId: `line-${index}`,

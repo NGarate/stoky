@@ -805,6 +805,37 @@ describe("the per-address limit, through the auth route", () => {
       ).toBe(200);
     }
   });
+
+  it("refuses even the right password once the address has spent its budget, and only there", async () => {
+    // CRITICAL-4 at the layer that enforces it: the auth route, in front of
+    // Better Auth.
+    const address = `203.0.113.10-${MARKER}`;
+    const mine = await ownAccount("spent");
+
+    for (let i = 0; i < ATTEMPTS; i++) {
+      await signInWith(
+        { email: mine, password: "wrong password here" },
+        { address },
+      );
+    }
+
+    // Refused as a 429 with its own code, so the browser can say "wait"
+    // instead of "wrong password", and with no session handed out.
+    const refused = await signInWith(
+      { email: mine, password: PASSWORD },
+      { address },
+    );
+    expect(refused.status).toBe(429);
+    expect(refused.code).toBe("RATE_LIMITED");
+    expect(refused.setCookie).toEqual([]);
+
+    // A different address is unaffected.
+    const elsewhere = await signInWith(
+      { email: mine, password: PASSWORD },
+      { address: `203.0.113.11-${MARKER}` },
+    );
+    expect(elsewhere.status).toBe(200);
+  });
 });
 
 /**

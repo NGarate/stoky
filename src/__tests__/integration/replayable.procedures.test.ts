@@ -170,6 +170,9 @@ describe("what /shopping shows", () => {
     const lists = await api.shopping.list({ includeCompleted: false });
 
     expect(lists.map((list) => list.id)).not.toContain(OWNER.listId);
+    // Hidden from the shopping screen, not gone: asked for, it is there.
+    const all = await api.shopping.list({ includeCompleted: true });
+    expect(all.map((list) => list.id)).toContain(OWNER.listId);
   });
 
   it("shows a list with something still to buy", async () => {
@@ -225,6 +228,32 @@ describe("shopping.updateItem", () => {
     expect(first.isChecked).toBe(true);
     expect(second.isChecked).toBe(true);
     expect(second.checkedAt?.getTime()).toBe(first.checkedAt?.getTime());
+  });
+
+  it("unticks an item, forgetting when it was ticked", async () => {
+    const api = await caller();
+    const item = await api.shopping.addItem({
+      ...envelope(),
+      shoppingListId: OWNER.listId,
+      productId: OWNER.productId,
+      quantity: 1,
+      unit: "L",
+    });
+    const ticked = await api.shopping.updateItem({
+      ...envelope(),
+      id: item.id,
+      isChecked: true,
+    });
+    expect(ticked.checkedAt).toBeInstanceOf(Date);
+
+    const unticked = await api.shopping.updateItem({
+      ...envelope(),
+      id: item.id,
+      isChecked: false,
+    });
+
+    expect(unticked.isChecked).toBe(false);
+    expect(unticked.checkedAt).toBeNull();
   });
 });
 

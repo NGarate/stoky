@@ -1405,9 +1405,10 @@ in; nothing a person meets
 `feat/proxy-outside-the-bundle-2026-11-13`; not caused by that branch
 
 The test spies on `console.error` and `console.log` for the length of ten
-sign-ins and expects nothing from them. `receipt.router.test.ts`,
-`receipt.upload.test.ts` and `routers.test.ts` upload receipts whose reading
-goes on in the background after each test has deleted its rows; when a
+sign-ins and expects nothing from them. `receipt.router.test.ts` and
+`receipt.upload.test.ts` (and `routers.test.ts`, until its cases moved to
+other files on 2026-11-13) upload receipts whose reading goes on in the
+background after each test has deleted its rows; when a
 reading finishes it logs `Failed to process receipt: … P2025` and `Failed to
 mark receipt as failed: … P2025`. If those files run just before
 `security-log.test.ts`, the lines land inside its window and the test fails
