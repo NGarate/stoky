@@ -1332,8 +1332,8 @@ browser's own "no internet" page, or a page that went to `/login`.
 sign-in-heavy file ran next — `passkeys`, `household.members`, `household`,
 `session.cap`
 **Severity:** LOW — a test that sometimes runs out of time in CI; nothing a
-person meets has been tied to it. It was red on master three times in two
-days, which is the cost
+person meets has been tied to it. It turned master red twice in two days
+and a pull request once, which is the cost
 **Status:** RESOLVED 2026-11-13 — seen 2026-11-12 on PR #20
 
 **Resolved 2026-11-13.** Not Valkey. `receipt.upload` and `receipt.reframe`
