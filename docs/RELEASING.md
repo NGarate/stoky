@@ -130,9 +130,10 @@ attestation and anonymous-pull steps below depend on that (see
 
    PostgreSQL need not wait, and the bundle runs our build of it. Upstream's Alpine images go red between its
    rebuilds with fixes Alpine has already shipped (19 HIGH on 2026-11-12, every
-   tag), so `postgres.Dockerfile` is the official image plus `apk upgrade`, and
-   `.github/workflows/postgres-image.yml` builds it, scans it with the rule
-   above and, only when clean, publishes it as
+   tag), so `postgres.Dockerfile` is the official image plus `apk upgrade`,
+   started as postgres (70:70) and without gosu, which only a root start
+   would call; and `.github/workflows/postgres-image.yml` builds it, scans it
+   with the rule above and nothing skipped and, only when clean, publishes it as
    `ghcr.io/ngarate/stoky/postgres:<version>-alpine` and `:<major>-alpine`,
    attested like the application. It runs when the Dockerfile changes on
    `master` (a merged Dependabot bump of its base included), every Monday when
@@ -320,7 +321,10 @@ took postgres:16.15-alpine's gosu 1.19 from 61 findings to 3: GO-2026-6686 in
 `moby/sys/user`, reachable and fixed in gosu 1.20, and two Windows-only
 advisories (`x/sys/windows`, `os.Root` junctions) govulncheck leaves out for a
 Linux binary without writing a statement. Releases from then on also start
-PostgreSQL as its own user, so gosu is never run at all.
+PostgreSQL as its own user, so gosu is never run at all, and the bundle's
+PostgreSQL is our build of it, which deletes gosu (from the release after
+`v0.1.0-alpha.4`): the skip and the VEX document stay for upstream's images and
+the releases that shipped them.
 
 Run it by hand after changing it, or to check a release on demand:
 

@@ -1224,7 +1224,7 @@ describe("the PostgreSQL image workflow", () => {
     );
     expect(scan.with?.["exit-code"]).toBe("1");
     expect(scan.with?.cache).toBe(false);
-    expect(scan.with?.["skip-files"]).toBe("usr/local/bin/gosu");
+    expect(scan.with?.["skip-files"]).toBeUndefined();
   });
 
   it("pushes the scanned layers and never touches the Actions cache", () => {
@@ -1246,6 +1246,13 @@ describe("the PostgreSQL image workflow", () => {
 
   it("is named so the bundle scan skips its gosu as upstream's", () => {
     expect(parsed.env?.IMAGE_NAME).toBe("${{ github.repository }}/postgres");
+  });
+
+  // The entrypoint calls gosu only as root, and the image never starts as root.
+  it("starts as postgres and deletes gosu, so the gate has nothing to skip", () => {
+    const dockerfile = readFileSync(join(root, "postgres.Dockerfile"), "utf8");
+    expect(dockerfile.match(/^USER .*$/gm)).toEqual(["USER 70:70"]);
+    expect(dockerfile).toMatch(/^RUN .*&& rm \/usr\/local\/bin\/gosu$/m);
   });
 
   it("builds from the official image, pinned by its index digest", () => {

@@ -10,6 +10,8 @@
 # rebuilds its images carry fixes Alpine has already shipped. On 2026-11-12
 # every postgres:*-alpine tag failed the bundle scan with 19 fixable HIGH
 # findings that `apk upgrade` clears.
+# It also starts as postgres and carries no gosu (postgres.Dockerfile says
+# why), so its gate skips nothing.
 #
 # A push of the Dockerfile to master builds, and so does a dispatch. The
 # weekly run rebuilds only when the published image has gone red, so a quiet
@@ -120,9 +122,9 @@ jobs:
           no-cache: true
           cache-to: type=local,dest=${{ runner.temp }}/layers,mode=max
 
-      # gosu is skipped as in the bundle scan (scripts/scan-bundle-images.sh):
-      # its findings are Go standard-library advisories in packages it does not
-      # link, and the bundle never runs it (the service starts as 70:70).
+      # Nothing skipped: postgres.Dockerfile deletes gosu, the one file the
+      # bundle scan leaves out of upstream's images, so a gosu that came back
+      # would fail here.
       - name: Fail on critical or high findings
         if: steps.published.outputs.rebuild != 'false'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -132,7 +134,6 @@ jobs:
           exit-code: "1"
           severity: CRITICAL,HIGH
           ignore-unfixed: true
-          skip-files: usr/local/bin/gosu
           cache: false
           version: v0.76.1
 
