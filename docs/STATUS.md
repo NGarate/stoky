@@ -60,6 +60,18 @@ on loopback ports, removed afterwards:
   `Host` a Server Action request got 500 `Invalid Server Actions request`.
   `tailscale serve` was not run against it: what INSTALL says of its headers
   is from Tailscale's source.
+- **INSTALL's Compose arrangements again, with `STOKY_BIND=127.0.0.1`.**
+  Proxy on the host, gateway trusted: through Caddy and through nginx (with
+  its default server) a forged request was counted as `127.0.0.1`, the
+  address the proxy saw; `/login` 200 with `upgrade-insecure-requests`; a
+  2 MB body reached the app; `smoke-proxy.sh --live` ended `Proxy smoke: OK`
+  through each; the LAN address refused. Traefik in a container with the
+  override's labels, its network's range trusted: 200 for its name, 404 for
+  another, the forged request counted as the address Traefik saw. In both a
+  request sent **straight to the published port** with a forged header was
+  believed, as INSTALL warns: the port's traffic arrives from a trusted
+  gateway (the `web` network's in the first, the proxy network's in the
+  second, where the app is on both).
 - **The release smoke's new commands**, copied out of `ci.yml` and run
   against the bundle: `/api/health` 200 on the published port with HSTS,
   `nosniff`, `X-Frame-Options` and the CSP; against a port nothing listens

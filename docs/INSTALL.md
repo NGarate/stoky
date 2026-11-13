@@ -473,8 +473,12 @@ docker network inspect proxy --format '{{(index .IPAM.Config 0).Subnet}}'
 ```
 
 The range trusts every container on that network, so each of them could
-choose the address Stoky counts it by. Set `STOKY_BIND=127.0.0.1` here too:
-the proxy no longer uses the published port, and nothing else should.
+choose the address Stoky counts it by. It also holds that network's gateway,
+and with Stoky on the proxy's network Docker delivered the published port's
+traffic from that gateway (measured 2026-11-13): with the range trusted,
+whatever reaches the published port chooses its address too. A fixed address
+for the proxy trusts neither. Set `STOKY_BIND=127.0.0.1` here in either
+case: the proxy no longer uses the published port, and nothing else should.
 
 ### A proxy on another machine
 
