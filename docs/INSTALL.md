@@ -301,7 +301,7 @@ things to do:
 
 1. **Serve `https://DOMAIN`** with a certificate browsers trust, send plain
    `http://` there, and serve Stoky for that name only, not as the site for
-   every name it does not know.
+   every [name it does not know](#names-your-proxy-does-not-know).
 2. **Pass on the `Host` it was asked for.** Stoky refuses the forms that work
    without JavaScript when the name it is asked for is not the one in the
    browser's address bar.
@@ -327,10 +327,18 @@ a connection arrives from, and Docker changes that:
 | On this host (Caddy, nginx, `tailscale serve`) | `127.0.0.1:3000` | The gateway of the bundle's `web` network, **not** `127.0.0.1` | `STOKY_BIND=127.0.0.1`, and that gateway |
 | In a container on this host (Traefik in Docker) | Stoky's container, port 3000, over a Docker network both are on | The proxy container's address on that network | `STOKY_BIND=127.0.0.1`, and that address or the network's range |
 | On another machine | This host's address, port 3000 | That machine's address | That address, and a firewall rule so that nothing else reaches port 3000 |
+| In a Kubernetes cluster (an Ingress controller) | Stoky's Service, port 3000 | The controller pod's address | The range the controller's pods get, and a NetworkPolicy |
 
 The first two rows were measured on Docker Engine 29 with this bundle
 (2026-11-13). The third is how Docker forwards a published port; it was
-measured from this host's own LAN address, not from a second machine.
+measured from this host's own LAN address, not from a second machine. The
+fourth is from Kubernetes' documentation and was not run on a cluster.
+
+Any other proxy is one of these rows by where it runs: Nginx Proxy Manager
+and SWAG are nginx in a container, and a `cloudflared` tunnel is a proxy on
+this host or in a container with a CDN in front of it. None of those was run
+against this bundle; [Check it](#check-it) tells you whether yours does the
+four things.
 
 ### A proxy on this host
 
@@ -484,6 +492,119 @@ rules. Put the rule where that page says, or on the router or the network
 between the two machines, and test it from a third device.
 The network between proxy and Stoky carries every password and session
 cookie unencrypted, so keep it one you trust.
+
+### Names your proxy does not know
+
+Stoky answers whatever `Host` it is asked for, so serving it for `DOMAIN`
+only is the proxy's job. Asked for another name, for its own name with
+another `Host`, and for the bare address, in front of this bundle
+(2026-11-13):
+
+| Proxy | A name it was not given | To do |
+|---|---|---|
+| Caddy 2.11, one site block | No certificate, so no connection; an empty answer of its own when only `Host` differs | Nothing |
+| Traefik 3.7, one `Host()` rule | Its own `404 page not found` | Nothing |
+| nginx 1.31, the two blocks above | **Stoky**, for every name and for the bare address: the first `server` is the default one | Add the block below |
+| A Kubernetes Ingress | The controller's default backend (not run on a cluster) | Give every rule a `host:` |
+
+For nginx, add a default server that closes the connection. Measured with
+it: the three requests above got no answer, and its own name still got Stoky.
+
+```nginx
+server {
+    listen 443 ssl default_server;
+    listen 80 default_server;
+    ssl_reject_handshake on;
+    return 444;
+}
+```
+
+### On Kubernetes, behind an Ingress
+
+Stoky ships no manifests and no chart. The bundle's `docker-compose.yml` is
+the reference for the three containers, their environment, their volumes and
+their limits; `STOKY_BIND` and `STOKY_PORT` belong to Compose and mean
+nothing here. This section is written from Kubernetes' documentation and was
+**not run on a cluster** (2026-11-13). What takes their place:
+
+- **A `ClusterIP` Service** for Stoky, and for PostgreSQL and Valkey. No
+  `NodePort`, `LoadBalancer` or `hostPort` on any of the three: the Ingress
+  controller is the only way in.
+- **An Ingress with your name and a TLS secret**, every rule with a `host:`.
+- **`STOKY_URLS=https://stoky.example.com`** in the pod's environment. The
+  bundle derives it from `DOMAIN`; here you set it.
+- **`STOKY_TRUSTED_PROXIES`** set to the range the controller's pods get
+  their addresses from: the cluster's pod range, or the nodes' range for a
+  controller on the host network. A pod's address changes when it is
+  replaced, so one address will not do.
+- **A NetworkPolicy** that lets only the controller's namespace reach Stoky's
+  pod. Without it every pod in that range is a trusted proxy and can choose
+  the address Stoky counts it by. It needs a network plugin that enforces
+  policies.
+- **Probes** on `GET /api/health`, port 3000, for readiness and liveness.
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: stoky
+spec:
+  selector:
+    app: stoky
+  ports:
+    - port: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stoky
+spec:
+  tls:
+    - hosts: [stoky.example.com]
+      secretName: stoky-tls
+  rules:
+    - host: stoky.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stoky
+                port:
+                  number: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stoky-from-ingress-only
+spec:
+  podSelector:
+    matchLabels:
+      app: stoky
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress
+      ports:
+        - port: 3000
+```
+
+`ingress` is the namespace your controller runs in, and `stoky-tls` the
+secret holding the certificate. Two things belong to the controller, not to
+Stoky:
+
+- **The client's address.** Behind a `LoadBalancer` or `NodePort` Service
+  with the default `externalTrafficPolicy: Cluster`, the controller sees a
+  node's address for every client, and Stoky counts the whole household as
+  one. Set `externalTrafficPolicy: Local` on the controller's Service.
+- **The size of a receipt.** ingress-nginx refuses a body over 1 MB unless
+  the Ingress carries `nginx.ingress.kubernetes.io/proxy-body-size: 16m`.
+
+[Check it](#check-it) applies unchanged, with `kubectl logs` in place of
+`docker compose logs app`.
 
 ### A CDN in front of the proxy
 

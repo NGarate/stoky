@@ -41,6 +41,16 @@ on loopback ports, removed afterwards:
   `STOKY_BIND=127.0.0.1` only loopback connected; with `STOKY_BIND=[::1]`
   only `[::1]`; with the host's LAN address only that address, loopback and
   the Tailscale address refused.
+- **A name the proxy was not given**, asked of each in front of the bundle
+  (another name, its own name with another `Host`, the bare address): nginx
+  1.31 with INSTALL's two `server` blocks answered all three with Stoky's
+  `/api/health`, and none once a `default_server` with
+  `ssl_reject_handshake on` and `return 444` was added; Caddy 2.11 refused
+  the handshake for two and answered the other with an empty 200 of its own;
+  Traefik 3.7.14 answered `404 page not found`.
+- **Not measured: Kubernetes.** INSTALL's section on it is written from
+  Kubernetes' documentation; its manifests were checked against the API
+  schemas, not applied to a cluster.
 - **Three proxies in front of it**, each forging the header: Caddy 2.11 and
   nginx 1.31 on the host network (gateway trusted) and Traefik 3.7.14 in a
   container with labels from an override file (its network's range trusted)
