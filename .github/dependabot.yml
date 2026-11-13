@@ -76,7 +76,7 @@ updates:
   # The release bundle's service images: what an installation runs. Their
   # majors are never proposed. A PostgreSQL major cannot open the previous
   # major's data directory without pg_upgrade or a dump and restore, and a
-  # Valkey or Traefik major can change what the configuration the bundle ships
+  # Valkey major can change what the configuration the bundle ships
   # means. Each is a release with upgrade notes, not a bump. The application
   # line names ${STOKY_VERSION}, which Dependabot cannot resolve and leaves
   # alone.
@@ -96,8 +96,6 @@ updates:
       - dependency-name: ghcr.io/ngarate/stoky/postgres
         update-types: ["version-update:semver-major"]
       - dependency-name: valkey/valkey
-        update-types: ["version-update:semver-major"]
-      - dependency-name: traefik
         update-types: ["version-update:semver-major"]
     commit-message:
       prefix: build(docker)

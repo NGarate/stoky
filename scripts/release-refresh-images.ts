@@ -1,6 +1,6 @@
 /**
- * Refreshes the release bundle's service images — PostgreSQL, Valkey,
- * Traefik, as deploy/docker-compose.yml pins them — to the newest build of
+ * Refreshes the release bundle's service images — PostgreSQL and Valkey,
+ * as deploy/docker-compose.yml pins them — to the newest build of
  * the same major, which is RELEASING.md step 4 done by a program instead of
  * by hand.
  *
@@ -12,8 +12,8 @@
  * business), from its pin `NAME:TAG@sha256:DIGEST`:
  *
  * 1. The floating tag of the same major comes from the pinned tag:
- *    `16.15-alpine` → `16-alpine`, `8.1.10-alpine` → `8-alpine`,
- *    `v3.7.16` → `v3`. A tag is an optional `v`, a dotted version of at least
+ *    `16.15-alpine` → `16-alpine`, `8.1.10-alpine` → `8-alpine`.
+ *    A tag is an optional `v`, a dotted version of at least
  *    two numbers, and an optional suffix starting with a letter; anything
  *    else (`latest`, a bare `16`) is refused, not guessed at.
  * 2. The floating tag's digest is its multi-platform index's — refused if the
@@ -23,11 +23,12 @@
  *    request is all it costs (Docker Hub's anonymous limit, see versionOf).
  * 3. The exact version that index is comes from its linux/amd64 image config
  *    (`--format '{{json .Image}}'` on that manifest's digest, so the tag
- *    cannot move between this read and the last), from a source measured per
- *    image on the registry on 2026-10-23 and listed in VERSION_SOURCES. An
- *    image with no measured source is refused: the source differs between
- *    images, and a wrong guess here would be written into a release.
- * 4. The exact tag (`16.15-alpine`, `8.1.10-alpine`, `v3.7.16`) must name the
+ *    cannot move between this read and the last), from the environment
+ *    variable measured per image on the registry on 2026-10-23 and listed in
+ *    VERSION_SOURCES. An image with no measured source is refused: the
+ *    variable differs between images, and a wrong guess here would be
+ *    written into a release.
+ * 4. The exact tag (`16.15-alpine`, `8.1.10-alpine`) must name the
  *    same index digest, or the image is refused: the line written must say
  *    what it pins.
  *
@@ -39,7 +40,7 @@
  * Every candidate is then scanned with scripts/scan-bundle-images.sh, the
  * release gate's scanner and rule, one image per run so the summary can say
  * which one is red (each run downloads Trivy's database again; there are at
- * most three). Only when every candidate is clean is anything written, and
+ * most two). Only when every candidate is clean is anything written, and
  * then only the `image:` lines that change: everything else in the file is
  * kept byte for byte.
  *
@@ -73,14 +74,11 @@ class Refused extends Error {}
  * Where each image says which version it is, measured with
  * `docker buildx imagetools inspect NAME:FLOATING --format '{{json .Image}}'`
  * (linux/amd64). postgres (our build, which keeps upstream's environment) and
- * valkey carry no version label but set the version their Dockerfile builds;
- * traefik sets no such variable but labels the image with the tag, `v`
- * included.
+ * valkey carry no version label but set the version their Dockerfile builds.
  */
-const VERSION_SOURCES: Record<string, { env: string } | { label: string }> = {
+const VERSION_SOURCES: Record<string, { env: string }> = {
   "ghcr.io/ngarate/stoky/postgres": { env: "PG_VERSION" },
   "valkey/valkey": { env: "VALKEY_VERSION" },
-  traefik: { label: "org.opencontainers.image.version" },
 };
 
 const INDEX_TYPES = new Set([
@@ -200,11 +198,11 @@ function indexOf(reference: string): Index {
   return { digest: manifest.digest!, amd64 };
 }
 
-type Config = { config?: { Env?: string[]; Labels?: Record<string, string> } };
+type Config = { config?: { Env?: string[] } };
 
 /**
- * The version the index's linux/amd64 image says it is, without a leading
- * `v`. Read from that one manifest: `{{json .Image}}` on the index fetches
+ * The version the index's linux/amd64 image says it is. Read from that one
+ * manifest: `{{json .Image}}` on the index fetches
  * every platform's manifest, eight for postgres, and Docker Hub allows an
  * anonymous address 100 manifest requests an hour — measured: the
  * measurements behind this script spent them.
@@ -225,19 +223,14 @@ function versionOf(name: string, index: Index): string {
   const config = image.config ?? image["linux/amd64"]?.config;
   if (!config) throw new Refused(`${reference} has no image config`);
   const digest = index.digest;
-  const value =
-    "env" in source
-      ? config.Env?.find((entry) => entry.startsWith(`${source.env}=`))?.slice(
-          source.env.length + 1,
-        )
-      : config.Labels?.[source.label];
-  const where = "env" in source ? `env ${source.env}` : `label ${source.label}`;
-  if (value === undefined)
-    throw new Refused(`${name}@${digest} has no ${where}`);
-  const version = value.replace(/^v/, "");
+  const version = config.Env?.find((entry) =>
+    entry.startsWith(`${source.env}=`),
+  )?.slice(source.env.length + 1);
+  if (version === undefined)
+    throw new Refused(`${name}@${digest} has no env ${source.env}`);
   if (!VERSION.test(version))
     throw new Refused(
-      `${name}@${digest}: ${where} is "${value}", not a version`,
+      `${name}@${digest}: env ${source.env} is "${version}", not a version`,
     );
   return version;
 }

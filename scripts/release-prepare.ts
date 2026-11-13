@@ -7,8 +7,8 @@
  *   bump              what scripts/release-version.ts takes: prerelease,
  *                     prepatch, preminor, premajor, patch, minor, major,
  *                     release, or an explicit tag
- *   --refresh-images  first move deploy/docker-compose.yml's PostgreSQL,
- *                     Valkey and Traefik to their newest clean builds
+ *   --refresh-images  first move deploy/docker-compose.yml's PostgreSQL
+ *                     and Valkey to their newest clean builds
  *                     (scripts/release-refresh-images.ts), in a commit of
  *                     their own
  *   --no-push         stop before pushing: the branch stays local

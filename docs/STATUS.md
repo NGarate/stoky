@@ -1337,7 +1337,7 @@ touched `bun.lock`, the first being the move from pnpm, four answered an
 advisory. Dependabot version updates are now configured
 (`.github/dependabot.yml`) for `bun.lock`, the workflows' action pins, the
 Dockerfile's base and the release bundle's service images: weekly, seven days
-after a release, minor and patch grouped, no PostgreSQL, Valkey or Traefik
+after a release, minor and patch grouped, no PostgreSQL or Valkey
 major. **Not yet in effect:** the branch ruleset does not let Dependabot create
 its branches, which no version update can open without; Dependabot security
 updates are separately off. Both are owner settings, which
@@ -1366,7 +1366,6 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 | bun | 1.4.4 — `.bun-version` and the Dockerfile pin (tag and index digest `sha256:4cf82f56…`); all application image stages use Bun. Released 2026-10-22, taken on 2026-10-25, the first day the three-day `minimumReleaseAge` allows, for its security fixes and `bun fmt` |
 | node | No separate runtime installed in application images; upstream compatibility command resolves to Bun (2026-09-25) |
 | sharp | 0.35.5, **devDependency only** — not shipped, not loaded at runtime |
-| traefik | v3.7.17 — `deploy/docker-compose.yml`, the release bundle's proxy, since 2026-10-31: v3.7.16 has a HIGH in go-jose 4.1.5 (CVE-2026-116587) and two x/net advisories, fixed in 4.1.6 and 0.62.0, which v3.7.17 links. Clean under `scripts/scan-bundle-images.sh` that day. Pinned by hand: `traefik:v3` names the same image on every platform but its index adds riscv64, so `release:refresh-images` refuses the exact tag's different index digest |
 
 **The runtime changed on 2026-08-26 and this is the row that says so.** `next
 dev` and `next start` run under `bun --bun` (`b81102d`), the production image

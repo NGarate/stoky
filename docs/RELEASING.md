@@ -102,7 +102,7 @@ attestation and anonymous-pull steps below depend on that (see
    red; `release:prepare --refresh-images` commits its result on the release
    branch. By hand: for each, take the newest release of the same major, which is what
    the floating tag (`ghcr.io/ngarate/stoky/postgres:18-alpine`,
-   `valkey/valkey:8-alpine`, `traefik:v3`) names that day, and the digest of
+   `valkey/valkey:8-alpine`) names that day, and the digest of
    its multi-platform index, not one platform's manifest:
 
    ```bash
@@ -111,7 +111,7 @@ attestation and anonymous-pull steps below depend on that (see
    ```
 
    Write `image: valkey/valkey:8.1.11-alpine@sha256:<that digest>`, and the
-   same for PostgreSQL and `traefik`. A new major version is a decision with its own
+   same for PostgreSQL. A new major version is a decision with its own
    migration and release note, not a refresh. The release smoke then runs the
    builds operators will pull. `src/__tests__/unit/deployment.test.ts` fails if
    a service image loses its digest or goes back to a bare major tag.
@@ -122,7 +122,7 @@ attestation and anonymous-pull steps below depend on that (see
 
    ```bash
    bash scripts/scan-bundle-images.sh                         # what deploy/docker-compose.yml names
-   bash scripts/scan-bundle-images.sh traefik:v3.7.16@sha256:…   # candidates, before moving a pin
+   bash scripts/scan-bundle-images.sh valkey/valkey:8.1.11-alpine@sha256:…   # candidates, before moving a pin
    ```
 
    A red image is not refreshed into the bundle. If no release of the same
@@ -376,7 +376,7 @@ for four things: `bun.lock` (`bun`), the workflows' `uses:` pins
 bundle's service images in `deploy/docker-compose.yml` (`docker-compose`). It
 proposes a release only once it is seven days old. Minor and patch updates
 share one pull request per ecosystem; each major arrives alone. Majors of
-PostgreSQL, Valkey and Traefik are never proposed: a PostgreSQL major cannot
+PostgreSQL and Valkey are never proposed: a PostgreSQL major cannot
 open the previous major's data directory, so each of those is a release with
 upgrade notes, written by hand. `src/__tests__/unit/ci-workflow.test.ts` holds
 that shape.

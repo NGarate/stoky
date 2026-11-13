@@ -57,11 +57,6 @@ function config(name: string, version: string) {
     };
   if (name === "valkey/valkey")
     return { Env: ["PATH=/usr/bin", `VALKEY_VERSION=${version}`] };
-  if (name === "traefik")
-    return {
-      Env: ["PATH=/usr/bin"],
-      Labels: { "org.opencontainers.image.version": `v${version}` },
-    };
   throw new Error(`no fixture source for ${name}`);
 }
 
