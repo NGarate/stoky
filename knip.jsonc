@@ -1,0 +1,56 @@
+// knip: unused files, exports and dependencies (`bun run check:unused`).
+//
+// Plugins are not listed: knip enables each from package.json and the config
+// files it finds (among them Bun, GitHub Actions, Next.js, next-intl, Oxlint,
+// Playwright, PostCSS, Prisma, Tailwind and TypeScript), and they supply the
+// entries that follow from a convention: the App Router's files, src/proxy.ts,
+// src/instrumentation.ts, src/i18n/request.ts, the bun test targets and
+// preloads, the e2e specs, prisma/seed.ts, and what package.json's scripts and
+// the workflows run. `bun run check:unused --debug` prints them. Listed below
+// is only what no plugin can see. `src/generated/` (the Prisma client) is not
+// analysed because .gitignore excludes it, and knip honours .gitignore.
+//
+// An entry ending in `!` is a production entry: `--production` starts from
+// those alone, so code reached only from tests, e2e or tools shows up there.
+// In the default mode tests count as users: an export kept for a test is a
+// deliberate seam, not dead code.
+{
+  "$schema": "./node_modules/knip/schema-jsonc.json",
+  "entry": [
+    // The Dockerfile's CMD, `bun --preload ./entry.ts server.js`.
+    "src/server/http/entry.ts!",
+    // Registered by URL, navigator.serviceWorker.register("/sw.js")
+    // (src/lib/sw/register.ts).
+    "public/sw.js!",
+    // Run by the Dockerfile's builder stage to stage the image's runtime deps.
+    "scripts/stage-runtime-deps.ts!",
+    // Playwright setup projects, selected by a testMatch regex the plugin
+    // does not evaluate (playwright.config.ts).
+    "e2e/*.setup.ts",
+    // Spawned as a process by src/__tests__/unit/proxy-entry.test.ts.
+    "src/__tests__/fixtures/echo-headers-server.js",
+    // Run by hand: the header of each says how, and the docs name them
+    // (docs/RELEASING.md for github-settings, ISSUES.md TEST-5 for the
+    // reproduction).
+    "scripts/generate-icons.ts",
+    "scripts/github-settings.ts",
+    "docs/reproductions/test-5.test.ts",
+  ],
+  "project": [
+    // The application: what `--production` analyses. The production entries
+    // above (sw.js, the Dockerfile's two) count without being named here.
+    "src/**/*.{ts,tsx,css}!",
+    // Everything else is code too, but not shipped. A pattern without `!` is
+    // left out in production mode, which is what keeps the tests out of it.
+    "src/__tests__/**/*.{js,ts,tsx}",
+    "{e2e,prisma,scripts,docs}/**/*.{ts,prisma}",
+    "*.{ts,mjs}",
+  ],
+  // OpenSSH's, run by release-tag.test.ts to make a signing key: a system
+  // program, not a package that could be listed.
+  "ignoreBinaries": ["ssh-keygen"],
+  // release-prepare.test.ts runs `bun scripts/release-notes.ts` with its cwd
+  // set to a scratch copy of the repository; knip resolves the path from the
+  // test's own directory, where it does not exist.
+  "ignoreUnresolved": ["scripts/release-notes.ts"],
+}

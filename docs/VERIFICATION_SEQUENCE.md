@@ -125,6 +125,29 @@ One spec at a time, when diagnosing a failure the whole run found:
 bun run test:e2e -- e2e/products.spec.ts
 ```
 
+## Unused code — a report, not yet a gate
+
+```bash
+bun run check:unused              # unused files, exports, types and dependencies
+bun run check:unused:production   # the same, counting only what ships
+```
+
+knip, configured in `knip.jsonc`. Nothing else finds these: oxlint has no
+unused-exports rule and TypeScript does not check exports. Its plugins supply
+the entry points the frameworks imply (the App Router's files, `src/proxy.ts`,
+the `bun test` targets, the e2e specs, the workflows' commands); `knip.jsonc`
+names the rest, each with the reason no plugin sees it.
+
+- **`check:unused`** counts tests as users, so an export kept for a test is a
+  seam, not dead code. What it reports is used by nothing at all.
+- **`check:unused:production`** starts from the application's own entries and
+  leaves tests, e2e and tools out, so it also lists what only a test uses.
+  Informational: a test-only export can be deliberate.
+
+Both exit non-zero while anything is reported, and today something is: it is in
+no gate (`verify:*`, `check-scope.sh`, CI) until the dead code it lists is
+gone. Neither needs the network or a database.
+
 ## Scoped checks — feedback, not a gate
 
 The static checks in three scopes, through one script:
