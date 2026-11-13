@@ -17,7 +17,7 @@ const root = join(import.meta.dir, "..", "..", "..");
 const script = join(root, "deploy/install.sh");
 const version =
   readFileSync(script, "utf8").match(/^DEFAULT_VERSION=(\S+)$/m)?.[1] ?? "";
-const files = ["docker-compose.yml", "example.env", "traefik.yml"];
+const files = ["docker-compose.yml", "example.env"];
 const fixtures: string[] = [];
 
 afterEach(() => {
@@ -110,7 +110,7 @@ exit 0
         new RegExp(`^${key}=(.*)$`, "m"),
       )?.[1],
     mode: (name: string) => statSync(join(install, name)).mode & 0o777,
-    // umask 077 is the case that once left Traefik unable to read its routes.
+    // Under umask 077, the strictest an operator's shell is likely to have.
     // `baseUrl: null` leaves the override unset, as an operator's run does.
     run: (
       args: string[] = [],
@@ -158,10 +158,12 @@ describe("deploy/install.sh", () => {
     expect(postgres).not.toBe(secret);
     expect(fixture.env()).not.toMatch(/^NEXTAUTH_SECRET=/m);
     expect(fixture.value("STOKY_VERSION")).toBe(version);
-    // No default exists for these; the operator fills them in and is told so.
+    // No default exists for it; the operator fills it in and is told so, and
+    // told that TLS is their proxy's: nothing here asks for a certificate.
     expect(fixture.value("DOMAIN")).toBe("");
-    expect(fixture.value("ACME_EMAIL")).toBe("");
-    expect(result.stdout).toContain("DOMAIN ACME_EMAIL");
+    expect(fixture.env()).not.toContain("ACME_EMAIL");
+    expect(result.stdout).toContain("rellena: DOMAIN\n");
+    expect(result.stdout).toContain("STOKY_TRUSTED_PROXIES");
   });
 
   it("follows redirects only to https, at TLS 1.2 or later", () => {
@@ -188,10 +190,9 @@ describe("deploy/install.sh", () => {
     );
   });
 
-  it("leaves Traefik's file readable and .env private, whatever the umask", () => {
+  it("leaves .env private, whatever the umask", () => {
     const fixture = setup();
     expect(fixture.run().exitCode).toBe(0);
-    expect(fixture.mode("traefik.yml")).toBe(0o644);
     expect(fixture.mode(".env")).toBe(0o600);
   });
 
@@ -230,7 +231,6 @@ describe("deploy/install.sh", () => {
       '"kept-as-written-0123456789abcdef0123"',
     );
     expect(fixture.value("POSTGRES_PASSWORD")).toMatch(/^[0-9a-f]{64}$/);
-    expect(fixture.value("ACME_EMAIL")).toBe("");
     expect(fixture.env().match(/^POSTGRES_PASSWORD=/gm)).toHaveLength(1);
   });
 
@@ -249,10 +249,10 @@ describe("deploy/install.sh", () => {
 
   it("refuses a download that does not match its checksum, and writes nothing", () => {
     const fixture = setup();
-    writeFileSync(join(fixture.release, "traefik.yml"), "tampered\n");
+    writeFileSync(join(fixture.release, "example.env"), "tampered\n");
     const result = fixture.run();
     expect(result.exitCode).not.toBe(0);
-    expect(result.stderr).toContain("traefik.yml no coincide");
+    expect(result.stderr).toContain("example.env no coincide");
     expect(readdirSync(fixture.install)).toEqual([]);
   });
 
@@ -263,12 +263,12 @@ describe("deploy/install.sh", () => {
       join(fixture.release, "SHA256SUMS"),
       sums
         .split("\n")
-        .filter((line) => !line.endsWith("traefik.yml"))
+        .filter((line) => !line.endsWith("example.env"))
         .join("\n"),
     );
     const result = fixture.run();
     expect(result.exitCode).not.toBe(0);
-    expect(result.stderr).toContain("no incluye traefik.yml");
+    expect(result.stderr).toContain("no incluye example.env");
     expect(readdirSync(fixture.install)).toEqual([]);
   });
 

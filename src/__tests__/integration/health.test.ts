@@ -38,7 +38,7 @@ describe("when everything is reachable", () => {
   });
 
   it("says nothing about what is behind it", async () => {
-    // Reachable through Traefik from the public internet. "database:
+    // Reachable through the operator's proxy from the public internet. "database:
     // unreachable" tells an attacker which half of a deployment to push on;
     // the operator gets that from the container log instead.
     const body = await (await GET()).text();

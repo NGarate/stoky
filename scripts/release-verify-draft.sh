@@ -24,8 +24,8 @@
 #   7. The release's install.sh (run only once its attestation verified and
 #      it matched SHA256SUMS) installs into an empty directory from a
 #      file:// copy of the release, creating the files and a .env with both
-#      secrets generated; with DOMAIN and
-#      ACME_EMAIL filled in, `docker compose config --images` lists exactly
+#      secrets generated; with DOMAIN
+#      filled in, `docker compose config --images` lists exactly
 #      the released Compose file's images, the application's being
 #      ghcr.io/<owner>/stoky:<tag>@<digest>.
 #
@@ -66,8 +66,8 @@ VERSION_RE='^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$'
 # release-assets.sh's application image line: a repository, then the
 # ${STOKY_VERSION...} tag, optionally quoted, before the digest is added.
 APP_IMAGE_LINE='^([[:space:]]*image:[[:space:]]*"?[^"[:space:]@]+:\$\{STOKY_VERSION(:\?[^}]*)?\})("?[[:space:]]*)$'
-ASSETS=(docker-compose.yml example.env traefik.yml install.sh SHA256SUMS)
-INSTALL_FILES=(docker-compose.yml example.env traefik.yml SHA256SUMS)
+ASSETS=(docker-compose.yml example.env install.sh SHA256SUMS)
+INSTALL_FILES=(docker-compose.yml example.env SHA256SUMS)
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
@@ -392,8 +392,7 @@ check_images() {
     DETAIL="no digest in the released Compose file"
     return 1
   fi
-  sed -i -e 's/^DOMAIN=.*/DOMAIN=release-verify.invalid/' \
-    -e 's/^ACME_EMAIL=.*/ACME_EMAIL=release-verify@example.invalid/' "$INSTALL_DIR/.env"
+  sed -i -e 's/^DOMAIN=.*/DOMAIN=release-verify.invalid/' "$INSTALL_DIR/.env"
   local actual expected config
   config="$(anonymous_config)"
   # Only the installation's .env: a STOKY_VERSION or DOMAIN exported here

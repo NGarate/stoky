@@ -114,10 +114,6 @@ function setup(
     join(fixture, "deploy/install.sh"),
     `#!/bin/bash\n# ${guide("master")}\nDEFAULT_VERSION=${options.installVersion ?? tag}\n`,
   );
-  writeFileSync(
-    join(fixture, "deploy/traefik.yml"),
-    "http:\n  services:\n    stoky:\n      loadBalancer:\n        servers:\n          - url: http://app:3000\n",
-  );
   // An operator's local credentials must never become a release attachment.
   writeFileSync(
     join(fixture, "deploy/.env"),
@@ -176,7 +172,7 @@ describe("release installation assets", () => {
     const { fixture, output, run } = setup();
     const result = run();
     expect(result.exitCode).toBe(0);
-    for (const name of ["example.env", "traefik.yml", "install.sh"]) {
+    for (const name of ["example.env", "install.sh"]) {
       const source = readFileSync(join(fixture, "deploy", name), "utf8");
       expect(readFileSync(join(output, name), "utf8")).toBe(
         source.replaceAll(guide("master"), guide(tag)),
@@ -192,6 +188,14 @@ describe("release installation assets", () => {
     const verify = () =>
       Bun.spawnSync(["sha256sum", "-c", "SHA256SUMS"], { cwd: output });
     expect(verify().exitCode).toBe(0);
+    // Every file an operator downloads, and no other: install.sh refuses a
+    // SHA256SUMS that leaves one of its files out.
+    expect(
+      readFileSync(join(output, "SHA256SUMS"), "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => line.split("  ")[1]),
+    ).toEqual(["docker-compose.yml", "example.env", "install.sh"]);
     writeFileSync(join(output, "docker-compose.yml"), "corrupted download\n");
     expect(verify().exitCode).not.toBe(0);
   });

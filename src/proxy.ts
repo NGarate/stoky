@@ -67,10 +67,12 @@ export function proxy(request: NextRequest): NextResponse {
   if (minted) request.cookies.set(DEVICE_ID_COOKIE, minted);
 
   // `upgrade-insecure-requests` is keyed on how this request actually
-  // travelled: behind Traefik that is the x-forwarded-proto header TLS
-  // termination writes; served directly it is the URL's own scheme. A client
-  // forging the header against a plain-http install only upgrades — and so
-  // breaks — its own requests, which is the harmless direction.
+  // travelled: behind a proxy that is the x-forwarded-proto header TLS
+  // termination writes; served directly it is the URL's own scheme. The
+  // header is the proxy's or absent: the entry deletes it from any peer not
+  // in STOKY_TRUSTED_PROXIES (`src/server/http/entry.ts`). Under `next dev`,
+  // which has no entry, a client forging it only upgrades — and so breaks —
+  // its own requests.
   const isHttps =
     request.headers.get("x-forwarded-proto") === "https" ||
     request.nextUrl.protocol === "https:";

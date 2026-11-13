@@ -263,7 +263,7 @@ export function publicUrlProblems(env: Env): PublicUrlProblem[] {
 }
 
 /** Where to go instead, shared by the warnings about transport. */
-const TLS_ROUTE = `Put TLS in front — the release bundle, your own proxy setting X-Forwarded-For, or \`tailscale serve\` — and list that https address in ${URLS_ENV}.`;
+const TLS_ROUTE = `Put TLS in front — your own proxy, setting X-Forwarded-For and listed in STOKY_TRUSTED_PROXIES, or \`tailscale serve\` — and list that https address in ${URLS_ENV}.`;
 
 /**
  * The warnings for this configuration, in words an operator can act on, one

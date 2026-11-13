@@ -31,7 +31,6 @@ const OTHER_DIGEST = `sha256:${"b".repeat(64)}`;
 const ASSETS = [
   "docker-compose.yml",
   "example.env",
-  "traefik.yml",
   "install.sh",
   "SHA256SUMS",
 ];
@@ -133,9 +132,6 @@ function setup(options: Options = {}) {
     "example.env": relink(
       readFileSync(join(root, "deploy/example.env"), "utf8"),
     ).replace(/^STOKY_VERSION=.*$/m, `STOKY_VERSION=${TAG}`),
-    "traefik.yml": relink(
-      readFileSync(join(root, "deploy/traefik.yml"), "utf8"),
-    ),
     "install.sh": options.hostileInstall
       ? `#!/bin/bash\ntouch "${options.hostileInstall}"\n`
       : relink(readFileSync(join(root, "deploy/install.sh"), "utf8")).replace(
@@ -152,7 +148,7 @@ function setup(options: Options = {}) {
       .join(""),
   );
   if (options.tamper)
-    appendFileSync(join(release, "traefik.yml"), "# replaced\n");
+    appendFileSync(join(release, "example.env"), "# replaced\n");
 
   const calls = join(fixture, "calls");
   writeFileSync(calls, "");
@@ -330,8 +326,8 @@ describe("verifying a release draft", () => {
   });
 
   it("fails a file with no attestation for this tag", () => {
-    const result = setup({ unattested: ["traefik.yml"] }).run();
-    expectFailures(result, ["attestation traefik.yml"]);
+    const result = setup({ unattested: ["example.env"] }).run();
+    expectFailures(result, ["attestation example.env"]);
   });
 
   it("never runs an install.sh with no attestation, however its checksum agrees", () => {

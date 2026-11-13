@@ -44,7 +44,6 @@ function pinOf(service: string) {
 const PINS = {
   db: pinOf("db"),
   cache: pinOf("cache"),
-  traefik: pinOf("traefik"),
 };
 
 const digest = (n: number) =>
@@ -220,7 +219,14 @@ function pinnedLikeDeploymentTest(text: string) {
     );
 }
 
-const NEW_TRAEFIK = `traefik:v3.99.1@${digest(1)}`;
+// The cache's image stands for "a service image" below: a newer build of its
+// major, under the floating tag the pin's own tag derives.
+const CACHE = PINS.cache.name;
+const CACHE_TAG = parseTag(PINS.cache.tag)!;
+const FLOATING = floatingTag(CACHE_TAG);
+const NEWER = `${CACHE_TAG.major}.99.1`;
+const NEWER_TAG = `${NEWER}${CACHE_TAG.suffix}`;
+const NEW_CACHE = `${CACHE}:${NEWER_TAG}@${digest(1)}`;
 
 describe("refreshing the bundle's service images", () => {
   it("derives the floating tag of the same major, and parses nothing else", () => {
@@ -268,18 +274,18 @@ describe("refreshing the bundle's service images", () => {
 
   it("writes a newer build of the same major, scanned, and changes no other byte", () => {
     const { run, publish, scanned, content } = setup();
-    publish("traefik", ["v3", "v3.99.1"], digest(1), "3.99.1");
+    publish(CACHE, [FLOATING, NEWER_TAG], digest(1), NEWER);
     const result = run();
     expect(result.exitCode).toBe(0);
-    expect(scanned()).toEqual([NEW_TRAEFIK]);
+    expect(scanned()).toEqual([NEW_CACHE]);
     expect(content()).toBe(
-      real.replace(`image: ${PINS.traefik.image}\n`, `image: ${NEW_TRAEFIK}\n`),
+      real.replace(`image: ${PINS.cache.image}\n`, `image: ${NEW_CACHE}\n`),
     );
     expect(content()).not.toBe(real);
     expect(pinnedLikeDeploymentTest(content())).toBe(true);
     expect(result.stdout).toMatch(
       new RegExp(
-        `traefik\\s+${RegExp.escape(PINS.traefik.image)}\\s+${RegExp.escape(NEW_TRAEFIK)}\\s+clean`,
+        `cache\\s+${RegExp.escape(PINS.cache.image)}\\s+${RegExp.escape(NEW_CACHE)}\\s+clean`,
       ),
     );
   });
@@ -306,38 +312,44 @@ describe("refreshing the bundle's service images", () => {
 
   it("refuses when the exact tag names another index than the floating one", () => {
     const { run, publish, scanned, content } = setup();
-    publish("traefik", ["v3"], digest(1), "3.99.1");
-    publish("traefik", ["v3.99.1"], digest(3), "3.99.1");
+    publish(CACHE, [FLOATING], digest(1), NEWER);
+    publish(CACHE, [NEWER_TAG], digest(3), NEWER);
     const result = run();
     expect(result.exitCode).toBe(2);
-    expect(result.stderr).toContain("traefik:v3.99.1");
+    expect(result.stderr).toContain(`${CACHE}:${NEWER_TAG}`);
     expect(content()).toBe(real);
     expect(scanned()).toEqual([]);
   });
 
   it("writes nothing, not even a clean update, when a candidate is red", () => {
     const { run, publish, markRed, scanned, content } = setup();
-    publish("traefik", ["v3", "v3.99.1"], digest(1), "3.99.1");
+    publish(CACHE, [FLOATING, NEWER_TAG], digest(1), NEWER);
+    const db = parseTag(PINS.db.tag)!;
+    const newerDb = `${db.major}.99`;
     publish(
-      "valkey/valkey",
-      ["8-alpine", "8.99.0-alpine"],
+      PINS.db.name,
+      [floatingTag(db), `${newerDb}${db.suffix}`],
       digest(4),
-      "8.99.0",
+      newerDb,
     );
-    markRed(NEW_TRAEFIK);
+    markRed(NEW_CACHE);
     const result = run();
     expect(result.exitCode).toBe(1);
     expect(scanned().toSorted()).toEqual(
-      [NEW_TRAEFIK, `valkey/valkey:8.99.0-alpine@${digest(4)}`].toSorted(),
+      [
+        NEW_CACHE,
+        `${PINS.db.name}:${newerDb}${db.suffix}@${digest(4)}`,
+      ].toSorted(),
     );
     expect(content()).toBe(real);
-    expect(result.stdout).toMatch(/traefik\s.*\sred$/m);
-    expect(result.stdout).toMatch(/cache\s.*\sclean$/m);
+    expect(result.stdout).toMatch(/cache\s.*\sred$/m);
+    expect(result.stdout).toMatch(/db\s.*\sclean$/m);
   });
 
   it("refuses a new major, which is a migration and not a refresh", () => {
     const { run, publish, scanned, content } = setup();
-    publish("traefik", ["v3", "v4.0.0"], digest(5), "4.0.0");
+    const next = `${Number(CACHE_TAG.major) + 1}.0.0`;
+    publish(CACHE, [FLOATING, `${next}${CACHE_TAG.suffix}`], digest(5), next);
     const result = run();
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toContain("new major");
@@ -347,25 +359,25 @@ describe("refreshing the bundle's service images", () => {
 
   it("with --check, reports and scans an update and writes nothing", () => {
     const { run, publish, markRed, scanned, content } = setup();
-    publish("traefik", ["v3", "v3.99.1"], digest(1), "3.99.1");
+    publish(CACHE, [FLOATING, NEWER_TAG], digest(1), NEWER);
     const clean = run("--check");
     expect(clean.exitCode).toBe(0);
-    expect(scanned()).toEqual([NEW_TRAEFIK]);
-    expect(clean.stdout).toContain(NEW_TRAEFIK);
+    expect(scanned()).toEqual([NEW_CACHE]);
+    expect(clean.stdout).toContain(NEW_CACHE);
     expect(content()).toBe(real);
 
-    markRed(NEW_TRAEFIK);
+    markRed(NEW_CACHE);
     expect(run("--check").exitCode).toBe(1);
     expect(content()).toBe(real);
   });
 
-  it.each(["latest", "v3"])(
+  it.each(["latest", CACHE_TAG.major])(
     "refuses a pin whose tag %p it cannot parse, rather than guess",
     (tag) => {
       const { run, setCompose, content, calls, scanned } = setup();
       const broken = real.replace(
-        PINS.traefik.image,
-        `traefik:${tag}@${PINS.traefik.digest}`,
+        PINS.cache.image,
+        `${CACHE}:${tag}@${PINS.cache.digest}`,
       );
       setCompose(broken);
       const result = run();
@@ -374,7 +386,7 @@ describe("refreshing the bundle's service images", () => {
       expect(content()).toBe(broken);
       expect(
         calls("docker").some((args) =>
-          args.some((arg) => arg.startsWith("traefik")),
+          args.some((arg) => arg.startsWith(CACHE)),
         ),
       ).toBe(false);
       expect(scanned()).toEqual([]);
@@ -384,8 +396,8 @@ describe("refreshing the bundle's service images", () => {
   it("refuses when the registry does not answer for a floating tag", () => {
     const { run, setCompose, content } = setup();
     const unknown = real.replace(
-      PINS.traefik.image,
-      `traefik:v9.1.0@${PINS.traefik.digest}`,
+      PINS.cache.image,
+      `${CACHE}:99.1.0${CACHE_TAG.suffix}@${PINS.cache.digest}`,
     );
     setCompose(unknown);
     const result = run();

@@ -172,7 +172,8 @@ wear two different words (ISSUES UI-11).
 - Passwords are Argon2id, tuned to roughly 250ms.
 - Rate limiting is per account as well as per address, and a refusal carries
   `Retry-After`. The current limits live in the code, not here.
-- Only Traefik exposes ports. PostgreSQL and Valkey have none.
+- Only the app publishes a port. PostgreSQL and Valkey have none. Forwarded
+  headers count only from `STOKY_TRUSTED_PROXIES`.
 - Never raw SQL without parameterised queries (tagged template literals). An
   `ORDER BY` built by interpolation is the one that looks fine.
 - Never commit secrets. `.env.example` is documentation, and the application

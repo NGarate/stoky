@@ -263,7 +263,7 @@ describe("the production compose runs read-only", () => {
 
   it("builds from source without restating, and so without drifting from, that definition", () => {
     // docker-compose.prod.yml used to be a full second copy of the hardening
-    // and had already diverged (an older Traefik with the Docker socket). It
+    // and had already diverged. It
     // may now only add the build. Anything else here would override deploy/.
     const override = Bun.YAML.parse(
       readFileSync(join(ROOT, "docker-compose.prod.yml"), "utf8"),

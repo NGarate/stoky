@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-10-19
+Updated: 2026-11-13
 
 Single source of truth for where the project actually is.
 
@@ -11,6 +11,44 @@ say what measured it.
 ---
 
 ## Gate status
+
+**2026-11-13 the reverse proxy leaves the bundle**
+(`feat/proxy-outside-the-bundle-2026-11-13`). The bundle is db, cache and
+app; the app publishes port 3000 over plain HTTP for the operator's proxy and
+believes forwarded headers only from `STOKY_TRUSTED_PROXIES`. Measured on
+this branch, host Bun 1.4.4, Docker Engine 29.9.3, with the production image
+built from the working tree and the bundle under a throwaway Compose project
+on loopback ports, removed afterwards:
+
+- **The entry, on the production build** (`bun --preload
+  src/server/http/entry.ts .next/standalone/server.js`, Next 16.4.3). A
+  request from `127.0.0.1` forging `X-Forwarded-For: 203.0.113.9` and
+  `X-Forwarded-Proto: https` was logged as `203.0.113.9` by `server.js`
+  alone, as `127.0.0.1` through the entry, and as `203.0.113.9` again only
+  with `STOKY_TRUSTED_PROXIES=127.0.0.1`; the policy carried
+  `upgrade-insecure-requests` in the first and third cases only. SIGTERM
+  ended the server in under 30 ms with exit 143 with and without the entry.
+- **Who the app sees**, read from its security log with nothing trusted:
+  the host at `127.0.0.1:PORT`, at `[::1]:PORT` and at the container's own
+  address arrives as the `web` network's gateway; the host at its LAN or
+  Tailscale address arrives as that address; a container on `web` as itself;
+  a container on another bridge, through the host's port, as the gateway.
+  With `STOKY_PORT=127.0.0.1:3317` only the first of those connects. A
+  second machine was not available, so a LAN client's address is Docker's
+  documented behaviour, not a measurement.
+- **Three proxies in front of it**, each forging the header: Caddy 2.11 and
+  nginx 1.31 on the host network (gateway trusted) and Traefik 3.7.14 in a
+  container with labels from an override file (its network's range trusted)
+  all gave the app the address they saw, never `203.0.113.9`. nginx without
+  its `X-Forwarded-For` line passed the forged header on and the app logged
+  it; without `client_max_body_size` it refused a 2 MB body with 413; without
+  `Host` a Server Action request got 500 `Invalid Server Actions request`.
+  `tailscale serve` was not run against it: what INSTALL says of its headers
+  is from Tailscale's source.
+- **The release smoke's new commands**, copied out of `ci.yml` and run
+  against the bundle: `/api/health` 200 on the published port with HSTS,
+  `nosniff`, `X-Frame-Options` and the CSP; against a port nothing listens
+  on, curl's exit 7. The smoke itself runs only on a tag.
 
 **2026-10-18 both branches landed on `master`.** The security branch (PR #11)
 and the Better Auth branch on top of it (PR #12) landed as `e9d62eb..d68ffd1`:
@@ -178,7 +216,7 @@ lock. What it measured:
   and read-only root filesystems for the app and Traefik are in place; only
   Traefik publishes ports. Valkey is capped at 160 MiB with `allkeys-lru`. Two
   limits on what this proves: ACME cannot issue for a test domain, so Traefik
-  served its default certificate; and the image carries no revision label, so
+  (which the bundle shipped until 2026-11-13) served its default certificate; and the image carries no revision label, so
   that it was built from that head is known from the build step, not from
   the image.
 

@@ -833,7 +833,8 @@ jobs:
           version: v0.76.1
       # Run the downloaded registry image, including its migrations, against
       # new volumes. This checks the actual publication, beyond the build and
-      # source tests. Public DNS/certificate issuance is an operator check.
+      # source tests. TLS and the proxy are the operator's, and so is their
+      # check (scripts/smoke-proxy.sh --live).
       - name: Verify the published image on a fresh database
         env:
           # The candidate tag image-publish pushed; the version tag does not
@@ -842,23 +843,36 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
           EXPECTED_DIGEST: ${{ needs.image-publish.outputs.digest }}
           DOMAIN: release-smoke.invalid
-          ACME_EMAIL: release-smoke@example.invalid
         run: |
           POSTGRES_PASSWORD="$(openssl rand -hex 32)"
           STOKY_SECRET="$(openssl rand -hex 32)"
           export POSTGRES_PASSWORD STOKY_SECRET
           COMPOSE=(docker compose --project-name "stoky-release-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --file deploy/docker-compose.yml)
-          trap '"${COMPOSE[@]}" logs --tail=100 app db cache traefik; "${COMPOSE[@]}" down --volumes' EXIT
+          trap '"${COMPOSE[@]}" logs --tail=100 app db cache; "${COMPOSE[@]}" down --volumes' EXIT
           "${COMPOSE[@]}" pull app
           APP_IMAGE="$("${COMPOSE[@]}" config --format json | bun -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).services.app.image")"
           docker image inspect "$APP_IMAGE" --format '{{range .RepoDigests}}{{println .}}{{end}}' \
             | grep -Fx "${APP_IMAGE%:*}@$EXPECTED_DIGEST"
-          # Traefik too: it is the only way in, and its file-provider template,
-          # flags and read-only config mount are shipped files no other job runs.
-          "${COMPOSE[@]}" up -d --wait --wait-timeout 180 app traefik
+          "${COMPOSE[@]}" up -d --wait --wait-timeout 180 app
           "${COMPOSE[@]}" exec -T -e EXPECTED_VERSION="${RELEASE_TAG#v}" app \
             bun -e 'if (require("./package.json").version !== process.env.EXPECTED_VERSION) process.exit(1)'
-          bash scripts/smoke-proxy.sh "$DOMAIN"
+          # Through the published port, the only way in and a mapping no other
+          # job runs. The security headers are the application's own: nothing
+          # in the bundle stands in front of it to add them.
+          HEADERS="$RUNNER_TEMP/smoke-headers"
+          STATUS="$(curl --silent --show-error --max-time 10 --dump-header "$HEADERS" --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3000/api/health)"
+          if [ "$STATUS" != 200 ]; then
+            echo "::error::/api/health answered $STATUS on the published port, expected 200."
+            cat "$HEADERS"
+            exit 1
+          fi
+          for header in strict-transport-security x-content-type-options x-frame-options content-security-policy; do
+            if ! grep -qi "^$header:" "$HEADERS"; then
+              echo "::error::The response on the published port is missing $header."
+              cat "$HEADERS"
+              exit 1
+            fi
+          done
       # Retag the exact digest the smoke ran, server side: no rebuild, so the
       # version tag cannot name anything but the verified image.
       - name: Promote the verified image to the version tag
@@ -920,7 +934,6 @@ jobs:
           subject-path: |
             ${{ runner.temp }}/release/docker-compose.yml
             ${{ runner.temp }}/release/example.env
-            ${{ runner.temp }}/release/traefik.yml
             ${{ runner.temp }}/release/install.sh
             ${{ runner.temp }}/release/SHA256SUMS
       - name: Create or refresh the draft
@@ -931,7 +944,7 @@ jobs:
         run: |
           PRERELEASE=false
           case "$RELEASE_TAG" in *-*) PRERELEASE=true ;; esac
-          ASSETS=("$RUNNER_TEMP/release/docker-compose.yml" "$RUNNER_TEMP/release/example.env" "$RUNNER_TEMP/release/traefik.yml" "$RUNNER_TEMP/release/install.sh" "$RUNNER_TEMP/release/SHA256SUMS")
+          ASSETS=("$RUNNER_TEMP/release/docker-compose.yml" "$RUNNER_TEMP/release/example.env" "$RUNNER_TEMP/release/install.sh" "$RUNNER_TEMP/release/SHA256SUMS")
           if DRAFT="$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null)"; then
             if [ "$DRAFT" != true ]; then
               echo "::error::Release $RELEASE_TAG is already published; refusing to replace its assets."

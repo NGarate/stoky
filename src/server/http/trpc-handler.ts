@@ -93,7 +93,7 @@ export function createTrpcHandler<TRouter extends AnyTRPCRouter>({
  *
  * **Nothing else marks them.** tRPC sets no cache directive on its JSON, Next
  * sends a route handler's response as it is, and neither the config's
- * `headers()` nor Traefik adds one. A query is a GET carrying one household's
+ * `headers()` nor anything in the bundle adds one. A query is a GET carrying one household's
  * stock, prices, receipts and members, under a URL that is often the same for
  * every account (`input={}`) and a `Vary` that does not name the cookie. A
  * shared cache in front of the instance — a CDN rule that caches everything,

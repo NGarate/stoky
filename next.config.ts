@@ -11,9 +11,8 @@ const withNextIntl = createNextIntlPlugin();
 // Next's inline bootstrap scripts, which stops hydration and silently breaks the
 // login form.
 //
-// Some of these are also set by Traefik in deploy/traefik.yml, but that
-// only helps someone deploying behind that exact proxy. A self-hosted app runs
-// behind whatever the operator already has, so the defaults belong in the app.
+// A self-hosted app runs behind whatever proxy the operator already has, and
+// the release bundle ships none, so the defaults belong in the app.
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
@@ -93,7 +92,7 @@ const securityHeaders = [
       "compute-pressure=()",
     ].join(", "),
   },
-  // Two years, matching the Traefik middleware. Only applies over HTTPS.
+  // Two years. Browsers honour it only over HTTPS.
   // No `preload`: that token is the domain owner's consent to the browsers'
   // built-in lists, which anyone may then submit the domain to, and
   // hstspreload.org asks software shipping HTTPS defaults not to send it. It is

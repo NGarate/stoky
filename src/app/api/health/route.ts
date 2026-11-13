@@ -25,7 +25,7 @@ import { configuredSecret, secretProblem } from "@/lib/auth/secret";
  * pair of round trips in the application.
  *
  * **The body says nothing the status code does not.** This is reachable
- * through Traefik from the public internet, and "database: unreachable" tells
+ * through the operator's proxy from the public internet, and "database: unreachable" tells
  * an attacker which half of a deployment to keep pushing on. The operator gets
  * the detail from the container log, which names the component.
  */

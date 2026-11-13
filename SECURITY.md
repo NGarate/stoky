@@ -49,7 +49,7 @@ and the release bundle (`deploy/` and the files attached to a release). Someone
 else's Stoky installation is not: a weakness that comes from how one instance
 is configured goes to whoever runs it, and a weakness in Stoky itself comes here
 whatever instance you found it on. A defect in an upstream component (Bun,
-Next.js, PostgreSQL, Valkey, Traefik) belongs to that project, unless the way
+Next.js, PostgreSQL, Valkey) belongs to that project, unless the way
 Stoky uses or ships it is what makes it exploitable.
 
 **Which version.** Only the latest published alpha is supported (see
@@ -176,7 +176,7 @@ Verified against the files named in each row.
 
 ### Release deployment — `deploy/docker-compose.yml`
 
-- **PostgreSQL, Valkey and Traefik are pinned by exact version and digest**
+- **PostgreSQL and Valkey are pinned by exact version and digest**
   (`valkey/valkey:8.1.11-alpine@sha256:…`, the digest of the multi-platform
   index). PostgreSQL's is our build of the official image
   (`ghcr.io/ngarate/stoky/postgres`, `postgres.Dockerfile`), which takes the
@@ -193,11 +193,10 @@ Verified against the files named in each row.
   and ships with the next release. The app image is named by `STOKY_VERSION`.
   `src/__tests__/unit/deployment.test.ts` fails if a service image loses its
   digest or names a floating major. Verified by running each pinned reference:
-  PostgreSQL 18.6, Valkey 8.1.11, Traefik 3.7.17.
+  PostgreSQL 18.6, Valkey 8.1.11.
 - `no-new-privileges:true` on every service.
 - `cap_drop: [ALL]` on every service, with capabilities added back only where
-  they are actually needed (Valkey for setgid/setuid, Traefik for
-  `NET_BIND_SERVICE`). PostgreSQL needs none: it starts as the image's
+  they are actually needed (Valkey for setgid/setuid). PostgreSQL needs none: it starts as the image's
   `postgres` user (`user: "70:70"`), so its entrypoint never runs as root and
   never steps down through `gosu`, the Go binary behind every PostgreSQL row
   of the weekly re-scan. Verified on 2026-10-28 with the bundle itself: a new
@@ -207,19 +206,22 @@ Verified against the files named in each row.
 - The app container runs with `read_only: true`. Writes are confined to the
   `uploads` volume plus tmpfs mounts for `/tmp` and `/app/.next/cache`.
 - Postgres and Valkey sit on an `internal: true` bridge network and publish **no
-  ports**. Only Traefik publishes anything, and only 80 and 443.
+  ports**. **Only the app publishes one**: 3000, plain HTTP, for the
+  operator's proxy (`STOKY_PORT` moves it, or binds it to one address). Docker
+  publishes nothing for a container that is only on an internal network, so
+  the app is also on an ordinary one, `web`, which the database and the cache
+  are not on. `src/__tests__/unit/deployment.test.ts` pins all of it.
 - Memory limits on every service, so one service's runaway allocation stops at
   its own limit. Valkey is also bounded inside its own limit, with
   `--maxmemory`, because it does not read the container's: see "It fails
   closed" below.
 - A process limit on every service (`deploy.resources.limits.pids`, which
-  counts threads as well as processes): app 512, db 256, cache 128, traefik
-  128. A fork loop or a runaway thread pool stops at its own container's
+  counts threads as well as processes): app 512, db 256, cache 128. A fork loop or a runaway thread pool stops at its own container's
   ceiling instead of using up the host's process table. These are ceilings, not
   sizing. Measured on the bundle (8 cores, `v0.1.0-alpha.3`), from the cgroup's
   `pids.peak` after a sign-up, a sign-in, six receipt uploads run through OCR
-  and 900 concurrent page and health requests through Traefik: app 50, db 25,
-  cache 14, traefik 26. Postgres runs one process per connection, and its
+  and 900 concurrent page and health requests, sent through the Traefik the
+  bundle then shipped: app 50, db 25, cache 14. Postgres runs one process per connection, and its
   default `max_connections` of 100 keeps it under 256 however many connections
   the app's pool asks for. Forking 300 `sleep`s inside the cache container
   stopped at 127 of 128, with `pids.events` counting the refused forks.
@@ -234,26 +236,61 @@ Verified against the files named in each row.
   and receipt upload is metered per account (below).
   `src/__tests__/unit/deployment.test.ts` pins each process limit and the
   absence of a `cpus` limit.
-- Traefik uses a read-only file provider, with no Docker socket access.
-- **Traefik does not contact Traefik Labs.** Its version check is on by
-  default (`--global.checknewversion`, default `true` in `traefik:v3.7.13
-  --help`) and asks Traefik Labs' update service for releases, which tells them
-  a Traefik runs at the instance's address. The bundle sets it to `false`:
-  Traefik reaches an operator through a Stoky release, which pins its version,
-  so the notice was one they could not act on. Anonymous usage statistics are
-  off by default and set to `false` anyway, so a changed default cannot turn
-  them on. Measured by starting `traefik:v3.7.13` with no network and the
-  bundle's command list for 11 minutes: before this change it logged "Version
-  check is enabled" and, ten minutes in, a failed lookup of
-  `update.traefik.io`; after it, "Version check is disabled" and no lookup at
-  all. `src/__tests__/unit/deployment.test.ts` pins both flags. Traefik still
-  contacts Let's Encrypt, which it must to issue and renew the certificate.
-- Traefik terminates TLS with Let's Encrypt, redirects HTTP to HTTPS, and adds
-  HSTS (two years, `includeSubDomains`), `nosniff` and `frameDeny`.
-- **HSTS does not send `preload`**, from Traefik or from the app. The token is
+- **The bundle ships no reverse proxy, and so no TLS.** Until 2026-11-13 it
+  ran Traefik on ports 80 and 443 with its own Let's Encrypt. That made an
+  installation fight the bundle wherever a proxy, or Tailscale, already held
+  443, and made every Traefik advisory a Stoky release (`v0.1.0-alpha.3`
+  shipped four HIGH). The operator's proxy now does what Traefik did, and each
+  thing it did has a named place:
+
+  | The bundled Traefik did | Now |
+  |---|---|
+  | TLS, certificates, the redirect from HTTP | The operator's proxy |
+  | TLS 1.2 or later, AEAD suites only at 1.2 | The operator's proxy. No Stoky release sets or tests a TLS floor any more |
+  | HSTS, `nosniff`, `X-Frame-Options` | The application, which always set them too (below) |
+  | Routed only `Host: DOMAIN` | The operator's proxy. See the next point for what reaches the app when it does not |
+  | Was the only published port | The app's port 3000, plain HTTP |
+  | Wrote `X-Forwarded-For`, which every per-address limit reads | The operator's proxy writes it, and **the app believes it only from `STOKY_TRUSTED_PROXIES`** ([*Rate limiting*](#rate-limiting-covers-authentication-and-the-expensive-calls-not-the-rest)) |
+  | Closed idle connections after 60s, and was what a flood of held connections filled | The operator's proxy ([*One address can hold a proxy's connections open*](#one-address-can-hold-a-proxys-connections-open)) |
+
+  [The installation guide](docs/INSTALL.md#4-your-proxy) has a measured
+  example for Traefik, Caddy, nginx and `tailscale serve`, and says what to
+  put in `STOKY_TRUSTED_PROXIES` for each.
+- **The app answers whatever `Host` it is asked for.** Nothing in front of it
+  is guaranteed to filter the name any more, so what depends on it was
+  checked (2026-11-13). Better Auth is built with a fixed `baseURL`, the first
+  `STOKY_URLS` entry, and does not read `X-Forwarded-Host` or
+  `X-Forwarded-Proto` (`advanced.trustedProxyHeaders` is unset). It infers an
+  origin from the request's own URL in one case, an opaque `Origin: null`
+  with `Sec-Fetch-Site: same-origin`, and that origin must still be one of
+  `STOKY_URLS`. tRPC decides on `Sec-Fetch-Site`, not on a name. Next compares
+  a Server Action's `Origin` with `X-Forwarded-Host` or `Host`, two values a
+  page on another site controls neither of. `passkeyOfferedAt` reads `Host`
+  only to decide whether to draw a button. So no request gains anything by
+  naming another host, and the application does not check the name itself.
+  What is no longer stopped before it arrives is **DNS rebinding**: a page on
+  a name the attacker controls, resolved to the instance's address, can talk
+  to it from a visitor's browser as any unauthenticated client on that
+  network could. It carries no session — cookies belong to the name they were
+  set for — so it reaches what the sign-in page reaches, including
+  `/register` while registration is open. A proxy that serves Stoky for its
+  own name only, and a port bound to `127.0.0.1`, stop it where Traefik's
+  `Host` rule did.
+- **Between the proxy and the app the request is plain HTTP.** On the same
+  host that is loopback or a Docker network. With the proxy on another
+  machine it is the network between them, carrying every password and session
+  cookie: keep that network one you trust, and the port closed to everything
+  but the proxy.
+- **The published port answers anyone who can reach it**, with no TLS and,
+  until `STOKY_TRUSTED_PROXIES` names a proxy, with every visitor counted by
+  their own address. `STOKY_PORT=127.0.0.1:3000` leaves it to programs on the
+  host, which is what a proxy on that host needs and all it needs. Measured on
+  Docker Engine 29 (2026-11-13): bound to `127.0.0.1`, the port refused the
+  host's LAN address, its Tailscale address, `[::1]` and another container.
+- **HSTS does not send `preload`.** The token is
   the domain owner's consent to the browsers' built-in HSTS lists:
   hstspreload.org checks the header, not who submits, and leaving the list is
-  slow. Until 2026-10-12 both layers sent it on whatever `DOMAIN` an operator
+  slow. Until 2026-10-12 the app sent it on whatever `DOMAIN` an operator
   chose, so anyone could have submitted an apex install's domain, every
   subdomain with it; hstspreload.org asks software that ships HTTPS defaults
   not to send it (`docs/SECURITY_REVIEW.md` §8). An operator who wants
@@ -261,39 +298,6 @@ Verified against the files named in each row.
   V3.4.1 asks; on an apex `DOMAIN` it makes every host under that domain
   HTTPS-only for two years in each browser that opens Stoky, which
   `docs/INSTALL.md` warns about.
-- **TLS 1.2 or later, and at 1.2 only forward-secret AEAD suites** — ECDHE
-  with AES-GCM or ChaCha20-Poly1305, Mozilla's "intermediate" profile, in the
-  `tls.options.default` block of `deploy/traefik.yml`. Without it Traefik takes
-  Go's defaults, and measured against v3.7.13 those still accepted
-  `ECDHE-RSA-AES128-SHA` and `ECDHE-RSA-AES256-SHA` (CBC with SHA-1) at TLS
-  1.2. TLS 1.3 suites are not configurable in Go and are all AEAD. Clients that
-  cannot do TLS 1.2 with one of those suites cannot connect; none is supported.
-  Two settings are left out on purpose. `sniStrict` would refuse the handshake
-  for the configured name itself while ACME has not yet issued (alert 112,
-  measured in the 2026-10-12 audit), turning a pending certificate into an
-  opaque failure and failing the release smoke, which has no certificate to
-  issue; the cost is that a client without SNI still gets Traefik's default
-  certificate, which names the software. `curvePreferences` would replace Go's
-  list, which negotiates the post-quantum hybrid `X25519MLKEM768`;
-  `[X25519, CurveP256]` measurably fell back to plain X25519. The release smoke
-  (`scripts/smoke-proxy.sh`) requires a TLS 1.1 handshake and a CBC/SHA-1 suite
-  at TLS 1.2 to be refused by the server, and a TLS 1.2 AEAD handshake to
-  succeed; `src/__tests__/unit/deployment.test.ts` pins the block.
-- **A quiet keep-alive connection is closed after 60 seconds**, not Traefik's
-  default 180 (`transport.respondingTimeouts.idleTimeout=60s` on both
-  entrypoints), so sockets held open for nothing free Traefik's 256m sooner.
-  Browsers reconnect without the person noticing. `readTimeout` is stated at
-  its default of 60s so that it cannot drift: in Go it covers the whole request,
-  body included, and a 10 MiB receipt is about 14 MB of base64 on the wire, so
-  60s already needs about 1.9 Mbps of uplink. There is no `writeTimeout`, which
-  would cut off streamed tRPC batches. Measured against `traefik:v3.7.13` with
-  the bundle's flags (no network, a Bun client in its namespace): an idle
-  keep-alive connection closed 180.0s after its response before this change and
-  60.1s after, on both entrypoints; a partial request line closed at 60.1s
-  either way. `src/__tests__/unit/deployment.test.ts` pins the exact set of
-  timeout flags. This shortens how long a connection is held; it does not cap
-  how many one address holds: see "One address can hold Traefik's connections
-  open" below.
 
 ### Application headers — `next.config.ts` and `src/proxy.ts`
 
@@ -302,7 +306,7 @@ Verified against the files named in each row.
   `base-uri 'self'`, `form-action 'self'` and `frame-ancestors 'none'`.
   `'unsafe-eval'` is added in development only, for hot reloading.
   `upgrade-insecure-requests` is sent **only when the request itself arrived
-  over https** (Traefik's `x-forwarded-proto`, or the URL's own scheme) — on a
+  over https** (a trusted proxy's `x-forwarded-proto`, or the URL's own scheme) — on a
   plain-http install the directive upgraded every WebKit fetch into a TLS
   handshake against a server with no TLS, which killed the application on
   Safari while the page still rendered. Behind TLS termination nothing
@@ -341,8 +345,8 @@ Verified against the files named in each row.
   self-hosted app runs behind whatever proxy the operator already has:
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
   `Referrer-Policy: same-origin` (below),
-  `X-Permitted-Cross-Domain-Policies: none`, HSTS with the value Traefik
-  sends (`src/__tests__/unit/deployment.test.ts` keeps the two equal), and a
+  `X-Permitted-Cross-Domain-Policies: none`, HSTS for two years with
+  `includeSubDomains` (`src/__tests__/unit/deployment.test.ts` pins the value), and a
   `Permissions-Policy` that allows `camera=(self)` for the barcode scanner,
   `publickey-credentials-create=(self)` and `publickey-credentials-get=(self)`
   for passkeys (PROGRESS D151), and
@@ -407,7 +411,7 @@ Verified against the files named in each row.
   data, errors, the 429 and the handler's own 403, 413 and 415 — set once, at
   the handler's exit in `src/server/http/trpc-handler.ts`. Until 2026-10-12
   nothing set one: tRPC adds no cache directive, Next sends a route handler's
-  response as it is, and neither `next.config.ts` nor Traefik adds one. A
+  response as it is, and `next.config.ts` adds none. A
   query is a GET carrying one household's data, often under a URL that is the
   same for every account, with a `Vary` that does not name the cookie, so a
   shared cache in front of the instance could have served one person's
@@ -510,8 +514,8 @@ Verified against the files named in each row.
   receipt photograph travels base64'd inside it; nothing sends multipart or
   `application/octet-stream`, the two other types tRPC accepts. JSON is not a
   type a form can send, so a page on another origin cannot send it without a
-  preflight, which this application never grants: nothing in it, its proxy or
-  Traefik's configuration sets an `Access-Control-Allow-Origin`.
+  preflight, which this application never grants: nothing in it or in
+  `src/proxy.ts` sets an `Access-Control-Allow-Origin`.
 - **A request whose `Sec-Fetch-Site` is anything but `same-origin` or `none`
   is refused with 403** and an `access.denied` line with `reason:
   "cross-site"` and the header's value: `same-site` in that line means a
@@ -555,7 +559,7 @@ Verified against the files named in each row.
   both; before D138 one URL named one of them, and the other answered 403.
   Every listed origin can send a cookie-bearing sign-in, so the list holds
   only addresses that reach this instance; the bundle lists only
-  `https://${DOMAIN}`, the one host Traefik routes.
+  `https://${DOMAIN}`, the name the operator's proxy serves.
   `integration/auth.origins.test.ts` signs in, under a production instance
   with two entries, at both, and is refused from an unlisted origin and from
   a `DEV_ALLOWED_ORIGIN` host.
@@ -1452,9 +1456,9 @@ Verified against the files named in each row.
   still replace a published release's files and their `SHA256SUMS` together.
   The attestation in the next point is what such a replacement does not carry.
 - **A release's installation files are attested.** `release-draft` signs build
-  provenance (`actions/attest-build-provenance`, `subject-path`) for the five
-  files it attaches — `docker-compose.yml`, `example.env`, `traefik.yml`,
-  `install.sh` and `SHA256SUMS` — after the packaged Compose file has been
+  provenance (`actions/attest-build-provenance`, `subject-path`) for the four
+  files it attaches — `docker-compose.yml`, `example.env`, `install.sh` and
+  `SHA256SUMS` — after the packaged Compose file has been
   checked and before the draft exists. The attestation is stored by GitHub, not
   in the release, and names the signing workflow and the tag, so a file swapped
   on the release later fails `gh attestation verify` pinned to `ci.yml` and
@@ -1503,7 +1507,7 @@ Verified against the files named in each row.
 - **The newest published release is re-scanned every week**
   (`.github/workflows/rescan.yml`, Mondays and by hand). It downloads that
   release's `docker-compose.yml` and scans every image Compose resolves from it
-  — the application at its digest, PostgreSQL, Valkey and Traefik — with
+  — the application at its digest, PostgreSQL and Valkey — with
   `release-draft`'s scanner and gate (Trivy 0.76.1, from the registry, no Actions
   cache, fixable CRITICAL/HIGH), uploading one SARIF report per image and failing
   the run so the failure reaches the maintainer. The workflow holds
@@ -1520,13 +1524,14 @@ Verified against the files named in each row.
   permissions, the pins and the gate.
 - **A release's service images are scanned before its draft exists.** On a
   tag, `ci.yml`'s `release-images` job runs `scripts/scan-bundle-images.sh`
-  over the PostgreSQL, Valkey and Traefik images `deploy/docker-compose.yml`
+  over the PostgreSQL and Valkey images `deploy/docker-compose.yml`
   names, with the same rule (Trivy 0.76.1 pinned by digest, from the registry,
   no cache, fixable CRITICAL/HIGH, gosu the only skip), and `release-draft`
   needs it: a red bundle is never promoted or packaged. It runs on pull
   requests too, as information. Before it, these images were first scanned by
-  the weekly re-scan, after publication; `v0.1.0-alpha.3` shipped
-  `traefik:v3.7.13` with four HIGH advisories that way.
+  the weekly re-scan, after publication; `v0.1.0-alpha.3` shipped the
+  Traefik the bundle then included, `v3.7.13`, with four HIGH advisories that
+  way.
 - **A package version younger than three days is not installed.** `bunfig.toml`
   sets `[install] minimumReleaseAge = 259200`, so `bun add`, `bun update` and
   any install that resolves something new skip versions, direct or transitive,
@@ -1842,7 +1847,9 @@ publishing an instance:
   the LAN choose their own. An entry that is neither an address nor a range
   stops the server at start-up with a `[proxy] refusing to start:` line that
   names it — `10.0.0.0/` is not read as `/0`. The release bundle sets the
-  list to the network it gives Traefik (`10.153.74.0/24`).
+  application cannot know the proxy, so the release bundle leaves the list
+  empty and the operator fills it in
+  ([installation guide](docs/INSTALL.md#4-your-proxy)).
 
   Measured on the production build (Next 16.4.3, 2026-11-13) with a request
   from `127.0.0.1` forging `X-Forwarded-For: 203.0.113.9`: served by
@@ -1889,20 +1896,28 @@ publishing an instance:
   /64 — a /56 or a /48, as many home connections are — still has one budget
   per /64 in it (256 or 65,536): that is the attacker with a range of
   addresses above, and the per-account limit is what bounds it.
-- **Under the release bundle as shipped, IPv6 clients are not told apart at
-  all.** Traefik's network is IPv4-only, so a client connecting over IPv6
+- **Behind a proxy that runs in a container, IPv6 clients are not told apart
+  at all, unless its network has IPv6.** A Docker network is IPv4-only by
+  default, so a client connecting over IPv6 to a port a container publishes
   reaches it through Docker's userland proxy, which opens a connection of its
-  own: the application sees the network's gateway (`172.x.0.1`) in place of
-  every IPv6 client. They share one sign-in and one registration budget, so
-  anyone on IPv6 can keep every other IPv6 visitor waiting, and the security
-  log names the gateway for all of them. Established from Docker's
-  documentation and the proxy's source (security review, 2026-10-12), not
-  reproduced: that needs ports published on a dual-stack host. IPv6 is
-  not turned on in the bundle because it breaks Engines before 27, hosts with
-  IPv6 disabled, and an existing network on upgrade; it is an opt-in, and
-  [the installation guide](docs/INSTALL.md#clients-on-ipv6) says how to take
-  it, how to avoid the question with an A record only, and how to tell from
-  the log which applies. The /64 grouping above is what makes taking it safe.
+  own: the container sees the network's gateway (`172.x.0.1`) in place of
+  every IPv6 client, and a proxy in that container tells the application so.
+  They share one sign-in and one registration budget, so anyone on IPv6 can
+  keep every other IPv6 visitor waiting, and the security log names the
+  gateway for all of them. Measured on 2026-11-13 against the app's own
+  published port: a request to `[::1]:3000` arrived from the `web` network's
+  gateway. A proxy installed on the host accepts the connection itself and is
+  not affected. [The installation guide](docs/INSTALL.md#clients-on-ipv6)
+  says how to give the proxy's network IPv6, how to avoid the question with
+  an A record only, and how to tell from the log which applies. The /64
+  grouping above is what makes real IPv6 addresses safe to count.
+- **That gateway is also why a trusted gateway needs a bound port.** A proxy
+  on the host reaches the app through the same gateway, so the operator lists
+  it in `STOKY_TRUSTED_PROXIES`. So does everything else on the host that
+  reaches the published port: another container, and an IPv6 client handed
+  over by the userland proxy. With the port open to the network, such a
+  client would be believed about its own address. The installation guide
+  therefore pairs a trusted gateway with `STOKY_PORT=127.0.0.1:3000`.
 - **A refusal says how long to wait.** A 429 from tRPC carries `Retry-After`,
   read off the refusal rather than recomputed, so the header and the message
   cannot disagree — RFC 9110 §10.2.3. Two things deliberately do not carry it:
@@ -2529,33 +2544,32 @@ problems. The tree can be verified to contain the right information; whether the
 result *sounds* sensible cannot. Any accessibility score in an older document
 was still not produced by a tool.
 
-### One address can hold Traefik's connections open
+### One address can hold a proxy's connections open
 
 Nothing in the bundle limits how many connections one source address keeps
-open. The 2026-10-12 audit measured 4,000 TLS connections from one client, each
-holding an unfinished request line, taking the Traefik container from 17.5 MiB
-to 192.9 MiB of its 256 MiB (not re-measured since). Past that the container is
-killed and restarted, and the instance is unreachable for as long as the
-sockets are held. No account and no application request are needed.
+open, and since 2026-11-13 the proxy they are held on is the operator's. What
+was measured is the Traefik the bundle shipped until then: the 2026-10-12
+audit opened 4,000 TLS connections from one client, each holding an unfinished
+request line, and took that container from 17.5 MiB to 192.9 MiB of its
+256 MiB. Past its limit a proxy is killed, or takes the host's memory, and the
+instance is unreachable for as long as the sockets are held. No account and no
+application request are needed. The same has not been measured against
+another proxy, or against the app's own port, which is one more reason to
+bind it to `127.0.0.1`.
 
 Shorter timeouts do not close this. A client that reopens what expires needs
-about 88 new connections a second to keep 5,300 open against a 60s
-`readTimeout`, and about 350 against 15s; both are easy from one host, and 15s
-would break slow receipt uploads (above). Traefik cannot cap connections per
-address on an HTTP router: `inFlightConn` exists only for TCP routers, and in
-the HTTP section of the dynamic file Traefik v3.7.13 rejects the whole file
-("field not found, node: inFlightConn", measured in the audit), so the `stoky`
-router disappears and every request gets 404. `inFlightReq` is valid there but
-runs only once the request headers have arrived, which the held connections
-never send. The memory limit stays: it is what turns the attack into a Traefik
-restart instead of memory pressure on the whole host.
+about 88 new connections a second to keep 5,300 open against a 60s read
+timeout, and about 350 against 15s; both are easy from one host, and 15s
+would break slow receipt uploads: a 10 MiB receipt is about 14 MB of base64 on
+the wire, so 60s already needs about 1.9 Mbps of uplink. A proxy timeout that
+covers writing the response would cut off streamed tRPC batches.
 
-A per-address connection cap belongs in front of Traefik: the host firewall
-(nftables `ct count over N` per source address on TCP 443, or iptables
-`connlimit`), or a CDN or tunnel that does its own. The project ships no rule
-and has not tested one. Leave room for a household: its phones and laptops
-usually share one public address, and every browser opens connections of its
-own.
+A per-address connection cap belongs in the proxy, where it has one (nginx's
+`limit_conn`), or in front of it: the host firewall (nftables `ct count over
+N` per source address on TCP 443, or iptables `connlimit`), or a CDN or tunnel
+that does its own. The project ships no rule and has not tested one. Leave
+room for a household: its phones and laptops usually share one public
+address, and every browser opens connections of its own.
 
 ### Other things that do not exist
 
@@ -2631,13 +2645,16 @@ full in the section named.
   device's, so a copied cookie is refused at once; **Tus dispositivos**
   (`/settings/security`) lists every session and ends one, every other or
   every one, after the password.
-- **IPv6 clients share the bridge gateway's budget by default.** IPv6 on
-  Traefik's network is an opt-in, because enabling it breaks older Docker
-  engines, hosts without IPv6 and existing networks; /64 grouping applies once
-  it is on ([Install](docs/INSTALL.md#clients-on-ipv6)).
-- **No proxy-level cap on connections per address.** Traefik cannot put one in
-  the HTTP chain; the idle timeout is shorter and host-level limits are
-  documented ([*One address can hold Traefik's connections open*](#one-address-can-hold-traefiks-connections-open)).
+- **Behind a proxy in a container, IPv6 clients share the bridge gateway's
+  budget by default.** IPv6 on that proxy's network is the operator's to turn
+  on; /64 grouping applies once it is
+  ([Install](docs/INSTALL.md#clients-on-ipv6)).
+- **No cap on connections per address.** The bundle has no proxy to put one
+  in; where it belongs is documented
+  ([*One address can hold a proxy's connections open*](#one-address-can-hold-a-proxys-connections-open)).
+- **No TLS, and no check of the `Host` a request names.** Both are the
+  operator's proxy's
+  ([*Release deployment*](#release-deployment--deploydocker-composeyml)).
 - **An unauthenticated client can rotate the app's log out.** One refusal line
   per anonymous request and the 50 MB cap bound the disk and the
   amplification, not the volume of requests. Shipping logs off the host is the
@@ -2648,9 +2665,6 @@ full in the section named.
   Separate migrator and runtime roles, or `requirepass`, need new secrets and
   manual steps on existing volumes; the next breaking bundle change is the
   time for them.
-- **Traefik runs as root inside its container**, with every capability
-  dropped, `no-new-privileges` and a read-only filesystem. Running it as
-  another user means chowning the existing ACME volume on every installation.
 - **Secrets reach the containers as environment variables**, not `_FILE`
   secrets. Reading them takes `docker inspect`, which takes the Docker daemon,
   which is root on the host ([*Secrets*](#secrets)).
@@ -2726,7 +2740,7 @@ is stored, logged or sent.
 | The Open Food Facts cache: product data, keyed by barcode alone, with nothing about who scanned the code | Valkey | 30 days. A day for a code Open Food Facts does not know |
 | Certificates: the ACME account key, `ACME_EMAIL`, and the certificates with their private keys | `acme.json` on the `letsencrypt` volume | Until the volume is removed |
 | On each device: the saved reads, the write queue, the `stoky_device` cookie, and while signed in the `stoky.session_token` and `stoky.dont_remember` cookies (`__Secure-` prefixed behind https) | The browser's storage | See [*A device keeps the last account's data while it stays offline*](#a-device-keeps-the-last-accounts-data-while-it-stays-offline). The device cookie lasts a year; the session cookies end with the browser, and are refused once their row has gone |
-| Backups made with [the documented commands](docs/INSTALL.md#backup-and-restore): the database dump (every PostgreSQL row above, password hashes included), the uploads, `.env`, and the Compose and Traefik files | Wherever the operator puts them | As long as the operator keeps them. Nothing in Stoky rotates or expires a backup, and a backup still holds accounts and receipts deleted after it was taken. Valkey, the logs and the certificates are not in it |
+| Backups made with [the documented commands](docs/INSTALL.md#backup-and-restore): the database dump (every PostgreSQL row above, password hashes included), the uploads, `.env` and the Compose file | Wherever the operator puts them | As long as the operator keeps them. Nothing in Stoky rotates or expires a backup, and a backup still holds accounts and receipts deleted after it was taken. Valkey, the logs and the certificates are not in it |
 
 Two hashes in that table are weaker than they look. The security log's
 account tag is keyed with `STOKY_SECRET`, so a pasted log line cannot be
@@ -2734,9 +2748,8 @@ checked against a list of likely addresses. The Valkey account hash is not
 keyed. Anyone who can read the Valkey data can confirm whether a guessed
 address has tried to sign in during the window, or has a known device.
 
-No request body or receipt text reaches a log. Traefik has no access log: the
-release bundle does not pass `--accesslog`, so the proxy does not record
-requests.
+No request body or receipt text reaches a log. What the operator's proxy
+records of each request is its own configuration's to say.
 
 ### What the JSON export does not include
 
@@ -2786,9 +2799,9 @@ What an instance contacts on its own, as released:
   origin the CSP allows, and only in `img-src`. `connect-src` is `'self'`. The
   product page's links to `world.openfoodfacts.org` are navigations, made only
   when somebody follows one.
-- **Traefik contacts Let's Encrypt** over ACME to obtain and renew the
-  certificate, and registers `ACME_EMAIL` there. Its version check and its
-  anonymous usage statistics are both off ([*Release deployment*](#release-deployment--deploydocker-composeyml)).
+- **The bundle requests no certificate.** Whatever the operator's proxy
+  contacts to obtain one — Let's Encrypt, say, with the address it registers
+  there — is that proxy's.
 - **Nothing else, and no telemetry.** Stoky reports nothing to the project or
   to anybody else: there is no analytics, no error tracking and no update
   check. Better Auth's telemetry is off in its configuration, and a
@@ -2942,14 +2955,17 @@ review 2026-10-12, CWE-321):
 ### Before the first start
 
 Follow [the installation guide](docs/INSTALL.md). The released `example.env`
-leaves all four required settings empty; Compose refuses missing values. Generate
+leaves all three required settings empty; Compose refuses missing values. Generate
 two independent `openssl rand -hex 32` secrets, and keep `.env` private.
 The app rejects short signing keys and the published development placeholder.
 
-Use the release bundle, which exposes only Traefik. Development Compose files
+Use the release bundle, which publishes one port: the app's, plain HTTP, for
+your proxy. Development Compose files
 publish local infrastructure and carry known passwords; they are not deployments.
-Forwarded addresses are believed only from `STOKY_TRUSTED_PROXIES`, which the
-bundle sets to Traefik's network.
+Put a proxy with TLS in front, bind the port to it (`STOKY_PORT`), and name it
+in `STOKY_TRUSTED_PROXIES`: forwarded addresses are believed from nobody else,
+and from nobody at all until you do
+([Your proxy](docs/INSTALL.md#4-your-proxy)).
 If the hostname has an AAAA record, read
 [Clients on IPv6](docs/INSTALL.md#clients-on-ipv6) first.
 
@@ -2958,19 +2974,18 @@ If the hostname has an AAAA record, read
 Restrict this alpha to trusted testers through your network or an authenticating
 proxy. The [security review](docs/SECURITY_REVIEW.md) has run and the password
 policy includes common-password/identity checks; neither makes this a stable
-release. The bundled automatic certificate flow needs a hostname and inbound
-TCP 443. LAN/VPN deployments need their own trusted TLS configuration.
+release. The bundle obtains no certificate: TLS is your proxy's, on the
+internet, a LAN or a VPN alike.
 Plain HTTP to another machine is tolerated for testing, not supported: it sends
 every password and session cookie in cleartext, and the app logs a warning at
 start-up for each `STOKY_URLS` entry that is such an address (and does not
 start when it is not set). Nor does it have passkeys, which need the first
 entry to be https with a domain name. For TLS without a
-public hostname, use your own proxy — listing its https address in `STOKY_URLS`
-address and forwarding `X-Forwarded-Proto` and `X-Forwarded-For` — or
-`tailscale serve` ([local bootstrap](docs/LOCAL_BOOTSTRAP.md), way 4).
-An instance open to the internet needs a per-address connection cap in front
-of Traefik, which the bundle cannot provide: see "One address can hold
-Traefik's connections open" above.
+public hostname, `tailscale serve` is a proxy like any other
+([Your proxy](docs/INSTALL.md#4-your-proxy)).
+An instance open to the internet needs a per-address connection cap at its
+proxy or in front of it, which the bundle cannot provide: see "One address can
+hold a proxy's connections open" above.
 If a CDN sits in front of it, give it no rule that caches everything or
 overrides the origin's `Cache-Control`: `/api/trpc` marks every answer
 `no-store`, and a cache told to ignore that would serve one household's data
@@ -2983,14 +2998,14 @@ Use exact release tags and follow the target release notes and
 does not replace running containers; `docker compose up -d --wait` does.
 Do not automatically follow `latest` for an alpha installation.
 
-The bundle's PostgreSQL, Valkey and Traefik are pinned by digest, so pulling
+The bundle's PostgreSQL and Valkey are pinned by digest, so pulling
 does not update them either: a fix to one of them reaches an installation in
 the Stoky release that refreshes its pin. Take new releases for those fixes as
 well as for the app's.
 
 Trivy checks images before publication for fixable CRITICAL/HIGH findings,
 and a release's exact digest again before its version tag exists. The newest
-published release's images — the application and its three services — are
+published release's images — the application and its two services — are
 re-scanned weekly with the same gate, and a finding there is fixed by a new
 release, never in place. That covers only the newest release, only what
 Trivy can see, and only what was known that week: a clean scan is not an

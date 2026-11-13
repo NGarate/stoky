@@ -5,9 +5,12 @@ alpha upgrades can change the database and may require manual migration steps.
 For development from source, use [Local Bootstrap](LOCAL_BOOTSTRAP.md).
 
 The installation follows the [Immich Compose guide](https://docs.immich.app/install/docker-compose/):
-download the release's Compose file, environment template and Traefik file, configure them,
-then start the containers. Stoky's bundle includes PostgreSQL, Valkey, the app
-and Traefik. You do not need Git, Node.js, Bun or a local build.
+download the release's Compose file and environment template, configure them,
+then start the containers. Stoky's bundle includes PostgreSQL, Valkey and the
+app, which answers plain HTTP on one port. **TLS is your reverse proxy's**:
+Traefik, Caddy, nginx, `tailscale serve`, or whatever already answers on port
+443 for your other services. [Your proxy](#4-your-proxy) has an example for
+each. You do not need Git, Node.js, Bun or a local build.
 
 ## Requirements
 
@@ -17,13 +20,13 @@ and Traefik. You do not need Git, Node.js, Bun or a local build.
 - A starting allocation of **2 CPU cores and 4 GiB RAM**, plus disk space for
   images, PostgreSQL, uploaded receipts and backups. This is a planning allowance,
   not a measured minimum. OCR performance depends on the host and photographs.
-- A hostname you control, with DNS pointing to the server — preferably a
-  dedicated subdomain such as `stoky.example.com`, for the reason given under
-  `DOMAIN` in step 2. The included TLS-ALPN
-  challenge requires Let's Encrypt to reach **TCP 443**; clients use TCP 80/443.
-  Both ports must be free. An existing proxy or a LAN-only/VPN-only installation
-  needs its own trusted TLS configuration; the supplied ACME setup does not work
-  for `localhost`, a bare private IP, or an unreachable hostname.
+- **A reverse proxy that serves HTTPS**, on this host or another, and a
+  hostname for Stoky that it answers — preferably a dedicated subdomain such
+  as `stoky.example.com`, for the reason given under `DOMAIN` in step 2. The
+  bundle ships no proxy and asks for no certificate, so it needs neither port
+  80 nor 443 and no public DNS of its own. Stoky is meant to be used over
+  HTTPS only: browsers give the camera, offline use and passkeys to a trusted
+  HTTPS origin alone, and the session cookie is `Secure`.
 - `curl`, `openssl`, `sha256sum` and a text editor. No GitHub account is needed:
   the release files and the image download anonymously.
 
@@ -49,8 +52,8 @@ cd stoky-app
 ### With the install script
 
 `install.sh` does this step for you and stops: it downloads the release files,
-verifies every one against `SHA256SUMS`, sets their permissions, and creates
-`.env` from `example.env` with both secrets generated. It changes no value that
+verifies every one against `SHA256SUMS`, and creates `.env`, readable only
+by you, from `example.env` with both secrets generated. It changes no value that
 is already set, never replaces an installed file that differs (that is an
 upgrade, below), and **never starts anything**: you review `.env` and start
 Stoky yourself in step 3. Running it again is safe.
@@ -76,8 +79,7 @@ replaced one too. The `--proto` and
 `--tlsv1.2` flags keep every hop on HTTPS with TLS 1.2 or later, GitHub's
 redirect included. `install.sh` passes
 `--proto-redir '=https' --tlsv1.2` to its own downloads. The script installs
-the release it came with. Continue with step 2: only `DOMAIN` and `ACME_EMAIL`
-are left.
+the release it came with. Continue with step 2: only `DOMAIN` is left.
 
 ### By hand
 
@@ -86,24 +88,18 @@ GitHub's `releases/latest/download` URL.
 
 ```bash
 STOKY_RELEASE=v0.1.0-alpha.4
-for asset in docker-compose.yml example.env traefik.yml SHA256SUMS; do
+for asset in docker-compose.yml example.env SHA256SUMS; do
   curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --location \
     --output "$asset" \
     "https://github.com/NGarate/stoky/releases/download/${STOKY_RELEASE}/${asset}"
 done
-grep -E '  (docker-compose\.yml|example\.env|traefik\.yml)$' SHA256SUMS | sha256sum -c
+grep -E '  (docker-compose\.yml|example\.env)$' SHA256SUMS | sha256sum -c
 cp example.env .env
 chmod 600 .env
-chmod 644 traefik.yml
 ```
 
-`traefik.yml` must stay readable by everyone (`644`); it holds no secrets. Traefik
-runs with every capability dropped, so it cannot read a file only its owner can,
-and a restrictive `umask` (such as `077`) creates the downloads that way. It then
-starts without its routes and answers every request with `404 page not found`.
-
-`sha256sum -c` must print `OK` for all three files. Take the Compose, Traefik
-and environment files from the release, never from `master`: `master` may
+`sha256sum -c` must print `OK` for both files. Take the Compose and
+environment files from the release, never from `master`: `master` may
 already describe the next release. Checksums detect damaged/mismatched files;
 they are not a separate signature of the publisher, which the
 [attestation below](#optional-check-who-published-the-files) is. They also fix the image: the Compose file names it by
@@ -141,7 +137,7 @@ means do not install those files; report it as a
 ## 2. Configure `.env`
 
 If you used the install script, the two secrets are already in `.env`: fill in
-`DOMAIN` and `ACME_EMAIL` and review the rest. By hand, generate **two
+`DOMAIN` and review the rest. By hand, generate **two
 different** random values:
 
 ```bash
@@ -154,8 +150,7 @@ Open `.env` in your editor and fill in:
 | Setting | Value |
 |---|---|
 | `STOKY_VERSION` | Keep `v0.1.0-alpha.4` for this release |
-| `DOMAIN` | The hostname alone, for example `stoky.example.com`; no scheme or path |
-| `ACME_EMAIL` | Your email address for Let's Encrypt |
+| `DOMAIN` | The hostname your proxy serves Stoky at, alone, for example `stoky.example.com`; no scheme or path |
 | `POSTGRES_PASSWORD` | The first generated hex value |
 | `STOKY_SECRET` | The second generated hex value |
 
@@ -193,15 +188,23 @@ value that is not a positive whole number means `3`, and more than the host's
 processors means as many as it has. It is read when the app starts, so apply
 a change with `docker compose up -d --wait`.
 
-`STOKY_TRUSTED_PROXIES` is whose `X-Forwarded-For` Stoky believes, as
-comma-separated addresses and CIDR ranges. Stoky counts sign-in attempts per
-address, and only a listed proxy may say what a visitor's address is: from
-anyone else the header is ignored and the address that connected is counted.
-The bundle sets it to the network it gives Traefik (`10.153.74.0/24`), so
-leave it unset unless you put another proxy in front or change that network.
-Keep it as narrow as the proxy itself, because every address in it can choose
-the address it is counted by. A value that is neither an address nor a range
-stops the app starting, with a `[proxy] refusing to start:` line in
+`STOKY_PORT` is where Stoky answers on this host: `3000` unless you set it.
+It is plain HTTP, meant for your proxy and for nobody else. With the proxy on
+this same host, set `STOKY_PORT=127.0.0.1:3000`, and the port answers only to
+programs on this host. Left as a bare port it answers on every address the
+host has, which a proxy on another machine needs; close it to everything but
+that machine with your firewall.
+
+`STOKY_TRUSTED_PROXIES` is whose `X-Forwarded-For` and `X-Forwarded-Proto`
+Stoky believes: your proxy's address as Stoky sees it, or several addresses
+and CIDR ranges separated by commas. [Your proxy](#4-your-proxy) says what
+that address is for each arrangement, and it is rarely `127.0.0.1`. Until you
+set it Stoky believes nobody. It works, but it counts every visitor as the
+proxy: the whole household shares one budget of 5 sign-in attempts per 15
+minutes, and the log names the proxy for everyone. Keep it as narrow as the
+proxy itself, because every address in it can choose the address it is
+counted by. A value that is neither an address nor a range stops the app
+starting, with a `[proxy] refusing to start:` line in
 `docker compose logs app`.
 
 Use hex for the database password: it is inserted into a connection URL without
@@ -214,8 +217,8 @@ longer read: rename the key to `STOKY_SECRET` and keep its value.
 
 The bundle derives `DATABASE_URL`, `VALKEY_URL` and the instance's address
 itself, so you do not edit them; the address is `https://` and `DOMAIN`, the
-one host Traefik routes. Outside the bundle — a source install, or one behind
-your own proxy — set `STOKY_URLS` to every address people type, comma-separated, the
+name your proxy serves. Outside the bundle — a source install — set
+`STOKY_URLS` to every address people type, comma-separated, the
 canonical one first, for example
 `STOKY_URLS="http://stoky.lan:3000,http://192.168.1.10:3000"`. List only
 addresses that reach this instance: every one is trusted to sign a browser in.
@@ -246,11 +249,11 @@ line for each one set: `STOKY_SECRET` and `STOKY_URLS` are what it reads.
 Keep `.env` private and out of version control.
 
 **Prefer a dedicated subdomain for `DOMAIN`.** Stoky sends HSTS for two years
-with `includeSubDomains`, from the app and from Traefik. On `stoky.example.com`
+with `includeSubDomains`. On `stoky.example.com`
 that covers only the hosts beneath it. On an apex such as `example.com`, every
 browser that opens Stoky then refuses plain `http://` for **every** host under
 that domain — a router, a NAS, another service — for two years, and changing
-`DOMAIN` afterwards does not release it. Neither layer sends `preload`: listing
+`DOMAIN` afterwards does not release it. It does not send `preload`: listing
 a domain in the browsers' built-in HSTS lists is close to permanent and covers
 the whole domain, so it is left to the domain's owner, at their own proxy.
 
@@ -258,30 +261,247 @@ PostgreSQL uses its password setting **only when creating a new data volume**.
 Editing `POSTGRES_PASSWORD` later does not rotate the database password; it
 breaks the application's connection until the stored password agrees.
 
-## 3. Start and check
+## 3. Start
 
 ```bash
 docker compose config --quiet
 docker compose pull
 docker compose up -d --wait --wait-timeout 180
 docker compose ps
-docker compose logs --tail=100 app traefik
+docker compose logs --tail=100 app
+curl --fail --show-error http://127.0.0.1:3000/api/health
 ```
 
 `config --quiet` rejects missing settings without printing your credentials.
 The application applies the included database migrations before starting;
-there is no manual Prisma command and no demo account to seed.
+there is no manual Prisma command and no demo account to seed. The health
+endpoint checks both PostgreSQL and Valkey; use your own port in place of
+`3000` if you set `STOKY_PORT`.
 
-**Register straight away.** With
-`first-user`, whoever reaches `https://YOUR_DOMAIN/register` first becomes the
-owner of this installation,
-and the hostname is public from the moment its certificate is issued:
-certificates are published in Certificate Transparency logs, which people
-watch for new hosts. Visit `/register`, create your account and provide a
-household name. If `/register` says registration is closed on a new
-installation, somebody else registered first. Remove the installation with
-`docker compose down -v`, which deletes its data volumes (only on an
-installation with no data you want to keep), and start step 3 again.
+Stoky now answers plain HTTP on that port, and nothing else is published: the
+database and the cache stay on an internal network, and the application runs
+as a non-root user with a read-only filesystem. Named volumes preserve the
+database, uploads and cache across container replacement.
+
+**Do not register over this port.** With `first-user`, whoever reaches
+`/register` first becomes the owner of the installation, and until the port is
+bound to `127.0.0.1` or firewalled that is anyone on your network. Go on to
+step 4 now.
+
+## 4. Your proxy
+
+Put your reverse proxy in front of that port. Whichever it is, it has four
+things to do:
+
+1. **Serve `https://DOMAIN`** with a certificate browsers trust, send plain
+   `http://` there, and serve Stoky for that name only, not as the site for
+   every name it does not know.
+2. **Pass on the `Host` it was asked for.** Stoky refuses the forms that work
+   without JavaScript when the name it is asked for is not the one in the
+   browser's address bar.
+3. **Say who the client is.** Set `X-Forwarded-For` to the address that
+   connected to the proxy, and `X-Forwarded-Proto` to `https`. Adding to an
+   `X-Forwarded-For` the client sent is fine; passing the client's own header
+   on untouched is not, because Stoky will believe it.
+4. **Let a receipt through**: a request body of up to 15 MiB.
+
+Then tell Stoky which address the proxy's requests come from, in `.env`, and
+apply it with `docker compose up -d --wait`:
+
+```bash
+STOKY_TRUSTED_PROXIES=172.20.0.1
+```
+
+Stoky believes `X-Forwarded-For` from that address and from no other. Which
+address it is depends on where the proxy runs, because Stoky sees the address
+a connection arrives from, and Docker changes that:
+
+| The proxy runs | It forwards to | Stoky sees it arrive from | Set |
+|---|---|---|---|
+| On this host (Caddy, nginx, `tailscale serve`) | `127.0.0.1:3000` | The gateway of the bundle's `web` network, **not** `127.0.0.1` | `STOKY_PORT=127.0.0.1:3000`, and that gateway |
+| In a container on this host (Traefik in Docker) | Stoky's container, port 3000, over a Docker network both are on | The proxy container's address on that network | `STOKY_PORT=127.0.0.1:3000`, and that address or the network's range |
+| On another machine | This host's address, port 3000 | That machine's address | That address, and a firewall rule so that nothing else reaches port 3000 |
+
+The first two rows were measured on Docker Engine 29 with this bundle
+(2026-11-13). The third is how Docker forwards a published port; it was
+measured from this host's own LAN address, not from a second machine.
+
+### A proxy on this host
+
+Stoky sees a connection to `127.0.0.1:3000` arrive from the gateway of its
+`web` network:
+
+```bash
+docker network inspect stoky-release_web --format '{{(index .IPAM.Config 0).Gateway}}'
+```
+
+Put what that prints (`172.20.0.1`, say) in `STOKY_TRUSTED_PROXIES`, **and set
+`STOKY_PORT=127.0.0.1:3000`**. The two belong together. That gateway is also
+the address of everything else on this host that reaches the published port:
+another container, or a client on IPv6, which Docker hands over itself. Bound
+to `127.0.0.1`, the port is reached by programs on this host and by nothing
+else.
+
+Docker picks the network's range when it creates the network, and may pick
+another after `docker compose down`. To choose it yourself, create
+`docker-compose.override.yml` beside the Compose file. Compose reads it on
+every command, and neither a release nor `install.sh` ever writes or replaces
+it:
+
+```yaml
+networks:
+  web:
+    ipam:
+      config:
+        - subnet: 172.31.253.0/24
+```
+
+The gateway is then `172.31.253.1`. Docker does not change an existing
+network, so apply it with `docker compose down` and
+`docker compose up -d --wait`; `down` without `-v` keeps your data. Choose a
+range nothing else on your network uses.
+
+**Caddy** needs two lines. It obtains the certificate and redirects plain
+HTTP by itself and, measured with Caddy 2.11 in front of this bundle, passes
+`Host` on, sets `X-Forwarded-For` and `X-Forwarded-Proto`, discards an
+`X-Forwarded-For` the client sent, and lets a 2 MB body through:
+
+```caddy
+stoky.example.com {
+	reverse_proxy 127.0.0.1:3000
+}
+```
+
+**nginx** does none of the four by default, so every line here is needed
+(measured with nginx 1.31):
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name stoky.example.com;
+    ssl_certificate     /etc/letsencrypt/live/stoky.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/stoky.example.com/privkey.pem;
+
+    client_max_body_size 16m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name stoky.example.com;
+    return 308 https://$host$request_uri;
+}
+```
+
+Measured without them: with no `X-Forwarded-For` line nginx passes on whatever
+the client sent, and Stoky, trusting nginx, logged a forged address as the
+client; with no `client_max_body_size` a 2 MB receipt was refused with 413;
+with no `Host` line Stoky is asked for `127.0.0.1:3000` and answers the
+no-JavaScript forms with 500.
+
+**`tailscale serve`** gives a tailnet-only HTTPS address with a real
+certificate and nothing open to the internet:
+
+```bash
+tailscale serve --bg 3000
+tailscale serve status      # https://my-machine.tail1234.ts.net (tailnet only)
+```
+
+`DOMAIN` is that name, without `https://`. Enable **MagicDNS** and **HTTPS
+Certificates** for the tailnet first ([Local Bootstrap](LOCAL_BOOTSTRAP.md),
+way 4, has the steps). It forwards to `127.0.0.1`, so it is a proxy on this
+host like the two above. Tailscale's source says it passes `Host` on and sets
+`X-Forwarded-For` to the device's tailnet address, replacing what the client
+sent, and `X-Forwarded-Proto` to `https` (read on 2026-11-13; not measured
+against this bundle).
+
+### A proxy in a container
+
+A container cannot reach this host's `127.0.0.1`. Put Stoky on the proxy's
+Docker network instead, in `docker-compose.override.yml`. With **Traefik**
+and its Docker provider, the labels go in the same file:
+
+```yaml
+services:
+  app:
+    networks:
+      - proxy
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: proxy
+      traefik.http.routers.stoky.rule: Host(`stoky.example.com`)
+      traefik.http.routers.stoky.entrypoints: websecure
+      traefik.http.routers.stoky.tls.certresolver: letsencrypt
+      traefik.http.services.stoky.loadbalancer.server.port: "3000"
+
+networks:
+  proxy:
+    external: true
+```
+
+`proxy`, `websecure` and `letsencrypt` are whatever your Traefik calls its
+network, its HTTPS entry point and its certificate resolver. Traefik passes
+`Host` on and replaces an `X-Forwarded-For` the client sent with the address
+it saw (measured with Traefik 3.7). A Caddy or nginx container works the same
+way without the labels, forwarding to `stoky-release-app-1:3000`.
+
+Stoky sees the proxy arrive from its address on that network. Docker assigns
+it, so either give the proxy a fixed `ipv4_address` there and trust that, or
+trust the network's range:
+
+```bash
+docker network inspect proxy --format '{{(index .IPAM.Config 0).Subnet}}'
+```
+
+The range trusts every container on that network, so each of them could
+choose the address Stoky counts it by. Set `STOKY_PORT=127.0.0.1:3000` here
+too: the proxy no longer uses the published port, and nothing else should.
+
+### A CDN in front of the proxy
+
+Stoky reads `X-Forwarded-For` from the right and stops at the first address
+that is not in `STOKY_TRUSTED_PROXIES`. With a CDN in front of your proxy that
+address is the CDN's edge, and every visitor shares its budget, until the
+CDN's ranges are in the list as well. Give the CDN no rule that caches
+everything or overrides `Cache-Control`.
+
+### Check it
+
+```bash
+docker compose logs app | grep -F '[proxy]' | tail -n 1
+```
+
+says which addresses this start believes. Then sign in once with a wrong
+password from a phone on mobile data, with Wi-Fi off, and look at the address
+Stoky counted:
+
+```bash
+docker compose logs app | grep auth.signin.failed | tail -n 1
+```
+
+The `address` in that line must be the phone's own: its public address, or
+its tailnet address behind `tailscale serve`. If it is your
+proxy's, or a Docker gateway such as `172.20.0.1`, `STOKY_TRUSTED_PROXIES` is
+not the address Stoky sees the proxy at: that address is the one the line
+shows.
+
+## 5. Register and check
+
+**Register straight away**, at `https://YOUR_DOMAIN/register`. With
+`first-user`, whoever gets there first becomes the owner of this installation,
+and a hostname is public from the moment a public certificate is issued for
+it: certificates are published in Certificate Transparency logs, which people
+watch for new hosts. Create your account and provide a household name. If
+`/register` says registration is closed on a new installation, somebody else
+registered first. Remove the installation with `docker compose down -v`, which
+deletes its data volumes (only on an installation with no data you want to
+keep), and start step 3 again.
 
 Sign in, add a product, record stock, and upload a JPEG, PNG or WebP receipt.
 Review recognized lines before applying them. Add other household members through
@@ -301,14 +521,9 @@ default.
 curl --fail --show-error https://YOUR_DOMAIN/api/health
 ```
 
-The health endpoint checks both PostgreSQL and Valkey. A healthy app container
-does not prove DNS or the public TLS certificate works; check the HTTPS URL too.
-Camera access and offline service workers require a trusted HTTPS origin.
-
-Only Traefik publishes ports. The database/cache stay on an internal network,
-the application runs as a non-root user with a read-only filesystem, and Traefik
-uses a file provider without access to the Docker socket. Named volumes preserve
-the database, uploads, cache and certificates across container replacement.
+The health check in step 3 says the containers are up. This one says DNS, your
+proxy and its certificate work as well. Camera access and offline service
+workers require a trusted HTTPS origin.
 
 ## Everyday operation
 
@@ -328,7 +543,7 @@ an `unhealthy` status alone does not automatically restart a running process.
 
 Every container logs through Docker's
 `json-file` driver, capped at five files of 10 MB each: at most 50 MB on disk
-per container, about 200 MB for the four. Docker's own default keeps
+per container, about 150 MB for the three. Docker's own default keeps
 everything, and anyone who can reach the instance can add lines to the app's
 security log, so the cap is what stops logs from filling the disk.
 Older lines are discarded as new ones arrive, so how far back the logs
@@ -349,7 +564,6 @@ services:
   db: { logging: *logging }
   cache: { logging: *logging }
   app: { logging: *logging }
-  traefik: { logging: *logging }
 ```
 
 Check it with `docker compose config --quiet`, keep it with your backups, and
@@ -357,8 +571,8 @@ apply it with `docker compose up -d --wait`;
 `docker inspect --format '{{.HostConfig.LogConfig.Type}}' stoky-release-app-1`
 then names the driver in use. Plain `docker compose config` would show the
 override too, but it prints your database password and session secret with
-it. Upgrades replace the Compose and Traefik files, not the override, so it
-stays in place.
+it. Upgrades replace the Compose file, not the override, so it stays in
+place.
 
 The app's log records client addresses and account ids, and the database's log
 records an email address that was added twice (SECURITY.md,
@@ -521,45 +735,52 @@ because the counter never stores the address itself. On macOS use
 it, but the first browser the person signs in on afterwards keeps its own
 attempts from then on.
 
-An address like `172.18.0.1` in those lines is not a person; see
+An address like `172.18.0.1` in those lines, or your proxy's own, is not a
+person: see [Your proxy](#4-your-proxy) and
 [Clients on IPv6](#clients-on-ipv6).
 
 ## Clients on IPv6
 
-As released, Traefik's network is IPv4-only. A client that connects over IPv6
-(most mobile networks, and any connection your AAAA record attracts) reaches
-Traefik through Docker's userland proxy, and Stoky sees the network's gateway,
-an address like `172.18.0.1`, instead of the client. Every IPv6 client then
-shares one budget: 5 sign-in attempts per 15 minutes and 3 registrations per
-hour. One of them spending it makes the rest wait, and the security log shows
-the gateway for all of them. IPv4 clients and people already signed in are not
-affected.
+A Docker network is IPv4-only unless it is told otherwise. A client that
+connects over IPv6 (most mobile networks, and any connection your AAAA record
+attracts) to a port **a container publishes** on such a network is handed over
+by Docker's userland proxy, and the container sees the network's gateway, an
+address like `172.18.0.1`, instead of the client.
 
-Choose one:
+Whether that touches you depends on where your proxy runs:
+
+- **A proxy installed on this host** (Caddy, nginx, `tailscale serve`) accepts
+  the connection itself and sees the client's own address. There is nothing to
+  do, provided `STOKY_PORT=127.0.0.1:3000` keeps IPv6 clients from reaching
+  Stoky's port directly ([Your proxy](#a-proxy-on-this-host)).
+- **A proxy in a container** sees the gateway for every IPv6 client and tells
+  Stoky so. Every IPv6 client then shares one budget: 5 sign-in attempts per
+  15 minutes and 3 registrations per hour. One of them spending it makes the
+  rest wait, and the security log shows the gateway for all of them. IPv4
+  clients and people already signed in are not affected.
+
+For a proxy in a container, choose one:
 
 - **Publish only an A record**, with no AAAA. Every client connects over IPv4
   and is counted by its own address.
 - **Accept the shared budget**, for a small household.
-- **Give Traefik's network IPv6.** This needs Docker Engine 27 or newer
-  (`docker version --format '{{.Server.Version}}'`), IPv6 enabled on the host
-  (`cat /proc/sys/net/ipv6/conf/all/disable_ipv6` prints `0`), and `ip6tables`
-  not set to `false` in `/etc/docker/daemon.json`. From Engine 27 Docker gives
-  such a network an IPv6 range of its own and forwards it with ip6tables, so
-  the client's address arrives intact. Create `docker-compose.override.yml`
-  beside the Compose file; Compose reads it on every command, and a release
-  never ships or replaces it:
+- **Give the proxy's network IPv6**, in the proxy's own Compose file: the
+  network its container publishes ports 80 and 443 on. This needs Docker
+  Engine 27 or newer (`docker version --format '{{.Server.Version}}'`), IPv6
+  enabled on the host (`cat /proc/sys/net/ipv6/conf/all/disable_ipv6` prints
+  `0`), and `ip6tables` not set to `false` in `/etc/docker/daemon.json`. From
+  Engine 27 Docker gives such a network an IPv6 range of its own and forwards
+  it with ip6tables, so the client's address arrives intact:
 
   ```yaml
   networks:
-    traefik:
+    proxy:
       enable_ipv6: true
   ```
 
-  Docker does not change an existing network, so recreate it with
-  `docker compose down` and then `docker compose up -d --wait`; `down` without
-  `-v` keeps your data. On an older Engine or a host without IPv6 the network
-  cannot be created and nothing starts: delete the override file and start
-  again.
+  Docker does not change an existing network, so it has to be removed and
+  created again. On an older Engine or a host without IPv6 the network cannot
+  be created and nothing on it starts: take the line out again.
 
 Stoky counts an IPv6 client by its
 /64, the smallest block an internet provider gives one connection. Devices in one home share a budget, as they do
@@ -571,13 +792,13 @@ on IPv6, for example a phone on mobile data with Wi-Fi off, then run:
 
 ```bash
 docker compose logs app | grep auth.signin.failed | tail -n 1
-docker network inspect stoky-release_traefik --format '{{range .IPAM.Config}}{{.Gateway}} {{end}}'
+docker network inspect proxy --format '{{range .IPAM.Config}}{{.Gateway}} {{end}}'
 ```
 
-If the `address` in the first line is one of the gateways the second prints,
-IPv6 clients are sharing. An address with colons that is not a gateway is the
-device's own. A dotted address that is not a gateway means the device used
-IPv4; try another one.
+with the proxy's network in place of `proxy`. If the `address` in the first
+line is one of the gateways the second prints, IPv6 clients are sharing. An
+address with colons that is not a gateway is the device's own. A dotted
+address that is not a gateway means the device used IPv4; try another one.
 
 ## Deleting somebody's account
 
@@ -718,11 +939,11 @@ docker compose stop app
 docker compose exec -T db pg_dump -U stoky -d stoky -Fc > "$STOKY_BACKUP/database.dump"
 docker compose run --rm --no-deps -T --entrypoint tar app \
   -C /app/uploads -czf - . > "$STOKY_BACKUP/uploads.tar.gz"
-cp .env docker-compose.yml traefik.yml "$STOKY_BACKUP/"
+cp .env docker-compose.yml "$STOKY_BACKUP/"
 docker compose up -d --wait app
 ```
 
-The directory holds `.env` (the database password and the session secret), every
+If you wrote a `docker-compose.override.yml`, copy it too. The directory holds `.env` (the database password and the session secret), every
 account's password hash and every receipt, all in plaintext. **Encrypt it before
 it leaves the server.** With [age](https://age-encryption.org), installed on
 both machines, create a key pair once on the machine that keeps the backups,
@@ -749,16 +970,14 @@ everything in the backup, so keep it apart from the backups.
 
 Backups are not rotated for you. Delete old ones on a schedule you choose. Each
 one keeps accounts and receipts that were deleted from the instance after it was
-taken. Certificate storage is separate; on a new host Traefik obtains
-certificates again, subject to your DNS and ACME rate limits.
+taken. Your proxy's configuration and certificates are not part of it: they
+are the proxy's to back up.
 
 **Test restoration on an empty installation on another host**, using the same
-release and the saved `.env`, Compose and Traefik files. These commands assume its database and
+release and the saved `.env` and Compose file. These commands assume its database and
 uploads are empty and the backup files have been copied into its directory.
-The backup was written under `umask 077`, so make `traefik.yml` readable again:
 
 ```bash
-chmod 644 traefik.yml
 docker compose pull
 docker compose up -d --wait db cache
 docker compose exec -T db pg_restore -U stoky -d stoky \
@@ -778,7 +997,7 @@ not covered by these commands. Never delete the original volumes to test a backu
 
 When the new Compose file changes a service's configuration, `up -d` recreates
 that container and deletes its old log files with it; the first release that
-rotates logs changes all four. Save the logs you need before upgrading, for
+rotates logs changes every one. Save the logs you need before upgrading, for
 example `docker compose logs --no-color --timestamps > logs-before-upgrade.txt`.
 
 Read the target release's notes first. Back up the current installation, download
@@ -786,19 +1005,15 @@ the target release's assets **into a separate directory**, and verify their
 checksums and, with the GitHub CLI, [who published
 them](#optional-check-who-published-the-files), with `STOKY_RELEASE` set to the
 target tag. Compare `example.env` with your `.env`; preserve your secrets. Replace
-the installed Compose and Traefik files with that release's files and set `STOKY_VERSION` to
+the installed Compose file with that release's and set `STOKY_VERSION` to
 its exact tag. The Compose file is what selects the image: it names it by digest, Docker pulls that digest whatever tag
 `STOKY_VERSION` gives, and changing `STOKY_VERSION` alone changes nothing. Then:
 
 ```bash
-chmod 644 traefik.yml
 docker compose config --quiet
 docker compose pull
 docker compose up -d --wait --wait-timeout 180
 ```
-
-The Traefik file sets the proxy's security headers as well as its routing, so
-an upgrade that replaces only the image keeps the previous release's headers.
 
 Confirm health, sign-in and your data. Automatic alpha updates are not supported.
 Migrations run automatically and are not automatically reversible: a rollback may
@@ -814,10 +1029,10 @@ can no longer start against the upgraded database, so that returning to it
 needs the pre-upgrade backup. Those depend on the version you come from, so
 this guide, which describes one release, does not repeat them. The new
 release's `install.sh` adds every missing setting to `.env`, but only once `example.env` and
-`SHA256SUMS` have been replaced along with the Compose and Traefik files:
+`SHA256SUMS` have been replaced along with the Compose file:
 against the previous release's copies it stops before it reaches `.env`.
 
-PostgreSQL, Valkey and Traefik change only with a Stoky release. The Compose
+PostgreSQL and Valkey change only with a Stoky release. The Compose
 file names each of them by exact version and by digest
 (`valkey/valkey:8.1.11-alpine@sha256:…`), so `docker compose pull` fetches the build
 the release was tested with, not whatever the tag names that day. Their
@@ -865,16 +1080,20 @@ migration again.
 | Release download returns 404 | Exact alpha tag; the stable `latest` URL excludes prereleases |
 | Image pull says `denied` or `unauthorized` | Exact tag in `STOKY_VERSION`; stale saved credentials for `ghcr.io` are sent even to a public image, so try `docker logout ghcr.io` |
 | `no matching manifest` | This alpha publishes Linux amd64 only |
-| Traefik configuration file missing | Download `traefik.yml` beside the Compose file from the same release |
-| Every page is `404 page not found` | `docker compose logs traefik` shows `permission denied` for `dynamic.yml`: run `chmod 644 traefik.yml`, then `docker compose restart traefik` |
+| `docker compose up` says port 3000 is already allocated | Something else on this host uses it: set `STOKY_PORT` to a free one, and point your proxy there |
+| The proxy answers 502 or `Bad Gateway` | It cannot reach Stoky: `curl http://127.0.0.1:3000/api/health` on this host, then the address and port the proxy forwards to. A proxy in a container cannot reach `127.0.0.1` of the host; see [Your proxy](#4-your-proxy) |
+| App exits with `[proxy] refusing to start:` | The line names the `STOKY_TRUSTED_PROXIES` entry that is neither an address nor a CIDR range |
+| Everybody is told to wait at sign-in at once, or the log shows one address for everyone | Stoky is counting the proxy, not the people: `STOKY_TRUSTED_PROXIES` is unset or is not the address Stoky sees the proxy at. See [Check it](#check-it) |
+| A receipt photo will not upload, and the proxy's log shows 413 | The proxy's body limit is below 15 MiB (nginx: `client_max_body_size`) |
+| A page's buttons do nothing without JavaScript, and the app logs `Invalid Server Actions request` | The proxy is not passing the `Host` it was asked for (nginx: `proxy_set_header Host $host`) |
 | `P1000` / database authentication | Password differs from the one stored when the volume was initialized; changing `.env` is not rotation |
 | App is unhealthy | `docker compose logs --tail=100 app db cache`; migrations, database connectivity and Valkey |
 | App keeps restarting and its log says `P3018` or `P3009` | A migration failed; see [A migration stops the upgrade](#a-migration-stops-the-upgrade) before restarting again |
-| TLS error / certificate not issued | DNS A/AAAA records, inbound TCP 443, port conflicts and Traefik logs; an incorrect AAAA record can also break issuance |
+| TLS error / certificate not issued | That is your proxy's: its logs, its DNS records and its port 443. Stoky answers plain HTTP and asks for no certificate |
 | Sign-in unavailable | Valkey must be healthy; authentication rate limiting fails closed |
 | App exits with `[auth] refusing to start:` | The line names the setting to fix — `STOKY_SECRET` unset, the example value or too short; `STOKY_URLS` unset, an entry that is not a bare address, or an https first entry beside plain-HTTP network addresses; `BETTER_AUTH_TRUSTED_ORIGINS` set, or `BETTER_AUTH_TELEMETRY` on. See step 2 |
-| Sign-in refused with 403 `INVALID_ORIGIN` or `MISSING_OR_NULL_ORIGIN` (the form says the service is unavailable; the app's log says `Invalid origin`) | The browser is at an address `STOKY_URLS` does not list, or a proxy strips `Origin`. Add the address people use to `STOKY_URLS` — only one that reaches this instance — or sign in at a listed one. The bundle lists only `https://` and `DOMAIN`, the one host Traefik routes. In development, `DEV_ALLOWED_ORIGIN` hosts are trusted too |
-| People on IPv6, often on mobile data, are told to wait at sign-in | IPv6 clients share the Docker gateway's budget; see [Clients on IPv6](#clients-on-ipv6) |
+| Sign-in refused with 403 `INVALID_ORIGIN` or `MISSING_OR_NULL_ORIGIN` (the form says the service is unavailable; the app's log says `Invalid origin`) | The browser is at an address `STOKY_URLS` does not list, or a proxy strips `Origin`. Add the address people use to `STOKY_URLS` — only one that reaches this instance — or sign in at a listed one. The bundle lists only `https://` and `DOMAIN`, the name your proxy serves. In development, `DEV_ALLOWED_ORIGIN` hosts are trusted too |
+| People on IPv6, often on mobile data, are told to wait at sign-in | Behind a proxy in a container, IPv6 clients share the Docker gateway's budget; see [Clients on IPv6](#clients-on-ipv6) |
 | The right password is told to wait for minutes, again and again | The account's shared attempts are being spent; see [Somebody keeps being told to wait](#somebody-keeps-being-told-to-wait) |
 | Somebody forgot their password | An admin sets a new one from **Personas del hogar**; a sole owner's is set in the database, see [A forgotten password](#a-forgotten-password) |
 | Somebody lost the phone with their authenticator app, or is told at sign-in that the server can no longer check it | A backup code signs them in; without one, a household admin removes it from **Personas del hogar** — see [A lost authenticator](#a-lost-authenticator). Everybody told so at once means `STOKY_SECRET` changed; see [Rotating `STOKY_SECRET`](#rotating-stoky_secret) |

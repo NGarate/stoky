@@ -23,7 +23,7 @@ VERSION="${1:-$DEFAULT_VERSION}"
 # tests do, and so can a maintainer checking packaged assets before a release.
 # An operator has no use for it.
 BASE_URL="${STOKY_RELEASE_BASE_URL:-https://github.com/NGarate/stoky/releases/download}"
-FILES=(docker-compose.yml example.env traefik.yml)
+FILES=(docker-compose.yml example.env)
 # The project name fixed in docker-compose.yml, which names its volumes.
 DATABASE_VOLUME=stoky-release_postgres_data
 
@@ -72,7 +72,7 @@ for file in "${FILES[@]}"; do
 done
 
 # A file already here is kept if identical and refused if not: replacing the
-# Compose or Traefik file of a running installation is an upgrade, and the
+# Compose file of a running installation is an upgrade, and the
 # guide's upgrade steps (backup first) are the way to do one.
 for file in "${FILES[@]}" SHA256SUMS; do
   if [ -e "$file" ] && ! cmp -s "$file" "$WORK/$file"; then
@@ -113,9 +113,6 @@ for file in "${FILES[@]}" SHA256SUMS; do
     echo "    creado     $file"
   fi
 done
-# Traefik runs with every capability dropped and cannot read a file only its
-# owner can; a restrictive umask would otherwise leave it serving 404s.
-chmod 644 docker-compose.yml example.env traefik.yml SHA256SUMS
 
 echo "==> Configurando .env"
 if [ "$ENV_EXISTS" = false ]; then
@@ -158,18 +155,12 @@ if [ "$(env_value STOKY_VERSION)" != "$VERSION" ]; then
   echo "Aviso: .env indica STOKY_VERSION=$(env_value STOKY_VERSION), no $VERSION. Se ha dejado como estaba." >&2
 fi
 
-MISSING=()
-for key in DOMAIN ACME_EMAIL; do
-  [ -n "$(env_value "$key")" ] || MISSING+=("$key")
-done
-
 echo
 echo "Stoky $VERSION está listo para configurar en $(pwd). No se ha arrancado nada."
 echo
-if [ "${#MISSING[@]}" -gt 0 ]; then
-  echo "1. Edita .env y rellena: ${MISSING[*]}"
-  echo "   DOMAIN es solo el nombre (stoky.example.com), con el DNS apuntando a este servidor;"
-  echo "   ACME_EMAIL es el correo al que escribe Let's Encrypt."
+if [ -z "$(env_value DOMAIN)" ]; then
+  echo "1. Edita .env y rellena: DOMAIN"
+  echo "   DOMAIN es solo el nombre (stoky.example.com) con el que tu proxy inverso sirve Stoky por https."
 else
   echo "1. Revisa .env."
 fi
@@ -179,5 +170,9 @@ echo
 echo "     docker compose config --quiet"
 echo "     docker compose pull"
 echo "     docker compose up -d --wait --wait-timeout 180"
+echo
+echo "3. Stoky atiende por HTTP en el puerto 3000 de este equipo. Pon delante tu proxy inverso"
+echo "   con TLS y dile a Stoky cuál es con STOKY_TRUSTED_PROXIES: la guía tiene un ejemplo"
+echo "   para Traefik, Caddy, nginx y Tailscale."
 echo
 echo "Guía: https://github.com/NGarate/stoky/blob/master/docs/INSTALL.md"
