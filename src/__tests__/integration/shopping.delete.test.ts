@@ -14,7 +14,7 @@ import {
  * Deleting a shopping list — the state a list is actually in when it is deleted.
  *
  * `shopping.delete` had one test and it deleted an **empty** list
- * (`routers.test.ts`, "should delete shopping list"). Every list a household
+ * (`routers.test.ts`, since dissolved). Every list a household
  * wants rid of has something on it, and that case had never been run.
  *
  * It did not work. `ShoppingItem`'s foreign key is `ON DELETE RESTRICT` — the
@@ -30,7 +30,7 @@ import {
  * itself.
  *
  * Two of these tests would pass against the broken version (`NOT_FOUND` for a
- * stranger's list, and the empty-list case `routers.test.ts` already had). The
+ * stranger's list, and the empty-list case, which is the one that always worked). The
  * first one is the one that matters.
  */
 

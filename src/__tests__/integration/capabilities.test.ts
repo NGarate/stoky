@@ -64,7 +64,7 @@ async function callerFor(
 async function expectRefused(
   label: string,
   call: () => Promise<unknown>,
-  code: "FORBIDDEN" | "PRECONDITION_FAILED" = "FORBIDDEN",
+  code: TRPCError["code"] = "FORBIDDEN",
 ) {
   let thrown: unknown;
   try {
@@ -290,5 +290,56 @@ describe("an account with no household", () => {
       () => orphan.product.list({ limit: 20 }),
       "PRECONDITION_FAILED",
     );
+  });
+
+  it("is told the same by the write and admin tiers, before its role is weighed", async () => {
+    // The orphan is a MEMBER, so an admin procedure that checked the role
+    // first would answer FORBIDDEN — a refusal with no way forward, for an
+    // account whose only problem is the missing household.
+    const refusals: [string, () => Promise<unknown>][] = [
+      ["product.create", () => orphan.product.create({ name: "Huérfano" })],
+      ["location.create", () => orphan.location.create({ name: "Huérfano" })],
+      ["store.create", () => orphan.store.create({ name: "Huérfano" })],
+      [
+        "receipt.upload",
+        () =>
+          orphan.receipt.upload({
+            // Never read: the refusal comes before the photograph is.
+            fileBase64: Buffer.from([0xff, 0xd8, 0xff, 0xe0]).toString(
+              "base64",
+            ),
+            mimeType: "image/jpeg",
+          }),
+      ],
+    ];
+    for (const [label, call] of refusals) {
+      await expectRefused(label, call, "PRECONDITION_FAILED");
+    }
+  });
+});
+
+describe("an anonymous caller", () => {
+  it("is refused every household's data as not signed in", async () => {
+    const anonymous = appRouter.createCaller(
+      await createTRPCContext({ session: null }),
+    );
+    const refusals: [string, () => Promise<unknown>][] = [
+      ["product.list", () => anonymous.product.list({})],
+      [
+        "inventory.getStockOverview",
+        () => anonymous.inventory.getStockOverview({}),
+      ],
+      ["location.list", () => anonymous.location.list()],
+      ["receipt.list", () => anonymous.receipt.list({})],
+      ["store.list", () => anonymous.store.list({})],
+      [
+        "price.getHistory",
+        () => anonymous.price.getHistory({ productId: "p", days: 30 }),
+      ],
+      ["shopping.list", () => anonymous.shopping.list({})],
+    ];
+    for (const [label, call] of refusals) {
+      await expectRefused(label, call, "UNAUTHORIZED");
+    }
   });
 });

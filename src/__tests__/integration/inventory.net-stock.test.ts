@@ -734,6 +734,11 @@ describe("a quantity with the wrong sign", () => {
       unit: "L",
     });
     const before = await netStock();
+    const adjustments = () =>
+      prisma.stockEntry.count({
+        where: { productId, operationType: "ADJUST" },
+      });
+    const adjusted = await adjustments();
 
     await api.inventory.adjustStock({
       productId,
@@ -743,6 +748,8 @@ describe("a quantity with the wrong sign", () => {
     });
 
     expect(await netStock()).toBe(before - 2);
+    // Booked as a reconciliation, which the history shows as one.
+    expect(await adjustments()).toBe(adjusted + 1);
   });
 });
 

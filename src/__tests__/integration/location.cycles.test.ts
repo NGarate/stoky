@@ -98,6 +98,29 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
+describe("a location created inside another", () => {
+  it("files it under the household's own parent, at the top level without one", async () => {
+    // The control for the refusals below and in `cross-household.test.ts`:
+    // a parent the household owns is accepted, and lands in the tree.
+    const api = await caller();
+    const cocina = await api.location.create({ name: "Cocina" });
+    const balda = await api.location.create({
+      name: "Balda de la cocina",
+      parentId: cocina.id,
+    });
+
+    expect([cocina.name, cocina.parentId]).toEqual(["Cocina", null]);
+    expect([balda.name, balda.parentId]).toEqual([
+      "Balda de la cocina",
+      cocina.id,
+    ]);
+    const node = (await api.location.getTree()).find(
+      (root) => root.id === cocina.id,
+    );
+    expect(node?.children.map((child) => child.id)).toEqual([balda.id]);
+  });
+});
+
 describe("a loop of locations already in the database", () => {
   it("refuses a move into it instead of walking it for ever, and getTree still draws it", async () => {
     const a = await location("Bucle A");

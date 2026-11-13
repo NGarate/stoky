@@ -276,3 +276,31 @@ describe("deleting a shop", () => {
     }
   });
 });
+
+describe("deleting a location", () => {
+  it("is refused while a sub-location hangs off it, and both survive", async () => {
+    const parent = await prisma.storageLocation.create({
+      data: { name: "Despensa", householdId },
+    });
+    const child = await prisma.storageLocation.create({
+      data: { name: "Balda de arriba", householdId, parentId: parent.id },
+    });
+
+    try {
+      const refusal = await refusalFrom(
+        caller.location.delete({ id: parent.id }),
+      );
+
+      expect(refusal.code).toBe("CONFLICT");
+      expect(refusal.message).toContain("sub-locations");
+      expect(
+        await prisma.storageLocation.count({
+          where: { id: { in: [parent.id, child.id] } },
+        }),
+      ).toBe(2);
+    } finally {
+      await prisma.storageLocation.deleteMany({ where: { id: child.id } });
+      await prisma.storageLocation.deleteMany({ where: { id: parent.id } });
+    }
+  });
+});
