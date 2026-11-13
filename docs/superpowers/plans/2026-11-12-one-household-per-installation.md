@@ -8,6 +8,20 @@ installations.
 Read `CLAUDE.md` first; everything there holds. This plan is written for an
 agent starting with no context from the conversation that produced it.
 
+**State on 2026-11-13** (checked against `master` at `4df104c4`): nothing of
+it is implemented — no commit, branch or stash carries any of the five below.
+Every reference in it was re-checked that day; corrections are folded into
+the text, not listed apart. Two things changed around it:
+
+- **PR #25** (`refactor/integration-tests-2026-11-13`, open) reorganises the
+  integration suite: it deletes `routers.test.ts` and rewrites
+  `test-helpers.ts`, `cross-household.test.ts`, `capabilities.test.ts` and
+  `auth.flow.test.ts`. Let it merge first and cut this branch from the
+  `master` after it, or the two will conflict in the helpers both touch.
+- **`v0.1.0-alpha.5` is about to be cut**, already carrying five breaking
+  changes. Commits 3 and 4 are breaking too; landing them before that release
+  keeps an operator's breakage to one upgrade instead of two.
+
 ---
 
 ## 1. Why — what is wrong today
@@ -16,12 +30,13 @@ There is no role above a household (`OWNER`/`ADMIN`/`MEMBER`/`KITCHEN` are
 roles *in* one, `User.householdId` is a single nullable column), yet three
 doors make more households:
 
-1. **`STOKY_REGISTRATION=open`** (`src/lib/auth/registration.ts`): every
+1. **`STOKY_REGISTRATION=open`** (`src/lib/auth/registration.ts`, the
+   default at ~90): every
    registration creates a household of its own. Nobody can list them, block
    an account, delete one, or see what they store. It is also the default
    outside production.
 2. **`household.create`** (`src/server/trpc/routers/household.ts`), offered by
-   `RouteState`'s `CreateHousehold` form (`src/components/household/RouteState.tsx`)
+   `RouteState`'s `CreateHousehold` form (~251) (`src/components/household/RouteState.tsx`)
    to any account without a household — reachable even under the default
    `first-user`.
 3. **`household.removeMember`** only sets `householdId: null`. The removed
@@ -30,7 +45,7 @@ doors make more households:
 
 And nothing can delete an account or a household, so whatever those doors
 create stays for ever. `auth.register` also accepts no `householdName`
-(`src/lib/validations/auth.ts`, `.optional()`), making an account with no
+(`src/lib/validations/auth.ts` ~43, `.optional()`), making an account with no
 household directly.
 
 ## 2. Decisions (the owner's — do not reopen)
@@ -61,21 +76,27 @@ household directly.
 - Making `User.householdId` non-nullable, or removing `householdId` anywhere.
 - An instance-admin role, a households screen, account blocking, quotas
   (`ISSUES.md` UPLOAD-1 stays open; only its severity reasoning may change).
+- Renaming the household. No procedure does it today, though the form
+  commit 4 removes promises it ("podrás cambiarle el nombre más adelante");
+  the promise goes with the form. A rename is a feature of its own.
 - Rewording every comment that mentions "an account with no household".
   Change a comment only where the code beside it changes, or where it is now
   false in a way that would mislead.
 
 ## 4. The commits
 
-Work on a branch cut from `master`, `feat/one-household-2026-11-12`, and open
-a pull request (`CLAUDE.md`, Git Workflow: unattended agent work). Each commit
+Work on a branch cut from `master` after PR #25 has merged, named
+`feat/one-household-<the date it is cut>`, and open a pull request
+(`CLAUDE.md`, Git Workflow: unattended agent work). If the owner is watching
+each commit land instead, it goes straight to `master`; the owner says which. Each commit
 stands alone, passes its own gates, and updates the documents it makes wrong
 **in the same commit** (`docs/README.md` says which document owns what). The
 order matters: no commit may leave e2e red, which is why the e2e accounts
 change first.
 
 Before starting, list every reference yourself — the files named here are
-what was found on 2026-11-12, not a promise of completeness:
+what was found on 2026-11-12 and re-checked on 2026-11-13, not a promise of
+completeness:
 
 ```
 grep -rn "household\.create\|CreateHousehold\|isNoHouseholdError\|noHousehold" src e2e messages
@@ -128,9 +149,14 @@ is sent; without one it makes a householdless MEMBER.
   always `OWNER`. Its doc comment says "The household is optional…
   (HOUSE-1)": rewrite it.
 - `src/components/session/RegisterForm.tsx`: the field is required (and says
-  so the way the form's other required fields do); stop sending `undefined`.
-- Tests: the integration test that registered without a household now
-  expects the refusal; the component test sends the name. Break the schema
+  so the way the form's other required fields do: the input has no
+  `required` today); stop sending `householdName || undefined` (~61).
+- `messages/es.json` / `messages/en.json` `householdHint` says the field is
+  optional ("Opcional. Si lo completas ahora, se creará tu hogar inicial."):
+  rewrite both.
+- Tests: `integration/registration.test.ts`'s `account()` helper (~123)
+  leaves the name out unless asked; the cases that registered without one
+  now expect the refusal; the component test sends the name. Break the schema
   back to optional and watch the new assertion go red (CLAUDE.md, rule 2).
 
 ### Commit 3 — `feat(auth)!: refuse STOKY_REGISTRATION=open, one household per installation`
@@ -146,45 +172,72 @@ is sent; without one it makes a householdless MEMBER.
 - `playwright.config.ts`: drop `STOKY_REGISTRATION: "open"` and its comment.
 - Every test of `open`: `src/__tests__/unit/registration-mode.test.ts`,
   `auth-environment.test.ts`, `deployment.test.ts`, `auth.error-messages.test.ts`,
-  `integration/registration.test.ts` — an `open` case becomes "is refused /
+  `integration/registration.test.ts`; and the two that set
+  `STOKY_REGISTRATION` for their own reasons, `unit/public-url.test.ts` and
+  `components/auth-pages.test.tsx` — an `open` case becomes "is refused /
   unknown", not deleted silently. A dev or test default of `first-user` may
   break suites that relied on registering freely; fix them to create
   accounts directly.
-- Docs, all in this commit: `docs/INSTALL.md` (the modes table at ~163, the
-  paragraph at ~278, ~692, the troubleshooting rows at ~873–874),
-  `.env.example` (~115), `deploy/example.env` comment if any, `SECURITY.md`
-  (~1199, ~2208–2211, ~2585, and the "under open registration" risk lines
-  ~1744, ~1762, ~1801, ~2623 — reword or drop each, do not leave them
-  describing a mode that no longer exists), `ISSUES.md` (~769, ~974–976:
-  the severity reasoning of those entries), `docs/STATUS.md` (~397–398).
+- Docs, all in this commit (line numbers as of 2026-11-13; re-grep
+  `` `open` `` and "open registration" before trusting them):
+  `docs/INSTALL.md` (the modes table at ~164, ~172, ~676, ~1092, the
+  troubleshooting row at ~1272), `.env.example` (~113–115),
+  `SECURITY.md` (the registration section at ~2276–2282 and ~2326, ~2652,
+  and the "under open registration" risk lines ~277, ~1761, ~1779, ~1818 —
+  reword or drop each, do not leave them describing a mode that no longer
+  exists), `ISSUES.md` (~771, ~976–978: the severity reasoning of those
+  entries), `docs/STATUS.md` (~471). `deploy/example.env` and
+  `deploy/docker-compose.yml` already say `first-user` and need nothing.
   `docs/releases/NEXT.md`: one line for operators — `open` is no longer
   accepted and an installation is one household. No upgrade instructions
   (pre-beta).
 
 ### Commit 4 — `feat(household)!: stop creating a household from an account without one`
 
-- Remove `household.create` from `src/server/trpc/routers/household.ts` and
-  its schema if nothing else uses it (`householdSchema`).
+- Remove `household.create` from `src/server/trpc/routers/household.ts`
+  (~238), and the schemas that then validate nothing:
+  - `householdSchema` (`src/lib/validations/household.ts` ~10), whose only
+    procedure was `create`;
+  - `updateHouseholdSchema` (~14), built from it and already used by no
+    procedure — there is no rename (see §3);
+  - `createHouseholdSchema` (`src/lib/validations/auth.ts` ~118), already
+    used by no procedure;
+  - their types `HouseholdInput`, `UpdateHouseholdInput` (~206–207) and
+    `CreateHouseholdInput` (~132).
+
+  With them, the tests that exercise only those schemas:
+  `unit/household.validation.test.ts`'s two `describe`s for them,
+  `unit/auth.validation.test.ts`'s `createHouseholdSchema` block, the
+  `household` row of `unit/update-schemas.test.ts` (~24), and three rows of
+  `unit/validation-bounds.test.ts` (~471–473).
 - `src/components/household/RouteState.tsx`: remove `CreateHousehold` and the
   no-household branch of `RouteState`. `isNoHouseholdError` goes if nothing
   else uses it; an account without a household can no longer be made, so
   that error now falls to the ordinary "could not load" state with a retry.
+  `components/RouteState.test.tsx` tests `isNoHouseholdError` (~69).
 - `householdProcedure` (`src/server/trpc/trpc.ts` ~306) **keeps** refusing an
   account with no household — defence against a hand-edited database. Its
   comment says the client resolves it by creating one: reword that, and
   leave the code as it is.
-- `messages/es.json` and `messages/en.json`: the keys only the form used
-  (`noHouseholdTitle`, `noHouseholdBody`, `createHousehold`, `creating`,
-  `createFailed`, `nameHint`, maybe `nameLabel` — check each is unused
-  first).
-- `src/__tests__/unit/capabilities.test.ts`: drop `create`; the documented
-  procedure count goes from 79 to 78 in `SECURITY.md` and `docs/STATUS.md`
-  (the test checks those sentences). The matrix comment above `household.ts`
+- `messages/es.json` and `messages/en.json`: `noHouseholdTitle`,
+  `noHouseholdBody`, `createHousehold` and `creating` are used only by the
+  form. `createFailed`, `nameHint` and `nameLabel` are also read elsewhere
+  (`ScanProductDialog`, `products/new`, `RegisterForm`, …): delete each only
+  if no other reader shares its namespace.
+- Comments that name the form or the procedure and become false:
+  `src/components/offline/WriteQueueProvider.tsx` (~77, "`CreateHousehold`
+  invalidates…") and `removeMember`'s doc comment in `household.ts` (~433,
+  "a new household of its own (`household.create`)").
+- `src/__tests__/unit/capabilities.test.ts`: drop `create` (~64); the
+  documented procedure count goes from 79 to 78 in `SECURITY.md` ("all 79
+  procedures are assigned", ~2471) and `docs/STATUS.md` ("**79
+  procedures**" ~1131, "all 79 procedures assigned" ~1235) — the test
+  matches those three sentences. The matrix comment above `household.ts`
   explains `create`'s tier: rewrite it.
-- Tests that call `household.create` (`integration/household.test.ts`,
-  `routers.test.ts`, `capabilities.refusals.test.ts`, …): remove those cases
-  or, where they used it as setup, create the household through Prisma like
-  the other integration tests.
+- Tests that call the procedure: only `integration/household.test.ts`, its
+  `describe("household.create")` (~84–200). Remove those cases. (Every other
+  `household.create` in the suites is `prisma.household.create`, setup that
+  stays; `routers.test.ts` never called the procedure and PR #25 deletes it.)
 - `ISSUES.md` HOUSE-1 is resolved; add one line to it saying the way out it
   describes was removed and why, rather than rewriting history.
 - `docs/releases/NEXT.md` only if a household could notice; probably not.
@@ -195,9 +248,14 @@ is sent; without one it makes a householdless MEMBER.
 Delete the account instead, in the same transaction, after the same guards
 (`withOwnersLocked`, `assertMayActOnOwner`, `assertAnOwnerRemains`).
 
-- Keep `endSessions` before the delete: sessions also live in Valkey
-  (Better Auth's secondary storage), which a row cascade does not reach.
-  Confirm that is still true before relying on it either way.
+- Keep `endSessions` (`src/lib/auth/end-sessions.ts`) before the delete,
+  but not for the reason first written here: sessions are `Session` rows
+  only (no secondary storage; the cookie cache is off), and those cascade.
+  What does not cascade is what `endSessions` also deletes from
+  `Verification`, which has no relation to `User`: the account's two-step
+  sign-ins in progress and its step-ups. The known-devices sets in Valkey
+  (`src/lib/auth/known-devices.ts`) are keyed by account and expire on
+  their own; a re-added person gets a new id, so they need nothing.
 - `Account`, `Session`, `Passkey`, `TwoFactor` cascade from `User`
   (`onDelete: Cascade` in `prisma/schema.prisma`). `ScreenChoice` and
   `MutationReplay` key on `userId` with no relation: delete the member's rows
@@ -206,14 +264,16 @@ Delete the account instead, in the same transaction, after the same guards
   them — the history keeps who did it, as an id.
 - Keep the `auth.session.ended` security event; it should still record how
   many sessions ended and that the reason was removal.
-- The removal dialog must say the account is deleted, not only removed from
-  the household (`messages/*.json`, the members screen in
-  `src/components/household/`).
+- The removal dialog must say the account is deleted. Today it says the
+  opposite: `removeConfirmBody` is "Su cuenta no se borra: deja de
+  pertenecer a este hogar…" (`messages/es.json` ~948, and `en.json`);
+  `removeConfirmTitle` and `removeConfirm` say "quitar del hogar". The
+  screen is `src/app/(dashboard)/settings/people/page.tsx`.
 - Tests (integration, `household.test.ts`): after removal the account row and
   its credentials are gone, sign-in with its password fails, its
   `ScreenChoice` rows are gone, and the same e-mail can be added again with
   `addMember`. Each seen red with the delete reverted.
-- Docs: `SECURITY.md` where member removal is described; `docs/releases/NEXT.md`
+- Docs: `SECURITY.md` where member removal is described (~799–811); `docs/releases/NEXT.md`
   (a household notices: a removed person's account no longer exists).
 
 ## 5. Gates
@@ -223,7 +283,10 @@ Per commit (`CLAUDE.md` rule 4, as the owner narrowed it):
 touches — never the whole suite to find one case, never the whole browser
 suite. Component tests need the DOM preload:
 `bun test --preload ./src/__tests__/setup/register-dom.ts <file>`.
-Integration tests need the local database (`docs/VERIFICATION_SEQUENCE.md`).
+Integration tests need a database (`docs/VERIFICATION_SEQUENCE.md`). Do not
+let them, or `verify:ci`, recreate the developer's database container (it may
+be a different PostgreSQL major than the suite expects): run them against
+throwaway PostgreSQL and Valkey containers on spare ports.
 
 Before the push, once: the whole `bun run verify:ci`, read to the end — its
 exit status is the last script's, and it stops at the first failing step, so
@@ -235,9 +298,9 @@ Push over HTTPS (`git -c credential.helper= -c credential.helper='!gh auth git-c
 SSH asks for a passphrase nobody can type in an agent session. Open the PR
 and stop: the owner reviews and merges.
 
-Known noise, not this work's: the CI job "Scan the bundle's service images"
-was red on 2026-11-12 for `postgres:16.15-alpine` HIGH CVEs (`krb5-libs`,
-`libxslt`); refreshing the pin is the owner's (`release:refresh-images`).
+CI was entirely green on `master` at `4df104c4` (2026-11-13), image build
+and scan included; the bundle now runs our own PostgreSQL 18 image. A red
+job on this branch is this branch's.
 
 ## 6. Risks and things to check, not assume
 
@@ -251,6 +314,9 @@ was red on 2026-11-12 for `postgres:16.15-alpine` HIGH CVEs (`krb5-libs`,
   except a hand edit. Making it required would let the database hold the
   invariant (`ISSUES.md` DB-1's class), but touches every test that creates a
   user without a household — a separate decision, not this plan.
+- **The release.** If `v0.1.0-alpha.5` is cut before this lands, commits 3
+  and 4 become the next release's breaking changes; `docs/releases/NEXT.md`
+  is then a new file, not the one being renamed.
 - **The receipt keywords (PARSE-5)** can follow this plan with
   `adminProcedure` as their editor. Once this merges, update PARSE-5's status
   line to say the question it waited on is settled.
