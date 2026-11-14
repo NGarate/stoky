@@ -54,18 +54,21 @@ export const updateMemberRoleSchema = z.object({
 });
 
 /**
- * Removing a member from the household.
- *
- * **Not deleting the account.** `User.householdId` is nullable, and a person
- * who leaves a household is not a person who stops existing — they land in the
- * same householdless state a fresh registration does, which `householdRouter`
- * already knows how to get out of (ISSUES.md HOUSE-1). Deleting somebody's
- * account because they left would also take their name off every row that
- * records who did what.
+ * Removing a member from the household, which deletes their account: an
+ * installation holds one household, so outside it an account has nowhere to
+ * be. What they did stays — stock movements and receipts keep their id.
  */
 export const removeMemberSchema = z.object({
   userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
 });
+
+/**
+ * What `household.removeMember` says when the member named is the caller.
+ * English and shared, like `RESET_OWN_PASSWORD_MESSAGE`: the screen never
+ * offers it, because removal deletes the account.
+ */
+export const REMOVE_SELF_MESSAGE =
+  "You cannot remove yourself: it would delete the account you are signed in with";
 
 /**
  * An admin setting a new password for somebody in the household.

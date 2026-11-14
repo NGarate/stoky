@@ -491,11 +491,12 @@ enum LandingScreen {
 /// anything is drawn, and the landing become a redirect instead of a flash.
 ///
 /// No foreign key to User, matching `MutationReplay` above and the schema's
-/// standing rule that there are no cascades. A deleted account leaves rows
-/// keyed on a user id that no longer exists; nothing reads them, they are two
-/// short strings each, and a cascade is kept for the auth tables alone
-/// (`Account`, `Session`), where a row left behind is a credential rather than
-/// a preference.
+/// standing rule that there are no cascades: a cascade is kept for the auth
+/// tables alone (`Account`, `Session`), where a row left behind is a
+/// credential rather than a preference. So whatever deletes an account deletes
+/// these rows itself — `household.removeMember` does, in its transaction —
+/// though a write of theirs still in flight can leave one behind, keyed on an
+/// id that no longer exists. Nothing reads it.
 model ScreenChoice {
   userId    String
   deviceId  String

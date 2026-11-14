@@ -506,16 +506,20 @@ export default function PeoplePage(): JSX.Element {
                       </Button>
                     ) : null}
 
-                    <Button
-                      onClick={() => {
-                        setConfirmingRemoval(member.id);
-                        setRowFailure(null);
-                      }}
-                      type="button"
-                      variant="destructive-ghost"
-                    >
-                      {t("removeButton")}
-                    </Button>
+                    {/* Not on the caller's own row: removal deletes the
+                      account, and the server refuses it for your own. */}
+                    {me.data && me.data.id !== member.id ? (
+                      <Button
+                        onClick={() => {
+                          setConfirmingRemoval(member.id);
+                          setRowFailure(null);
+                        }}
+                        type="button"
+                        variant="destructive-ghost"
+                      >
+                        {t("removeButton")}
+                      </Button>
+                    ) : null}
                   </div>
                 )}
 

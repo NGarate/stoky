@@ -804,12 +804,12 @@ describe("setting a member's password", () => {
 
 /**
  * Removing somebody from the household signs them out everywhere (ASVS 5.0.0
- * 7.4.2, PROGRESS D146). Before, it took the household away and left every
- * session alive: the account itself — its password, a new household of its
- * own — stayed reachable from whatever device the person had been signed in
- * on. Cookies from real sign-ins through the route, read back through
- * `readSession`, because a row deleted is only half of a session ended; the
- * cookie being refused is the other.
+ * 7.4.2, PROGRESS D146), and deletes their account. Before D146, it took the
+ * household away and left every session alive: the account itself — its
+ * password, a new household of its own — stayed reachable from whatever
+ * device the person had been signed in on. Cookies from real sign-ins
+ * through the route, read back through `readSession`, because a row deleted
+ * is only half of a session ended; the cookie being refused is the other.
  */
 describe("removing a member", () => {
   const PASSWORD = "TestPassword123!";
@@ -852,49 +852,39 @@ describe("removing a member", () => {
       "remove-bystander",
     );
     const api = await callerFor(admin.id, HOUSEHOLD.id);
-    try {
-      const phone = await browser(member.email);
-      const tablet = await browser(member.email);
-      const stays = await browser(bystander.email);
+    const phone = await browser(member.email);
+    const tablet = await browser(member.email);
+    const stays = await browser(bystander.email);
 
-      // The control: the cookies are good before, so the refusal after is
-      // the removal's doing and not the cookies' shape.
-      expect(await readSession(phone, { refresh: false })).not.toBeNull();
-      expect(await readSession(tablet, { refresh: false })).not.toBeNull();
+    // The control: the cookies are good before, so the refusal after is
+    // the removal's doing and not the cookies' shape.
+    expect(await readSession(phone, { refresh: false })).not.toBeNull();
+    expect(await readSession(tablet, { refresh: false })).not.toBeNull();
 
-      const events = await eventsDuring(() =>
-        api.household.removeMember({ userId: member.id }),
-      );
+    const events = await eventsDuring(() =>
+      api.household.removeMember({ userId: member.id }),
+    );
 
-      expect(await prisma.session.count({ where: { userId: member.id } })).toBe(
-        0,
-      );
-      expect(await readSession(phone, { refresh: false })).toBeNull();
-      expect(await readSession(tablet, { refresh: false })).toBeNull();
-      expect(await readSession(stays, { refresh: false })).not.toBeNull();
+    expect(await prisma.session.count({ where: { userId: member.id } })).toBe(
+      0,
+    );
+    expect(await readSession(phone, { refresh: false })).toBeNull();
+    expect(await readSession(tablet, { refresh: false })).toBeNull();
+    expect(await readSession(stays, { refresh: false })).not.toBeNull();
 
-      const ended = events.filter((e) => e.event === "auth.session.ended");
-      expect(ended).toHaveLength(1);
-      expect(ended[0]?.reason).toBe("removed");
-      expect(ended[0]?.userId).toBe(admin.id);
-      expect(ended[0]?.targetUserId).toBe(member.id);
-      expect(ended[0]?.householdId).toBe(HOUSEHOLD.id);
-      expect(ended[0]?.count).toBe("2");
+    const ended = events.filter((e) => e.event === "auth.session.ended");
+    expect(ended).toHaveLength(1);
+    expect(ended[0]?.reason).toBe("removed");
+    expect(ended[0]?.userId).toBe(admin.id);
+    expect(ended[0]?.targetUserId).toBe(member.id);
+    expect(ended[0]?.householdId).toBe(HOUSEHOLD.id);
+    expect(ended[0]?.count).toBe("2");
 
-      // The account stays: the person can sign in again, to no household.
-      const again = await signInWith({
-        email: member.email,
-        password: PASSWORD,
-      });
-      expect(again.status).toBe(200);
-      expect(
-        (await prisma.user.findUniqueOrThrow({ where: { id: member.id } }))
-          .householdId,
-      ).toBeNull();
-    } finally {
-      // Out of the household, so `afterAll` no longer finds the account.
-      await prisma.user.deleteMany({ where: { id: member.id } });
-    }
+    // The account goes with them (one household per installation): what
+    // the deletion leaves behind is `household.test.ts`'s.
+    expect(
+      await prisma.user.findUnique({ where: { id: member.id } }),
+    ).toBeNull();
   });
 
   it("ends nothing and writes no line when the removal is refused", async () => {
