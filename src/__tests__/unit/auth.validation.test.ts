@@ -95,17 +95,6 @@ describe("Authentication Validation Schemas", () => {
         email: "newuser@example.com",
         name: "John Doe",
         password: "securepass123",
-      };
-
-      const result = registerSchema.safeParse(validInput);
-      expect(result.success).toBe(true);
-    });
-
-    it("should accept registration with optional household name", () => {
-      const validInput: RegisterInput = {
-        email: "newuser@example.com",
-        name: "John Doe",
-        password: "securepass123",
         householdName: "My Home",
       };
 
@@ -113,11 +102,28 @@ describe("Authentication Validation Schemas", () => {
       expect(result.success).toBe(true);
     });
 
+    it("refuses a registration without the household's name", () => {
+      // Whoever registers founds the household and owns it; an account
+      // without one had nothing to do but create one (HOUSE-1).
+      for (const householdName of [undefined, "", "   "]) {
+        const result = registerSchema.safeParse({
+          email: "newuser@example.com",
+          name: "John Doe",
+          password: "securepass123",
+          householdName,
+        });
+
+        expect(result.success, String(householdName)).toBe(false);
+        expect(result.error?.issues[0]?.path).toEqual(["householdName"]);
+      }
+    });
+
     it("should reject empty name", () => {
       const invalidInput = {
         email: "user@example.com",
         name: "",
         password: "password123",
+        householdName: "Casa",
       };
 
       const result = registerSchema.safeParse(invalidInput);
@@ -128,6 +134,7 @@ describe("Authentication Validation Schemas", () => {
       const invalidInput = {
         email: "user@example.com",
         password: "password123",
+        householdName: "Casa",
       };
 
       const result = registerSchema.safeParse(invalidInput);
@@ -141,6 +148,7 @@ describe("Authentication Validation Schemas", () => {
         // Twelve characters, no composition rules — DEBT-1 answered against
         // NIST SP 800-63B §5.1.1.2 rather than against its own suggestion.
         password: "nevera cocina",
+        householdName: "Casa",
       };
 
       const result = registerSchema.safeParse(minimalInput);
@@ -155,6 +163,7 @@ describe("Authentication Validation Schemas", () => {
         email: "  Noel@Example.COM ",
         name: "Noel",
         password: "nevera cocina despensa",
+        householdName: "Casa",
       });
       const signingIn = loginSchema.parse({
         email: "NOEL@example.com",
@@ -173,6 +182,7 @@ describe("Authentication Validation Schemas", () => {
           email: "johndoe@example.com",
           name: "John Doe",
           password,
+          householdName: "Casa",
         });
 
         expect(result.success, password).toBe(false);
@@ -185,6 +195,7 @@ describe("Authentication Validation Schemas", () => {
         email: "a@b.co",
         name: "A",
         password: "12345678",
+        householdName: "Casa",
       });
 
       expect(result.success).toBe(false);

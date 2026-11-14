@@ -958,6 +958,7 @@ describe("the registration limit, through the router", () => {
     if (original === undefined) delete process.env.RATE_LIMIT_REGISTER_ATTEMPTS;
     else process.env.RATE_LIMIT_REGISTER_ATTEMPTS = original;
     await cleanupTestUsers(PREFIX);
+    await cleanupTestHouseholds(PREFIX);
   });
 
   /**
@@ -978,6 +979,7 @@ describe("the registration limit, through the router", () => {
     email: `${PREFIX}.${suffix}@example.com`,
     name: "Throttle Test",
     password: PASSWORD,
+    householdName: `${PREFIX} ${suffix}`,
   });
 
   it("stops after the configured number from one address", async () => {

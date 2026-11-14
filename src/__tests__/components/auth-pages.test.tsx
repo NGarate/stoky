@@ -302,6 +302,14 @@ describe("the register form", () => {
     }
   });
 
+  it("asks for the household's name as it asks for the others", () => {
+    // Whoever registers founds the household; the server refuses a
+    // registration without its name, so the browser says so first.
+    renderWithIntl(<RegisterForm />, { locale: "es" });
+
+    expect(screen.getByLabelText("Nombre del hogar")).toBeRequired();
+  });
+
   it("translates the panel beside the form", () => {
     const { container } = renderWithIntl(<RegisterForm />, { locale: "en" });
 
@@ -454,6 +462,7 @@ describe("where signing in leads", () => {
     await userEvent.type(screen.getByLabelText("Nombre"), "Ana");
     await userEvent.type(screen.getByLabelText("Correo electrónico"), "a@b.es");
     await userEvent.type(screen.getByLabelText("Contraseña"), "Secreta1234!");
+    await userEvent.type(screen.getByLabelText("Nombre del hogar"), "Casa");
     await userEvent.click(screen.getByRole("button", { name: "Registrarse" }));
 
     await waitFor(() => expect(replaced).toEqual(["/"]));
@@ -516,6 +525,7 @@ describe("keep me signed in", () => {
     await userEvent.type(screen.getByLabelText("Nombre"), "Ana");
     await userEvent.type(screen.getByLabelText("Correo electrónico"), "a@b.es");
     await userEvent.type(screen.getByLabelText("Contraseña"), "Secreta1234!");
+    await userEvent.type(screen.getByLabelText("Nombre del hogar"), "Casa");
     await userEvent.click(screen.getByRole("button", { name: "Registrarse" }));
 
     await waitFor(() => expect(signInCalls).toHaveLength(1));
@@ -626,6 +636,7 @@ describe("what a sign-in refused straight after registering says", () => {
         screen.getByLabelText("Contraseña"),
         "cocina despensa nevera",
       );
+      await userEvent.type(screen.getByLabelText("Nombre del hogar"), "Casa");
       await userEvent.click(
         screen.getByRole("button", { name: "Registrarse" }),
       );
@@ -655,13 +666,20 @@ describe("what a refused registration says", () => {
         name: "Nombre",
         email: "Correo electrónico",
         password: "Contraseña",
+        household: "Nombre del hogar",
         submit: "Registrarse",
       },
     ],
     [
       "en",
       "Registration is closed on this server. Ask whoever runs your household to add you from “People in the household”, in Settings.",
-      { name: "Name", email: "Email", password: "Password", submit: "Sign up" },
+      {
+        name: "Name",
+        email: "Email",
+        password: "Password",
+        household: "Household name",
+        submit: "Sign up",
+      },
     ],
   ] as const) {
     it(`says registration is closed, in ${locale}`, async () => {
@@ -678,6 +696,7 @@ describe("what a refused registration says", () => {
           screen.getByLabelText(labels.password),
           "cocina despensa nevera",
         );
+        await userEvent.type(screen.getByLabelText(labels.household), "Casa");
         await userEvent.click(
           screen.getByRole("button", { name: labels.submit }),
         );
@@ -693,7 +712,11 @@ describe("what a refused registration says", () => {
   // the ZodError's own JSON. Built here from the real schema rather than
   // written out, so a reworded server message cannot leave this test passing
   // against a string the server no longer sends.
-  const identity = { email: "noel@example.com", name: "Noel" };
+  const identity = {
+    email: "noel@example.com",
+    name: "Noel",
+    householdName: "Casa",
+  };
   const password = "noel despensa 2026";
 
   for (const [locale, words, labels] of [
@@ -704,13 +727,20 @@ describe("what a refused registration says", () => {
         name: "Nombre",
         email: "Correo electrónico",
         password: "Contraseña",
+        household: "Nombre del hogar",
         submit: "Registrarse",
       },
     ],
     [
       "en",
       "The password contains your name or your email address. Choose one that does not include them.",
-      { name: "Name", email: "Email", password: "Password", submit: "Sign up" },
+      {
+        name: "Name",
+        email: "Email",
+        password: "Password",
+        household: "Household name",
+        submit: "Sign up",
+      },
     ],
   ] as const) {
     it(`says the password contains the person's own name, in ${locale}`, async () => {
@@ -726,6 +756,10 @@ describe("what a refused registration says", () => {
           identity.email,
         );
         await userEvent.type(screen.getByLabelText(labels.password), password);
+        await userEvent.type(
+          screen.getByLabelText(labels.household),
+          identity.householdName,
+        );
         await userEvent.click(
           screen.getByRole("button", { name: labels.submit }),
         );

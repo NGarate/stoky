@@ -53,6 +53,8 @@ import { retryAfterSeconds } from "@/server/trpc/throttle";
 const RUN_MARKER = `authflow-${Date.now().toString(36)}`;
 const runEmail = (prefix: string) =>
   generateTestEmail(`${RUN_MARKER}-${prefix}`);
+/** Registration requires one; carries the marker so the cleanup finds it. */
+const HOUSEHOLD = `Casa ${RUN_MARKER}`;
 
 /**
  * The tRPC code a call was refused with, or why it was not.
@@ -120,28 +122,21 @@ describe("Authentication Flow Integration Tests", () => {
       expect(dbUser?.role).toBe("OWNER");
     });
 
-    it("should register a new user without household", async () => {
+    it("refuses a registration without the household's name, and creates nothing", async () => {
+      // It used to make a householdless MEMBER, whose only way forward was to
+      // create a household afterwards (HOUSE-1). Whoever registers founds one.
       const email = runEmail("no-household");
-      const name = generateTestName("No Household User");
-      const password = "SecurePassword123!";
 
-      const result = await caller.auth.register({
-        email,
-        name,
-        password,
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.user).toBeDefined();
-
-      // Verify user was created without household
-      const dbUser = await prisma.user.findUnique({
-        where: { email },
-      });
-
-      expect(dbUser).toBeDefined();
-      expect(dbUser?.householdId).toBeNull();
-      expect(dbUser?.role).toBe("MEMBER");
+      expect(
+        await codeOf(
+          caller.auth.register({
+            email,
+            name: generateTestName("No Household User"),
+            password: "SecurePassword123!",
+          } as Parameters<typeof caller.auth.register>[0]),
+        ),
+      ).toBe("BAD_REQUEST");
+      expect(await prisma.user.count({ where: { email } })).toBe(0);
     });
 
     it("should fail to register with duplicate email", async () => {
@@ -154,6 +149,7 @@ describe("Authentication Flow Integration Tests", () => {
         email,
         name,
         password,
+        householdName: HOUSEHOLD,
       });
 
       // Try to create second user with same email
@@ -163,6 +159,7 @@ describe("Authentication Flow Integration Tests", () => {
           email,
           name: "Different Name",
           password: "DifferentPassword123!",
+          householdName: HOUSEHOLD,
         });
       } catch (e) {
         error = e as Error;
@@ -177,6 +174,7 @@ describe("Authentication Flow Integration Tests", () => {
             email,
             name: "Different Name",
             password: "DifferentPassword123!",
+            householdName: HOUSEHOLD,
           }),
         ),
       ).toBe("CONFLICT");
@@ -194,6 +192,7 @@ describe("Authentication Flow Integration Tests", () => {
         email: typed,
         name: generateTestName("Mixed Case"),
         password,
+        householdName: HOUSEHOLD,
       });
       expect(result.user.email).toBe(lower);
 
@@ -203,7 +202,12 @@ describe("Authentication Flow Integration Tests", () => {
       expect((await signInWith({ email: typed, password })).status).toBe(200);
 
       await expect(
-        caller.auth.register({ email: lower, name: "Second", password }),
+        caller.auth.register({
+          email: lower,
+          name: "Second",
+          password,
+          householdName: HOUSEHOLD,
+        }),
       ).rejects.toThrow("Email already registered");
       expect(
         await prisma.user.count({
@@ -243,7 +247,12 @@ describe("Authentication Flow Integration Tests", () => {
 
       expect(
         await codeOf(
-          caller.auth.register({ email: "not-an-email", name, password }),
+          caller.auth.register({
+            email: "not-an-email",
+            name,
+            password,
+            householdName: HOUSEHOLD,
+          }),
         ),
       ).toBe("BAD_REQUEST");
     });
@@ -253,7 +262,14 @@ describe("Authentication Flow Integration Tests", () => {
       const name = generateTestName("Short Password User");
 
       expect(
-        await codeOf(caller.auth.register({ email, name, password: "short" })),
+        await codeOf(
+          caller.auth.register({
+            email,
+            name,
+            password: "short",
+            householdName: HOUSEHOLD,
+          }),
+        ),
       ).toBe("BAD_REQUEST");
       expect(await prisma.user.count({ where: { email } })).toBe(0);
     });
@@ -272,6 +288,7 @@ describe("Authentication Flow Integration Tests", () => {
           email,
           name: generateTestName("Identity User"),
           password: `${localPart}!`,
+          householdName: HOUSEHOLD,
         });
       } catch (e) {
         refusal = e;
@@ -290,7 +307,14 @@ describe("Authentication Flow Integration Tests", () => {
       const password = "SecurePassword123!";
 
       expect(
-        await codeOf(caller.auth.register({ email, name: "", password })),
+        await codeOf(
+          caller.auth.register({
+            email,
+            name: "",
+            password,
+            householdName: HOUSEHOLD,
+          }),
+        ),
       ).toBe("BAD_REQUEST");
       expect(await prisma.user.count({ where: { email } })).toBe(0);
     });
@@ -603,6 +627,7 @@ describe("Authentication Flow Integration Tests", () => {
         email,
         name,
         password,
+        householdName: HOUSEHOLD,
       });
 
       const dbUser = await prisma.user.findUniqueOrThrow({
@@ -636,25 +661,6 @@ describe("Authentication Flow Integration Tests", () => {
 
       expect(dbUser).toBeDefined();
       expect(dbUser?.role).toBe("OWNER");
-    });
-
-    it("should create user as MEMBER when no household is provided", async () => {
-      const email = runEmail("member-role");
-      const name = generateTestName("Member User");
-      const password = "SecurePassword123!";
-
-      await caller.auth.register({
-        email,
-        name,
-        password,
-      });
-
-      const dbUser = await prisma.user.findUnique({
-        where: { email },
-      });
-
-      expect(dbUser).toBeDefined();
-      expect(dbUser?.role).toBe("MEMBER");
     });
   });
   /**

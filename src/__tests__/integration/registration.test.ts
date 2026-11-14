@@ -120,11 +120,11 @@ async function callerOn(database: PrismaClient, address?: string) {
   return appRouter.createCaller(ctx);
 }
 
-const account = (suffix: string, householdName?: string) => ({
+const account = (suffix: string, householdName = `Casa ${RUN}`) => ({
   email: `${RUN}.${suffix}@example.com`,
   name: "Registro",
   password: PASSWORD,
-  ...(householdName ? { householdName } : {}),
+  householdName,
 });
 
 async function refusal(call: Promise<unknown>): Promise<TRPCError> {

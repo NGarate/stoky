@@ -98,9 +98,9 @@ export const authRouter = createTRPCRouter({
    * (`src/server/http/body-limit.ts`) — the proxy's cap alone did not, for a
    * request labelled a prefetch (`docs/SECURITY_REVIEW.md` §8).
    *
-   * The household is optional. An account can exist without one, and
-   * `householdRouter` is what such an account uses to get out of that state
-   * (HOUSE-1).
+   * The household's name is required: whoever registers creates the
+   * household and is its OWNER. It used to be optional, and leaving it out
+   * made an account with no household (HOUSE-1).
    *
    * **Whether anyone may call it at all is the operator's**, through
    * `STOKY_REGISTRATION` (`src/lib/auth/registration.ts`): `first-user` by
@@ -209,18 +209,13 @@ export const authRouter = createTRPCRouter({
         // scalar rather than as a nested write because `createCredentialUser`
         // is the one way an account with a password is made, and the unchecked
         // input it takes is the form every caller can use.
-        const household = householdName
-          ? await tx.household.create({ data: { name: householdName } })
-          : null;
+        const household = await tx.household.create({
+          data: { name: householdName },
+        });
 
         return createCredentialUser(
           tx,
-          {
-            email,
-            name,
-            role: household ? "OWNER" : "MEMBER",
-            householdId: household?.id,
-          },
+          { email, name, role: "OWNER", householdId: household.id },
           passwordHash,
         );
       });
