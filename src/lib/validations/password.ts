@@ -75,7 +75,7 @@ export type PasswordProblem =
  * Everything wrong with a password, rather than the first thing.
  *
  * A form that reports one problem at a time makes somebody guess their way
- * through the rules, which is `REDESIGN_PLAN.md` §7 rule 4 from the other
+ * through the rules, which is `DECISIONS.md` USABILITY rule 4 from the other
  * direction: an error should say what to do next, and "also this" three times
  * is not that.
  */

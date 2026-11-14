@@ -287,7 +287,7 @@ question. Start there; the table below is the short version.
 | [`docs/README.md`](docs/README.md) | **Index. Start here** — reading order and document ownership |
 | [`docs/STATUS.md`](docs/STATUS.md) | Where the project actually is, with gate results |
 | [`docs/PROGRESS.md`](docs/PROGRESS.md) | Completed work and decision records |
-| [`docs/REDESIGN_PLAN.md`](docs/REDESIGN_PLAN.md) | What is being built, in what order, and what done means |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | The product decisions every screen is held to, and why |
 | [`docs/DESIGN_AUDIT.md`](docs/DESIGN_AUDIT.md) | The interface and WCAG AAA audit, with numbered actions |
 | [`SECURITY.md`](SECURITY.md) | Threat model and hardening for a self-hosted deployment, and how to report a vulnerability |
 | [`docs/LOCAL_BOOTSTRAP.md`](docs/LOCAL_BOOTSTRAP.md) | Clone → running app, and what to record if it breaks |

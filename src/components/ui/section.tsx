@@ -11,7 +11,7 @@ import type { JSX, ReactNode } from "react";
  * grey labels on the two main screens — the last of which is the commonest
  * tell of a template rather than a decision, and reads as a label nobody taps
  * rather than as the start of a section. One token, sentence case, and the
- * kitchen's larger size only at its distance (`REDESIGN_PLAN.md` §4).
+ * kitchen's larger size only at its distance (`DECISIONS.md` SCREENS).
  *
  * Exported for the one heading that cannot be a `Section`: the shop screen's
  * trolley, whose heading *is* the disclosure button that opens it.

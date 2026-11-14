@@ -23,7 +23,7 @@ import type { JSX } from "react";
  * unreliable across screen readers, and a rendered test would pass it happily.
  *
  * Every state has text. Never a bare icon, never colour alone
- * (`REDESIGN_PLAN.md` §7 rule 2, and the WCAG floor this project holds itself
+ * (`DECISIONS.md` USABILITY rule 2, and the WCAG floor this project holds itself
  * to).
  *
  * The reconciliation opens from here rather than interrupting when the

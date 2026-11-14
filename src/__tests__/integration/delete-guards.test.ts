@@ -122,7 +122,7 @@ describe("deleting a product that has been used", () => {
     // Without the count, "this product still has stock entries" leaves somebody
     // hunting for how much.
     expect(refusal.message).toContain("2 stock entries");
-    // And it says what to do next, which is REDESIGN_PLAN §7 rule 4.
+    // And it says what to do next, which is DECISIONS.md USABILITY rule 4.
     expect(refusal.message).toMatch(/remove those first/i);
   });
 

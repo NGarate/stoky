@@ -22,7 +22,7 @@ import { Decimal } from "@prisma/client-runtime-utils";
  * right and the second is refused. Reporting that as "it did not save" throws
  * away a real event — they *did* take the milk. What is left is a question only
  * a person can answer: the count and the house disagree, and someone has to
- * look at the shelf (`REDESIGN_PLAN.md` §5.5.3).
+ * look at the shelf (`DECISIONS.md` OFFLINE.3).
  *
  * The answer is written as an `adjustStock`, which is the primitive that exists
  * for "the count is wrong and here is the truth". It asks for an **absolute**

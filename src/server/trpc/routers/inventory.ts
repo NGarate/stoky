@@ -504,7 +504,7 @@ export const inventoryRouter = createTRPCRouter({
    *
    * `householdProcedure`, not `writeProcedure`, and that is the capability
    * matrix rather than an oversight: a KITCHEN account may look, use one up
-   * and write down what is needed — nothing else (REDESIGN_PLAN §5.2, amended
+   * and write down what is needed — nothing else (DECISIONS.md ROLES, amended
    * by the owner's pass; D88). This was the first of its three writes.
    *
    * Refuses to take more than the batches hold — CONFLICT, checked against

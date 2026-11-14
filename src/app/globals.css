@@ -12,8 +12,8 @@
    The palette is Estante's, unchanged. Every hex below is copied verbatim from
    the design-lab proposal that was already verified against WCAG AAA; nothing
    was averaged, re-tinted or invented. Estante wins because it is the phone
-   app's basis and therefore the surface people see every day (REDESIGN_PLAN
-   §1, §3; PROGRESS D11). The kitchen screen (§4) is served by the same set:
+   app's basis and therefore the surface people see every day (DECISIONS.md
+   SCREENS; PROGRESS D11). The kitchen screen (SCREENS) is served by the same set:
    `heading` carries the 40px+ display type, and the dark theme is the same
    calm one, applied automatically at night.
 
@@ -82,7 +82,7 @@
   --danger: #fbe3e3;
   --danger-foreground: #8a1220;
 
-  /* Estante's signature fill gauge (REDESIGN_PLAN §3) */
+  /* Estante's signature fill gauge (DECISIONS.md SCREENS) */
   --gauge: #0e4f42;
   --gauge-track: #d3dbd6;
 

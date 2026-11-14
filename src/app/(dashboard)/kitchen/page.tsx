@@ -26,7 +26,7 @@ import { formatTime } from "@/lib/dates";
 import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
- * Screen B — the kitchen, "at home" (`REDESIGN_PLAN.md` §4).
+ * Screen B — the kitchen, "at home" (`DECISIONS.md` SCREENS).
  *
  * Anyone in the house, in passing, reading from a metre away. An old tablet
  * propped up, possibly untouched for days. It answers one question: *what

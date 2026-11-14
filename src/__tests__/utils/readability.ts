@@ -6,7 +6,7 @@
  * standard emits "Check that…" and stops), so this project measures it itself,
  * the same way it measured target size rather than trusting a class name.
  *
- * It is not a compliance exercise. `REDESIGN_PLAN.md` states the premise as
+ * It is not a compliance exercise. `DESIGN_AUDIT.md` states the premise as
  * "anyone in a household can use this, including people with limited technical
  * confidence". That sentence is this criterion, and until now nothing checked
  * it.

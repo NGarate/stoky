@@ -1,6 +1,6 @@
 # Index of the planning documents
 
-Updated: 2026-08-31
+Updated: 2026-11-14
 
 **If you are an agent or a person picking this project up, start here.**
 
@@ -21,7 +21,7 @@ that answers it, and the others link rather than restate.
 |---|---|---|
 | 1 | [`STATUS.md`](STATUS.md) | What is true right now. Gate results, versions, known gaps, which phase is next |
 | 2 | [`PROGRESS.md`](PROGRESS.md) | What has been done and **why the decisions were made that way**. Every judgement call taken without asking, numbered D1–D154 |
-| 3 | [`REDESIGN_PLAN.md`](REDESIGN_PLAN.md) | What is being built, in what order, and what "done" means for each phase |
+| 3 | [`DECISIONS.md`](DECISIONS.md) | The product decisions every screen is held to — the two screens, roles, offline, languages, client state, usability, accessibility — and why |
 
 That is enough to start work. Everything else is reference for a specific task.
 
@@ -47,7 +47,8 @@ document.
 |---|---|
 | Does gate X pass, and what did it measure? | `STATUS.md` |
 | Why was this built this way? | `PROGRESS.md` (Decisions) |
-| What comes next, and what does done mean? | `REDESIGN_PLAN.md` |
+| Which product decisions bind every screen, and why? | `DECISIONS.md` |
+| What comes next? | `STATUS.md` (known gaps, and *What remains*) |
 | Is this defect known? Is it fixed? | `ISSUES.md` |
 | What did the 2026-08-29 review find and deliberately not fix? | `DEFERRED.md` |
 | What must work before calling a slice done? | `SMOKE_JOURNEYS.md` |
@@ -99,22 +100,18 @@ one time that rule was deliberately broken (D22).
 - **Write** a row when you finish a unit, and a new D-number whenever you make a
   judgement call the next person could reasonably make differently.
 
-**[`REDESIGN_PLAN.md`](REDESIGN_PLAN.md)**
-The plan. Two entry screens (a phone screen for day-to-day use, a kitchen screen
-for a tablet), the decisions that shaped them, and nine phases each with an
-explicit *done when*.
+**[`DECISIONS.md`](DECISIONS.md)**
+The product decisions that still govern the code: the two entry screens (a
+phone screen for day-to-day use, a kitchen screen for a tablet) and who each is
+for, roles, offline, both languages, client state, the compiler, the rating,
+and the usability and accessibility rules. Each keeps its wording and its date,
+under a name code cites it by. They were sections of the redesign plan until it
+was retired on 2026-11-14; its phases are `PROGRESS.md`'s record, and what is
+still owed is `STATUS.md`'s *What remains*.
 
-Phases 0 through 6 are complete against their done-whens, each with its named
-exceptions, and Phase 8 — the owner's first pass, six observations from real
-use — was built in a day and a half, closing 2026-08-19. **What remains:
-Phase 7's review document, Phase 8's own done-when (the owner repeating their
-pass), three human passes no suite can answer, and the §10 list**, including
-two §3/§5.1 promises found unbuilt when the journeys were re-audited on
-2026-08-17.
-
-- **Read** to know what you are building and what finishing it means.
-- **Write** when a phase closes — with what it actually did, including where the
-  plan turned out to be wrong. Phase 1 said four dead routes; there were six.
+- **Read** before building a screen or changing what a role may do.
+- **Write** when the owner takes or reverses a product decision — a dated
+  amendment in place, never a silent edit.
 
 **[`ISSUES.md`](../ISSUES.md)**
 Every known defect, with a file reference, evidence, and a severity. Resolved
@@ -162,13 +159,13 @@ The runbook for that pass: which screen reader to use per OS, how to drive it,
 the pa11y/Accessibility Insights supporting steps, and a per-journey todo list
 of what to check on each screen. `DESIGN_AUDIT.md` §5 owns the *why*; this owns
 the *how*. Its "definition of done" ends by dating the result in `STATUS.md` and
-striking the §10 item.
+striking its item in *What remains*.
 
 **[`DEFERRED.md`](DEFERRED.md)**
 What the 2026-08-29 full-codebase review found and deliberately did not fix —
 each item with why it was deferred and what would close it. The Critical and
 Important findings themselves are `ISSUES.md` REV-1; this holds the tail. Its
-rule mirrors §10's: an item leaves by being done, promoted to `ISSUES.md`, or
+rule mirrors `STATUS.md`'s *What remains*: an item leaves by being done, promoted to `ISSUES.md`, or
 dropped in writing — never by being forgotten. Two of its items are owner
 decisions, not code.
 
@@ -228,7 +225,7 @@ to use them. Still proposed: the candidate scripts (`preview`, `dev:https`,
 
 **[`superpowers/plans/2026-10-10-product-review.md`](superpowers/plans/2026-10-10-product-review.md)**
 Missing features, ease-of-use friction and a comparison with Grocy. It is input
-for `REDESIGN_PLAN.md`, not a schedule. It starts with the interface's false
+for the owner, not a schedule. It starts with the interface's false
 promises (household rename, password change), which are the cheapest fixes.
 
 **[`superpowers/plans/2026-11-06-long-receipts-in-parts.md`](superpowers/plans/2026-11-06-long-receipts-in-parts.md)**
@@ -304,7 +301,8 @@ it had rather than what the repository holds.
 |---|---|
 | Fixed a defect | `ISSUES.md` (status + evidence), `PROGRESS.md` (row) |
 | Found a defect you are not fixing | `ISSUES.md` only — file it, do not fix it in passing (D6) |
-| Finished a phase | `REDESIGN_PLAN.md`, `PROGRESS.md`, `STATUS.md` phase table |
+| Finished a phase | `PROGRESS.md`, `STATUS.md` phase table |
+| Took or reversed a product decision | `DECISIONS.md`, dated |
 | Made a judgement call | `PROGRESS.md`, new D-number, with the reasoning |
 | Changed what a gate measures | `STATUS.md`, `VERIFICATION_SEQUENCE.md` |
 | Made a journey pass, or fail | `SMOKE_JOURNEYS.md` |
@@ -344,10 +342,10 @@ Learned here, mostly the expensive way. They are stated in full in
 
 ## Where the unfinished work lives
 
-`docs/REDESIGN_PLAN.md` §10, **Carried forward** — every known-unfinished item
-in one table, each with the phase that owns it, plus an explicitly unowned
-section for the ones that have no phase yet. Compiled when Phase 4 closed,
-because a backlog spread across four files is a backlog nobody reads.
+`docs/STATUS.md` — its known gaps, and *What remains* under *Where the plan
+is*: every known-unfinished item in one place, because a backlog spread across
+four files is a backlog nobody reads. Defects are `ISSUES.md`'s; what is
+listed there is unbuilt or human-shaped.
 
 The rule for that list: an item leaves it by being done or by being
 deliberately dropped, and a drop is written down. Nothing leaves by being

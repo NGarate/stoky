@@ -6,7 +6,7 @@ import { createTRPCRouter, adminProcedure } from "../trpc";
  * The premise of this application is that a household's inventory, receipts and
  * prices live on hardware the household controls. That promise is only worth
  * something if the data can leave — otherwise "self-hosted" means the lock-in is
- * just closer to home. `REDESIGN_PLAN.md` §10 listed this as absent rather than
+ * just closer to home. `STATUS.md` listed this as absent rather than
  * deferred, which is the right description of a gap in the product's own
  * premise.
  *

@@ -7,7 +7,7 @@
  * inside each component is this project's own: the additive risk classes are a
  * small curated table with its sources named, not anybody's proprietary list.
  *
- * **The honesty rules outrank the formula** (REDESIGN_PLAN §6):
+ * **The honesty rules outrank the formula** (DECISIONS.md RATING):
  *
  * - No usable data → no invented number. The result says `noData` and the
  *   interface says "we don't have information on this product".

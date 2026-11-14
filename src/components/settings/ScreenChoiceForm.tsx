@@ -5,7 +5,7 @@ import type { LandingScreen } from "@/generated/prisma/browser";
 import type { JSX } from "react";
 
 /**
- * The three screens, as one question (`REDESIGN_PLAN.md` §5.1).
+ * The three screens, as one question (`DECISIONS.md` SCREEN-CHOICE).
  *
  * Rendered in two places — `/start` asks it once, `/settings/screen` lets it be
  * changed — and shared rather than written twice, because two copies of one

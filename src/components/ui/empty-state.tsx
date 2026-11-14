@@ -11,7 +11,7 @@ import type { JSX, ReactNode } from "react";
  * with an icon, a bordered paragraph, a green panel, and a bare sentence. And
  * most of them stopped at the mood — "No hay listas de compra" — without the
  * one thing an empty screen owes the person looking at it, which is what to
- * do next (`REDESIGN_PLAN.md` §7 rule 5: empty is an invitation with a
+ * do next (`DECISIONS.md` USABILITY rule 5: empty is an invitation with a
  * button).
  *
  * So the grammar is fixed: a **title** that says what is missing, in plain

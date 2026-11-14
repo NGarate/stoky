@@ -23,7 +23,7 @@ import type { JSX, ReactNode } from "react";
  * `check-contrast.ts` has not measured.
  *
  * Colour is never the message. Every badge in this system carries the word
- * too — that is REDESIGN_PLAN §8, and it is why `tone` has no default.
+ * too — that is DECISIONS.md ACCESSIBILITY, and it is why `tone` has no default.
  */
 const badgeVariants = cva(
   "inline-flex items-center rounded px-2 py-1 text-sm font-medium",

@@ -31,7 +31,7 @@ ones that were not personally checked say so.
 **What this review is not.** It is not a penetration test, and no part of it was
 run against a deployed instance. It reads code, runs the test suites, and drives
 the router directly as callers of the wrong household or role. The three human
-passes `REDESIGN_PLAN.md` §10 still owes are not security passes and do not
+passes `STATUS.md` still owes are not security passes and do not
 substitute for one.
 
 **The most useful output was not a list.** It was a *class*: four instances of
@@ -83,7 +83,7 @@ across ten routers — at `8bb2547`; **63 since 2026-08-31** (corrected
 pipeline pair took two away, `product.resolveScan` added one). `SECURITY.md`
 carries the current count, which `capabilities.test.ts` now holds to the
 router. `src/__tests__/unit/capabilities.test.ts` pins every one of
-them against `REDESIGN_PLAN.md` §5.2's matrix by declaration, exhaustively with
+them against `DECISIONS.md` ROLES's matrix by declaration, exhaustively with
 `toEqual` rather than by sampling, and it fails on a router file with no table
 entry. Roles are re-read from the database on every call
 (`src/server/trpc/trpc.ts:180`) rather than trusted from the JWT, so a demotion
@@ -1565,4 +1565,3 @@ None blocks the merge.
 | `SECURITY.md` | The threat model, what is hardened, and the operator's half |
 | `ISSUES.md` | SEC-1, the first of §2's family, and every other filed defect |
 | `docs/STATUS.md` | The gate results this review's verified claims were measured against |
-| `docs/REDESIGN_PLAN.md` §9 | Phase 7's scope, which this document answers |

@@ -15,7 +15,7 @@ import {
  *
  * AAA, and one of the few AAA criteria a machine can decide at all — pa11y's
  * WCAG2AAA standard emits "Check that…" for it and stops. It is here because
- * REDESIGN_PLAN.md's premise is "anyone in a household can use this, including
+ * DESIGN_AUDIT.md's premise is "anyone in a household can use this, including
  * people with limited technical confidence", and nothing checked that sentence
  * against the words the application actually shows.
  *

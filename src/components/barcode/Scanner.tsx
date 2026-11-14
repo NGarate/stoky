@@ -264,7 +264,7 @@ export function BarcodeScanner({
       setTorchFailed(false);
     } catch {
       // Say so rather than flipping the label over a lamp that did not come
-      // on: REDESIGN_PLAN §7 rule 4, errors say what to do next.
+      // on: DECISIONS.md USABILITY rule 4, errors say what to do next.
       setTorchFailed(true);
     }
   }, [cameraTrack, torchEnabled]);

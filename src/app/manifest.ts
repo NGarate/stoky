@@ -8,7 +8,7 @@ import type { MetadataRoute } from "next";
  * a tab, and iOS falls back to a screenshot for the icon. The service worker
  * alone never made this an installable application.
  *
- * `REDESIGN_PLAN.md` §5.4 still holds where it matters: nothing here *prompts*
+ * `DECISIONS.md` PWA still holds where it matters: nothing here *prompts*
  * anyone to install, and push and background sync stay deferred. This only
  * makes the browser's own install action produce an app instead of a
  * bookmark.

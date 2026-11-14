@@ -1,6 +1,6 @@
 # Long receipts: several photographs, and fixing what the reading doubts — 2026-11-06
 
-Status: **plan for the owner, not a decision.** `REDESIGN_PLAN.md` owns what
+Status: **plan for the owner, not a decision.** `docs/STATUS.md` owns what
 comes next; nothing here is scheduled until it is moved there.
 
 What the owner asked for, on 2026-11-06:

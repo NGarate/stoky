@@ -1,6 +1,6 @@
 # Product review: missing features, ease of use, and Grocy — 2026-10-10
 
-Status: **input for the owner, not a decision.** `REDESIGN_PLAN.md` owns what
+Status: **input for the owner, not a decision.** `docs/STATUS.md` owns what
 comes next. Nothing here is scheduled until it is moved there.
 
 How this was produced: three read-only passes over the code, by Haiku
@@ -42,7 +42,7 @@ telling people something untrue.
 | U4 | **Scanning in the shop does not tick the list item** | `scan/page.tsx:114` goes to the product page even with `?from=shopping` | With `from=shopping`, match open list items and offer "Marcar como comprado" with undo | M |
 | U5 ✔ | **Every auto-matched receipt line needs its own tap** | `receipt.confirmAll` exists; the only call is the finish handler (`review/page.tsx:154`) | "Confirmar todas las coincidencias automáticas" for `AUTO_MATCHED` only | M |
 | U6 | **Applying a receipt is unconfirmed and irreversible** | `review/page.tsx` "Añadir al inventario"; no revert procedure | A confirmation that states counts. A revert is a larger, separate change | S |
-| U7 | A KITCHEN account sees write buttons it cannot use, and the refusal reads "Revisa los datos" | `inventory/page.tsx`, `products/page.tsx` have no role check; FORBIDDEN maps to `errorGeneric` | Hide by role, per the capability matrix (`REDESIGN_PLAN.md` §5.2), plus a FORBIDDEN message | S |
+| U7 | A KITCHEN account sees write buttons it cannot use, and the refusal reads "Revisa los datos" | `inventory/page.tsx`, `products/page.tsx` have no role check; FORBIDDEN maps to `errorGeneric` | Hide by role, per the capability matrix (`DECISIONS.md` ROLES), plus a FORBIDDEN message | S |
 | U8 | Add/consume end in a **blocking dialog**, while the stepper and kitchen use undo | `inventory/add/page.tsx` success dialog | Snackbar with undo, the pattern used elsewhere | M |
 | U9 | **"unit" shows in English** in the Spanish unit field | `products/new/page.tsx:96,243`; `DESIGN_AUDIT.md` §10 lists it open | Display through the quantity formatter and keep the stored token | S |
 | U10 | **One concept, several names** — Compra / Lista de la compra / Listas de la compra; Queda poco / Se está acabando / Por reponer | `messages/es.json` navigation and shopping keys | A glossary in `messages/`, then align | M |

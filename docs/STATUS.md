@@ -1247,7 +1247,7 @@ how much is actually on the shelf — and the answer is written as an
 `adjustStock`. It does not interrupt: a conflict is discovered on reconnect,
 possibly with the phone in a pocket, so the sync indicator carries it and the
 dialog opens when the person chooses. A KITCHEN account is told who can fix it
-rather than shown a control the server would refuse. `REDESIGN_PLAN.md` §5.5.3.
+rather than shown a control the server would refuse. `DECISIONS.md` OFFLINE.3.
 
 **Security posture.** Per-request CSP nonce in `src/proxy.ts` with
 `strict-dynamic`, `worker-src` and `child-src` named explicitly, and `/sw.js`
@@ -1592,7 +1592,7 @@ Two things that sequence surfaced, both operational rather than defects:
   the page, `install` precaching `/offline`, the static cache holding real
   hashed chunks, a navigation with the network cut off served from cache, and
   an uncached route getting the offline document.
-- **iOS Safari is unverified.** Playwright's WebKit is not iOS Safari, and §5.4
+- **iOS Safari is unverified.** Playwright's WebKit is not iOS Safari, and `DECISIONS.md` PWA
   defers installability on iOS grounds specifically. The queue, the storage and
   the worker all need a pass on a real device, and that pass must be dated here
   rather than implied by a green suite.
@@ -1631,7 +1631,7 @@ Two things that sequence surfaced, both operational rather than defects:
   `pwa-manifest.test.ts` checks the install criteria and that the PNG sizes
   match their declarations. Nothing checks in a browser that Chromium parses
   the manifest cleanly and loads every icon (D154). What stays deferred on iOS
-  grounds (`REDESIGN_PLAN.md` §5.4) is an install *prompt*, push and background
+  grounds (`DECISIONS.md` PWA) is an install *prompt*, push and background
   sync. Measured trap: CDP's `Page.getInstallabilityErrors` answers `[]` even
   for a manifest with no icons, so it cannot be the assertion.
 - ~~No data export.~~ **Closed.** `/settings` downloads the household as JSON;
@@ -1696,8 +1696,9 @@ Two things that sequence surfaced, both operational rather than defects:
 
 ## Where the plan is
 
-Execution follows `docs/REDESIGN_PLAN.md`. Live progress and every decision
-taken without asking are in `docs/PROGRESS.md`.
+The redesign plan these phases ran under was retired on 2026-11-14; the
+decisions it held that still govern are `docs/DECISIONS.md`. Live progress and
+every decision taken without asking are in `docs/PROGRESS.md`.
 
 | Phase | State |
 |---|---|
@@ -1727,9 +1728,9 @@ found unbuilt have both landed, the ± stepper at `74cff4b` and the screen
 choice at `300f665`, so Journeys 4 and 8 pass — all six of the
 owner's observations are built and green (`70386ea` closes the last); what
 remains of the phase is its done-when, which no suite can run: the owner
-repeating the pass that produced them. All of it is in
-`REDESIGN_PLAN.md` §10, which is the list an item may only leave by being done
-or deliberately dropped.
+repeating the pass that produced them. This paragraph and the known gaps
+above are the list of what is owed (the retired plan kept it as its §10), and
+an item may only leave it by being done or deliberately dropped.
 
 All ten journeys of `docs/SMOKE_JOURNEYS.md` pass at the tiers a suite can
 answer — 4 since 2026-08-25, 8 since 2026-08-26, and 5 since 2026-09-01, when
@@ -1788,7 +1789,7 @@ one-tap add-to-list. The per-journey evidence is in that file.
 
 | Document | Purpose |
 |---|---|
-| `docs/REDESIGN_PLAN.md` | What is being built, phase by phase |
+| `docs/DECISIONS.md` | The product decisions that still govern the code, and why |
 | `docs/PROGRESS.md` | What is done, and every decision taken without asking |
 | `docs/DESIGN_AUDIT.md` | The interface audit and its actions |
 | `docs/SMOKE_JOURNEYS.md` | User journeys that must work before calling work done |

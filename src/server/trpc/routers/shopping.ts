@@ -163,7 +163,7 @@ export const shoppingRouter = createTRPCRouter({
    * A new, empty list. Named by the person; the automatic one names itself.
    *
    * `householdProcedure`, not `writeProcedure`, since the owner's pass
-   * (REDESIGN_PLAN §5.2 amendment, D88): a kitchen account may write down
+   * (DECISIONS.md ROLES amendment, D88): a kitchen account may write down
    * what is needed. Same tier and same reasoning as `consumeStock` — the
    * capability test asserts the widening is exactly these two procedures.
    */
@@ -613,7 +613,7 @@ export const shoppingRouter = createTRPCRouter({
   /**
    * Every item on every list, flattened, unticked first — the phone screen.
    *
-   * `REDESIGN_PLAN.md` §3: the screen answers "what do I need to buy, and is
+   * `DECISIONS.md` SCREENS: the screen answers "what do I need to buy, and is
    * this thing in my hand a good buy?", so it wants one flat list of what is
    * outstanding — not a list of lists. Which list an item belongs to is a
    * filing decision, filing is what `/shopping/lists` is for, and the list an
