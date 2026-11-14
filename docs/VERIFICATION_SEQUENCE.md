@@ -32,7 +32,8 @@ Before a commit:
 
 ```bash
 bun run lint
-bun run typecheck                    # whole project: a changed signature breaks callers you did not touch
+bun run typecheck                    # whole project: a changed signature breaks callers you did not touch;
+                                     # an unused local or parameter is an error (noUnusedLocals, noUnusedParameters)
 bun test <unit files>
 bun test --preload ./src/__tests__/setup/register-dom.ts <component files>
 bash scripts/test-integration-local.sh <integration files>
@@ -74,7 +75,8 @@ bun run verify:local
 
 Nine steps:
 
-- `bun run lint`
+- `bun run lint` — oxlint with `--deny-warnings`: a warning (an unused
+  import or variable among them) fails it as an error does
 - `bun run check:format` — `bun fmt --check`: every file Bun's Prettier port
   has a parser for is formatted as `bunfig.toml`'s `[fmt]` says, Markdown and
   what else `.prettierignore` names excepted. `bun fmt` fixes it
