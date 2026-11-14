@@ -124,7 +124,7 @@ async function accountsNamed(
 }
 
 /** Better Auth's prefix for a two-step challenge's `Verification` row. */
-export const TWO_FACTOR_CHALLENGE_PREFIX = "2fa-";
+const TWO_FACTOR_CHALLENGE_PREFIX = "2fa-";
 
 /**
  * Ends the two-step sign-ins these accounts have in progress (PROGRESS D148),

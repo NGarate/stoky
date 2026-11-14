@@ -24,7 +24,7 @@ import { z } from "zod";
 
 /** What the rating reads. A subset of the OFF product, revalidated here
  * because the snapshot on a `Product` row may predate these fields. */
-export const ratingInputSchema = z.object({
+const ratingInputSchema = z.object({
   nutriscore_grade: z.string().optional(),
   additives_tags: z.array(z.string()).optional(),
   additives_n: z.number().optional(),
@@ -33,17 +33,17 @@ export const ratingInputSchema = z.object({
 
 export type RatingInput = z.infer<typeof ratingInputSchema>;
 
-export type RatingWord = "excellent" | "good" | "poor" | "bad";
+type RatingWord = "excellent" | "good" | "poor" | "bad";
 
 export type AdditiveRisk = "none" | "limited" | "moderate" | "high";
 
-export interface RatedAdditive {
+interface RatedAdditive {
   /** Normalised E-number: `e322`. */
   tag: string;
   risk: AdditiveRisk;
 }
 
-export interface RatingBreakdown {
+interface RatingBreakdown {
   nutritional: { grade: string; points: number; max: 60 };
   additives: {
     /** Each additive with its class, worst first — the interface lists these

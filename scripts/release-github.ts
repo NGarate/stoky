@@ -23,7 +23,7 @@ function run(command: string, args: string[], cwd: string): string {
 }
 
 /** OWNER/NAME of the repository gh resolves from the checkout. */
-export function repository(cwd: string): string {
+function repository(cwd: string): string {
   return run(
     "gh",
     ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"],

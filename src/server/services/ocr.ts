@@ -151,7 +151,7 @@ type RecognisingWorker = {
 };
 
 /** What Tesseract made of one image: its text, and how sure it was (0–100). */
-export interface Reading {
+interface Reading {
   text: string;
   confidence: number;
 }
@@ -177,7 +177,7 @@ export type Confidence = (
 ) => Promise<number>;
 
 /** No opinion on any image: the orientation the proportions chose stands. */
-export const noConfidence: Confidence = async () => 0;
+const noConfidence: Confidence = async () => 0;
 
 /**
  * Recognition with a time limit, one image at a time.
@@ -219,7 +219,7 @@ export function timedRecogniser<W extends RecognisingWorker>(
  * application's workers are, so that reading and judging an orientation
  * share one queue per worker.
  */
-export function timedReader<W extends RecognisingWorker>(
+function timedReader<W extends RecognisingWorker>(
   worker: { get(): Promise<W>; terminate(): Promise<void> },
   timeoutMs: () => number = ocrTimeoutMs,
 ): (image: Buffer, options?: RecogniseOptions) => Promise<Reading> {

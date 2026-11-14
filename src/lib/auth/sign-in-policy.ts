@@ -129,7 +129,7 @@ export interface SignInCharge {
 }
 
 /** An attempt whose address did not parse: counted per address, and nothing else. */
-export interface MalformedSignIn {
+interface MalformedSignIn {
   outcome: "malformed";
 }
 
@@ -344,7 +344,7 @@ export function signInFailed(charge: SignInCharge): void {
  * people's passwords, one good sign-in to their own, repeat. Refunded to the
  * window it was counted in (`SignInCharge.addressWindow`).
  */
-export async function settleSignIn(
+async function settleSignIn(
   charge: SignInCharge,
   limiter: SignInLimiter = valkeySignInLimiter,
 ): Promise<void> {

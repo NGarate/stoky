@@ -105,10 +105,10 @@ import { logSecurityEvent } from "@/lib/security-log";
  */
 
 /** Better Auth's defaults, which the instance does not change. */
-export const TOTP_PERIOD_S = 30;
+const TOTP_PERIOD_S = 30;
 export const TOTP_DIGITS = 6;
 /** Steps either side of now that Better Auth accepts. */
-export const TOTP_WINDOW = 1;
+const TOTP_WINDOW = 1;
 
 /** What a code that matched no step becomes: nothing six digits long. */
 export const NO_MATCH_CODE = "stoky-no-match";
@@ -173,7 +173,7 @@ interface TwoFactorRow {
  * Better Auth's account lockout of the second step, which the instance does
  * not change: ten wrong codes in a row lock it for this long.
  */
-export const TWO_FACTOR_LOCK_S = 15 * 60;
+const TWO_FACTOR_LOCK_S = 15 * 60;
 
 /**
  * How long the second step of `ctx`'s account stays locked, in whole

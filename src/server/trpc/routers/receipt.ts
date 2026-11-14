@@ -43,7 +43,6 @@ import {
   receiptItemRemoveSchema,
   receiptItemUpdateSchema,
   receiptQuadSchema,
-  receiptReframeSchema,
   receiptRegionSchema,
 } from "@/lib/validations/receipt";
 
@@ -443,7 +442,7 @@ export const receiptRouter = createTRPCRouter({
    * upload does, so it spends the upload budget.
    */
   reframe: writeProcedure
-    .input(receiptReframeSchema)
+    .input(receiptRegionSchema)
     .mutation(async ({ ctx, input }) => {
       await enforceRateLimit(
         uploadRateLimit(),

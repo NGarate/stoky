@@ -51,7 +51,7 @@ import type { Persister } from "@tanstack/react-query-persist-client";
 // expiring batch is never null now, and a cached null would draw as nothing.
 // 7 when a query still loading stopped being kept (`shouldPersist`): a cache
 // from before can hold one, and restoring it throws.
-export const CACHE_VERSION = "7";
+const CACHE_VERSION = "7";
 
 /**
  * The queries worth keeping between visits.
@@ -178,7 +178,7 @@ function refusingDeparted(
   } as Storage;
 }
 
-export function createReadPersister(
+function createReadPersister(
   userId: string,
   seams: PersistSeams = {},
 ): Persister {

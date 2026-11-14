@@ -44,7 +44,7 @@ export function matchingOptions(
   return matches;
 }
 
-export interface ComboboxProps extends Omit<
+interface ComboboxProps extends Omit<
   InputProps,
   "value" | "onChange" | "list" | "role" | "type"
 > {

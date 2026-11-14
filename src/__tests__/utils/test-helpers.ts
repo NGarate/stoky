@@ -7,7 +7,6 @@ import type {
   HouseholdRole,
   Product,
   StockEntry,
-  StorageLocation,
 } from "@/generated/prisma/client";
 import type { AppSession } from "@/lib/auth/session";
 
@@ -45,12 +44,6 @@ export interface TestStockEntryData {
   expirationDate?: Date;
   operationType?: "PURCHASE" | "CONSUME" | "ADJUST";
   createdBy: string;
-}
-
-export interface TestLocationData {
-  name: string;
-  householdId: string;
-  parentId?: string;
 }
 
 /**
@@ -150,21 +143,6 @@ export async function createTestProduct(
       householdId: data.householdId,
       defaultUnit: data.defaultUnit || "unit",
       minStock: data.minStock,
-    },
-  });
-}
-
-/**
- * Creates a test storage location
- */
-export async function createTestLocation(
-  data: TestLocationData,
-): Promise<StorageLocation> {
-  return prisma.storageLocation.create({
-    data: {
-      name: data.name,
-      householdId: data.householdId,
-      parentId: data.parentId,
     },
   });
 }

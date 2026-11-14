@@ -38,10 +38,10 @@ import { configuredSecret } from "@/lib/auth/secret";
  */
 
 /** Separates this HMAC from any other use of the same key. */
-export const ACCOUNT_TAG_CONTEXT = "stoky-log-account:";
+const ACCOUNT_TAG_CONTEXT = "stoky-log-account:";
 
 /** Hex characters kept from the digest. */
-export const ACCOUNT_TAG_LENGTH = 16;
+const ACCOUNT_TAG_LENGTH = 16;
 
 /**
  * `secret` defaults to `STOKY_SECRET` (`configuredSecret`), read at call time. Production refuses

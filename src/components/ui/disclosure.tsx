@@ -51,7 +51,7 @@ const summaryVariants = cva(
   },
 );
 
-export interface DisclosureProps {
+interface DisclosureProps {
   summary: React.ReactNode;
   children: React.ReactNode;
   variant?: "panel" | "inline";

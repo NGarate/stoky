@@ -8,7 +8,7 @@ import {
   readability,
   toProse,
   type SupportedLocale,
-} from "@/lib/readability";
+} from "../utils/readability";
 
 /**
  * WCAG 2.1 **3.1.5 Reading Level**, measured on the catalogues.

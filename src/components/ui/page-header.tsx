@@ -147,5 +147,3 @@ export function PageHeader({
     </div>
   );
 }
-
-export { PAGE_WIDTHS, titleVariants as pageTitleVariants };
