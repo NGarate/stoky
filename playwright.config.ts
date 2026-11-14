@@ -87,8 +87,8 @@ export default defineConfig({
   testDir: "./e2e",
   /**
    * Every test, in parallel. Each is one happy path that brings its own data:
-   * it registers its own account, or works in the seeded household on rows no
-   * other test reads.
+   * it gets an account and household of its own (`e2e/account.ts`), or works
+   * in the seeded household on rows no other test reads.
    */
   fullyParallel: true,
   workers: WORKERS,
@@ -185,7 +185,7 @@ export default defineConfig({
      * Chromium because its DevTools protocol has a virtual authenticator, the
      * only way a browser here can hold a passkey; and one engine because
      * whether a server accepts a passkey has one engine's answer. Its spec
-     * registers its own account, so it needs the seeded database and not the
+     * makes its own account, so it needs the migrated database and not the
      * shared session.
      */
     ...(PASSKEYS_TESTABLE
