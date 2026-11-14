@@ -96,11 +96,7 @@ function answered<T>(data: T): Stub<T> {
 
 mock.module("@/lib/trpc/client", () => ({
   api: {
-    // RouteState's household form, reached only on the no-household branch.
     useUtils: () => ({ invalidate: () => Promise.resolve() }),
-    household: {
-      create: { useMutation: () => ({ mutate: () => {}, isPending: false }) },
-    },
     inventory: {
       getStockOverview: {
         useQuery: (input: Record<string, unknown>) => {
@@ -269,19 +265,6 @@ describe("when not every question has an answer", () => {
     expect(
       screen.getByText("No se han podido cargar los datos"),
     ).toBeInTheDocument();
-  });
-
-  it("offers a household by the server's code, not by the message's words", () => {
-    overviewStub = {
-      data: undefined,
-      isPending: false,
-      error: trpcError("PRECONDITION_FAILED", 412),
-      fetchStatus: "idle",
-      refetch: () => {},
-    };
-    renderWithIntl(<DashboardPage />, { locale: "es" });
-
-    expect(screen.getByText("Todavía no tienes un hogar")).toBeInTheDocument();
   });
 });
 

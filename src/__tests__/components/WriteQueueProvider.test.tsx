@@ -238,7 +238,7 @@ describe("two triggers at once", () => {
   });
 });
 
-describe("a household created this session", () => {
+describe("a household the token does not know yet", () => {
   it("stamps new changes with the household the server reports", async () => {
     // The token still says no household; the account row says one exists.
     serverHousehold = "clnewhouseholdnewhousehold";

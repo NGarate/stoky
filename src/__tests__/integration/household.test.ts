@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach } from "bun:test";
-import { TRPCError } from "@trpc/server";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
@@ -11,19 +10,14 @@ import {
 } from "../utils/test-helpers";
 
 /**
- * ISSUES.md HOUSE-1: registration treats the household name as optional, so an
- * account can exist without one, and every household-scoped procedure then
- * refuses it.
- *
- * This covers the way out. The refusal itself — PRECONDITION_FAILED rather
- * than a bare Error — is covered in `capabilities.test.ts`, and what the
- * interface does with it is `src/__tests__/components/RouteState.test.tsx`.
+ * The caller's household, as `household.current` reports it — including for
+ * an account with none (ISSUES.md HOUSE-1), which it answers rather than
+ * refuses. The refusal every household-scoped procedure gives that account
+ * is covered in `capabilities.test.ts`, and what the interface does with it
+ * is `src/__tests__/components/RouteState.test.tsx`.
  */
 
 const HOUSEHOLD_PREFIX = "House Test";
-
-/** Rounds of the concurrent-create race; one pair may run in sequence by chance. */
-const ROUNDS = 10;
 
 type Caller = ReturnType<typeof appRouter.createCaller>;
 
@@ -57,9 +51,8 @@ afterEach(async () => {
 
 describe("household.current", () => {
   it("returns null for an account with no household, rather than throwing", async () => {
-    // The distinction the whole fix rests on: this is the one procedure an
-    // account in the broken state can call, so it must not require the thing
-    // that is missing.
+    // `protectedProcedure`, not `householdProcedure`: it must not require the
+    // thing it reports missing.
     const { caller } = await callerForNewUser();
 
     const result = await caller.household.current();
@@ -78,128 +71,5 @@ describe("household.current", () => {
     expect(result.household?.id).toBe(household.id);
     expect(result.household?.name).toBe(`${HOUSEHOLD_PREFIX} Existing`);
     expect(result.role).toBe("OWNER");
-  });
-});
-
-describe("household.create", () => {
-  it("creates the household and puts the caller in it as OWNER", async () => {
-    const { caller, userId } = await callerForNewUser();
-
-    const created = await caller.household.create({
-      name: `${HOUSEHOLD_PREFIX} New`,
-    });
-
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    expect(user?.householdId).toBe(created.id);
-    expect(user?.role).toBe("OWNER");
-  });
-
-  it("unblocks the procedures that were refusing the account", async () => {
-    // The end-to-end point of HOUSE-1: before, PRECONDITION_FAILED; after,
-    // data. Without this the router could create a row and leave the account
-    // exactly as stuck as it was.
-    const { caller } = await callerForNewUser();
-
-    await expect(caller.product.list({ limit: 20 })).rejects.toThrow();
-
-    await caller.household.create({ name: `${HOUSEHOLD_PREFIX} Unblocked` });
-
-    const products = await caller.product.list({ limit: 20 });
-    expect(products.products).toEqual([]);
-  });
-
-  it("refuses an account that already has a household", async () => {
-    const household = await createTestHousehold({
-      name: `${HOUSEHOLD_PREFIX} Taken`,
-    });
-    const { caller } = await callerForNewUser(household.id);
-
-    let thrown: unknown;
-    try {
-      await caller.household.create({ name: `${HOUSEHOLD_PREFIX} Second` });
-    } catch (error) {
-      thrown = error;
-    }
-
-    expect(thrown).toBeInstanceOf(TRPCError);
-    expect((thrown as TRPCError).code).toBe("CONFLICT");
-
-    // And it left nothing behind. A create that half-applies leaves a
-    // household nobody is a member of, which nothing in the interface can
-    // ever reach or clean up.
-    expect(
-      await prisma.household.count({
-        where: { name: `${HOUSEHOLD_PREFIX} Second` },
-      }),
-    ).toBe(0);
-  });
-
-  it("lets only one of two concurrent creates claim the account, and leaves no empty household", async () => {
-    // A double tap, two tabs or one batched request: both calls pass the
-    // early read before either commits. The claim used to be an update keyed
-    // on the id alone, so the second overwrote the first and stranded its
-    // household with no member. Several rounds, because one pair can happen
-    // to run in sequence and prove nothing.
-    for (let round = 0; round < ROUNDS; round++) {
-      const { caller, userId } = await callerForNewUser();
-      const names = [
-        `${HOUSEHOLD_PREFIX} Race ${round} A`,
-        `${HOUSEHOLD_PREFIX} Race ${round} B`,
-      ];
-
-      const outcomes = await Promise.allSettled(
-        names.map((name) => caller.household.create({ name })),
-      );
-
-      const created = outcomes.flatMap((o) =>
-        o.status === "fulfilled" ? [o.value.id] : [],
-      );
-      const refused = outcomes.flatMap((o) =>
-        o.status === "rejected" ? [o.reason] : [],
-      );
-      expect(created).toHaveLength(1);
-      expect(refused).toHaveLength(1);
-      expect(refused[0]).toBeInstanceOf(TRPCError);
-      expect((refused[0] as TRPCError).code).toBe("CONFLICT");
-
-      // The loser's household rolled back with it, so the account's one
-      // household is the only row either call left.
-      const left = await prisma.household.findMany({
-        where: { name: { in: names } },
-        select: { id: true, _count: { select: { members: true } } },
-      });
-      expect(left.map((h) => h.id)).toEqual(created);
-      expect(left[0]._count.members).toBe(1);
-
-      const user = await prisma.user.findUnique({ where: { id: userId } });
-      expect(user?.householdId).toBe(created[0]);
-      expect(user?.role).toBe("OWNER");
-    }
-  });
-
-  it("rejects an empty name", async () => {
-    const { caller } = await callerForNewUser();
-
-    await expect(caller.household.create({ name: "   " })).rejects.toThrow();
-    expect(
-      await prisma.household.count({
-        where: { name: { startsWith: HOUSEHOLD_PREFIX } },
-      }),
-    ).toBe(0);
-  });
-
-  it("refuses an unauthenticated caller", async () => {
-    const ctx = await createTRPCContext({ session: null });
-    const caller = appRouter.createCaller(ctx);
-
-    let thrown: unknown;
-    try {
-      await caller.household.create({ name: `${HOUSEHOLD_PREFIX} Anonymous` });
-    } catch (error) {
-      thrown = error;
-    }
-
-    expect(thrown).toBeInstanceOf(TRPCError);
-    expect((thrown as TRPCError).code).toBe("UNAUTHORIZED");
   });
 });

@@ -1128,7 +1128,7 @@ These are recorded because each one produced a confident, wrong number.
 
 **Backend — substantially complete.** 10 tRPC routers (`auth`, `data`,
 `household`, `product`, `location`, `inventory`, `receipt`, `store`, `price`,
-`shopping`) merged in `src/server/trpc/router.ts`, **73 procedures** — a count
+`shopping`) merged in `src/server/trpc/router.ts`, **72 procedures** — a count
 that has never held still (44 → 45 → 55 → 59 → 64 → 62 → 63 → 64 → 65 → 66 → 68 → 67 → 68 → 69 → 70 → 71 → 72 → 73 → 74 → 75 → 76 → 79 → 73: it reached 64
 unrecorded while this file said 59, fell to 62 when the two dead pipeline
 procedures were deleted, reached 63 with `product.resolveScan` on
@@ -1233,7 +1233,7 @@ which is what I18N-5 is.
 
 **Roles — enforced on the server, per procedure.** Four values
 (`OWNER`, `ADMIN`, `MEMBER`, `KITCHEN`), three procedure tiers in
-`src/server/trpc/trpc.ts`, and all 73 procedures assigned. Membership and role
+`src/server/trpc/trpc.ts`, and all 72 procedures assigned. Membership and role
 are read from the database on every call rather than from the session, so a
 demotion takes effect on the next request rather than whenever the session
 happens to end. `src/__tests__/unit/capabilities.test.ts` checks the assignment

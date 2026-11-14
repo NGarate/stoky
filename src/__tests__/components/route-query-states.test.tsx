@@ -72,7 +72,6 @@ mock.module("@/lib/offline/queue-context", () => ({
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({ invalidate: () => Promise.resolve() }),
-    household: { create: { useMutation: () => idleMutation } },
     receipt: {
       list: { useQuery: () => queryStub },
       getReceiptWithItems: { useQuery: () => queryStub },
@@ -298,20 +297,6 @@ describe("a receipt that really is not there", () => {
 
 describe("a route that used to hand-roll its states", () => {
   for (const { name, render, back } of DETAIL_ROUTES) {
-    it(`${name} offers a household form when that is what is missing`, () => {
-      queryStub = {
-        ...queryStub,
-        isPending: false,
-        error: trpcError("PRECONDITION_FAILED", 412),
-      };
-
-      mount(render());
-
-      expect(
-        screen.getByText("Todavía no tienes un hogar"),
-      ).toBeInTheDocument();
-    });
-
     it(`${name} keeps its way back while it has no answer`, () => {
       // The loading state of three of these had no way out at all: a title
       // and a sentence, and a query that might never answer.

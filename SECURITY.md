@@ -803,7 +803,7 @@ Verified against the files named in each row.
   owner — so a refused removal ends nothing, and a removal never leaves the
   sessions behind. Losing the household already refused every household
   request; what a live session still reached was the account itself — its
-  password, its devices, a new household of its own — on a device such as
+  password, its devices — on a device such as
   the kitchen tablet that the household may no longer control. The account
   stays (the application deletes none, below), so the person can sign in
   again, to no household. An owner removing themselves beside another owner
@@ -2471,7 +2471,7 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 (`AppSession`) non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 73 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+and all 72 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
 pinning every one against the matrix rather than sampling, and failing when the
 count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the session, so a

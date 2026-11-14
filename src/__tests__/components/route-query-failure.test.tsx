@@ -75,7 +75,6 @@ mock.module("@/lib/offline/queue-context", () => ({
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({ invalidate: () => Promise.resolve() }),
-    household: { create: { useMutation: () => idleMutation } },
     shopping: {
       list: { useQuery: () => queryStub },
       // The preview sits above the list and asks its own question. It is not
@@ -200,27 +199,6 @@ describe("a route whose query failed", () => {
       ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: "Volver a intentarlo" }),
-      ).toBeInTheDocument();
-      expect(screen.queryByText(emptyState)).toBeAbsent();
-    });
-
-    it(`${name} offers a household form when that is what is missing`, () => {
-      queryStub = {
-        data: undefined,
-        isPending: false,
-        error: trpcError("PRECONDITION_FAILED", 412),
-        fetchStatus: "idle",
-        refetch: noop,
-      };
-
-      renderWithIntl(
-        <SnackbarProvider>
-          <Page />
-        </SnackbarProvider>,
-      );
-
-      expect(
-        screen.getByText("Todavía no tienes un hogar"),
       ).toBeInTheDocument();
       expect(screen.queryByText(emptyState)).toBeAbsent();
     });

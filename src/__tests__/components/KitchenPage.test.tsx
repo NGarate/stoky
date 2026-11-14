@@ -74,9 +74,6 @@ mock.module("@/lib/trpc/client", () => ({
       invalidate: () => Promise.resolve(),
       shopping: { list: { invalidate: () => Promise.resolve() } },
     }),
-    household: {
-      create: { useMutation: () => ({ mutate: () => {}, isPending: false }) },
-    },
     inventory: {
       getExpiringItems: { useQuery: () => expiringStub },
       getStockOverview: { useQuery: () => stockStub },

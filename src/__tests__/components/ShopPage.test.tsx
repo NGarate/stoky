@@ -44,9 +44,6 @@ mock.module("@/lib/offline/queue-context", () => ({
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({ invalidate: () => Promise.resolve() }),
-    household: {
-      create: { useMutation: () => ({ mutate: () => {}, isPending: false }) },
-    },
     shopping: { getBuyList: { useQuery: () => queryStub } },
     // Who is looking decides whether a row is a control at all.
     auth: { me: { useQuery: () => ({ data: { role } }) } },

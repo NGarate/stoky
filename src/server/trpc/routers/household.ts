@@ -29,7 +29,6 @@ import {
   addMemberSchema,
   endHouseholdSessionsSchema,
   endMemberSessionsSchema,
-  householdSchema,
   memberSessionsSchema,
   OWN_SESSIONS_MESSAGE,
   OWNERS_ONLY_MESSAGE,
@@ -41,18 +40,6 @@ import {
   updateMemberRoleSchema,
 } from "@/lib/validations/household";
 
-/**
- * The household an account belongs to.
- *
- * `protectedProcedure` rather than `householdProcedure` throughout, and that is
- * the point: these are the procedures an account with **no** household needs,
- * so requiring one would make the router unreachable exactly when it matters.
- *
- * ISSUES.md HOUSE-1. Registration treats the household name as optional, so an
- * account can exist without one; before this, every household-scoped procedure
- * threw and the pages sat on a loading skeleton for ever, with nothing saying
- * why and no way forward.
- */
 /**
  * The member this call names, or `NOT_FOUND`.
  *
@@ -209,7 +196,14 @@ async function actorRole(
 }
 
 export const householdRouter = createTRPCRouter({
-  /** The caller's household, or null. Never throws for the missing case. */
+  /**
+   * The caller's household, or null. Never throws for the missing case.
+   *
+   * `protectedProcedure` rather than `householdProcedure`: an account with no
+   * household gets null rather than a refusal. There is no way out of that
+   * state to offer here any more: an installation holds one household, so
+   * `household.create` was removed (ISSUES.md HOUSE-1).
+   */
   current: protectedProcedure.query(async ({ ctx }) => {
     const user = await ctx.db.user.findUnique({
       where: { id: ctx.session.user.id },
@@ -225,71 +219,6 @@ export const householdRouter = createTRPCRouter({
 
     return { household: user.household, role: user.role };
   }),
-
-  /**
-   * Creates a household and puts the caller in it as its OWNER.
-   *
-   * Refuses if the caller already has one: this is the way out of the
-   * no-household state, not a way to move between households. Leaving a
-   * household, and being invited to another, are Phase 3's neighbours rather
-   * than part of it, and both need a membership model this schema does not
-   * have — `User.householdId` is a single nullable column.
-   */
-  create: protectedProcedure
-    .input(householdSchema)
-    .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      const existing = await ctx.db.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!existing) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "This account no longer exists",
-        });
-      }
-
-      if (existing.householdId) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "This account already belongs to a household",
-        });
-      }
-
-      // One transaction: a household with no members is invisible in the
-      // interface and unreachable by anyone, so a half-applied create would
-      // leave a row nothing can ever clean up.
-      //
-      // The read above is only the early answer; the claim is the conditional
-      // update below. Two creates sent together from one account (a double
-      // tap, two tabs, one batched request) both pass that read, and an
-      // update keyed on `id` alone let the second overwrite the first and
-      // strand its household with no member. With `householdId: null` in the
-      // WHERE, the second waits on the first one's row lock, re-reads the row
-      // once it commits (READ COMMITTED), matches nothing, and throws — which
-      // rolls its own household back.
-      const household = await ctx.db.$transaction(async (tx) => {
-        const created = await tx.household.create({
-          data: { name: input.name },
-        });
-        const claimed = await tx.user.updateMany({
-          where: { id: userId, householdId: null },
-          data: { householdId: created.id, role: "OWNER" },
-        });
-        if (claimed.count === 0) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: "This account already belongs to a household",
-          });
-        }
-        return created;
-      });
-
-      return household;
-    }),
 
   /**
    * Who is in this household.
@@ -429,9 +358,8 @@ export const householdRouter = createTRPCRouter({
    * neither the household nor the sessions can go without the other. Losing
    * the household alone already refused every household request; what a
    * session left alive still reached was the account itself — its password,
-   * its devices list, a new household of its own (`household.create`) — on
-   * a device the household may no longer control, such as the kitchen
-   * tablet. The account stays, so the person can sign in
+   * its devices list — on a device the household may no longer control,
+   * such as the kitchen tablet. The account stays, so the person can sign in
    * again, to an account with no household.
    *
    * Removing yourself, which an owner beside another owner may do, ends your

@@ -1,17 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { TRPCClientError } from "@trpc/client";
-import { api } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   PageHeader,
   PageShell,
   type PageWidth,
 } from "@/components/ui/page-header";
-import type { FormEvent, JSX, ReactNode } from "react";
+import type { JSX, ReactNode } from "react";
 
 /**
  * The same three states for one section of a screen rather than a whole one.
@@ -23,9 +20,9 @@ import type { FormEvent, JSX, ReactNode } from "react";
  * "nothing is about to go off", which is the one failure that reads as good
  * news.
  *
- * No title and no household form: the route around it owns both. A section
- * is told what its query is doing and says so, in the same polite region
- * shape `RouteState` uses and for the same reason.
+ * No title: the route around it owns that. A section is told what its query
+ * is doing and says so, in the same polite region shape `RouteState` uses
+ * and for the same reason.
  */
 export function SectionState({
   error,
@@ -81,10 +78,10 @@ export function SectionState({
  *   Query calls this `fetchStatus: "paused"`, and it is not a failure: no
  *   request was made, so there is nothing to retry until there is signal.
  * - **Loading** — the skeleton, as before.
- * - **No household** — a form to create one. The account is fine; it is
- *   missing a precondition it can supply itself, which is why the server says
- *   PRECONDITION_FAILED rather than FORBIDDEN.
- * - **Anything else** — what happened, and a button to try again.
+ * - **Anything else** — what happened, and a button to try again. That
+ *   includes an account with no household: there used to be a form here to
+ *   create one, but an installation holds one household, so there is nothing
+ *   else to offer it (ISSUES.md HOUSE-1).
  *
  * The paused branch comes first because a paused query is *also* `isPending`,
  * so a skeleton would win and someone with no signal would watch it for ever —
@@ -129,14 +126,6 @@ interface RouteStateProps {
   onRetry: () => void;
 }
 
-/** True when the server said the caller has no household. */
-export function isNoHouseholdError(error: unknown): boolean {
-  return (
-    error instanceof TRPCClientError &&
-    error.data?.code === "PRECONDITION_FAILED"
-  );
-}
-
 /** True when the server said the thing being asked for does not exist. */
 export function isNotFoundError(error: unknown): boolean {
   return error instanceof TRPCClientError && error.data?.code === "NOT_FOUND";
@@ -156,19 +145,6 @@ export function RouteState({
 }: RouteStateProps): JSX.Element {
   const t = useTranslations("household");
   const offline = useTranslations("offline");
-
-  // The no-household branch is a form rather than a message, so it leaves
-  // before the live region below — a `role="status"` wrapped around a form
-  // announces the whole form. No actions: every one of them would be refused
-  // for the same missing household.
-  if (isNoHouseholdError(error)) {
-    return (
-      <PageShell width={width}>
-        <PageHeader back={back} density={density} title={title} />
-        <CreateHousehold />
-      </PageShell>
-    );
-  }
 
   const paused = fetchStatus === "paused";
   const missing = !paused && notFound !== undefined && isNotFoundError(error);
@@ -235,106 +211,5 @@ export function RouteState({
         )}
       </div>
     </PageShell>
-  );
-}
-
-/**
- * The way out of the no-household state.
- *
- * Of the three fixes HOUSE-1 suggests — require a household at registration,
- * create one implicitly, or detect the state and offer a way out — this is the
- * third. The first would break the invitation flow that Phase 3's neighbours
- * need (someone joining an existing household must be able to register without
- * making a second one), and the second silently creates a household named after
- * nothing, which is worse than asking.
- */
-function CreateHousehold(): JSX.Element {
-  const t = useTranslations("household");
-  const utils = api.useUtils();
-  const [name, setName] = useState("");
-  const [failed, setFailed] = useState(false);
-
-  const create = api.household.create.useMutation({
-    onSuccess: async () => {
-      setFailed(false);
-      // Everything on this route was refused for want of a household, so the
-      // whole cache is stale rather than one query of it.
-      await utils.invalidate();
-    },
-    onError: () => setFailed(true),
-  });
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>): void {
-    event.preventDefault();
-    const trimmed = name.trim();
-    if (trimmed.length === 0) return;
-    create.mutate({ name: trimmed });
-  }
-
-  return (
-    <div>
-      <div className="rounded-xl border border-input bg-card p-6">
-        <h2 className="text-lg font-semibold text-heading">
-          {t("noHouseholdTitle")}
-        </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {t("noHouseholdBody")}
-        </p>
-
-        <form
-          className="mt-4 flex flex-col gap-3 sm:flex-row"
-          onSubmit={handleSubmit}
-        >
-          <div className="flex-1">
-            <label
-              className="mb-1 block text-sm font-medium"
-              htmlFor="household-name"
-            >
-              {t("nameLabel")}
-            </label>
-            <Input
-              aria-describedby="household-name-hint"
-              autoComplete="off"
-              id="household-name"
-              name="householdName"
-              onChange={(event) => setName(event.target.value)}
-              required
-              value={name}
-            />
-            <p
-              className="mt-1 text-sm text-muted-foreground"
-              id="household-name-hint"
-            >
-              {t("nameHint")}
-            </p>
-          </div>
-          <Button
-            className="sm:mt-7 sm:w-auto"
-            disabled={create.isPending || name.trim().length === 0}
-            type="submit"
-          >
-            {create.isPending ? t("creating") : t("createHousehold")}
-          </Button>
-        </form>
-
-        {/* Always mounted, empty when there is nothing to say: a region
-            created at the moment it has something to say is one some readers
-            never announce (SyncStatus.tsx:64-65). It stays here rather than
-            becoming a snackbar because the form you would retry from is on
-            screen, and the reason has to still be there when you look back
-            at it. */}
-        <p
-          aria-live="polite"
-          className={
-            failed
-              ? "mt-4 rounded-xl border border-danger-foreground bg-danger px-4 py-3 text-sm text-danger-foreground"
-              : "sr-only"
-          }
-          role="status"
-        >
-          {failed ? t("createFailed") : ""}
-        </p>
-      </div>
-    </div>
   );
 }
