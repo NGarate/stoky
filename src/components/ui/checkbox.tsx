@@ -44,7 +44,6 @@ export function Checkbox({
   label,
   hint,
   disabled,
-  className,
 }: {
   /** The input's id. Minted with `useId` when omitted. */
   id?: string;
@@ -58,14 +57,13 @@ export function Checkbox({
   /** Secondary text, announced as the checkbox's description. */
   hint?: ReactNode;
   disabled?: boolean;
-  className?: string;
 }): JSX.Element {
   const minted = useId();
   const inputId = id ?? minted;
   const hintId = `${inputId}-hint`;
 
   return (
-    <div className={className}>
+    <div>
       <label
         className={cn(
           "relative flex min-h-[48px] min-w-[48px] cursor-pointer items-center gap-3 rounded py-2 text-sm text-foreground",
