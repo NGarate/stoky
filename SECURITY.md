@@ -795,22 +795,27 @@ Verified against the files named in each row.
   the server first, then the queue, the saved reads and the cached shell —
   and offers to send unsent changes first. No token rotation, as for every
   re-entry (the 7.2.4 deviation above).
-- **Removing somebody from the household signs them out everywhere** (ASVS
-  5.0.0 7.4.2, PROGRESS D146). `household.removeMember` deletes every
-  session the member has (`endSessions`) in the transaction that clears
-  their household, after the guards that removal already had — this
-  household's member, only an owner removes an owner, the household keeps an
-  owner — so a refused removal ends nothing, and a removal never leaves the
-  sessions behind. Losing the household already refused every household
-  request; what a live session still reached was the account itself — its
-  password, its devices — on a device such as
-  the kitchen tablet that the household may no longer control. The account
-  stays (the application deletes none, below), so the person can sign in
-  again, to no household. An owner removing themselves beside another owner
-  is signed out too, this device included. Logged as `auth.session.ended`
-  with `reason: "removed"`, the admin as `userId`, the member as
-  `targetUserId` and the count, once the transaction has committed. The
-  confirmation on **Personas del hogar** says so before the fact.
+- **Removing somebody from the household signs them out everywhere and
+  deletes their account** (ASVS 5.0.0 7.4.2, PROGRESS D146). An
+  installation holds one household, so an account outside it has nowhere to
+  be. `household.removeMember` deletes every session the member has
+  (`endSessions`, which also takes their two-step sign-ins in progress and
+  step-ups from `Verification`), their start-screen choices and offline
+  replay records, and then the account, whose password, passkeys and
+  authenticator go with it (a cascade) — all in one transaction, after the
+  guards that removal already had: this household's member, only an owner
+  removes an owner, the household keeps an owner. So a refused removal ends
+  and deletes nothing, and a removal never leaves the sessions or the
+  password behind on a device such as the kitchen tablet that the household
+  may no longer control. The stock movements and receipts they recorded
+  stay, naming them by an id that no longer has an account. The same address
+  can be added again, as a new account. Nobody removes themselves: it would
+  delete the account in use, so the server refuses the caller's own id
+  (`FORBIDDEN`) and the screen does not offer it on their row.
+  Logged as `auth.session.ended` with `reason: "removed"`, the admin as
+  `userId`, the member as `targetUserId` and the count, once the transaction
+  has committed. The confirmation on **Personas del hogar** says so before
+  the fact.
 - **Signing in ends the session the browser presented** (ASVS 5.0.0 7.2.4,
   PROGRESS D139). Better Auth issues a new token at every sign-in and leaves
   the old row alive, so after the sign-in succeeds the auth route deletes the
@@ -2737,7 +2742,7 @@ is stored, logged or sent.
 
 | Data | Where | How long |
 |---|---|---|
-| Accounts: email address, name, role, language and display preference | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database ([Install](docs/INSTALL.md#deleting-somebodys-account)). The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
+| Accounts: email address, name, role, language and display preference | PostgreSQL `User`, on the `postgres_data` volume | Until an admin removes the person from **Personas del hogar**, which deletes the account, or it is deleted in the database — the household's last owner, whom the application does not remove ([Install](docs/INSTALL.md#deleting-somebodys-account)) |
 | Each account's Argon2id password hash, in its `credential` row: the account id, the hash and when the row was written | PostgreSQL `Account`, on the `postgres_data` volume | As long as the account. The database deletes the row with its `User` row (a cascade, PROGRESS D134), so no hash outlives its account |
 | Sessions, one row each: the account id, the session token (the value the cookie signs), when it expires, was created, last written and was signed in, whether it is remembered, the browser's User-Agent string, and the `stoky_device` cookie value the sign-in carried (`deviceId`, D143), which the list of a person's sessions joins to `ScreenChoice` and never returns. No IP address: Better Auth's address tracking is off, so `ipAddress` stays null | PostgreSQL `Session` | Until the session ends: signing out, ending sessions (one's own, a member's, or the whole household's, D147), a password being set, removal from the household (D146), signing in again in the same browser, an eleventh session ending the least recently used one (D140), or the account's deletion (a cascade) delete it, and an expired row is deleted the next time its cookie is read or the account next signs in (D139). A row whose cookie is never sent again stays, expired, until one of them happens. At most fifteen idle minutes and a day in all for a live browser session (PROGRESS D135); ninety idle days and a year in all for a remembered one (D141) |
 | Each passkey a person adds (D151): the account id, the credential's id and public key, its signature counter, whether it can sync to the person's other devices and is backed up, the transports the browser named, when it was added, the name the person gave it, and its AAGUID — the make of authenticator or password manager, never the device or the person | PostgreSQL `Passkey` | Until the person removes it, or the account's deletion (a cascade, like `Account`). Not in the JSON export |
@@ -2746,8 +2751,8 @@ is stored, logged or sent.
 | Better Auth's short-lived values: an identifier, a value and an expiry. Today, a two-step sign-in in progress (the account id, under a random identifier) and its count of wrong codes | PostgreSQL `Verification` | Ten minutes, or until the code is accepted, the challenge has had five wrong codes, or the account's sessions are ended (D148). An expired row stays until it is next read |
 | The household's things: products, stock movements (each one records the member who made it, and can carry a free-text note), locations, stores (a name and an optional address), price records and shopping lists | PostgreSQL | Until somebody deletes them in the application, where it allows that, or in the database. Price records and stock movements add up to the household's purchase history |
 | Receipts: the photograph, re-encoded as a JPEG with no EXIF or GPS data; the OCR text of the whole ticket (`rawOcrText`), which can include a masked card number, a loyalty number and the cashier's name; the text of each line; the store, date and total; and the member who uploaded it | The photograph on the `uploads` volume, everything else in PostgreSQL | Indefinitely. Nothing in the application deletes a receipt or its photograph (`docs/SECURITY_REVIEW.md` finding 16). The photographs a deleted account uploaded can be removed by hand ([Install](docs/INSTALL.md#deleting-somebodys-account)) |
-| Which screen each person opens on each device: an account id, the `stoky_device` cookie value and the chosen screen | PostgreSQL `ScreenChoice` | Indefinitely. Deleting the account as [Install](docs/INSTALL.md#deleting-somebodys-account) describes deletes its rows; deleting the `User` row alone leaves them (`prisma/schema.prisma`) |
-| Offline replay records: account, household, procedure, a hash of the request and the ids of the rows it wrote | PostgreSQL `MutationReplay` | 90 days (`REPLAY_RETENTION_DAYS`). An expired row is deleted the next time the same account sends a replayable write, so an account that stops writing leaves its rows behind |
+| Which screen each person opens on each device: an account id, the `stoky_device` cookie value and the chosen screen | PostgreSQL `ScreenChoice` | Indefinitely. Removing the person from the household deletes their rows, and so does deleting the account as [Install](docs/INSTALL.md#deleting-somebodys-account) describes; deleting the `User` row alone leaves them (`prisma/schema.prisma`) |
+| Offline replay records: account, household, procedure, a hash of the request and the ids of the rows it wrote | PostgreSQL `MutationReplay` | 90 days (`REPLAY_RETENTION_DAYS`). An expired row is deleted the next time the same account sends a replayable write, so an account that stops writing leaves its rows behind. Removing the person from the household deletes theirs |
 | The security log: time, event, the client's full address, account and household ids, procedure, and for a sign-in the keyed tag of the address that was tried ([*Refusals are recorded*](#refusals-are-recorded)) | The `app` container's log | Until rotation removes it. Each container keeps at most 50 MB of log, so how far back it reaches depends on traffic ([Install](docs/INSTALL.md#logs)) |
 | An email address entered a second time. PostgreSQL logs `DETAIL: Key (email)=(…) already exists` with the address in full when an admin adds a member whose address already has an account, or when two registrations of one address race. Query values are sent as bind parameters, so no other value reaches this log | The `db` container's log | As above |
 | Rate-limit counters, each with its key. The key is the client's IPv4 address or IPv6 /64 for the per-address sign-in and registration limits. It is the first 32 hex characters of an unkeyed SHA-256 of the address that was tried for the per-account sign-in limit, followed by a SHA-256 fingerprint of the `stoky_device` id when the browser has signed in to that account before. It is the account id for the metered actions, and the session id for the per-session budget of a re-entered password (D143) | Valkey memory, saved to `dump.rdb` on the `valkey_data` volume | The limit's window: 15 minutes or an hour. A snapshot taken during the window keeps a counter until the next snapshot replaces it. Under the release bundle's command line, the pinned Valkey saves at least once an hour while anything changes (`CONFIG GET save` answers `3600 1 300 100 60 10000`, measured 2026-10-12) |
@@ -2789,10 +2794,11 @@ shopping lists. It leaves out:
 
 It is therefore not a complete copy of what the instance holds about one
 person, and a member who is not an admin cannot export at all. There is no
-per-person export or account deletion. If a person asks the operator for their
-data, the operator answers from the database and the uploads volume. If they
-ask to be erased, [Install](docs/INSTALL.md#deleting-somebodys-account) deletes
-the account in the database and lists what stays. Either way the operator also
+per-person export. If a person asks the operator for their data, the operator
+answers from the database and the uploads volume. If they ask to be erased, an
+admin removes them from **Personas del hogar**, which deletes the account;
+[Install](docs/INSTALL.md#deleting-somebodys-account) deletes the household's
+last owner in the database, and lists what stays. Either way the operator also
 has to account for the backups.
 
 ### Outbound connections

@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from "bun:test";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
+import { signInWith } from "../utils/authorize";
 import {
   createTestUser,
   createTestHousehold,
@@ -15,6 +16,11 @@ import {
  * refuses. The refusal every household-scoped procedure gives that account
  * is covered in `capabilities.test.ts`, and what the interface does with it
  * is `src/__tests__/components/RouteState.test.tsx`.
+ *
+ * And what removing a member leaves behind: nothing of theirs. An
+ * installation holds one household, so a removed member's account is
+ * deleted rather than left with no household and no way out. That removal
+ * signs them out everywhere is `household.members.test.ts`'s.
  */
 
 const HOUSEHOLD_PREFIX = "House Test";
@@ -71,5 +77,99 @@ describe("household.current", () => {
     expect(result.household?.id).toBe(household.id);
     expect(result.household?.name).toBe(`${HOUSEHOLD_PREFIX} Existing`);
     expect(result.role).toBe("OWNER");
+  });
+});
+
+describe("household.removeMember", () => {
+  const PASSWORD = "TestPassword123!";
+
+  async function householdWithMember() {
+    const household = await createTestHousehold({
+      name: `${HOUSEHOLD_PREFIX} Removal`,
+    });
+    const owner = await callerForNewUser(household.id);
+    const member = await createTestUser({
+      email: generateTestEmail("house-removed"),
+      name: `${HOUSEHOLD_PREFIX} Removed`,
+      householdId: household.id,
+      role: "MEMBER",
+    });
+    return { household, owner, member };
+  }
+
+  it("deletes the account, its credentials and its own rows, and nobody else's", async () => {
+    const { household, owner, member } = await householdWithMember();
+    // The control: the password works before, so the refusal after is the
+    // removal's doing.
+    expect(
+      (await signInWith({ email: member.email, password: PASSWORD })).status,
+    ).toBe(200);
+    await prisma.screenChoice.createMany({
+      data: [
+        { userId: member.id, deviceId: crypto.randomUUID(), screen: "KITCHEN" },
+        {
+          userId: owner.userId,
+          deviceId: crypto.randomUUID(),
+          screen: "SHOPPING",
+        },
+      ],
+    });
+    await prisma.mutationReplay.create({
+      data: {
+        key: crypto.randomUUID(),
+        userId: member.id,
+        householdId: household.id,
+        procedure: "test.removal",
+        requestHash: "removed",
+        resultIds: [],
+        expiresAt: new Date(Date.now() + 3600 * 1000),
+      },
+    });
+
+    await owner.caller.household.removeMember({ userId: member.id });
+
+    expect(
+      await prisma.user.findUnique({ where: { id: member.id } }),
+    ).toBeNull();
+    expect(await prisma.account.count({ where: { userId: member.id } })).toBe(
+      0,
+    );
+    expect(await prisma.session.count({ where: { userId: member.id } })).toBe(
+      0,
+    );
+    expect(
+      await prisma.screenChoice.count({ where: { userId: member.id } }),
+    ).toBe(0);
+    expect(
+      await prisma.mutationReplay.count({ where: { userId: member.id } }),
+    ).toBe(0);
+    expect(
+      (await signInWith({ email: member.email, password: PASSWORD })).status,
+    ).toBe(401);
+    // The owner's own row is untouched.
+    expect(
+      await prisma.screenChoice.count({ where: { userId: owner.userId } }),
+    ).toBe(1);
+    await prisma.screenChoice.deleteMany({ where: { userId: owner.userId } });
+  });
+
+  it("lets the same address be added again, as a new account", async () => {
+    // The way back for somebody removed by mistake: an address left on a
+    // householdless row would have been refused as taken.
+    const { household, owner, member } = await householdWithMember();
+
+    await owner.caller.household.removeMember({ userId: member.id });
+    const again = await owner.caller.household.addMember({
+      name: `${HOUSEHOLD_PREFIX} Back`,
+      email: member.email,
+      password: "otra contraseña de vuelta",
+      role: "MEMBER",
+    });
+
+    expect(again.id).not.toBe(member.id);
+    expect(
+      (await prisma.user.findUniqueOrThrow({ where: { id: again.id } }))
+        .householdId,
+    ).toBe(household.id);
   });
 });

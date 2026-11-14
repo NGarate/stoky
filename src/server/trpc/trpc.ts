@@ -316,8 +316,9 @@ export const householdProcedure = protectedProcedure
     if (!membership.householdId) {
       // Kept although the client can no longer resolve it: `household.create`
       // is gone (ISSUES.md HOUSE-1). Every query below is scoped by this id,
-      // so an account outside the household — removed from it, or a row
-      // edited by hand — is refused here rather than trusted to be null-safe.
+      // so an account outside the household — a row edited by hand, since a
+      // removal deletes the account — is refused here rather than trusted to
+      // be null-safe.
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
         message: "This account does not belong to a household yet",

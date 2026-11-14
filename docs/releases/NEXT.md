@@ -223,6 +223,15 @@ El formulario de registro pide ahora el nombre del hogar y no deja seguir sin
 él: quien se registra crea el hogar y lo administra. Antes se podía dejar en
 blanco, y la cuenta quedaba sin hogar hasta crear uno después.
 
+### Quitar a alguien del hogar borra su cuenta
+
+En **Configuración → Personas del hogar**, quitar a alguien borra ahora su
+cuenta y cierra sus sesiones en todos sus dispositivos: ya no puede entrar.
+Antes la cuenta se quedaba sin hogar y sin nada que hacer con ella. Lo que
+hizo en el hogar, como los movimientos de stock y los tickets que subió, se
+queda. Si fue un error, añádela otra vez con el mismo correo: será una cuenta
+nueva. Nadie puede quitarse a sí mismo: tu propia fila ya no lo ofrece.
+
 ## Cambios incompatibles
 
 * **Una instalación es un hogar, y `STOKY_REGISTRATION=open` ya no se
@@ -438,6 +447,16 @@ The registration form now asks for the household's name and does not go on
 without it: whoever registers creates the household and runs it. Before, it
 could be left blank, and the account had no household until one was created
 afterwards.
+
+### Removing somebody from the household deletes their account
+
+In **Configuración → Personas del hogar**, removing somebody now deletes
+their account and signs them out on every device: they can no longer sign
+in. Before, the account was left with no household and nothing to do with
+it. What they did in the household, such as stock movements and the receipts
+they uploaded, stays. If it was a mistake, add them again with the same
+email address: it will be a new account. Nobody can remove themselves: your
+own row no longer offers it.
 
 ### Breaking changes
 

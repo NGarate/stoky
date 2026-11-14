@@ -1399,6 +1399,16 @@ describe("a member's sessions, from the people page", () => {
     expect(memberSessionsFor).toBeNull();
   });
 
+  it("does not offer the admin removing themselves, which deletes the account", () => {
+    renderPeople();
+
+    const alba = rowOf("Alba");
+    if (!alba) throw new Error("the admin is not listed");
+    expect(
+      within(alba).queryByRole("button", { name: "Quitar del hogar" }),
+    ).toBeNull();
+  });
+
   it("opens a dialog named for the member, listing their sessions by device", async () => {
     renderPeople();
 
@@ -1494,9 +1504,10 @@ describe("a member's sessions, from the people page", () => {
     ).toBeInTheDocument();
   });
 
-  it("says before a removal that it signs the member out on every device", async () => {
-    // ASVS 5.0.0 7.4.2, D146: removing somebody now ends their sessions too,
-    // and the question is the last place the admin can learn that.
+  it("says before a removal that it deletes the account and signs the member out", async () => {
+    // ASVS 5.0.0 7.4.2, D146: removing somebody ends their sessions, and
+    // deletes their account; the question is the last place the admin can
+    // learn either, and it used to say the account stayed.
     renderPeople();
     const ana = rowOf("Ana");
     if (!ana) throw new Error("Ana is not listed");
@@ -1505,9 +1516,16 @@ describe("a member's sessions, from the people page", () => {
       within(ana).getByRole("button", { name: "Quitar del hogar" }),
     );
 
+    const question = screen.getByRole("group", {
+      name: "¿Quitar a Ana del hogar y borrar su cuenta?",
+    });
+    expect(question).toHaveTextContent("Su cuenta se borra");
+    expect(question).toHaveTextContent(
+      "se cierran sus sesiones en todos sus dispositivos",
+    );
     expect(
-      screen.getByRole("group", { name: "¿Quitar a Ana del hogar?" }),
-    ).toHaveTextContent("se cierran sus sesiones en todos sus dispositivos");
+      within(question).getByRole("button", { name: "Sí, borrar su cuenta" }),
+    ).toBeInTheDocument();
   });
 });
 

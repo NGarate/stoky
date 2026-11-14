@@ -34,6 +34,7 @@ import {
   OWNERS_ONLY_MESSAGE,
   RESET_OWN_PASSWORD_MESSAGE,
   REMOVE_OWN_TWO_FACTOR_MESSAGE,
+  REMOVE_SELF_MESSAGE,
   removeMemberSchema,
   removeMemberTwoFactorSchema,
   resetMemberPasswordSchema,
@@ -343,34 +344,41 @@ export const householdRouter = createTRPCRouter({
     }),
 
   /**
-   * Remove somebody from the household.
+   * Remove somebody from the household, which deletes their account.
    *
-   * Sets `householdId` to null rather than deleting the account — see
-   * `removeMemberSchema` for why. The same three guards as `updateRole`, and
-   * the same immediacy: the next request that member makes gets
-   * `PRECONDITION_FAILED` from `householdProcedure`, because it re-reads the
-   * household too.
+   * An installation holds one household, so an account outside it has
+   * nowhere to be: a removed member's account goes, rather than lingering
+   * with no household and no way out of that. The same
+   * three guards as `updateRole`, in the same transaction as the delete, so
+   * a refused removal deletes nothing.
    *
-   * **And it signs them out everywhere** (ASVS 5.0.0 7.4.2, PROGRESS D146).
-   * Every session the member has is deleted in the same transaction that
-   * takes their household away (`endSessions`), so the phone in their pocket
-   * and the kitchen tablet they left signed in are signed out together, and
-   * neither the household nor the sessions can go without the other. Losing
-   * the household alone already refused every household request; what a
-   * session left alive still reached was the account itself — its password,
-   * its devices list — on a device the household may no longer control,
-   * such as the kitchen tablet. The account stays, so the person can sign in
-   * again, to an account with no household.
+   * **It signs them out everywhere** (ASVS 5.0.0 7.4.2, PROGRESS D146).
+   * `Session`, `Account`, `Passkey` and `TwoFactor` rows go with the `User`
+   * row (a cascade), but `endSessions` still runs first, in the transaction:
+   * it is what counts the sessions for the log, and what deletes the
+   * account's `Verification` rows — two-step sign-ins in progress and
+   * step-ups — which have no relation to `User` to cascade from.
+   * `ScreenChoice` and `MutationReplay` key on the account's id with no
+   * relation either and are the account's own, so they go here too.
+   * `StockEntry.createdBy` and `Receipt.uploadedBy` stay: they are the
+   * household's history, kept as an id.
    *
-   * Removing yourself, which an owner beside another owner may do, ends your
-   * own sessions too, this one included: you no longer belong anywhere, and
-   * nothing about that needs a session. Logged as `auth.session.ended` with
-   * `reason: "removed"`, after the transaction has committed, so a refused
-   * removal writes no line.
+   * Never the caller: removing yourself would delete the account in use,
+   * with no undo, so it is refused (`REMOVE_SELF_MESSAGE`) and the screen
+   * does not offer it. Logged as `auth.session.ended`
+   * with `reason: "removed"` — the account deleted with them — after the
+   * transaction has committed, so a refused removal writes no line.
    */
   removeMember: adminProcedure
     .input(removeMemberSchema)
     .mutation(async ({ ctx, input }) => {
+      if (input.userId === ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: REMOVE_SELF_MESSAGE,
+        });
+      }
+
       const removed = await withOwnersLocked(
         ctx.db,
         ctx.householdId,
@@ -387,15 +395,12 @@ export const householdRouter = createTRPCRouter({
           );
           await assertAnOwnerRemains(tx, ctx.householdId, member, null);
 
-          await tx.user.update({
-            where: { id: member.id },
-            data: { householdId: null },
-          });
+          const ended = await endSessions(tx, { userId: member.id });
+          await tx.screenChoice.deleteMany({ where: { userId: member.id } });
+          await tx.mutationReplay.deleteMany({ where: { userId: member.id } });
+          await tx.user.delete({ where: { id: member.id } });
 
-          return {
-            id: member.id,
-            ended: await endSessions(tx, { userId: member.id }),
-          };
+          return { id: member.id, ended };
         },
       );
 
