@@ -954,7 +954,11 @@
     "removeTwoFactorAction": "Remove it",
     "removeTwoFactorDone": "{name}'s two-step verification has been removed and their sessions have ended. Ask them to set it up again as soon as they sign in.",
     "removeTwoFactorNotOwner": "Only another owner may remove an owner's two-step verification.",
-    "removeTwoFactorChanged": "This person no longer has two-step verification on, or their account changed. The list has been updated."
+    "removeTwoFactorChanged": "This person no longer has two-step verification on, or their account changed. The list has been updated.",
+    "settingsTitle": "Household",
+    "nameLabel": "Household name",
+    "renamed": "The household is now called “{name}”",
+    "renameFailed": "The household's name could not be changed. Try again."
   },
   "session": {
     "expiringIn": "Your session will close in {minutes} min after being idle. Anything unsaved will be lost.",

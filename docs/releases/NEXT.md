@@ -232,6 +232,12 @@ hizo en el hogar, como los movimientos de stock y los tickets que subió, se
 queda. Si fue un error, añádela otra vez con el mismo correo: será una cuenta
 nueva. Nadie puede quitarse a sí mismo: tu propia fila ya no lo ofrece.
 
+### Cambia el nombre del hogar
+
+Quien es propietario o administra el hogar puede cambiarle el nombre en
+**Configuración → Hogar**. Hasta ahora el nombre que se ponía al registrarse
+no se podía cambiar después.
+
 ## Cambios incompatibles
 
 * **Una instalación es un hogar, y `STOKY_REGISTRATION=open` ya no se
@@ -457,6 +463,12 @@ it. What they did in the household, such as stock movements and the receipts
 they uploaded, stays. If it was a mistake, add them again with the same
 email address: it will be a new account. Nobody can remove themselves: your
 own row no longer offers it.
+
+### Rename the household
+
+Whoever owns or runs the household can rename it in
+**Configuración → Hogar**. Until now the name given at registration could not
+be changed afterwards.
 
 ### Breaking changes
 

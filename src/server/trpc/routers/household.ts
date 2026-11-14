@@ -29,6 +29,7 @@ import {
   addMemberSchema,
   endHouseholdSessionsSchema,
   endMemberSessionsSchema,
+  householdSchema,
   memberSessionsSchema,
   OWN_SESSIONS_MESSAGE,
   OWNERS_ONLY_MESSAGE,
@@ -220,6 +221,23 @@ export const householdRouter = createTRPCRouter({
 
     return { household: user.household, role: user.role };
   }),
+
+  /**
+   * Renames the caller's household.
+   *
+   * The row is `ctx.householdId`, never an id from the input: an admin has
+   * exactly one household to rename, so there is nothing for the input to
+   * choose and no other household's row it could reach.
+   */
+  update: adminProcedure
+    .input(householdSchema)
+    .mutation(async ({ ctx, input }) => {
+      return ctx.db.household.update({
+        where: { id: ctx.householdId },
+        data: input,
+        select: { id: true, name: true },
+      });
+    }),
 
   /**
    * Who is in this household.

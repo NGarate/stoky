@@ -1,4 +1,6 @@
 import { describe, it, expect, afterEach } from "bun:test";
+import type { HouseholdRole } from "@/generated/prisma/client";
+import { MAX_NAME_LENGTH } from "@/lib/validations/bounds";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
@@ -27,7 +29,10 @@ const HOUSEHOLD_PREFIX = "House Test";
 
 type Caller = ReturnType<typeof appRouter.createCaller>;
 
-async function callerForNewUser(householdId?: string): Promise<{
+async function callerForNewUser(
+  householdId?: string,
+  role: HouseholdRole = householdId ? "OWNER" : "MEMBER",
+): Promise<{
   caller: Caller;
   userId: string;
 }> {
@@ -35,7 +40,7 @@ async function callerForNewUser(householdId?: string): Promise<{
     email: generateTestEmail("house"),
     name: `${HOUSEHOLD_PREFIX} User`,
     householdId,
-    role: householdId ? "OWNER" : "MEMBER",
+    role,
   });
   const ctx = await createTRPCContext({ session: createMockSession(user) });
   return { caller: appRouter.createCaller(ctx), userId: user.id };
@@ -77,6 +82,64 @@ describe("household.current", () => {
     expect(result.household?.id).toBe(household.id);
     expect(result.household?.name).toBe(`${HOUSEHOLD_PREFIX} Existing`);
     expect(result.role).toBe("OWNER");
+  });
+});
+
+describe("household.update", () => {
+  /** Two households, so a rename has a neighbour it must not reach. */
+  async function twoHouseholds() {
+    const mine = await createTestHousehold({
+      name: `${HOUSEHOLD_PREFIX} Mine`,
+    });
+    const other = await createTestHousehold({
+      name: `${HOUSEHOLD_PREFIX} Other`,
+    });
+    return { mine, other };
+  }
+
+  const nameOf = async (id: string) =>
+    (await prisma.household.findUniqueOrThrow({ where: { id } })).name;
+
+  it("lets an admin rename their own household, and no other", async () => {
+    const { mine, other } = await twoHouseholds();
+    const { caller } = await callerForNewUser(mine.id, "ADMIN");
+
+    const renamed = await caller.household.update({
+      name: `  ${HOUSEHOLD_PREFIX} Renamed  `,
+    });
+
+    expect(renamed).toEqual({
+      id: mine.id,
+      name: `${HOUSEHOLD_PREFIX} Renamed`,
+    });
+    expect(await nameOf(mine.id)).toBe(`${HOUSEHOLD_PREFIX} Renamed`);
+    expect(await nameOf(other.id)).toBe(`${HOUSEHOLD_PREFIX} Other`);
+  });
+
+  it.each(["MEMBER", "KITCHEN"] as const)(
+    "refuses a %s account, and renames nothing",
+    async (role) => {
+      const { mine } = await twoHouseholds();
+      const { caller } = await callerForNewUser(mine.id, role);
+
+      await expect(
+        caller.household.update({ name: `${HOUSEHOLD_PREFIX} Not Allowed` }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(await nameOf(mine.id)).toBe(`${HOUSEHOLD_PREFIX} Mine`);
+    },
+  );
+
+  it.each([
+    ["a blank", "   "],
+    ["an over-long", "x".repeat(MAX_NAME_LENGTH + 1)],
+  ])("refuses %s name, and renames nothing", async (_, name) => {
+    const { mine } = await twoHouseholds();
+    const { caller } = await callerForNewUser(mine.id, "ADMIN");
+
+    await expect(caller.household.update({ name })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    expect(await nameOf(mine.id)).toBe(`${HOUSEHOLD_PREFIX} Mine`);
   });
 });
 
