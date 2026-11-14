@@ -1264,3 +1264,15 @@ describe("the PostgreSQL image workflow", () => {
     ]);
   });
 });
+
+// knip is the only check that sees an unused export; it is a gate only while
+// the quality job runs it, which happens inside scripts/ci-in-image.sh.
+describe("the CI workflow's quality job", () => {
+  it("runs knip's unused-code check in the development image", () => {
+    const runs = (workflow.jobs?.quality?.steps ?? []).map((step) => step.run);
+    expect(runs).toContain("bash scripts/ci-in-image.sh quality");
+    const script = readFileSync(join(root, "scripts/ci-in-image.sh"), "utf8");
+    const quality = script.match(/^ {2}quality\)\n([\s\S]*?)^ {4};;$/m)?.[1];
+    expect(quality).toContain("bun run check:unused");
+  });
+});

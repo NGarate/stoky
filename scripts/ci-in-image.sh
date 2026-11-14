@@ -70,7 +70,8 @@ case "$SUITE" in
       && bun run typecheck \
       && bun run check:react \
       && bun run check:contrast \
-      && bun run check:links'
+      && bun run check:links \
+      && bun run check:unused'
     ;;
   changed)
     # The pull request's own changes, before the whole-project gates: a fast

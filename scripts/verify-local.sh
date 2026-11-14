@@ -112,6 +112,7 @@ run_step "Typecheck" 180 "${RUN_CMD[@]}" typecheck
 run_step "React doctor" 120 "${RUN_CMD[@]}" check:react
 run_step "Internal links" 120 "${RUN_CMD[@]}" check:links
 run_step "Contrast" 120 "${RUN_CMD[@]}" check:contrast
+run_step "Unused code" 120 "${RUN_CMD[@]}" check:unused
 run_step "Dependency audit" 60 "${RUN_CMD[@]}" check:audit
 run_step "Unit tests" 120 "${RUN_CMD[@]}" test:unit
 run_step "Component tests" 180 "${RUN_CMD[@]}" test:components

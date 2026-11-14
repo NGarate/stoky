@@ -14,6 +14,13 @@
 // those alone, so code reached only from tests, e2e or tools shows up there.
 // In the default mode tests count as users: an export kept for a test is a
 // deliberate seam, not dead code.
+//
+// The default mode is a gate (verify-local.sh, check-scope.sh `all`, CI's
+// quality job); `--production` is informational. package.json's two scripts
+// set E2E_DATABASE_URL and E2E_VALKEY_URL to placeholders: the Playwright
+// plugin loads playwright.config.ts, which throws without a database URL (and
+// on the empty VALKEY_URL scripts/ci-in-image.sh passes), and knip then
+// reports every e2e spec as unused. Nothing connects to either.
 {
   "$schema": "./node_modules/knip/schema-jsonc.json",
   "entry": [
