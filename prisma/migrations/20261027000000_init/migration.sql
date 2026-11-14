@@ -11,7 +11,7 @@ CREATE TYPE "ReceiptStatus" AS ENUM ('UPLOADING', 'PROCESSING', 'PARSED', 'NEEDS
 CREATE TYPE "MatchStatus" AS ENUM ('PENDING', 'AUTO_MATCHED', 'USER_CONFIRMED', 'USER_CREATED', 'SKIPPED');
 
 -- CreateEnum
-CREATE TYPE "StockOperation" AS ENUM ('PURCHASE', 'CONSUME', 'ADJUST', 'TRANSFER');
+CREATE TYPE "StockOperation" AS ENUM ('PURCHASE', 'CONSUME', 'ADJUST');
 
 -- CreateEnum
 CREATE TYPE "HouseholdRole" AS ENUM ('OWNER', 'ADMIN', 'MEMBER', 'KITCHEN');
@@ -120,6 +120,8 @@ CREATE TABLE "Verification" (
 CREATE TABLE "Household" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "tabName" TEXT,
+    "appName" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Household_pkey" PRIMARY KEY ("id")

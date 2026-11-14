@@ -87,8 +87,8 @@ export default defineConfig({
   testDir: "./e2e",
   /**
    * Every test, in parallel. Each is one happy path that brings its own data:
-   * it registers its own account, or works in the seeded household on rows no
-   * other test reads.
+   * it gets an account and household of its own (`e2e/account.ts`), or works
+   * in the seeded household on rows no other test reads.
    */
   fullyParallel: true,
   workers: WORKERS,
@@ -185,7 +185,7 @@ export default defineConfig({
      * Chromium because its DevTools protocol has a virtual authenticator, the
      * only way a browser here can hold a passkey; and one engine because
      * whether a server accepts a passkey has one engine's answer. Its spec
-     * registers its own account, so it needs the seeded database and not the
+     * makes its own account, so it needs the migrated database and not the
      * shared session.
      */
     ...(PASSKEYS_TESTABLE
@@ -272,9 +272,10 @@ export default defineConfig({
           : BASE_URL,
       // The auth rate limiter (ISSUES.md CRITICAL-4) counts per IP, and every
       // browser project reaches the dev server without a proxy in front of it,
-      // so the whole matrix shares one bucket. At the shipped limits — 5
-      // sign-ins per 15 minutes, 3 registrations per hour — the suite would
-      // spend most of a run locked out of a control it is not testing.
+      // so the whole matrix shares one bucket. At the shipped limit of 5
+      // sign-ins per 15 minutes the suite would spend most of a run locked
+      // out of a control it is not testing. No spec registers: the accounts
+      // are made in the database (`e2e/account.ts`).
       //
       // Raised here rather than switched off, so the limiter still runs on
       // every request the suite makes and a crash in it still fails the suite.
@@ -283,8 +284,7 @@ export default defineConfig({
       // proven against a real Valkey in the integration suite — so this
       // override cannot quietly become the product's behaviour.
       RATE_LIMIT_LOGIN_ATTEMPTS: "10000",
-      RATE_LIMIT_REGISTER_ATTEMPTS: "10000",
-      // And the per-account one, for a sharper reason than the two above: the
+      // And the per-account one, for a sharper reason than the one above: the
       // whole suite signs in as the *same* seeded demo user, so every worker
       // shares one account counter however many addresses they come from —
       // which is precisely what that limit is for.
@@ -304,12 +304,6 @@ export default defineConfig({
       // spec adds people today; one that does should not find the budget
       // spent by the specs that ran before it.
       RATE_LIMIT_ADD_MEMBER_ATTEMPTS: "10000",
-      // Production leaves registration `first-user` when this is unset
-      // (`src/lib/auth/registration.ts`), and the seeded demo household is
-      // already an account — so every spec that registers would be refused.
-      // `open` is a shipped mode, not a test-only bypass; `first-user` and
-      // `closed` are proven against a real database in the integration suite.
-      STOKY_REGISTRATION: "open",
     },
     // A cold `next build` on a slow machine, plus server start. A wedged build
     // never answers at all; five minutes tells the two apart.

@@ -32,7 +32,8 @@ Before a commit:
 
 ```bash
 bun run lint
-bun run typecheck                    # whole project: a changed signature breaks callers you did not touch
+bun run typecheck                    # whole project: a changed signature breaks callers you did not touch;
+                                     # an unused local or parameter is an error (noUnusedLocals, noUnusedParameters)
 bun test <unit files>
 bun test --preload ./src/__tests__/setup/register-dom.ts <component files>
 bash scripts/test-integration-local.sh <integration files>
@@ -72,9 +73,10 @@ Runs the checks that should stay cheap enough for most iteration loops:
 bun run verify:local
 ```
 
-Nine steps:
+Ten steps:
 
-- `bun run lint`
+- `bun run lint` — oxlint with `--deny-warnings`: a warning (an unused
+  import or variable among them) fails it as an error does
 - `bun run check:format` — `bun fmt --check`: every file Bun's Prettier port
   has a parser for is formatted as `bunfig.toml`'s `[fmt]` says, Markdown and
   what else `.prettierignore` names excepted. `bun fmt` fixes it
@@ -82,6 +84,8 @@ Nine steps:
 - `bun run check:react` — react-doctor, gating on errors, not the score
 - `bun run check:links` — every internal link points at a route that exists
 - `bun run check:contrast` — every theme token pair meets WCAG AAA
+- `bun run check:unused` — knip: no unused file, export, type or dependency
+  (below)
 - `bun run check:audit` — `bun audit --audit-level moderate`. The one step
   that needs the network: it sends package names and versions to the npm
   advisory endpoint. Offline it reports **skipped**, not failed, because
@@ -125,7 +129,7 @@ One spec at a time, when diagnosing a failure the whole run found:
 bun run test:e2e -- e2e/products.spec.ts
 ```
 
-## Unused code — a report, not yet a gate
+## Unused code
 
 ```bash
 bun run check:unused              # unused files, exports, types and dependencies
@@ -139,14 +143,19 @@ the `bun test` targets, the e2e specs, the workflows' commands); `knip.jsonc`
 names the rest, each with the reason no plugin sees it.
 
 - **`check:unused`** counts tests as users, so an export kept for a test is a
-  seam, not dead code. What it reports is used by nothing at all.
+  seam, not dead code. What it reports is used by nothing at all. **It is a
+  gate**: `verify:*`, `check:all` and CI's quality job (in the development
+  image, under Bun alone) fail while it reports anything. Fix what it finds;
+  an ignore in `knip.jsonc` needs a comment naming the runtime, framework or
+  Dockerfile path that loads what knip cannot see.
 - **`check:unused:production`** starts from the application's own entries and
   leaves tests, e2e and tools out, so it also lists what only a test uses.
-  Informational: a test-only export can be deliberate.
+  Informational, in no gate: a test-only export can be deliberate.
 
-Both exit non-zero while anything is reported, and today something is: it is in
-no gate (`verify:*`, `check-scope.sh`, CI) until the dead code it lists is
-gone. Neither needs the network or a database.
+Neither needs the network or a database. knip loads `playwright.config.ts`,
+which refuses to load without a database URL to point the browser suite at
+(and on an empty `VALKEY_URL`), so both scripts set `E2E_DATABASE_URL` and
+`E2E_VALKEY_URL` to placeholders nothing connects to.
 
 ## Scoped checks — feedback, not a gate
 
@@ -168,6 +177,7 @@ bun run check:changed --base <ref>   # ...or from another base
 | shellcheck | `scripts/*.sh` | listed `scripts/*.sh` |
 | zizmor | `.github/` — every workflow and `dependabot.yml` | listed workflows and `.github/dependabot.yml` |
 | dependency audit | always | only when `bun.lock` or `package.json` is listed |
+| knip (`check:unused`) | the project | not run — whole-project like typecheck, and slower to read; `all`, `verify:*` and CI run it |
 | typecheck | the project | the project — a changed signature breaks callers that are not listed |
 
 **`staged` and `changed` prove nothing.** They answer "is what I did clean", not

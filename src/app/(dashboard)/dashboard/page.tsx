@@ -35,7 +35,7 @@ import type { JSX } from "react";
  * - `inventory.getExpiredItems` — batches already past their date.
  *
  * This is the desktop overview, not the phone or kitchen screen. Those are
- * Phases 4 and 5 of docs/REDESIGN_PLAN.md and are deliberately not attempted
+ * the two screens of docs/DECISIONS.md SCREENS and are deliberately not attempted
  * here: no scanner, no ± stepper, no metre-away type.
  */
 

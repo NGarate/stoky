@@ -53,6 +53,8 @@ import { retryAfterSeconds } from "@/server/trpc/throttle";
 const RUN_MARKER = `authflow-${Date.now().toString(36)}`;
 const runEmail = (prefix: string) =>
   generateTestEmail(`${RUN_MARKER}-${prefix}`);
+/** Registration requires one; carries the marker so the cleanup finds it. */
+const HOUSEHOLD = `Casa ${RUN_MARKER}`;
 
 /**
  * The tRPC code a call was refused with, or why it was not.
@@ -87,129 +89,25 @@ describe("Authentication Flow Integration Tests", () => {
     await cleanupTestHouseholds(RUN_MARKER);
   });
 
+  // What registration makes of a successful call — its household, its owner,
+  // the address lower-cased, the Argon2id hash — is in registration.test.ts:
+  // one account claims an installation (`first-user`), so it needs a
+  // database with no other account in it, and this file shares one.
   describe("User Registration", () => {
-    it("should register a new user with valid data", async () => {
-      const email = runEmail("register");
-      const name = generateTestName("Register User");
-      const password = "SecurePassword123!";
-      const householdName = `My Test Household ${RUN_MARKER}`;
-
-      const result = await caller.auth.register({
-        email,
-        name,
-        password,
-        householdName,
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.user).toBeDefined();
-      expect(result.user.email).toBe(email);
-      expect(result.user.name).toBe(name);
-
-      // Verify user was created in database
-      const dbUser = await prisma.user.findUnique({
-        where: { email },
-        include: { household: true },
-      });
-
-      expect(dbUser).toBeDefined();
-      expect(dbUser?.email).toBe(email);
-      expect(dbUser?.name).toBe(name);
-      expect(dbUser?.household).toBeDefined();
-      expect(dbUser?.household?.name).toBe(householdName);
-      expect(dbUser?.role).toBe("OWNER");
-    });
-
-    it("should register a new user without household", async () => {
+    it("refuses a registration without the household's name", async () => {
+      // It used to make a householdless MEMBER, whose only way forward was to
+      // create a household afterwards (HOUSE-1). Whoever registers founds one.
       const email = runEmail("no-household");
-      const name = generateTestName("No Household User");
-      const password = "SecurePassword123!";
 
-      const result = await caller.auth.register({
-        email,
-        name,
-        password,
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.user).toBeDefined();
-
-      // Verify user was created without household
-      const dbUser = await prisma.user.findUnique({
-        where: { email },
-      });
-
-      expect(dbUser).toBeDefined();
-      expect(dbUser?.householdId).toBeNull();
-      expect(dbUser?.role).toBe("MEMBER");
-    });
-
-    it("should fail to register with duplicate email", async () => {
-      const email = runEmail("duplicate");
-      const name = generateTestName("Duplicate User");
-      const password = "SecurePassword123!";
-
-      // Create first user
-      await caller.auth.register({
-        email,
-        name,
-        password,
-      });
-
-      // Try to create second user with same email
-      let error: Error | null = null;
-      try {
-        await caller.auth.register({
-          email,
-          name: "Different Name",
-          password: "DifferentPassword123!",
-        });
-      } catch (e) {
-        error = e as Error;
-      }
-
-      expect(error).toBeDefined();
-      expect(error?.message).toContain("Email already registered");
-      // A conflict the client can act on, not a server fault.
       expect(
         await codeOf(
           caller.auth.register({
             email,
-            name: "Different Name",
-            password: "DifferentPassword123!",
-          }),
+            name: generateTestName("No Household User"),
+            password: "SecurePassword123!",
+          } as Parameters<typeof caller.auth.register>[0]),
         ),
-      ).toBe("CONFLICT");
-    });
-
-    it("treats an address in any case as one account", async () => {
-      // Registration stored the case as typed and sign-in compared exactly:
-      // the account below could not sign in with the address in lower case,
-      // and the lower-case spelling could be registered as a second account.
-      const lower = runEmail("mixed-case");
-      const typed = `  ${lower.toUpperCase()} `;
-      const password = "SecurePassword123!";
-
-      const result = await caller.auth.register({
-        email: typed,
-        name: generateTestName("Mixed Case"),
-        password,
-      });
-      expect(result.user.email).toBe(lower);
-
-      // The second through the route's trim and lower-casing, the spaces and
-      // the capitals as the person typed them.
-      expect((await signInWith({ email: lower, password })).status).toBe(200);
-      expect((await signInWith({ email: typed, password })).status).toBe(200);
-
-      await expect(
-        caller.auth.register({ email: lower, name: "Second", password }),
-      ).rejects.toThrow("Email already registered");
-      expect(
-        await prisma.user.count({
-          where: { email: { equals: lower, mode: "insensitive" } },
-        }),
-      ).toBe(1);
+      ).toBe("BAD_REQUEST");
     });
 
     it("refuses a second spelling of an address even from a write that skips the schema", async () => {
@@ -243,7 +141,12 @@ describe("Authentication Flow Integration Tests", () => {
 
       expect(
         await codeOf(
-          caller.auth.register({ email: "not-an-email", name, password }),
+          caller.auth.register({
+            email: "not-an-email",
+            name,
+            password,
+            householdName: HOUSEHOLD,
+          }),
         ),
       ).toBe("BAD_REQUEST");
     });
@@ -253,7 +156,14 @@ describe("Authentication Flow Integration Tests", () => {
       const name = generateTestName("Short Password User");
 
       expect(
-        await codeOf(caller.auth.register({ email, name, password: "short" })),
+        await codeOf(
+          caller.auth.register({
+            email,
+            name,
+            password: "short",
+            householdName: HOUSEHOLD,
+          }),
+        ),
       ).toBe("BAD_REQUEST");
       expect(await prisma.user.count({ where: { email } })).toBe(0);
     });
@@ -272,6 +182,7 @@ describe("Authentication Flow Integration Tests", () => {
           email,
           name: generateTestName("Identity User"),
           password: `${localPart}!`,
+          householdName: HOUSEHOLD,
         });
       } catch (e) {
         refusal = e;
@@ -290,7 +201,14 @@ describe("Authentication Flow Integration Tests", () => {
       const password = "SecurePassword123!";
 
       expect(
-        await codeOf(caller.auth.register({ email, name: "", password })),
+        await codeOf(
+          caller.auth.register({
+            email,
+            name: "",
+            password,
+            householdName: HOUSEHOLD,
+          }),
+        ),
       ).toBe("BAD_REQUEST");
       expect(await prisma.user.count({ where: { email } })).toBe(0);
     });
@@ -419,6 +337,26 @@ describe("Authentication Flow Integration Tests", () => {
       expect(at.result.status).toBe(401);
       expect(at.result.code).toBe("INVALID_EMAIL_OR_PASSWORD");
       expect(at.argon2Calls).toBe(1);
+    });
+
+    it("signs in with an address in any case", async () => {
+      // Registration stored the case as typed and sign-in compared exactly:
+      // an account could not sign in with its address in another case.
+      // Registration's half, storing it lower-cased, is in
+      // registration.test.ts; this is sign-in's.
+      const lower = runEmail("mixed-case");
+      const typed = `  ${lower.toUpperCase()} `;
+      const password = "SecurePassword123!";
+      await createTestUser({
+        email: lower,
+        name: generateTestName("Mixed Case"),
+        password,
+      });
+
+      // The second through the route's trim and lower-casing, the spaces and
+      // the capitals as the person typed them.
+      expect((await signInWith({ email: lower, password })).status).toBe(200);
+      expect((await signInWith({ email: typed, password })).status).toBe(200);
     });
 
     it("should refuse empty credentials", async () => {
@@ -593,119 +531,6 @@ describe("Authentication Flow Integration Tests", () => {
     });
   });
 
-  describe("User Logout", () => {
-    it("should logout successfully when authenticated", async () => {
-      const email = runEmail("logout");
-      const name = generateTestName("Logout User");
-      const password = "SecurePassword123!";
-
-      // Create user
-      const user = await createTestUser({ email, name, password });
-
-      // Create authenticated context
-      const session = createMockSession(user);
-      const authCtx = await createTRPCContext({ session });
-      const authCaller = appRouter.createCaller(authCtx);
-
-      // Call logout endpoint
-      const result = await authCaller.auth.logout();
-
-      expect(result.success).toBe(true);
-    });
-
-    it("should fail to logout when not authenticated", async () => {
-      expect(await codeOf(caller.auth.logout())).toBe("UNAUTHORIZED");
-    });
-
-    it("refuses an input", async () => {
-      // It takes nothing, so it accepts nothing. Before `z.void()` it had no
-      // parser and ran on whatever arrived — a cross-site form's body
-      // included. `unit/procedure-inputs.test.ts` holds every mutation to
-      // having one; this shows the refusal happens on the running router.
-      const user = await createTestUser({
-        email: runEmail("logout-input"),
-        name: generateTestName("Logout Input User"),
-      });
-      const authCaller = appRouter.createCaller(
-        await createTRPCContext({ session: createMockSession(user) }),
-      );
-      const form = new FormData();
-      form.set("anything", "1");
-
-      // The cast is the point: the type already says no, the runtime must too.
-      const logout = authCaller.auth.logout as (
-        input: unknown,
-      ) => Promise<unknown>;
-      expect(await codeOf(logout({}))).toBe("BAD_REQUEST");
-      expect(await codeOf(logout(form))).toBe("BAD_REQUEST");
-      expect(await logout(undefined)).toEqual({ success: true });
-    });
-  });
-
-  describe("Password Security", () => {
-    it("should store password as Argon2id hash", async () => {
-      const email = runEmail("password-hash");
-      const name = generateTestName("Password Hash User");
-      const password = "MySecurePassword123!";
-
-      await caller.auth.register({
-        email,
-        name,
-        password,
-      });
-
-      const dbUser = await prisma.user.findUniqueOrThrow({
-        where: { email },
-      });
-      const passwordHash = await storedPasswordHash(dbUser.id);
-
-      expect(passwordHash).not.toBe(password);
-      expect(passwordHash).toStartWith("$argon2id$");
-      expect(await argon2.verify(passwordHash, password)).toBe(true);
-    });
-  });
-
-  describe("Registration with Household", () => {
-    it("should create user as OWNER when household is provided", async () => {
-      const email = runEmail("owner-role");
-      const name = generateTestName("Owner User");
-      const password = "SecurePassword123!";
-      const householdName = "Owner Household";
-
-      await caller.auth.register({
-        email,
-        name,
-        password,
-        householdName,
-      });
-
-      const dbUser = await prisma.user.findUnique({
-        where: { email },
-      });
-
-      expect(dbUser).toBeDefined();
-      expect(dbUser?.role).toBe("OWNER");
-    });
-
-    it("should create user as MEMBER when no household is provided", async () => {
-      const email = runEmail("member-role");
-      const name = generateTestName("Member User");
-      const password = "SecurePassword123!";
-
-      await caller.auth.register({
-        email,
-        name,
-        password,
-      });
-
-      const dbUser = await prisma.user.findUnique({
-        where: { email },
-      });
-
-      expect(dbUser).toBeDefined();
-      expect(dbUser?.role).toBe("MEMBER");
-    });
-  });
   /**
    * A signed-in person replacing their own password — security review,
    * 2026-10-12, and since D144 without signing this device out.

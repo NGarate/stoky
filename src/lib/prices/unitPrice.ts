@@ -42,7 +42,7 @@ export function inUnit<T extends { quantity: Decimal; unit: string }>(
 }
 
 /** `record` with its unit price beside it, or null when it has none. */
-export function withUnitPrice<T extends { price: Decimal; quantity: Decimal }>(
+function withUnitPrice<T extends { price: Decimal; quantity: Decimal }>(
   record: T,
 ): (T & { unitPrice: Decimal }) | null {
   const value = unitPrice(record.price, record.quantity);

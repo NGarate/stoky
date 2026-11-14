@@ -12,7 +12,7 @@ import {
 } from "../utils/test-helpers";
 
 /**
- * Changing a member's role, and removing one — `REDESIGN_PLAN.md` §10's
+ * Changing a member's role, and removing one — `SECURITY_REVIEW.md` finding 8's
  * household admin panel, server half.
  *
  * `addMemberSchema` has said since it was written that promoting somebody
@@ -30,7 +30,7 @@ import {
  *    question to settle first, because it is the one that bites late.
  *
  * The last tests hold the second line of defence: a removal takes effect on
- * the very next request, because `householdProcedure` re-reads the household
+ * the very next request, because `householdProcedure` re-reads the account
  * rather than trusting the token. Removal also ends the member's sessions
  * (PROGRESS D146, `household.members.test.ts`); these callers carry a session
  * that is never read back, so they prove the re-read on its own.
@@ -162,6 +162,20 @@ describe("who may touch ownership", () => {
     ).toBe("FORBIDDEN");
   });
 
+  it("refuses anyone removing themselves, which would delete their account", async () => {
+    // Removal deletes the account, so an admin's own would be one click from
+    // gone for good. Refused for everyone, the last owner included.
+    await member("OWNER", "Owner");
+    const admin = await member("ADMIN", "Admin");
+
+    expect(
+      await codeOf(() =>
+        admin.caller.household.removeMember({ userId: admin.id }),
+      ),
+    ).toBe("FORBIDDEN");
+    expect(await roleOf(admin.id)).toBe("ADMIN");
+  });
+
   it("lets an owner do all of it", async () => {
     const { caller: owner } = await member("OWNER", "Owner");
     const other = await member("MEMBER", "Other");
@@ -191,19 +205,6 @@ describe("the household keeps an owner", () => {
     expect(await roleOf(sole.id)).toBe("OWNER");
   });
 
-  it("refuses the last owner being removed", async () => {
-    const sole = await member("OWNER", "Sole");
-
-    expect(
-      await codeOf(() =>
-        sole.caller.household.removeMember({ userId: sole.id }),
-      ),
-    ).toBe("CONFLICT");
-
-    const row = await prisma.user.findUniqueOrThrow({ where: { id: sole.id } });
-    expect(row.householdId).toBe(householdId);
-  });
-
   it("allows it once somebody else owns the household", async () => {
     // The escape the CONFLICT message names: promote first, then leave. Without
     // this the invariant would be a trap rather than a guard.
@@ -223,11 +224,13 @@ describe("the household keeps an owner", () => {
     expect(await roleOf(first.id)).toBe("MEMBER");
   });
 
-  it("keeps an owner when two owners step down at the same moment", async () => {
+  it("keeps an owner when one owner steps down as they remove the other", async () => {
     // Each call, alone, is allowed: there is another owner. Together they
     // leave none. The count and the write were separate statements outside
     // any transaction, so both counts could see two owners before either
     // write landed. Repeated, because a race that loses once proves nothing.
+    // Whichever lands second is refused: CONFLICT for the demotion of the
+    // last owner, FORBIDDEN for a removal by somebody no longer an owner.
     const outcomes: string[] = [];
 
     for (let round = 0; round < 5; round++) {
@@ -245,7 +248,7 @@ describe("the household keeps an owner", () => {
           }),
         ),
         codeOf(() =>
-          second.caller.household.removeMember({ userId: second.id }),
+          first.caller.household.removeMember({ userId: second.id }),
         ),
       ]);
       outcomes.push(`${a}/${b}`);
@@ -261,17 +264,20 @@ describe("the household keeps an owner", () => {
 
       // Exactly one of the two went ahead, and the other was told why.
       expect([a, b].filter((code) => code === null)).toHaveLength(1);
-      expect([a, b].filter((code) => code === "CONFLICT")).toHaveLength(1);
+      expect(
+        [a, b].filter((code) => code === "CONFLICT" || code === "FORBIDDEN"),
+      ).toHaveLength(1);
     }
   });
 });
 
 describe("when it takes effect", () => {
   it("bites on the removed member's very next request", async () => {
-    // Removal also deletes the member's sessions (D146), but this caller's
-    // session is a mock that nothing reads back, so what refuses it here is
-    // `householdProcedure` re-reading the household rather than trusting the
-    // token — the guard that holds even for a session not yet ended.
+    // Removal also deletes the member's sessions (D146) and account, but
+    // this caller's session is a mock that nothing reads back, so what
+    // refuses it here is `householdProcedure` re-reading the account rather
+    // than trusting the token — the guard that holds even for a session not
+    // yet ended.
     const { caller: owner } = await member("OWNER", "Owner");
     const target = await member("MEMBER", "Target");
 
@@ -282,7 +288,7 @@ describe("when it takes effect", () => {
 
     // Same caller, same token, no sign-out in between.
     expect(await codeOf(() => target.caller.product.list({}))).toBe(
-      "PRECONDITION_FAILED",
+      "UNAUTHORIZED",
     );
   });
 

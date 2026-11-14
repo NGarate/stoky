@@ -22,5 +22,3 @@ export const storeQuerySchema = z.object({
 });
 
 export type StoreInput = z.infer<typeof storeSchema>;
-export type UpdateStoreInput = z.infer<typeof updateStoreSchema>;
-export type StoreQueryInput = z.infer<typeof storeQuerySchema>;

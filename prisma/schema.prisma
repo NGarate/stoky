@@ -243,6 +243,12 @@ model Verification {
 model Household {
   id        String    @id @default(cuid())
   name      String
+  /// What the browser tab says after the page's own title; null says `Stoky`,
+  /// never `name`. Served before sign-in, so public (SECURITY.md).
+  tabName   String?
+  /// The installed app's name (the web manifest); null falls back to `name`.
+  /// The manifest is fetched without credentials, so public as well.
+  appName   String?
   members   User[]
   products  Product[]
   stores    Store[]
@@ -457,7 +463,6 @@ enum StockOperation {
   PURCHASE
   CONSUME
   ADJUST
-  TRANSFER
 }
 
 enum HouseholdRole {
@@ -469,7 +474,7 @@ enum HouseholdRole {
 
 /// Which screen a person starts on. The three that exist, and no fourth.
 ///
-/// `DASHBOARD` is the Panel, `SHOPPING` is Screen A (REDESIGN_PLAN §3) and
+/// `DASHBOARD` is the Panel, `SHOPPING` is Screen A (docs/DECISIONS.md SCREENS) and
 /// `KITCHEN` is Screen B (§4). Whether three entry points is the right number
 /// is DESIGN_AUDIT A5.4's still-open half, and this enum deliberately does not
 /// answer it: offering all three retires nothing, and what people actually
@@ -480,7 +485,7 @@ enum LandingScreen {
   KITCHEN
 }
 
-/// Where this person, on this device, wants to land. REDESIGN_PLAN §5.1.
+/// Where this person, on this device, wants to land. docs/DECISIONS.md SCREEN-CHOICE.
 ///
 /// Keyed on the pair, and that is the requirement rather than a normalisation
 /// choice: a shared tablet must not inherit the choice of whoever signed in
@@ -492,11 +497,12 @@ enum LandingScreen {
 /// anything is drawn, and the landing become a redirect instead of a flash.
 ///
 /// No foreign key to User, matching `MutationReplay` above and the schema's
-/// standing rule that there are no cascades. A deleted account leaves rows
-/// keyed on a user id that no longer exists; nothing reads them, they are two
-/// short strings each, and a cascade is kept for the auth tables alone
-/// (`Account`, `Session`), where a row left behind is a credential rather than
-/// a preference.
+/// standing rule that there are no cascades: a cascade is kept for the auth
+/// tables alone (`Account`, `Session`), where a row left behind is a
+/// credential rather than a preference. So whatever deletes an account deletes
+/// these rows itself — `household.removeMember` does, in its transaction —
+/// though a write of theirs still in flight can leave one behind, keyed on an
+/// id that no longer exists. Nothing reads it.
 model ScreenChoice {
   userId    String
   deviceId  String

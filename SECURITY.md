@@ -274,7 +274,7 @@ Verified against the files named in each row.
   to it from a visitor's browser as any unauthenticated client on that
   network could. It carries no session — cookies belong to the name they were
   set for — so it reaches what the sign-in page reaches, including
-  `/register` while registration is open. A proxy that serves Stoky for its
+  `/register` before the first account exists. A proxy that serves Stoky for its
   own name only, and a port bound to `127.0.0.1`, stop it where Traefik's
   `Host` rule did.
 - **Between the proxy and the app the request is plain HTTP.** On the same
@@ -496,11 +496,11 @@ Verified against the files named in each row.
   the household out of every device. Procedures with an input refuse a form
   body at validation; the three that took none did not. (`auth.endSessions`
   replaced it on 2026-10-15, and asks for the password.)
-- **Every mutation declares an input**, and the two that take nothing —
-  `auth.logout` and `shopping.generateFromLowStock`, and
-  `auth.revokeMySessions` until `auth.endSessions` replaced it — declare
-  `z.void()`, so a form body that got past the rule below would now fail
-  validation there too, with 400 and nothing written. `z.void()` and not
+- **Every mutation declares an input**, and the one that takes nothing —
+  `shopping.generateFromLowStock`, and `auth.logout` and
+  `auth.revokeMySessions` until they were removed — declares `z.void()`, so
+  a form body that got past the rule below would now fail validation there
+  too, with 400 and nothing written. `z.void()` and not
   `z.object({})`, which a `FormData` satisfies. It does not refuse every JSON
   body: superjson reads only a body's `json` field, so `{}` or any object
   without one arrives as no input. The application's own call sends
@@ -508,10 +508,10 @@ Verified against the files named in each row.
   as `undefined`; a bare `{"json":null}` is `null`, and `z.void()` now
   refuses it with 400.
   `src/__tests__/unit/procedure-inputs.test.ts` walks the running router and
-  names any mutation without an input parser; `integration/auth.flow.test.ts`
-  shows `auth.logout` refusing an object and a `FormData` on the running
-  router. The nine queries that take no input do not declare one: they write
-  nothing.
+  names any mutation without an input parser;
+  `integration/shopping.generate.test.ts` shows `generateFromLowStock`
+  refusing an object and a `FormData` on the running router. The eleven
+  queries that take no input do not declare one: they write nothing.
 - **A POST whose content type is not `application/json` is refused with 415**
   before its body is read. Both of the application's links send JSON, and a
   receipt photograph travels base64'd inside it; nothing sends multipart or
@@ -795,22 +795,27 @@ Verified against the files named in each row.
   the server first, then the queue, the saved reads and the cached shell —
   and offers to send unsent changes first. No token rotation, as for every
   re-entry (the 7.2.4 deviation above).
-- **Removing somebody from the household signs them out everywhere** (ASVS
-  5.0.0 7.4.2, PROGRESS D146). `household.removeMember` deletes every
-  session the member has (`endSessions`) in the transaction that clears
-  their household, after the guards that removal already had — this
-  household's member, only an owner removes an owner, the household keeps an
-  owner — so a refused removal ends nothing, and a removal never leaves the
-  sessions behind. Losing the household already refused every household
-  request; what a live session still reached was the account itself — its
-  password, its devices, a new household of its own — on a device such as
-  the kitchen tablet that the household may no longer control. The account
-  stays (the application deletes none, below), so the person can sign in
-  again, to no household. An owner removing themselves beside another owner
-  is signed out too, this device included. Logged as `auth.session.ended`
-  with `reason: "removed"`, the admin as `userId`, the member as
-  `targetUserId` and the count, once the transaction has committed. The
-  confirmation on **Personas del hogar** says so before the fact.
+- **Removing somebody from the household signs them out everywhere and
+  deletes their account** (ASVS 5.0.0 7.4.2, PROGRESS D146). An
+  installation holds one household, so an account outside it has nowhere to
+  be. `household.removeMember` deletes every session the member has
+  (`endSessions`, which also takes their two-step sign-ins in progress and
+  step-ups from `Verification`), their start-screen choices and offline
+  replay records, and then the account, whose password, passkeys and
+  authenticator go with it (a cascade) — all in one transaction, after the
+  guards that removal already had: this household's member, only an owner
+  removes an owner, the household keeps an owner. So a refused removal ends
+  and deletes nothing, and a removal never leaves the sessions or the
+  password behind on a device such as the kitchen tablet that the household
+  may no longer control. The stock movements and receipts they recorded
+  stay, naming them by an id that no longer has an account. The same address
+  can be added again, as a new account. Nobody removes themselves: it would
+  delete the account in use, so the server refuses the caller's own id
+  (`FORBIDDEN`) and the screen does not offer it on their row.
+  Logged as `auth.session.ended` with `reason: "removed"`, the admin as
+  `userId`, the member as `targetUserId` and the count, once the transaction
+  has committed. The confirmation on **Personas del hogar** says so before
+  the fact.
 - **Signing in ends the session the browser presented** (ASVS 5.0.0 7.2.4,
   PROGRESS D139). Better Auth issues a new token at every sign-in and leaves
   the old row alive, so after the sign-in succeeds the auth route deletes the
@@ -1206,7 +1211,7 @@ Verified against the files named in each row.
   machine, and CI and the browser suite serve there.
   `src/__tests__/unit/public-url.test.ts` pins each case and that the hook
   warns without exiting.
-- Self-registration is the operator's to open: `STOKY_REGISTRATION` is
+- Self-registration claims the instance: `STOKY_REGISTRATION` is
   `first-user` unless set, so the first account claims the instance and later
   people are added by a household admin. See
   [Registration closes after the first account](#registration-closes-after-the-first-account).
@@ -1383,8 +1388,8 @@ Verified against the files named in each row.
 - Stock writes and `product.update` hold the product row
   (`SELECT … FOR UPDATE`) so that two writes to one product take turns
   (`ISSUES.md` INV-2). The lock's own `WHERE` names the caller's household as
-  well as the id, in all five places: `addStock`, `consumeStock`,
-  `adjustStock`, `transferStock` and `product.update`.
+  well as the id, in all four places: `addStock`, `consumeStock`,
+  `adjustStock` and `product.update`.
 - Until 2026-10-12 four of them locked by id alone, before the household
   check that refuses a foreign id. A caller holding another household's
   product id therefore locked that household's row for the instant before
@@ -1396,10 +1401,10 @@ Verified against the files named in each row.
   it carries the predicate too, so there is one rule.
 - `src/__tests__/integration/product.lock-isolation.test.ts` has household A
   hold its product's lock in an open transaction while household B calls each
-  of the four procedures with A's id. B must be refused with `NOT_FOUND` while
-  A still holds the lock. Removing the predicate from any one procedure made
-  that procedure's case fail ("blocked" after the 5-second ceiling) and left
-  the other three passing.
+  of the three that lock before checking with A's id. B must be refused with
+  `NOT_FOUND` while A still holds the lock. Removing the predicate from any
+  one procedure made that procedure's case fail ("blocked" after the 5-second
+  ceiling) and left the others passing.
 
 ### Supply chain — `.github/workflows/`, `bunfig.toml`, `package.json`
 
@@ -1761,7 +1766,7 @@ publishing an instance:
   `resolveScan` of a code the household does not have went out to
   `world.openfoodfacts.org` from the instance's one address, and Open Food
   Facts throttles API clients per address. A member scanning random codes in a
-  loop — under open registration, anyone — could get the instance throttled
+  loop could get the instance throttled
   and barcode enrichment stopped for every household on it. Only a request
   that actually leaves is counted, after the household's own products and the
   shared cache (hits, and codes known to be unknown) have missed, so rescanning
@@ -1779,8 +1784,7 @@ publishing an instance:
   `household.addMember` runs Argon2id at 64 MiB on every call before the
   database is asked anything, and a duplicate address pays that hash as well,
   because the unique index only answers once the row is written. Unmetered,
-  any account that admins a household — on an instance with open registration,
-  anyone who registers one — could ask for those hashes in a loop, or hundreds
+  any account that admins the household could ask for those hashes in a loop, or hundreds
   at once in one batched request. An address that is already taken is
   counted like any other call — it has already paid the hash. What is refused
   before the count, by the role check or the input schema, never reaches the
@@ -1818,7 +1822,7 @@ publishing an instance:
   on a shared household instance. It is not only reads, either:
   `product.create`, `store.create` and the other writes are unlimited too.
   Until 2026-10-12 each of them could store as much text as the 15 MiB request
-  body carried, so open registration plus a loop of writes could fill the
+  body carried, so one account and a loop of writes could fill the
   disk every household shares. The per-field bounds above cap what one call
   stores — under 700 characters of text for a product, about 100,000 for the
   largest, a 500-line receipt review that creates a product per line — but
@@ -2000,7 +2004,7 @@ publishing an instance:
   `RATE_LIMIT_PASSKEY_OPTIONS_WINDOW_SECONDS`,
   `RATE_LIMIT_TWO_FACTOR_CODE_ATTEMPTS` and
   `RATE_LIMIT_TWO_FACTOR_CODE_WINDOW_SECONDS`. Raising them raises the
-  exposure; the browser suite raises the sign-in, known-device, registration,
+  exposure; the browser suite raises the sign-in, known-device,
   add-member and product-lookup attempts (`playwright.config.ts` says why for
   each), and a
   unit test asserts the shipped defaults with the environment unset so that
@@ -2276,21 +2280,24 @@ may call. Until 2026-10-12 nothing let an operator close it (security review,
 upload volume nothing cleans, and every unmetered procedure, and tenant
 isolation became the only thing between them and the owner's household.
 
-`STOKY_REGISTRATION` (`src/lib/auth/registration.ts`) takes `open`,
-`first-user` or `closed`. **Unset, it is `first-user` in production** and `open`
-elsewhere, and the release bundle passes `${STOKY_REGISTRATION:-first-user}`
-explicitly. A household does not need open registration: an admin adds people
-through `household.addMember`, which the setting does not govern.
+`STOKY_REGISTRATION` (`src/lib/auth/registration.ts`) takes `first-user` or
+`closed`. **Unset, it is `first-user`**, in production and everywhere else,
+and the release bundle passes `${STOKY_REGISTRATION:-first-user}` explicitly.
+A household does not need open registration: an admin adds people through
+`household.addMember`, which the setting does not govern. There is no `open`
+since 2026-11-14: an installation is one household, and `open` made every
+stranger who registered a household of their own on it.
 
-- **Parsed strictly.** An unknown value is `closed` at run time, never `open`,
-  and in production the server refuses to start over it, from the same
+- **Parsed strictly.** An unknown value, `open` included, is `closed` at run
+  time, and in production the server refuses to start over it, from the same
   instrumentation hook and in the same way as the signing-key guard above. Both
   problems are reported before the exit.
 - **In this order**, in `auth.register`: `closed` refuses with `FORBIDDEN`
   before the rate limiter and before any query; then the per-address limiter;
-  then, in `first-user`, a count of accounts, before the existence check, so a
-  refusal says nothing about whether an address is registered; then the
-  existence check and the Argon2id hash. Every refusal is an `access.denied`
+  then, in `first-user`, a count of accounts, so a refusal says nothing about
+  whether an address is registered; then the Argon2id hash. There is no
+  existence check: before the first account no address is registered, and
+  after it nobody gets this far. Every refusal is an `access.denied`
   line in the security log, with the path `auth.register`.
 - **The first-user count cannot race.** The account is created in a
   transaction that holds a PostgreSQL advisory lock
@@ -2310,8 +2317,8 @@ through `household.addMember`, which the setting does not govern.
   its own. The sign-in page still links to `/register`, which now explains
   instead of refusing after submit.
 - **Tested against PostgreSQL** on a database of its own
-  (`src/__tests__/integration/registration.test.ts`): `closed` refuses
-  everyone without touching the database; `first-user` admits exactly one;
+  (`src/__tests__/integration/registration.test.ts`): `closed`, and `open`
+  with it, refuses everyone without touching the database; `first-user` admits exactly one;
   two simultaneous claims leave one account and one household; a registration
   waits while the lock is held and is then refused; a credential row that
   cannot be written leaves no user, account or household behind. Removing the
@@ -2326,8 +2333,6 @@ What is still open:
   guide](docs/INSTALL.md) says to register immediately, and to start again from
   empty volumes if someone else did. A one-time setup token printed to the logs
   would close the window; it is not built.
-- **`open` is still what it was.** An installation that sets it accepts
-  strangers, and registration still reveals whether an address has an account.
 
 ---
 
@@ -2471,7 +2476,7 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 (`AppSession`) non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 79 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+and all 73 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
 pinning every one against the matrix rather than sampling, and failing when the
 count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the session, so a
@@ -2486,7 +2491,8 @@ fixed; a test now fails on the shape of them.
 
 Opening without a signal is a requirement, so a copy of household data lives
 on every device that has used the app: the cached shell (the service worker's
-copy of six pages, which carry no household data), the write queue
+copy of six pages, which carry no household data but the tab's and the app's
+names, public by decision), the write queue
 (`stoky.queue.v1.<account>`), and the **saved reads** — the seven allowlisted
 queries in `PERSISTED_QUERIES` (`src/lib/offline/persist.ts`: the shopping
 lists, the stock overview, expiring and expired items, the product list),
@@ -2651,11 +2657,10 @@ full in the section named.
   installation owns it; register at once, and start again if somebody else did
   ([*Registration closes after the first account*](#registration-closes-after-the-first-account)).
   A one-time setup token would close it, and is out of proportion for an alpha.
-- **An address's existence is visible** through `register` under
-  `STOKY_REGISTRATION=open` and through `addMember` to an admin. `first-user`
-  closes the first after the first account; the second is admin-only and
-  metered, and a uniform answer would hide real errors from the household's
-  own admins.
+- **An address's existence is visible** through `addMember` to an admin.
+  `register` does not show it: once an account exists, `first-user` refuses
+  without looking at the address. `addMember` is admin-only and metered, and a
+  uniform answer would hide real errors from the household's own admins.
 - ~~**No per-session sign-out.**~~ Closed by PROGRESS D135 and D143
   (2026-10-15): sessions are database rows, and signing out deletes this
   device's, so a copied cookie is refused at once; **Tus dispositivos**
@@ -2690,7 +2695,7 @@ full in the section named.
 - **No per-household storage quota, and uploaded photographs are never
   deleted** (`ISSUES.md` UPLOAD-1, Phase 7 finding 16). Uploads are metered and
   bounded per file; a quota needs a schema change, accounting and a screen.
-  Revisit before any open-registration or multi-tenant use.
+  Revisit before any multi-tenant use.
 - **No `CHECK` constraints in the database** (`ISSUES.md` DB-1). Zod bounds
   guard every write path; a constraint migration needs a data audit first.
 - **No account erasure in the application.** The operator is the data
@@ -2738,7 +2743,8 @@ is stored, logged or sent.
 
 | Data | Where | How long |
 |---|---|---|
-| Accounts: email address, name, role, language and display preference | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database ([Install](docs/INSTALL.md#deleting-somebodys-account)). The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
+| The household's name, and the names it gives its browser tab and installed app, which are public ([below](#what-anyone-who-reaches-the-address-can-read)) | PostgreSQL `Household` | Until an owner or admin changes them |
+| Accounts: email address, name, role, language and display preference | PostgreSQL `User`, on the `postgres_data` volume | Until an admin removes the person from **Personas del hogar**, which deletes the account, or it is deleted in the database — the household's last owner, whom the application does not remove ([Install](docs/INSTALL.md#deleting-somebodys-account)) |
 | Each account's Argon2id password hash, in its `credential` row: the account id, the hash and when the row was written | PostgreSQL `Account`, on the `postgres_data` volume | As long as the account. The database deletes the row with its `User` row (a cascade, PROGRESS D134), so no hash outlives its account |
 | Sessions, one row each: the account id, the session token (the value the cookie signs), when it expires, was created, last written and was signed in, whether it is remembered, the browser's User-Agent string, and the `stoky_device` cookie value the sign-in carried (`deviceId`, D143), which the list of a person's sessions joins to `ScreenChoice` and never returns. No IP address: Better Auth's address tracking is off, so `ipAddress` stays null | PostgreSQL `Session` | Until the session ends: signing out, ending sessions (one's own, a member's, or the whole household's, D147), a password being set, removal from the household (D146), signing in again in the same browser, an eleventh session ending the least recently used one (D140), or the account's deletion (a cascade) delete it, and an expired row is deleted the next time its cookie is read or the account next signs in (D139). A row whose cookie is never sent again stays, expired, until one of them happens. At most fifteen idle minutes and a day in all for a live browser session (PROGRESS D135); ninety idle days and a year in all for a remembered one (D141) |
 | Each passkey a person adds (D151): the account id, the credential's id and public key, its signature counter, whether it can sync to the person's other devices and is backed up, the transports the browser named, when it was added, the name the person gave it, and its AAGUID — the make of authenticator or password manager, never the device or the person | PostgreSQL `Passkey` | Until the person removes it, or the account's deletion (a cascade, like `Account`). Not in the JSON export |
@@ -2747,8 +2753,8 @@ is stored, logged or sent.
 | Better Auth's short-lived values: an identifier, a value and an expiry. Today, a two-step sign-in in progress (the account id, under a random identifier) and its count of wrong codes | PostgreSQL `Verification` | Ten minutes, or until the code is accepted, the challenge has had five wrong codes, or the account's sessions are ended (D148). An expired row stays until it is next read |
 | The household's things: products, stock movements (each one records the member who made it, and can carry a free-text note), locations, stores (a name and an optional address), price records and shopping lists | PostgreSQL | Until somebody deletes them in the application, where it allows that, or in the database. Price records and stock movements add up to the household's purchase history |
 | Receipts: the photograph, re-encoded as a JPEG with no EXIF or GPS data; the OCR text of the whole ticket (`rawOcrText`), which can include a masked card number, a loyalty number and the cashier's name; the text of each line; the store, date and total; and the member who uploaded it | The photograph on the `uploads` volume, everything else in PostgreSQL | Indefinitely. Nothing in the application deletes a receipt or its photograph (`docs/SECURITY_REVIEW.md` finding 16). The photographs a deleted account uploaded can be removed by hand ([Install](docs/INSTALL.md#deleting-somebodys-account)) |
-| Which screen each person opens on each device: an account id, the `stoky_device` cookie value and the chosen screen | PostgreSQL `ScreenChoice` | Indefinitely. Deleting the account as [Install](docs/INSTALL.md#deleting-somebodys-account) describes deletes its rows; deleting the `User` row alone leaves them (`prisma/schema.prisma`) |
-| Offline replay records: account, household, procedure, a hash of the request and the ids of the rows it wrote | PostgreSQL `MutationReplay` | 90 days (`REPLAY_RETENTION_DAYS`). An expired row is deleted the next time the same account sends a replayable write, so an account that stops writing leaves its rows behind |
+| Which screen each person opens on each device: an account id, the `stoky_device` cookie value and the chosen screen | PostgreSQL `ScreenChoice` | Indefinitely. Removing the person from the household deletes their rows, and so does deleting the account as [Install](docs/INSTALL.md#deleting-somebodys-account) describes; deleting the `User` row alone leaves them (`prisma/schema.prisma`) |
+| Offline replay records: account, household, procedure, a hash of the request and the ids of the rows it wrote | PostgreSQL `MutationReplay` | 90 days (`REPLAY_RETENTION_DAYS`). An expired row is deleted the next time the same account sends a replayable write, so an account that stops writing leaves its rows behind. Removing the person from the household deletes theirs |
 | The security log: time, event, the client's full address, account and household ids, procedure, and for a sign-in the keyed tag of the address that was tried ([*Refusals are recorded*](#refusals-are-recorded)) | The `app` container's log | Until rotation removes it. Each container keeps at most 50 MB of log, so how far back it reaches depends on traffic ([Install](docs/INSTALL.md#logs)) |
 | An email address entered a second time. PostgreSQL logs `DETAIL: Key (email)=(…) already exists` with the address in full when an admin adds a member whose address already has an account, or when two registrations of one address race. Query values are sent as bind parameters, so no other value reaches this log | The `db` container's log | As above |
 | Rate-limit counters, each with its key. The key is the client's IPv4 address or IPv6 /64 for the per-address sign-in and registration limits. It is the first 32 hex characters of an unkeyed SHA-256 of the address that was tried for the per-account sign-in limit, followed by a SHA-256 fingerprint of the `stoky_device` id when the browser has signed in to that account before. It is the account id for the metered actions, and the session id for the per-session budget of a re-entered password (D143) | Valkey memory, saved to `dump.rdb` on the `valkey_data` volume | The limit's window: 15 minutes or an hour. A snapshot taken during the window keeps a counter until the next snapshot replaces it. Under the release bundle's command line, the pinned Valkey saves at least once an hour while anything changes (`CONFIG GET save` answers `3600 1 300 100 60 10000`, measured 2026-10-12) |
@@ -2766,6 +2772,28 @@ address has tried to sign in during the window, or has a known device.
 
 No request body or receipt text reaches a log. What the operator's proxy
 records of each request is its own configuration's to say.
+
+### What anyone who reaches the address can read
+
+Two of the household's names are served without a session, by the owner's
+decision (`docs/superpowers/plans/2026-11-12-one-household-per-installation.md`,
+§2), and the settings form says so beside each field:
+
+- **The tab's name** (`Household.tabName`), which ends every document title,
+  `/login` and `/register` included. Left empty, the tab says `Stoky` and
+  never the household's name.
+- **The installed app's name** (`Household.appName`): the web manifest's
+  `name` and `short_name`, and the `apple-mobile-web-app-title` of every page.
+  The browser fetches the manifest without credentials. Left empty, the app
+  takes the household's name, which is then public too; with no household
+  yet, `Stoky`.
+
+Both are bounded and trimmed like the household's name
+(`src/lib/validations/household.ts`), written only by an owner or admin
+(`household.update`), and reach a response only as text: React escapes them
+in the HTML and the manifest is JSON. Neither goes into a header or a query
+string. An installation holds one household; a database edited to hold
+several shows the oldest one's names (`src/lib/household-names.ts`).
 
 ### What the JSON export does not include
 
@@ -2790,10 +2818,11 @@ shopping lists. It leaves out:
 
 It is therefore not a complete copy of what the instance holds about one
 person, and a member who is not an admin cannot export at all. There is no
-per-person export or account deletion. If a person asks the operator for their
-data, the operator answers from the database and the uploads volume. If they
-ask to be erased, [Install](docs/INSTALL.md#deleting-somebodys-account) deletes
-the account in the database and lists what stays. Either way the operator also
+per-person export. If a person asks the operator for their data, the operator
+answers from the database and the uploads volume. If they ask to be erased, an
+admin removes them from **Personas del hogar**, which deletes the account;
+[Install](docs/INSTALL.md#deleting-somebodys-account) deletes the household's
+last owner in the database, and lists what stays. Either way the operator also
 has to account for the backups.
 
 ### Outbound connections
@@ -3104,4 +3133,4 @@ docker buildx imagetools inspect \
 |---|---|
 | `docs/STATUS.md` | Command-verified state of the project, including the dependency audit |
 | `ISSUES.md` | Open issues, with file references — CRITICAL-4 is the rate limiting gap |
-| `docs/REDESIGN_PLAN.md` | Where the product is going, and which phase closes each gap |
+| `docs/DECISIONS.md` | ROLES, the capability matrix each role is held to |

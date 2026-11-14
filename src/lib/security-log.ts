@@ -93,7 +93,8 @@ export type SecurityEvent =
   // Sessions somebody ended on purpose, with the `reason`: the account's own
   // holder ending all of theirs (`self`), a password change ending every
   // other one (`password-change`), an admin ending a member's
-  // (`admin`), an admin removing a member from the household (`removed`),
+  // (`admin`), an admin removing a member, which deletes their account
+  // (`removed`),
   // an owner ending every session in the household (`owner`, with no
   // `targetUserId`: they were everybody's), an admin removing a member's
   // two-step verification, which ends all of theirs (`two-factor-removed`),

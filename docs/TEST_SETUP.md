@@ -27,12 +27,15 @@ Running a business flow on five engines does not test five things. A sign-in is
 tRPC, Prisma and Argon2id; none of it is rendered, and none of it changes
 because the engine did.
 
-So the browser suite is one happy path per process — sign up and in, products,
+So the browser suite is one happy path per process — sign in and out, products,
 stock, shopping offline, receipts, household members, password, sessions,
 two-step verification, passkeys — on chromium alone, every test in parallel.
-Each test registers its own account or works on seeded rows no other test
-reads. Layout, accessibility and security-header sweeps are not part of it
-(PROGRESS D154); axe at AAA runs in the component suite instead
+Each test works on seeded rows no other test reads, or on an account and
+household of its own, which `e2e/account.ts` writes straight into the suite's
+database the way the application makes one — not through `/register`, a
+once-per-installation step the suite cannot repeat on a database that already
+has accounts. Layout, accessibility and security-header sweeps are not part
+of it (PROGRESS D154); axe at AAA runs in the component suite instead
 (`src/__tests__/utils/axe.ts`).
 
 ### The budget is enforced, not aspirational
@@ -229,7 +232,7 @@ src/__tests__/
 
 e2e/                           # Playwright — one happy path per spec file
 ├── *.spec.ts
-├── account.ts                 # register, sign in, sign out
+├── account.ts                 # fresh account, sign in, sign out
 ├── db-url.ts                  # the suite's isolated database/cache URLs
 ├── seed.setup.ts              # migrate + seed the suite's own database
 ├── session.setup.ts           # sign in once; session.ts holds the mechanism

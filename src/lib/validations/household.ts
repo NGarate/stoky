@@ -7,24 +7,30 @@ import {
   withIdentityRule,
 } from "./password";
 
+/** A name the household may leave empty, which stores null: the default. */
+const optionalName = z
+  .string()
+  .trim()
+  .max(MAX_NAME_LENGTH)
+  .transform((value) => value || null)
+  .optional();
+
+/**
+ * The household's names. `tabName` and `appName` are served without a session
+ * (the tab on `/login`, the web manifest), so they are bounded and trimmed
+ * like the name, and reach a page only as text.
+ */
 export const householdSchema = z.object({
   name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
-});
-
-export const updateHouseholdSchema = householdSchema.partial().extend({
-  id: z.string().trim().min(1).max(MAX_ID_LENGTH),
-});
-
-export const householdMemberSchema = z.object({
-  userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
-  role: z.enum(["OWNER", "ADMIN", "MEMBER"]),
+  tabName: optionalName,
+  appName: optionalName,
 });
 
 /**
  * An account an admin creates for someone else in the household.
  *
  * **`OWNER` and `ADMIN` are deliberately not offered.** The capability matrix
- * (`REDESIGN_PLAN.md` §5.2) lets an admin invite people; letting one mint
+ * (`DECISIONS.md` ROLES) lets an admin invite people; letting one mint
  * another admin is a privilege escalation with no undo in a schema where
  * `User.householdId` is a single column. Promoting somebody is a decision that
  * deserves its own procedure and its own thought.
@@ -56,10 +62,6 @@ export const addMemberSchema = withIdentityRule(
  * without it a sole owner can never hand the household on or leave it. The
  * escalation guard lives in the resolver instead, where it can see who is
  * asking: only an `OWNER` may grant or revoke `OWNER`.
- *
- * Not `householdMemberSchema`, which has the same shape and omits `KITCHEN` —
- * so it cannot express turning somebody's account into a kitchen tablet, which
- * is the change this exists for. That schema has no production caller.
  */
 export const updateMemberRoleSchema = z.object({
   userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
@@ -67,18 +69,21 @@ export const updateMemberRoleSchema = z.object({
 });
 
 /**
- * Removing a member from the household.
- *
- * **Not deleting the account.** `User.householdId` is nullable, and a person
- * who leaves a household is not a person who stops existing — they land in the
- * same householdless state a fresh registration does, which `householdRouter`
- * already knows how to get out of (ISSUES.md HOUSE-1). Deleting somebody's
- * account because they left would also take their name off every row that
- * records who did what.
+ * Removing a member from the household, which deletes their account: an
+ * installation holds one household, so outside it an account has nowhere to
+ * be. What they did stays — stock movements and receipts keep their id.
  */
 export const removeMemberSchema = z.object({
   userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
 });
+
+/**
+ * What `household.removeMember` says when the member named is the caller.
+ * English and shared, like `RESET_OWN_PASSWORD_MESSAGE`: the screen never
+ * offers it, because removal deletes the account.
+ */
+export const REMOVE_SELF_MESSAGE =
+  "You cannot remove yourself: it would delete the account you are signed in with";
 
 /**
  * An admin setting a new password for somebody in the household.
@@ -190,19 +195,4 @@ export const REMOVE_OWN_TWO_FACTOR_MESSAGE =
 export const OWN_SESSIONS_MESSAGE =
   "Your own sessions are in Settings, under Security, where ending them asks for your password";
 
-export type AddMemberInput = z.infer<typeof addMemberSchema>;
-export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
-export type RemoveMemberInput = z.infer<typeof removeMemberSchema>;
-export type EndMemberSessionsInput = z.infer<typeof endMemberSessionsSchema>;
-export type EndHouseholdSessionsInput = z.infer<
-  typeof endHouseholdSessionsSchema
->;
-export type RemoveMemberTwoFactorInput = z.infer<
-  typeof removeMemberTwoFactorSchema
->;
-export type ResetMemberPasswordInput = z.infer<
-  typeof resetMemberPasswordSchema
->;
 export type HouseholdInput = z.infer<typeof householdSchema>;
-export type UpdateHouseholdInput = z.infer<typeof updateHouseholdSchema>;
-export type HouseholdMemberInput = z.infer<typeof householdMemberSchema>;

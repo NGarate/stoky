@@ -7,6 +7,7 @@ import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import { SnackbarDurationControl } from "@/components/ui/SnackbarDurationControl";
 import { ExportButton } from "@/components/settings/ExportButton";
+import { HouseholdSettings } from "@/components/settings/HouseholdSettings";
 import { SignOutButton } from "@/components/session/SignOutButton";
 import type { JSX } from "react";
 
@@ -34,10 +35,12 @@ import type { JSX } from "react";
  * otherwise have to guess the answer to. Theme is the device's, language and
  * the confirmation duration are the account's.
  *
- * What it still does not do, on purpose: household, profile and notification
- * settings. The `settings.household`, `settings.profile` and
- * `settings.notifications` strings exist in both catalogues, but no procedure
- * backs any of them.
+ * The household's own settings, its name, are a section here rather than a
+ * screen of their own: one field does not need a route, and only an owner or
+ * an admin sees it at all (`HouseholdSettings`).
+ *
+ * What it still does not do, on purpose: profile and notification settings.
+ * No procedure backs either.
  */
 export default function SettingsPage(): JSX.Element {
   const t = useTranslations("settings.hub");
@@ -89,6 +92,8 @@ export default function SettingsPage(): JSX.Element {
           title={tOffline("unsavedTitle")}
         />
       </ul>
+
+      <HouseholdSettings />
 
       {/* Not in the list above, because it is an action rather than a screen —
           and above sign-out, because leaving with your data is the step that

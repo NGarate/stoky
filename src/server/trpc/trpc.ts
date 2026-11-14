@@ -225,7 +225,7 @@ function isHouseholdMiss(error: TRPCError): boolean {
 }
 
 /**
- * The capability matrix of `docs/REDESIGN_PLAN.md` §5.2, as roles.
+ * The capability matrix of `docs/DECISIONS.md` ROLES, as roles.
  *
  * The matrix has three columns — Admin, User, Kitchen — and OWNER and ADMIN
  * share the first. It collapses to three tiers because every row in it is one
@@ -249,8 +249,9 @@ export const CAPABILITY_ROLES: Record<
 
 /**
  * Authenticated, and nothing more. Use it only where the household is
- * irrelevant — `auth.me` and `auth.logout`. Everything that touches household
- * data wants `householdProcedure` or one of its narrower forms.
+ * irrelevant — `auth.me` and the rest of the account's own procedures.
+ * Everything that touches household data wants `householdProcedure` or one of
+ * its narrower forms.
  */
 export const protectedProcedure = publicProcedure.use(({ ctx, next }) => {
   if (!ctx.session?.user) {
@@ -272,13 +273,8 @@ export const protectedProcedure = publicProcedure.use(({ ctx, next }) => {
  * **Membership and role are read from the database, not from the session.**
  * The session carries both so the interface can hide what an account cannot do,
  * but the interface is not the control: hiding a button is not a restriction
- * (`REDESIGN_PLAN.md` §5.2). Reading them here has two consequences worth
- * having:
- *
- * - a role change or a removal takes effect on the next request, whatever the
- *   session was read as;
- * - an account that has just created its household can use it immediately,
- *   without signing out and in again.
+ * (`DECISIONS.md` ROLES). Reading them here means a role change or a
+ * removal takes effect on the next request, whatever the session was read as.
  *
  * The cost is one primary-key lookup per call, and in four of the eight
  * routers it is not even that — those procedures were already making exactly
@@ -318,9 +314,11 @@ export const householdProcedure = protectedProcedure
     }
 
     if (!membership.householdId) {
-      // PRECONDITION_FAILED rather than FORBIDDEN: nothing is wrong with the
-      // account, it is missing a household, and that is a state the client can
-      // resolve by creating one. See ISSUES.md HOUSE-1.
+      // Kept although the client can no longer resolve it: `household.create`
+      // is gone (ISSUES.md HOUSE-1). Every query below is scoped by this id,
+      // so an account outside the household — a row edited by hand, since a
+      // removal deletes the account — is refused here rather than trusted to
+      // be null-safe.
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
         message: "This account does not belong to a household yet",

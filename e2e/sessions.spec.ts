@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { PASSWORD, register, signIn, signedIn } from "./account";
+import { PASSWORD, freshAccount, signIn, signedIn } from "./account";
 import es from "../messages/es.json";
 
 const t = es.security;
@@ -8,7 +8,7 @@ test("ends another device's session from the devices list", async ({
   page,
   browser,
 }) => {
-  const email = await register(page, "sessions");
+  const email = await freshAccount(page, "sessions");
   const otherContext = await browser.newContext();
   const other = await otherContext.newPage();
   await signIn(other, email);

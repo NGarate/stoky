@@ -155,9 +155,11 @@ with all of them in place (2026-08-30: verify:ci clean, browser suite 150/150).
 17. **`inventory.expiring.expiringHeading` repeats `{days}` in each ICU plural
     branch** — ICU MessageFormat requires it; a wording change must be made in
     both branches, in both languages. Maintenance note, not a defect.
-18. **A pre-existing unused-variable lint warning in `security-log.test.ts`**
+18. ~~**A pre-existing unused-variable lint warning in `security-log.test.ts`**
     is the one warning the gates tolerate; two implementers tripped over it as
-    noise.
+    noise.~~ **Gone, and now impossible (2026-11-14).** The warning was fixed
+    long ago; `bun run lint` runs with `--deny-warnings` since, so no warning
+    is tolerated any more.
 19. **`processReceiptAsync` prints P2025/ENOENT noise in an OCR-failure test
     path** — pre-existing log noise in the suites, not a failure.
 20. ~~**`ExpiringItems`' shape is still the pre-redesign one** — hand-rolled

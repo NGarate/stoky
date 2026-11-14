@@ -19,7 +19,7 @@ import { describeError } from "@/server/log-error";
  * replaces it in the same call chain) and a restart between them strands it
  * the same way.
  */
-export const INTERRUPTIBLE_STATUSES = [
+const INTERRUPTIBLE_STATUSES = [
   ReceiptStatus.UPLOADING,
   ReceiptStatus.PROCESSING,
   ReceiptStatus.PARSED,

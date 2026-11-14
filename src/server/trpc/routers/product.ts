@@ -22,7 +22,6 @@ import { stockTotals } from "@/lib/stock/totals";
 import {
   productSchema,
   updateProductSchema,
-  productSearchSchema,
   productByBarcodeSchema,
   productPaginationSchema,
   resolveScanSchema,
@@ -248,19 +247,6 @@ export const productRouter = createTRPCRouter({
     }),
 
   /**
-   * How many products the household actually has.
-   *
-   * The Panel's catalogue card used to show the length of `list`'s first page,
-   * which is "at least this many" wearing the clothes of a count. A number that
-   * is a door people open has to be the real one (Phase 8 item 2).
-   */
-  count: householdProcedure.query(({ ctx }) => {
-    return ctx.db.product.count({
-      where: { householdId: ctx.householdId },
-    });
-  }),
-
-  /**
    * The brands, categories and units this household has already used, most
    * used first, for the product forms to suggest.
    *
@@ -466,45 +452,6 @@ export const productRouter = createTRPCRouter({
       });
 
       return { success: true };
-    }),
-
-  /**
-   * Fuzzy name search, ranked by similarity.
-   *
-   * PostgreSQL's `pg_trgm`: `%` is the similarity operator and the GIN index on
-   * `Product.name` is what makes it cheap. It matches misspellings and partial
-   * words, which is the point — somebody typing "leche entra" on a phone in a
-   * supermarket should still find the milk.
-   *
-   * Raw SQL because Prisma has no `similarity()`, and a tagged template so the
-   * query is parameterised — the household id and the search term both come
-   * from the caller.
-   */
-  searchByName: householdProcedure
-    .input(productSearchSchema)
-    .query(async ({ ctx, input }) => {
-      // Use pg_trgm similarity search
-      const products = await ctx.db.$queryRaw`
-        SELECT 
-          id, name, barcode, brand, category, "defaultUnit", "minStock",
-          similarity(name, ${input.query}) as similarity
-        FROM "Product"
-        WHERE "householdId" = ${ctx.householdId}
-          AND name % ${input.query}
-        ORDER BY similarity(name, ${input.query}) DESC
-        LIMIT ${input.limit}
-      `;
-
-      return products as Array<{
-        id: string;
-        name: string;
-        barcode: string | null;
-        brand: string | null;
-        category: string | null;
-        defaultUnit: string;
-        minStock: number | null;
-        similarity: number;
-      }>;
     }),
 
   /**

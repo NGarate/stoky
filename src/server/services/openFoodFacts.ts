@@ -128,7 +128,7 @@ const offProductSchema = z.object({
 
   // The rating's inputs — Phase 6. All optional, because their absence is a
   // *state the interface shows* ("we don't have information on this product"),
-  // never an error. Verified shapes against the live API in REDESIGN_PLAN §6.
+  // never an error. Verified shapes against the live API in DECISIONS.md RATING.
   //
   // `nutriscore_grade` is a|b|c|d|e, or the literal strings "unknown" /
   // "not-applicable" — left as z.string() rather than an enum so an OFF
@@ -157,7 +157,6 @@ const offResponseSchema = z.object({
 });
 
 export type OpenFoodFactsProduct = z.infer<typeof offProductSchema>;
-export type OpenFoodFactsResponse = z.infer<typeof offResponseSchema>;
 
 /** Whether an Open Food Facts record says what the product is. */
 function identifiesAProduct(product: OpenFoodFactsProduct): boolean {

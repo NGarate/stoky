@@ -12,7 +12,6 @@ import { MAX_ID_LENGTH } from "@/lib/validations/bounds";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import {
   shoppingListSchema,
-  updateShoppingListSchema,
   addShoppingItemSchema,
   updateShoppingItemSchema,
   shoppingListQuerySchema,
@@ -55,9 +54,9 @@ import { withReplay } from "../replay";
  * inside a response the caller had every right to read.
  *
  * This is the same hole, on the same field, that SEC-1 closed for
- * `inventory.addStock`, and that `price.recordPrice` has guarded since it was
- * written. Two sibling procedures had the check and these two did not, which
- * is the argument for one function rather than a third copy of the paragraph.
+ * `inventory.addStock`. Sibling procedures had the check and these two did
+ * not, which is the argument for one function rather than another copy of the
+ * paragraph.
  *
  * `null` and `undefined` pass without a query: "anywhere" names no row, so
  * there is nothing to own.
@@ -164,7 +163,7 @@ export const shoppingRouter = createTRPCRouter({
    * A new, empty list. Named by the person; the automatic one names itself.
    *
    * `householdProcedure`, not `writeProcedure`, since the owner's pass
-   * (REDESIGN_PLAN §5.2 amendment, D88): a kitchen account may write down
+   * (DECISIONS.md ROLES amendment, D88): a kitchen account may write down
    * what is needed. Same tier and same reasoning as `consumeStock` — the
    * capability test asserts the widening is exactly these two procedures.
    */
@@ -176,30 +175,6 @@ export const shoppingRouter = createTRPCRouter({
           ...input,
           householdId: ctx.householdId,
         },
-        include: {
-          items: {
-            include: {
-              product: true,
-            },
-          },
-        },
-      });
-
-      return list;
-    }),
-
-  /** Renames a list. */
-  update: writeProcedure
-    .input(updateShoppingListSchema)
-    .mutation(async ({ ctx, input }) => {
-      const { id, ...data } = input;
-
-      const list = await ctx.db.shoppingList.update({
-        where: {
-          id,
-          householdId: ctx.householdId,
-        },
-        data,
         include: {
           items: {
             include: {
@@ -476,8 +451,14 @@ export const shoppingRouter = createTRPCRouter({
    * render: it writes rows a person will then tick off, and regenerating under
    * somebody mid-shop would be rude.
    *
-   * `z.void()` for the reason given on `auth.logout`: it takes nothing, so it
-   * accepts nothing.
+   * **`z.void()`, because it takes nothing.** With no parser tRPC hands the
+   * resolver whatever body arrived, a multipart form included, so the one
+   * check every other procedure has on what reaches it was absent from the
+   * mutations a cross-site form could most easily trigger (`auth.logout` and
+   * `revokeMySessions` were the others, both since removed). `z.void()`
+   * refuses anything but `undefined`, which is what the client sends;
+   * `z.object({})` would not, because a `FormData` is an object and passes.
+   * `src/__tests__/unit/procedure-inputs.test.ts` holds every mutation to it.
    */
   generateFromLowStock: writeProcedure
     .input(z.void())
@@ -632,7 +613,7 @@ export const shoppingRouter = createTRPCRouter({
   /**
    * Every item on every list, flattened, unticked first — the phone screen.
    *
-   * `REDESIGN_PLAN.md` §3: the screen answers "what do I need to buy, and is
+   * `DECISIONS.md` SCREENS: the screen answers "what do I need to buy, and is
    * this thing in my hand a good buy?", so it wants one flat list of what is
    * outstanding — not a list of lists. Which list an item belongs to is a
    * filing decision, filing is what `/shopping/lists` is for, and the list an

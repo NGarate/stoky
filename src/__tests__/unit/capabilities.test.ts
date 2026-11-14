@@ -7,7 +7,7 @@ import { appRouter } from "@/server/trpc/router";
 /**
  * The capability matrix, per procedure.
  *
- * `REDESIGN_PLAN.md` §5.2 says every restriction has to hold on the server,
+ * `DECISIONS.md` ROLES says every restriction has to hold on the server,
  * and the phase's *done when* says the check is repeated per procedure rather
  * than sampled. This is the per-procedure half: it reads how each procedure is
  * declared and compares it against the table below.
@@ -30,11 +30,9 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // because "no session" is an answer (null) rather than a refusal, and it
     // reads or moves nothing but the caller's own session row.
     session: "publicProcedure",
-    logout: "protectedProcedure",
     // An account setting, so `protectedProcedure` and deliberately not
-    // `householdProcedure`: an account with no household still sees
-    // snackbars — the form that creates the household raises them — and the
-    // matrix has no column for "how long you need to read a message". It is
+    // `householdProcedure`: snackbars are about the person, not the household,
+    // and the matrix has no column for "how long you need to read a message". It is
     // nobody's household data.
     setSnackbarDuration: "protectedProcedure",
     // Listing and ending one's own sessions (D143). An account with no
@@ -56,17 +54,18 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // have passkeys, the kitchen's shared account included.
     confirmPassword: "protectedProcedure",
   },
-  // Reachable by an account with no household, which is the whole reason it
-  // exists — see ISSUES.md HOUSE-1. `householdProcedure` here would make the
-  // way out of that state unreachable from inside it.
+  // `current` answers null for an account with no household rather than
+  // refusing it. `create`, the way out of that state, went with the state
+  // itself (ISSUES.md HOUSE-1).
   "household.ts": {
     current: "protectedProcedure",
-    create: "protectedProcedure",
     // The rest are admin: the matrix puts "invite people" and "see account
     // data and emails" there, and a kitchen tablet left on a counter must not
     // list the household's email addresses to whoever picks it up.
     members: "adminProcedure",
     addMember: "adminProcedure",
+    // Renaming the household is the matrix's "household settings".
+    update: "adminProcedure",
     // Changing who may do what, and who is in the household at all, is the
     // same authority as inviting — stricter if anything. The tier is not the
     // whole guard here: only an *owner* may grant or revoke ownership, and
@@ -110,7 +109,6 @@ const EXPECTED: Record<string, Record<string, string>> = {
     consumeStock: "householdProcedure",
     addStock: "writeProcedure",
     adjustStock: "writeProcedure",
-    transferStock: "writeProcedure",
   },
   "location.ts": {
     list: "householdProcedure",
@@ -124,16 +122,13 @@ const EXPECTED: Record<string, Record<string, string>> = {
     getHistory: "householdProcedure",
     getLatestPrices: "householdProcedure",
     getProductPrices: "householdProcedure",
-    recordPrice: "writeProcedure",
   },
   "product.ts": {
     list: "householdProcedure",
-    count: "householdProcedure",
     getById: "householdProcedure",
     getByBarcode: "householdProcedure",
     // Read like the catalogue it summarises, so the kitchen may see it too.
     suggestions: "householdProcedure",
-    searchByName: "householdProcedure",
     create: "writeProcedure",
     update: "writeProcedure",
     // Owner-directed (Phase 8 item 5, D90): a hard delete with no undo is the
@@ -174,7 +169,6 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // The two D88 moved to the kitchen-callable tier (owner's pass,
     // 2026-08-18): start a list, add an item. Nothing else moved.
     create: "householdProcedure",
-    update: "writeProcedure",
     delete: "writeProcedure",
     addItem: "householdProcedure",
     updateItem: "writeProcedure",

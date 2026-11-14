@@ -9,7 +9,7 @@ import type { QueuedOp } from "@/lib/offline/queue";
 import { asStored } from "../utils/amount";
 
 /**
- * Screen A, the phone's first screen (`REDESIGN_PLAN.md` §3).
+ * Screen A, the phone's first screen (`DECISIONS.md` SCREENS).
  *
  * The rules it is built to are §7's, and each one below is a test rather than
  * a comment: one primary action, state in words rather than colour, undo
@@ -44,9 +44,6 @@ mock.module("@/lib/offline/queue-context", () => ({
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({ invalidate: () => Promise.resolve() }),
-    household: {
-      create: { useMutation: () => ({ mutate: () => {}, isPending: false }) },
-    },
     shopping: { getBuyList: { useQuery: () => queryStub } },
     // Who is looking decides whether a row is a control at all.
     auth: { me: { useQuery: () => ({ data: { role } }) } },

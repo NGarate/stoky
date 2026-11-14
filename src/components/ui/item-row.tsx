@@ -15,7 +15,7 @@ import type { JSX, ReactNode } from "react";
  * the inventory card, so this is the inventory card — lifted, not redesigned.
  *
  * `density` is the one thing that varies, and it varies for a reason
- * REDESIGN_PLAN keeps: Screen A is used with a trolley in one hand and Screen
+ * DECISIONS.md SCREENS keeps: Screen A is used with a trolley in one hand and Screen
  * B is read from a metre away, so their rows are deliberately bigger than the
  * desktop's. Three sizes, one grammar — rather than one size that is wrong on
  * two of the three tiers.
@@ -98,7 +98,7 @@ const metaVariants = cva("mt-3 grid grid-cols-2 gap-x-4 gap-y-2", {
   defaultVariants: { density: "default" },
 });
 
-export interface MetaEntry {
+interface MetaEntry {
   label: string;
   value: ReactNode;
 }
@@ -120,7 +120,6 @@ export interface ItemRowProps extends VariantProps<typeof itemRowVariants> {
   actions?: ReactNode;
   /** `li` inside a `<ul>`, which is what every list here is. */
   as?: "li" | "div";
-  className?: string;
 }
 
 export function ItemRow({
@@ -134,12 +133,9 @@ export function ItemRow({
   tone,
   variant,
   as: Element = "li",
-  className,
 }: ItemRowProps): JSX.Element {
   return (
-    <Element
-      className={cn(itemRowVariants({ density, tone, variant }), className)}
-    >
+    <Element className={itemRowVariants({ density, tone, variant })}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         {href ? (
           <Link
@@ -178,5 +174,3 @@ export function ItemRow({
     </Element>
   );
 }
-
-export { itemRowVariants };

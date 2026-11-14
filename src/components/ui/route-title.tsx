@@ -17,11 +17,15 @@ import { documentTitle, titleKeyFor } from "@/lib/route-titles";
  * layout above it does not re-render on a client navigation. It still renders
  * on the server, so a page loaded without JavaScript (`/start`) has its title
  * in the first byte.
+ *
+ * `name` is the tab's name, which the root layout reads from the database
+ * (`src/lib/household-names.ts`), signed in or not: a prop rather than a
+ * query, so `/login` has it without a public tRPC procedure.
  */
-export function RouteTitle() {
+export function RouteTitle({ name }: { name: string }) {
   const pathname = usePathname();
   const t = useTranslations();
   const key = titleKeyFor(pathname ?? "/");
 
-  return <title>{key ? documentTitle(t(key)) : t("metadata.title")}</title>;
+  return <title>{documentTitle(key && t(key), name)}</title>;
 }

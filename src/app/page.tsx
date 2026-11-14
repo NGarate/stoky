@@ -6,7 +6,7 @@ import { DEVICE_ID_COOKIE, isDeviceId } from "@/lib/device";
 import { landingPath } from "@/lib/landing";
 
 /**
- * The landing decision (`REDESIGN_PLAN.md` §5.1, Journey 8).
+ * The landing decision (`DECISIONS.md` SCREEN-CHOICE, Journey 8).
  *
  * This used to be four lines redirecting everybody to `/dashboard`. It is now
  * where the screen choice is honoured, and it is a server component doing it —

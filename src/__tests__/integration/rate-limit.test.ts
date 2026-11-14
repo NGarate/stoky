@@ -1,4 +1,11 @@
-import { describe, it, expect, afterAll, beforeEach } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  afterAll,
+  beforeAll,
+  beforeEach,
+} from "bun:test";
 import Redis from "ioredis";
 import { TRPCError } from "@trpc/server";
 import {
@@ -937,9 +944,16 @@ describe("an IPv6 client, through the auth route", () => {
  * so registering is what this drives — same reasoning as the sign-in block
  * above.
  *
- * Two attempts rather than the configured three, because each allowed one costs
- * a real Argon2id hash at 64 MB. The number under test is the environment's, and
- * the default is asserted separately in the unit suite.
+ * Two attempts rather than the configured three, to keep it short. The number
+ * under test is the environment's, and the default is asserted separately in
+ * the unit suite.
+ *
+ * Every attempt here is a registration `first-user` refuses — the block makes
+ * an account first, so the instance is claimed whatever else the database
+ * holds — and the limiter counts it all the same, because it runs before the
+ * count (`registration.test.ts` pins that order). So an attempt within the
+ * budget is FORBIDDEN and one past it TOO_MANY_REQUESTS: the difference is the
+ * limiter's alone, and no attempt reaches Argon2id.
  */
 describe("the registration limit, through the router", () => {
   const ATTEMPTS = 2;
@@ -947,6 +961,13 @@ describe("the registration limit, through the router", () => {
   /** Shared by every account this block creates, so cleanup is one call. */
   const PREFIX = `register-throttle-${process.pid}`;
   const PASSWORD = "cocina despensa nevera";
+
+  beforeAll(async () => {
+    await createTestUser({
+      email: `${PREFIX}.claimed@example.com`,
+      name: "Throttle Test",
+    });
+  });
 
   beforeEach(async () => {
     process.env.RATE_LIMIT_REGISTER_ATTEMPTS = String(ATTEMPTS);
@@ -958,7 +979,22 @@ describe("the registration limit, through the router", () => {
     if (original === undefined) delete process.env.RATE_LIMIT_REGISTER_ATTEMPTS;
     else process.env.RATE_LIMIT_REGISTER_ATTEMPTS = original;
     await cleanupTestUsers(PREFIX);
+    await cleanupTestHouseholds(PREFIX);
   });
+
+  /** The code `auth.register` refuses `input` with. */
+  async function refusalCode(
+    caller: Awaited<ReturnType<typeof callerFrom>>,
+    input: ReturnType<typeof account>,
+  ): Promise<string> {
+    try {
+      await caller.auth.register(input);
+    } catch (error) {
+      if (error instanceof TRPCError) return error.code;
+      throw error;
+    }
+    throw new Error("expected the registration to be refused");
+  }
 
   /**
    * A caller carrying an address, which is the whole point: `auth.register`
@@ -978,26 +1014,18 @@ describe("the registration limit, through the router", () => {
     email: `${PREFIX}.${suffix}@example.com`,
     name: "Throttle Test",
     password: PASSWORD,
+    householdName: `${PREFIX} ${suffix}`,
   });
 
   it("stops after the configured number from one address", async () => {
     const caller = await callerFrom(nextIdentifier());
 
     for (let i = 0; i < ATTEMPTS; i++) {
-      const result = await caller.auth.register(account(String(i)));
-      expect(result.success).toBe(true);
+      expect(await refusalCode(caller, account(String(i)))).toBe("FORBIDDEN");
     }
 
     const over = account("over");
-    let thrown: unknown;
-    try {
-      await caller.auth.register(over);
-    } catch (error) {
-      thrown = error;
-    }
-
-    expect(thrown).toBeInstanceOf(TRPCError);
-    expect((thrown as TRPCError).code).toBe("TOO_MANY_REQUESTS");
+    expect(await refusalCode(caller, over)).toBe("TOO_MANY_REQUESTS");
 
     // Counted *before* anything is created, which is the half of the claim a
     // status code cannot make. If the limit ran after the write, the endpoint
@@ -1014,15 +1042,15 @@ describe("the registration limit, through the router", () => {
     // out by the control meant to prevent one.
     const spender = await callerFrom(nextIdentifier());
     for (let i = 0; i < ATTEMPTS; i++) {
-      await spender.auth.register(account(`spender-${i}`));
+      await refusalCode(spender, account(`spender-${i}`));
     }
-    await expect(
-      spender.auth.register(account("spender-over")),
-    ).rejects.toThrow();
+    expect(await refusalCode(spender, account("spender-over"))).toBe(
+      "TOO_MANY_REQUESTS",
+    );
 
     const bystander = await callerFrom(nextIdentifier());
-    expect((await bystander.auth.register(account("bystander"))).success).toBe(
-      true,
+    expect(await refusalCode(bystander, account("bystander"))).toBe(
+      "FORBIDDEN",
     );
   });
 
@@ -1033,19 +1061,14 @@ describe("the registration limit, through the router", () => {
     const prefix = `2001:db8:${(process.pid & 0xffff).toString(16)}:${(Date.now() & 0xffff).toString(16)}`;
     for (let host = 1; host <= ATTEMPTS; host++) {
       const caller = await callerFrom(`${prefix}::${host}`);
-      expect((await caller.auth.register(account(`v6-${host}`))).success).toBe(
-        true,
+      expect(await refusalCode(caller, account(`v6-${host}`))).toBe(
+        "FORBIDDEN",
       );
     }
 
     const rotated = await callerFrom(`${prefix}:dead:beef:1234:5678`);
-    let thrown: unknown;
-    try {
-      await rotated.auth.register(account("v6-over"));
-    } catch (error) {
-      thrown = error;
-    }
-    expect(thrown).toBeInstanceOf(TRPCError);
-    expect((thrown as TRPCError).code).toBe("TOO_MANY_REQUESTS");
+    expect(await refusalCode(rotated, account("v6-over"))).toBe(
+      "TOO_MANY_REQUESTS",
+    );
   });
 });

@@ -58,7 +58,7 @@ export function RegisterForm(): JSX.Element {
         email,
         name,
         password,
-        householdName: householdName || undefined,
+        householdName,
       });
 
       // A browser session: the box is on the login form, and somebody
@@ -234,6 +234,7 @@ export function RegisterForm(): JSX.Element {
                     aria-describedby="household-hint"
                     id="householdName"
                     name="householdName"
+                    required
                     type="text"
                   />
                   <p

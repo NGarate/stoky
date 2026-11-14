@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { PASSWORD, freshEmail, register, signIn } from "./account";
+import { PASSWORD, freshEmail, freshAccount, signIn } from "./account";
 import es from "../messages/es.json";
 
 const h = es.household;
@@ -8,7 +8,7 @@ test("an admin creates a member's account, and the member signs in", async ({
   page,
   browser,
 }) => {
-  await register(page, "owner");
+  await freshAccount(page, "owner");
   const memberEmail = freshEmail("member");
   const memberName = `Miembro E2E ${Date.now()}`;
 

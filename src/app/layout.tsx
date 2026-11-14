@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { RouteTitle } from "@/components/ui/route-title";
+import { readInstallationNames } from "@/lib/household-names";
 import { TRPCProvider } from "@/lib/trpc/client";
 import { ServiceWorkerProvider } from "@/components/providers/ServiceWorkerProvider";
 import { THEME_NO_FLASH_SCRIPT } from "@/lib/theme";
@@ -37,12 +38,14 @@ export const metadata: Metadata = {
   applicationName: "Stoky",
   // `src/app/manifest.ts` is linked by Next on its own. iOS reads none of the
   // manifest's icons, so the home-screen icon and the standalone launch are
-  // declared here as well.
+  // declared here as well. Its title is the household's app name, rendered in
+  // `<head>` below: a title here would be static, and request-bound metadata
+  // costs every route (above).
   icons: {
     icon: [{ url: "/icons/icon.svg", type: "image/svg+xml" }],
     apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
   },
-  appleWebApp: { capable: true, title: "Stoky", statusBarStyle: "default" },
+  appleWebApp: { capable: true, statusBarStyle: "default" },
 };
 
 /**
@@ -92,6 +95,11 @@ export default async function RootLayout({
   // The per-request CSP nonce minted in src/proxy.ts. Without it the
   // inline script below is blocked and the chosen theme flashes on every load.
   const nonce = (await headers()).get("x-nonce") ?? undefined;
+  // The tab's and the installed app's names. Free here: everything after
+  // `headers()` already renders per request, so no route loses a prerender
+  // to it, and a rename shows on the next render (the settings form calls
+  // `router.refresh()`) with no cache to invalidate.
+  const names = await readInstallationNames();
 
   return (
     // suppressHydrationWarning because the script below writes `data-theme` on
@@ -106,13 +114,16 @@ export default async function RootLayout({
           nonce={nonce}
           dangerouslySetInnerHTML={{ __html: THEME_NO_FLASH_SCRIPT }}
         />
+        {/* What iOS names the app added to a home screen: Safari prefers
+            this to the manifest's `name`. */}
+        <meta name="apple-mobile-web-app-title" content={names.app} />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <TRPCProvider>
           <NextIntlClientProvider messages={messages}>
-            <RouteTitle />
+            <RouteTitle name={names.tab} />
             <ServiceWorkerProvider />
             {children}
           </NextIntlClientProvider>

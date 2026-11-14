@@ -26,7 +26,7 @@ import { useState } from "react";
 afterEach(cleanup);
 
 /**
- * The member row's own rules — `/settings/people`, `REDESIGN_PLAN.md` §10.
+ * The member row's own rules — `/settings/people`, `SECURITY_REVIEW.md` finding 8.
  *
  * The server half is covered by `integration/household.roles.test.ts`, which
  * proves the three guards refuse. This covers the two things the server cannot:
@@ -67,9 +67,12 @@ function MemberRow({
       <ItemRow
         actions={
           confirming ? (
-            <div role="group" aria-label={`¿Quitar a ${name} del hogar?`}>
+            <div
+              role="group"
+              aria-label={`¿Quitar a ${name} del hogar y borrar su cuenta?`}
+            >
               <Button onClick={onRemove} type="button" variant="destructive">
-                Sí, quitar del hogar
+                Sí, borrar su cuenta
               </Button>
               <Button
                 onClick={() => setConfirming(false)}
@@ -262,7 +265,7 @@ describe("removing a member", () => {
 
     expect(onRemove).toHaveBeenCalledTimes(0);
     const confirm = screen.getByRole("group", {
-      name: "¿Quitar a Ana del hogar?",
+      name: "¿Quitar a Ana del hogar y borrar su cuenta?",
     });
     expect(confirm).toBeInTheDocument();
   });
@@ -282,10 +285,10 @@ describe("removing a member", () => {
       screen.getByRole("button", { name: "Quitar del hogar" }),
     );
     const confirm = screen.getByRole("group", {
-      name: "¿Quitar a Ana del hogar?",
+      name: "¿Quitar a Ana del hogar y borrar su cuenta?",
     });
     await userEvent.click(
-      within(confirm).getByRole("button", { name: "Sí, quitar del hogar" }),
+      within(confirm).getByRole("button", { name: "Sí, borrar su cuenta" }),
     );
 
     expect(onRemove).toHaveBeenCalledTimes(1);

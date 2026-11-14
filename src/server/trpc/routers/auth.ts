@@ -1,5 +1,4 @@
 import { TRPCError } from "@trpc/server";
-import { z } from "zod";
 import { enforceRateLimit } from "../throttle";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import {
@@ -69,10 +68,17 @@ function registrationClosed(): TRPCError {
  * protections the real one has. It was removed;
  * `src/__tests__/utils/authorize.ts` drives the real path instead.
  *
+ * **Nor is signing out.** It is `signOutAction` (`src/lib/auth/actions.ts`),
+ * a server action so it can clear the cookie as it deletes the row, called by
+ * `SignOutButton`, which first purges the offline queue and tells the service
+ * worker to forget the cached shell. It ends this device's session and nothing
+ * else; the others end when they sit idle, a day after their sign-in
+ * (`src/lib/auth/session-policy.ts`), or through `endSessions` below. An
+ * `auth.logout` that did nothing stood here for shape until it was removed.
+ *
  * So what is left is the parts Better Auth is not asked to do: creating an
  * account, reading the current one and its session's expiry, changing its
- * password, listing and ending its sessions, and a `logout` that exists for
- * shape.
+ * password, and listing and ending its sessions.
  */
 export const authRouter = createTRPCRouter({
   /**
@@ -92,22 +98,22 @@ export const authRouter = createTRPCRouter({
    * (`src/server/http/body-limit.ts`) — the proxy's cap alone did not, for a
    * request labelled a prefetch (`docs/SECURITY_REVIEW.md` §8).
    *
-   * The household is optional. An account can exist without one, and
-   * `householdRouter` is what such an account uses to get out of that state
-   * (HOUSE-1).
+   * The household's name is required: whoever registers creates the
+   * household and is its OWNER. It used to be optional, and leaving it out
+   * made an account with no household (HOUSE-1).
    *
    * **Whether anyone may call it at all is the operator's**, through
    * `STOKY_REGISTRATION` (`src/lib/auth/registration.ts`): `first-user` by
-   * default in production, so the person who installs the instance claims it
+   * default, so the person who installs the instance claims it
    * and everybody after is added through `household.addMember`. The order of
    * the checks below is the point of them:
    *
    * 1. `closed` refuses before anything — no limiter call, no query, no hash.
    * 2. The per-address limiter, before any query.
-   * 3. `first-user` counts accounts and refuses once one exists. Before the
-   *    existence check, so a refusal says nothing about whether an address
-   *    is registered.
-   * 4. The existence check, then the hash.
+   * 3. `first-user` counts accounts and refuses once one exists. Until then
+   *    no address is registered, so there is no duplicate to look for, and
+   *    a refusal says nothing about any address.
+   * 4. The hash.
    * 5. One transaction creates the household and the account together, under
    *    an advisory lock, re-counting in `first-user` mode — see there.
    */
@@ -146,26 +152,8 @@ export const authRouter = createTRPCRouter({
       // After the limiter, so a closed-after-first-user instance cannot be
       // made to count its accounts on demand. A fast answer for the common
       // refusal; the decision that counts is the one inside the transaction.
-      if (
-        mode === "first-user" &&
-        !registrationAllows(mode, await ctx.db.user.count())
-      ) {
+      if (!registrationAllows(mode, await ctx.db.user.count())) {
         throw registrationClosed();
-      }
-
-      // A courtesy, not the guard: it answers a duplicate before spending
-      // Argon2id on it, with the message the screens match. Two registrations
-      // of one address at once both pass it, and the unique index on `email`
-      // refuses the second — as P2002, which `domainErrors` answers CONFLICT.
-      const existingUser = await ctx.db.user.findUnique({
-        where: { email },
-      });
-
-      if (existingUser) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "Email already registered",
-        });
       }
 
       // Hash password with Argon2id. Outside the transaction: a quarter of a
@@ -181,17 +169,12 @@ export const authRouter = createTRPCRouter({
         // the second registration waits here until the first has committed,
         // then counts one. Released at commit or rollback; nothing to undo.
         //
-        // Taken in every mode, not only `first-user`: registration is metered
-        // to a handful an hour, so serialising it costs nothing, and one code
-        // path is one thing to test. `$executeRaw` because the function
+        // `$executeRaw` because the function
         // returns `void`, which `$queryRaw` cannot deserialise. The key is a
         // bound `bigint`, so Postgres resolves the one-argument overload.
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(${REGISTRATION_LOCK_KEY})`;
 
-        if (
-          mode === "first-user" &&
-          !registrationAllows(mode, await tx.user.count())
-        ) {
+        if (!registrationAllows(mode, await tx.user.count())) {
           throw registrationClosed();
         }
 
@@ -203,18 +186,13 @@ export const authRouter = createTRPCRouter({
         // scalar rather than as a nested write because `createCredentialUser`
         // is the one way an account with a password is made, and the unchecked
         // input it takes is the form every caller can use.
-        const household = householdName
-          ? await tx.household.create({ data: { name: householdName } })
-          : null;
+        const household = await tx.household.create({
+          data: { name: householdName },
+        });
 
         return createCredentialUser(
           tx,
-          {
-            email,
-            name,
-            role: household ? "OWNER" : "MEMBER",
-            householdId: household?.id,
-          },
+          { email, name, role: "OWNER", householdId: household.id },
           passwordHash,
         );
       });
@@ -592,38 +570,4 @@ export const authRouter = createTRPCRouter({
       });
       return { expiresAt: expiresAt.toISOString() };
     }),
-
-  /**
-   * Does nothing, on purpose, and is not how anybody signs out.
-   *
-   * Ending a session is `signOutAction` in `src/lib/auth/actions.ts` — a
-   * server action, so it can clear the cookie as it deletes the row —
-   * called by `SignOutButton`, which first purges the offline queue and tells
-   * the service worker to forget the cached shell. Those two are the reason
-   * signing out is a component's job rather than an endpoint's.
-   *
-   * This is kept so that a caller who goes looking for `auth.logout` finds this
-   * paragraph instead of concluding that signing out is unimplemented, which is
-   * what its previous silence invited.
-   *
-   * **Signing out ends this device's session and nothing else**: its row is
-   * deleted, so a copy of the cookie taken before is refused too. The other
-   * devices' sessions end when they sit idle for fifteen minutes, a day after
-   * their sign-in (`src/lib/auth/session-policy.ts`), or when somebody ends
-   * the account's sessions — `endSessions` above, or an admin from the
-   * members panel.
-   *
-   * **`z.void()` on the mutations that take nothing** — this and
-   * `shopping.generateFromLowStock`, and `revokeMySessions` until
-   * `endSessions` replaced it. With no parser tRPC hands the resolver
-   * whatever body arrived, a multipart form included, so the one check every
-   * other procedure has on what reaches it was absent from the three a
-   * cross-site form could most easily trigger. `z.void()`
-   * refuses anything but `undefined`, which is what the client sends;
-   * `z.object({})` would not, because a `FormData` is an object and passes.
-   * `src/__tests__/unit/procedure-inputs.test.ts` holds every mutation to it.
-   */
-  logout: protectedProcedure.input(z.void()).mutation(async () => {
-    return { success: true };
-  }),
 });

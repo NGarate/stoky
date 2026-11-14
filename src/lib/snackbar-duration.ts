@@ -85,7 +85,7 @@ export function undoHoldMs(): number {
   return UNDO_HOLD_MS[current];
 }
 
-export function isSnackbarDuration(value: unknown): value is SnackbarDuration {
+function isSnackbarDuration(value: unknown): value is SnackbarDuration {
   return (
     typeof value === "string" &&
     (SNACKBAR_DURATIONS as readonly string[]).includes(value)
@@ -97,7 +97,7 @@ export function isSnackbarDuration(value: unknown): value is SnackbarDuration {
  * throws rather than returning null when it is disabled or the origin is
  * opaque, and a private-mode browser should get the default, not a crash.
  */
-export function readStoredSnackbarDuration(): SnackbarDuration {
+function readStoredSnackbarDuration(): SnackbarDuration {
   try {
     const stored = window.localStorage.getItem(SNACKBAR_DURATION_STORAGE_KEY);
     return isSnackbarDuration(stored) ? stored : DEFAULT_SNACKBAR_DURATION;
@@ -106,7 +106,7 @@ export function readStoredSnackbarDuration(): SnackbarDuration {
   }
 }
 
-export function storeSnackbarDuration(value: SnackbarDuration): void {
+function storeSnackbarDuration(value: SnackbarDuration): void {
   try {
     window.localStorage.setItem(SNACKBAR_DURATION_STORAGE_KEY, value);
   } catch {

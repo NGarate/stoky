@@ -217,6 +217,46 @@ siguiente visita: sin señal, la lista de la compra o el inventario salían
 vacíos. Ahora solo se guarda lo que ya ha llegado, y una copia antigua dañada
 se descarta sin más.
 
+### Al registrarte, pones nombre al hogar
+
+El formulario de registro pide ahora el nombre del hogar y no deja seguir sin
+él: quien se registra crea el hogar y lo administra. Antes se podía dejar en
+blanco, y la cuenta quedaba sin hogar hasta crear uno después.
+
+### Quitar a alguien del hogar borra su cuenta
+
+En **Configuración → Personas del hogar**, quitar a alguien borra ahora su
+cuenta y cierra sus sesiones en todos sus dispositivos: ya no puede entrar.
+Antes la cuenta se quedaba sin hogar y sin nada que hacer con ella. Lo que
+hizo en el hogar, como los movimientos de stock y los tickets que subió, se
+queda. Si fue un error, añádela otra vez con el mismo correo: será una cuenta
+nueva. Nadie puede quitarse a sí mismo: tu propia fila ya no lo ofrece.
+
+### Cambia el nombre del hogar
+
+Quien es propietario o administra el hogar puede cambiarle el nombre en
+**Configuración → Hogar**. Hasta ahora el nombre que se ponía al registrarse
+no se podía cambiar después.
+
+### Pon nombre a la pestaña del navegador y a la app instalada
+
+En **Configuración → Hogar** hay dos nombres más. El de la **pestaña** sale
+detrás del título de cada página; vacío, la pestaña sigue diciendo «Stoky».
+El de la **app instalada** es el que lleva el icono en el móvil; vacío, la app
+se llama como el hogar. Los dos son públicos: el de la pestaña se ve también
+en la página para iniciar sesión, y el de la app lo puede leer cualquiera que
+llegue a la dirección de Stoky, así que si lo dejas vacío, también el nombre
+del hogar. Una app ya instalada recoge el nombre nuevo cuando el navegador lo
+vuelve a leer: Chrome, cuando le toca; en iPhone y iPad, al volver a
+instalarla.
+
+## Cambios incompatibles
+
+* **Una instalación es un hogar, y `STOKY_REGISTRATION=open` ya no se
+  acepta.** Con ese valor Stoky no arranca y lo dice en
+  `docker compose logs app`; los valores son `first-user`, el de siempre por
+  defecto, y `closed`.
+
 ## English
 
 > [!CAUTION]
@@ -418,3 +458,44 @@ Reloading a page while something was still loading damaged the copy the app
 keeps for use offline, and the next visit threw the whole copy away: with no
 signal, the shopping list or the inventory came up empty. Now only what has
 already arrived is kept, and an old damaged copy is simply discarded.
+
+### Registering names the household
+
+The registration form now asks for the household's name and does not go on
+without it: whoever registers creates the household and runs it. Before, it
+could be left blank, and the account had no household until one was created
+afterwards.
+
+### Removing somebody from the household deletes their account
+
+In **Configuración → Personas del hogar**, removing somebody now deletes
+their account and signs them out on every device: they can no longer sign
+in. Before, the account was left with no household and nothing to do with
+it. What they did in the household, such as stock movements and the receipts
+they uploaded, stays. If it was a mistake, add them again with the same
+email address: it will be a new account. Nobody can remove themselves: your
+own row no longer offers it.
+
+### Rename the household
+
+Whoever owns or runs the household can rename it in
+**Configuración → Hogar**. Until now the name given at registration could not
+be changed afterwards.
+
+### Name the browser tab and the installed app
+
+**Configuración → Hogar** has two more names. The **tab**'s follows each
+page's title; left empty, the tab still says "Stoky". The **installed app**'s
+is the one under its icon on the phone; left empty, the app takes the
+household's name. Both are public: the tab's shows on the sign-in page too,
+and anyone who reaches Stoky's address can read the app's, so if you leave it
+empty, the household's name as well. An app already installed picks up a new
+name when the browser reads it again: Chrome on its own schedule, iPhone and
+iPad only when it is installed again.
+
+### Breaking changes
+
+* **An installation is one household, and `STOKY_REGISTRATION=open` is no
+  longer accepted.** With it, Stoky does not start and says why in
+  `docker compose logs app`; the values are `first-user`, the default as
+  before, and `closed`.

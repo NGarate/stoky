@@ -37,17 +37,11 @@ export type PageWidth = keyof typeof PAGE_WIDTHS;
 export function PageShell({
   width,
   children,
-  className,
 }: {
   width: PageWidth;
   children: ReactNode;
-  className?: string;
 }): JSX.Element {
-  return (
-    <div className={cn("mx-auto", PAGE_WIDTHS[width], className)}>
-      {children}
-    </div>
-  );
+  return <div className={cn("mx-auto", PAGE_WIDTHS[width])}>{children}</div>;
 }
 
 /**
@@ -57,7 +51,7 @@ export function PageShell({
  * some screens and not on others, so moving between two settings pages
  * changed the title's size for no reason anyone had written down. `touch` is
  * the kitchen's, which is read from a metre away and is `text-4xl` at every
- * width (`REDESIGN_PLAN.md` §4: 40px+ headings).
+ * width (`DECISIONS.md` SCREENS: 40px+ headings).
  */
 const titleVariants = cva("font-bold text-heading", {
   variants: {
@@ -81,7 +75,7 @@ export interface PageHeaderProps {
   intro?: ReactNode;
   /**
    * `<Button>`s. At most one `default` — the screen's primary action — and
-   * the rest `outline` (`REDESIGN_PLAN.md` §7: one primary action per
+   * the rest `outline` (`DECISIONS.md` USABILITY: one primary action per
    * screen).
    */
   actions?: ReactNode;
@@ -153,5 +147,3 @@ export function PageHeader({
     </div>
   );
 }
-
-export { PAGE_WIDTHS, titleVariants as pageTitleVariants };

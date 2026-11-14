@@ -75,7 +75,7 @@ export type PasswordProblem =
  * Everything wrong with a password, rather than the first thing.
  *
  * A form that reports one problem at a time makes somebody guess their way
- * through the rules, which is `REDESIGN_PLAN.md` §7 rule 4 from the other
+ * through the rules, which is `DECISIONS.md` USABILITY rule 4 from the other
  * direction: an error should say what to do next, and "also this" three times
  * is not that.
  */
@@ -111,7 +111,7 @@ export function passwordProblems(
  * fields than the password (`household.addMember`) cannot read every
  * BAD_REQUEST as "too easy", and recognises this one by its words.
  */
-export const PASSWORD_TOO_EASY_MESSAGE = "That password is too easy to guess";
+const PASSWORD_TOO_EASY_MESSAGE = "That password is too easy to guess";
 
 /** Whether a refusal's message is the policy's "too easy to guess". */
 export function isPasswordTooEasyRefusal(message: string | undefined): boolean {

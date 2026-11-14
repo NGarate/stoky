@@ -8,7 +8,7 @@
  * `output: "standalone"` is irrelevant here; the Dockerfile already copies
  * `public/` verbatim.
  *
- * `REDESIGN_PLAN.md` §5.4: the worker ships without ever prompting anyone to
+ * `DECISIONS.md` PWA: the worker ships without ever prompting anyone to
  * "install the app". The app *is* installable through the browser's own
  * action (`src/app/manifest.ts`); an install prompt and push are deferred on
  * iOS grounds. The worker and the offline cache are not, and iOS Safari
@@ -45,8 +45,9 @@ function isOwnCache(name) {
  * The documents worth keeping so the app opens without a signal.
  *
  * HTML only, and only these. Every dashboard page is a client component that
- * fetches over tRPC, so the document carries no household data — which is what
- * makes caching an authenticated page defensible at all.
+ * fetches over tRPC, so the document carries no household data beyond the tab's
+ * and the app's names, public by decision (SECURITY.md) — which is what makes
+ * caching an authenticated page defensible at all.
  */
 const SHELL_ROUTES = new Set([
   "/",
@@ -250,7 +251,8 @@ self.addEventListener("fetch", (event) => {
  *
  * The shell is an authenticated document. Four things make keeping it
  * defensible, and this is one: it is purged when the account changes, and on
- * reaching `/login`. The others are that it carries no household data, that it
+ * reaching `/login`. The others are that it carries no household data but the
+ * tab's and the app's names, which are public by decision, that it
  * is HTML only over six routes, and that the cache is named and commented as
  * private. The residue, stated honestly: the shell proves *someone* was signed
  * in, and embeds the session's expiry.

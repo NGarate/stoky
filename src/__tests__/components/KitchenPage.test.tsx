@@ -11,7 +11,7 @@ import { Decimal } from "@prisma/client-runtime-utils";
 import { asStored } from "../utils/amount";
 
 /**
- * Screen B, the kitchen (`REDESIGN_PLAN.md` §4).
+ * Screen B, the kitchen (`DECISIONS.md` SCREENS).
  *
  * An old tablet propped up, read from a metre away, possibly untouched for
  * days. It does one thing — use something up — and everything else on it is
@@ -74,9 +74,6 @@ mock.module("@/lib/trpc/client", () => ({
       invalidate: () => Promise.resolve(),
       shopping: { list: { invalidate: () => Promise.resolve() } },
     }),
-    household: {
-      create: { useMutation: () => ({ mutate: () => {}, isPending: false }) },
-    },
     inventory: {
       getExpiringItems: { useQuery: () => expiringStub },
       getStockOverview: { useQuery: () => stockStub },

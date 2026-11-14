@@ -3,21 +3,19 @@ import {
   productByBarcodeSchema,
   productPaginationSchema,
   productSchema,
-  productSearchSchema,
   updateProductSchema,
 } from "@/lib/validations/product";
 import { storeQuerySchema } from "@/lib/validations/store";
-import { priceHistorySchema, priceRecordSchema } from "@/lib/validations/price";
+import { priceHistorySchema } from "@/lib/validations/price";
 import {
   addStockSchema,
   adjustStockSchema,
   consumeStockSchema,
 } from "@/lib/validations/inventory";
 import {
-  shoppingItemSchema,
+  addShoppingItemSchema,
   shoppingListSchema,
   updateShoppingItemSchema,
-  updateShoppingListSchema,
 } from "@/lib/validations/shopping";
 import { storeSchema, updateStoreSchema } from "@/lib/validations/store";
 import {
@@ -25,20 +23,16 @@ import {
   stockOverviewSchema,
   updateStorageLocationSchema,
 } from "@/lib/validations/inventory";
-import {
-  createHouseholdSchema,
-  loginSchema,
-  registerSchema,
-} from "@/lib/validations/auth";
+import { loginSchema, registerSchema } from "@/lib/validations/auth";
 import {
   addMemberSchema,
   householdSchema,
   removeMemberSchema,
-  updateHouseholdSchema,
   updateMemberRoleSchema,
 } from "@/lib/validations/household";
 import { receiptItemMatchSchema } from "@/lib/validations/receipt";
 import { replayable } from "@/lib/validations/idempotency";
+import { priceSchema } from "@/lib/validations/amounts";
 import {
   MAX_BARCODE_LENGTH,
   MAX_DAYS,
@@ -95,13 +89,6 @@ describe("quantities and prices are finite and bounded", () => {
       }),
     ).toBe(false);
     expect(
-      accepts(shoppingItemSchema, {
-        shoppingListId: "l",
-        productId: "p",
-        quantity: Infinity,
-      }),
-    ).toBe(false);
-    expect(
       accepts(updateShoppingItemSchema, {
         id: "i",
         quantity: Infinity,
@@ -111,17 +98,6 @@ describe("quantities and prices are finite and bounded", () => {
     expect(accepts(productSchema, { name: "Leche", minStock: Infinity })).toBe(
       false,
     );
-    // The divisor of every unit price: Infinity made a real price read as 0 €
-    // per unit, the best price on the screen, and the premiums beside it NaN.
-    expect(
-      accepts(priceRecordSchema, {
-        productId: "p",
-        storeId: "s",
-        price: 1,
-        unit: "unidad",
-        quantity: Infinity,
-      }),
-    ).toBe(false);
     expect(accepts(updateProductSchema, { id: "p", minStock: Infinity })).toBe(
       false,
     );
@@ -135,15 +111,6 @@ describe("quantities and prices are finite and bounded", () => {
       true,
     );
     expect(accepts(addStockSchema, { ...stock, quantity: 0.5 })).toBe(true);
-    expect(
-      accepts(priceRecordSchema, {
-        productId: "p",
-        storeId: "s",
-        price: 1,
-        unit: "unidad",
-        quantity: MAX_QUANTITY + 1,
-      }),
-    ).toBe(false);
     // Signed, so a reconciliation downwards still passes.
     expect(
       accepts(adjustStockSchema, {
@@ -155,11 +122,8 @@ describe("quantities and prices are finite and bounded", () => {
   });
 
   it("refuses an infinite price", () => {
-    const record = { productId: "p", storeId: "s", unit: "unidad" };
-    expect(accepts(priceRecordSchema, { ...record, price: Infinity })).toBe(
-      false,
-    );
-    expect(accepts(priceRecordSchema, { ...record, price: 1.29 })).toBe(true);
+    expect(accepts(priceSchema, Infinity)).toBe(false);
+    expect(accepts(priceSchema, 1.29)).toBe(true);
   });
 });
 
@@ -175,17 +139,13 @@ describe("a minimum stock is never negative", () => {
 
 describe("page sizes, windows and searches are bounded", () => {
   it("refuses a page size that is negative, fractional or enormous", () => {
-    // searchByName puts `limit` into `LIMIT ${…}`: -1 was a Postgres error.
+    // getStockOverview puts `limit` into `LIMIT ${…}`: -1 is a Postgres error.
     for (const limit of [-1, 0, 1.5, MAX_PAGE_SIZE + 1, 1e9]) {
-      expect(accepts(productSearchSchema, { query: "leche", limit })).toBe(
-        false,
-      );
+      expect(accepts(stockOverviewSchema, { limit })).toBe(false);
       expect(accepts(storeQuerySchema, { limit })).toBe(false);
       expect(accepts(productPaginationSchema, { limit })).toBe(false);
     }
-    expect(accepts(productSearchSchema, { query: "leche", limit: 10 })).toBe(
-      true,
-    );
+    expect(accepts(stockOverviewSchema, { limit: MAX_PAGE_SIZE })).toBe(true);
     expect(accepts(storeQuerySchema, { limit: MAX_PAGE_SIZE })).toBe(true);
   });
 
@@ -201,10 +161,9 @@ describe("page sizes, windows and searches are bounded", () => {
 
   it("refuses a search string no search box sends", () => {
     const long = "a".repeat(MAX_SEARCH_LENGTH + 1);
-    expect(accepts(productSearchSchema, { query: long })).toBe(false);
     expect(accepts(storeQuerySchema, { search: long })).toBe(false);
     expect(accepts(productPaginationSchema, { search: long })).toBe(false);
-    expect(accepts(productSearchSchema, { query: "leche entera" })).toBe(true);
+    expect(accepts(storeQuerySchema, { search: "leche entera" })).toBe(true);
   });
 });
 
@@ -257,6 +216,11 @@ describe("stored text has a maximum length", () => {
   // real — and one character over is refused. `base` is the smallest valid
   // input, so a refusal can only be about the field under test.
   type Schema = { safeParse: (v: unknown) => { success: boolean } };
+  // `shopping.addItem` takes the replay envelope with its fields.
+  const envelope = {
+    idempotencyKey: "3f1a9d1e-4c2b-4a5e-9d3f-2b7c8e1a4f60",
+    composedByUserId: "clzzzzzzzzzzzzzzzzzzzzzzz",
+  };
   const cases: [
     label: string,
     schema: Schema,
@@ -389,27 +353,6 @@ describe("stored text has a maximum length", () => {
       MAX_ID_LENGTH,
     ],
     [
-      "price product",
-      priceRecordSchema,
-      { storeId: "s", price: 1, unit: "u" },
-      "productId",
-      MAX_ID_LENGTH,
-    ],
-    [
-      "price store",
-      priceRecordSchema,
-      { productId: "p", price: 1, unit: "u" },
-      "storeId",
-      MAX_ID_LENGTH,
-    ],
-    [
-      "price unit",
-      priceRecordSchema,
-      { productId: "p", storeId: "s", price: 1 },
-      "unit",
-      MAX_UNIT_LENGTH,
-    ],
-    [
       "price history product",
       priceHistorySchema,
       {},
@@ -417,32 +360,31 @@ describe("stored text has a maximum length", () => {
       MAX_ID_LENGTH,
     ],
     ["list name", shoppingListSchema, {}, "name", MAX_NAME_LENGTH],
-    ["list id on edit", updateShoppingListSchema, {}, "id", MAX_ID_LENGTH],
     [
       "list item list",
-      shoppingItemSchema,
-      { productId: "p" },
+      addShoppingItemSchema,
+      { ...envelope, productId: "p" },
       "shoppingListId",
       MAX_ID_LENGTH,
     ],
     [
       "list item product",
-      shoppingItemSchema,
-      { shoppingListId: "l" },
+      addShoppingItemSchema,
+      { ...envelope, shoppingListId: "l" },
       "productId",
       MAX_ID_LENGTH,
     ],
     [
       "list item unit",
-      shoppingItemSchema,
-      { shoppingListId: "l", productId: "p" },
+      addShoppingItemSchema,
+      { ...envelope, shoppingListId: "l", productId: "p" },
       "unit",
       MAX_UNIT_LENGTH,
     ],
     [
       "list item store",
-      shoppingItemSchema,
-      { shoppingListId: "l", productId: "p" },
+      addShoppingItemSchema,
+      { ...envelope, shoppingListId: "l", productId: "p" },
       "storeId",
       MAX_ID_LENGTH,
     ],
@@ -457,7 +399,11 @@ describe("stored text has a maximum length", () => {
     [
       "registered name",
       registerSchema,
-      { email: "a@example.es", password: "una frase larga" },
+      {
+        email: "a@example.es",
+        password: "una frase larga",
+        householdName: "Casa",
+      },
       "name",
       MAX_NAME_LENGTH,
     ],
@@ -468,9 +414,7 @@ describe("stored text has a maximum length", () => {
       "householdName",
       MAX_NAME_LENGTH,
     ],
-    ["new household", createHouseholdSchema, {}, "name", MAX_NAME_LENGTH],
     ["household name", householdSchema, {}, "name", MAX_NAME_LENGTH],
-    ["household id", updateHouseholdSchema, {}, "id", MAX_ID_LENGTH],
     [
       "member name",
       addMemberSchema,
@@ -523,7 +467,7 @@ describe("stored text has a maximum length", () => {
     const password = "una frase larga";
     for (const [schema, rest] of [
       [loginSchema, { password }],
-      [registerSchema, { name: "Ana", password }],
+      [registerSchema, { name: "Ana", password, householdName: "Casa" }],
       [addMemberSchema, { name: "Ana", password, role: "MEMBER" }],
     ] as const) {
       expect(
@@ -574,31 +518,5 @@ describe("stored text has a maximum length", () => {
         barcode: "1".repeat(MAX_BARCODE_LENGTH + 1),
       }),
     ).toBe(false);
-  });
-});
-
-describe("a currency is a three-letter code", () => {
-  const record = { productId: "p", storeId: "s", price: 1, unit: "unidad" };
-  const currencyOf = (currency: unknown) =>
-    priceRecordSchema.safeParse({ ...record, currency });
-
-  it("defaults to euros and normalises what a client sends", () => {
-    expect(priceRecordSchema.parse(record).currency).toBe("EUR");
-    // A lowercase code was accepted before, so it must not be refused now.
-    expect(currencyOf(" eur ").data?.currency).toBe("EUR");
-    expect(currencyOf("usd").data?.currency).toBe("USD");
-  });
-
-  it("refuses anything that is not three letters", () => {
-    for (const currency of [
-      "EURO",
-      "EU",
-      "€",
-      "E1R",
-      "",
-      "E".repeat(1_000_000),
-    ]) {
-      expect(currencyOf(currency).success).toBe(false);
-    }
   });
 });

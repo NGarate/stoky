@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { PASSWORD, register, signOut } from "./account";
+import { PASSWORD, freshAccount, signOut } from "./account";
 import es from "../messages/es.json";
 
 /**
@@ -38,7 +38,7 @@ test("a passkey added in settings signs in from the login page", async ({
     },
   });
 
-  await register(page, "passkey");
+  await freshAccount(page, "passkey");
   await page.goto("/settings/security");
   const section = page.getByRole("region", { name: sec.passkeysTitle });
   await section

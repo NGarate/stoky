@@ -10,9 +10,9 @@
  *   it. One such row and every sum over the ledger is Infinity. Zod 4's `z.number()`
  *   refuses it; the schemas still say `.finite()`, which costs nothing and
  *   does not depend on a library default.
- * - **Unbounded page sizes.** `product.searchByName` interpolates its `limit`
- *   into `LIMIT ${…}`: `-1` was a Postgres error that surfaced as a 500, and a
- *   billion asked the database for every row it had.
+ * - **Unbounded page sizes.** `inventory.getStockOverview` interpolates its
+ *   `limit` into `LIMIT ${…}`: `-1` would be a Postgres error surfacing as a
+ *   500, and a billion would ask the database for every row it has.
  * - **Unbounded day windows.** `price.getPriceHistory` subtracts `days` from
  *   today; `1e12` is an Invalid Date that reaches Prisma.
  * - **Unbounded search strings**, which go into `pg_trgm` similarity and an

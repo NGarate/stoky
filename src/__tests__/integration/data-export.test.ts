@@ -15,7 +15,7 @@ import {
  *
  * The premise of this application is that the data lives on hardware the
  * household controls, and that promise is only worth something if it can leave.
- * `REDESIGN_PLAN.md` §10 listed this as absent rather than deferred, which is
+ * `STATUS.md` listed this as absent rather than deferred, which is
  * the right description of a gap in the product's own premise.
  *
  * The first two describes are the ones that matter. An export that is missing

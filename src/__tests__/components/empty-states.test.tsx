@@ -8,7 +8,7 @@ import { axeViolations } from "../utils/axe";
 /**
  * What an empty list says, and what it offers.
  *
- * `REDESIGN_PLAN.md` §7 rule 5: never an empty, silent screen — empty is an
+ * `DECISIONS.md` USABILITY rule 5: never an empty, silent screen — empty is an
  * invitation with a button. Three screens broke it outright: `/products` and
  * `/inventory` with no products drew a table header and nothing under it,
  * and `/prices` said "Registra tu primer precio" on a screen with no way to
@@ -63,7 +63,6 @@ mock.module("@/lib/trpc/client", () => ({
         getAutoList: { invalidate: () => Promise.resolve() },
       },
     }),
-    household: { create: { useMutation: () => idleMutation } },
     product: { list: { useQuery: () => answered(listData) } },
     inventory: {
       getStockOverview: { useQuery: () => answered(listData) },

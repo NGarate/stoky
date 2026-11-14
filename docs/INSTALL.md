@@ -33,7 +33,8 @@ each. You do not need Git, Node.js, Bun or a local build.
 Registration is closed after the first
 account. The person who installs Stoky registers first and becomes the owner of
 the household; everyone else is added by them from **Configuración → Personas
-del hogar**. `STOKY_REGISTRATION` in `.env` changes that (step 2). This is
+del hogar**. An installation is one household. `STOKY_REGISTRATION=closed`
+in `.env` closes registration to everyone, the first account included (step 2). This is
 still an alpha: restrict access to people you trust at your network or proxy
 boundary, and read [Security](../SECURITY.md) before deployment.
 
@@ -161,15 +162,14 @@ Open `.env` in your editor and fill in:
 |---|---|
 | `first-user` (the default) | Only the first account. After that, a household admin adds people from **Configuración → Personas del hogar** |
 | `closed` | Nobody. People are only added by an admin |
-| `open` | Anyone who can reach the server, each with a household of their own |
 
 When registration is closed, `/register` shows no form. It says that
 registration is closed, asks the visitor to have whoever runs their household
 add them, and links back to sign-in. With `first-user` that page replaces the
 form as soon as the first account exists.
 
-An unknown value, such as `Open` or `true`, stops the app starting, with the
-reason in `docker compose logs app`; it never falls back to `open`. To change it
+An unknown value, such as `open` or `true`, stops the app starting, with the
+reason in `docker compose logs app`; it never opens registration. To change it
 later, edit `.env` and run `docker compose up -d --wait` again.
 
 `OCR_WORKERS` is how many of a receipt's readings run at once. Every photo is
@@ -672,9 +672,8 @@ keep), and start step 3 again.
 
 Sign in, add a product, record stock, and upload a JPEG, PNG or WebP receipt.
 Review recognized lines before applying them. Add other household members through
-**Configuración → Personas del hogar**. With
-`STOKY_REGISTRATION=open`, a separate registration creates a separate
-household.
+**Configuración → Personas del hogar**: an installation is one household,
+and nobody else can register once you have.
 
 A session ends after fifteen minutes unused, a day after sign-in however much
 it is used, or when somebody ends it — *Authentication* in
@@ -970,11 +969,12 @@ address that is not a gateway means the device used IPv4; try another one.
 
 ## Deleting somebody's account
 
-Stoky cannot delete an account. Removing a person from **Personas del hogar**
-takes them out of the household and keeps their account: name, address,
-password hash and language. It also
-signs them out on every device at once. When somebody asks
-to be erased, delete the account in the database. Run these in the
+Removing a person from **Personas del hogar** deletes their account — name,
+address, password hash, passkeys, authenticator, the start screen they chose on
+each device and their offline replay records — and signs them out on every
+device at once. That is how somebody who asks to be erased is erased; steps 3
+and 4 below still apply. The application does not remove the household's last
+owner: to erase that account, delete it in the database. Run these in the
 installation directory, replacing the address with the person's:
 
 1. Look at the account:
@@ -1045,7 +1045,9 @@ installation directory, replacing the address with the person's:
    longer become a session.
 3. The receipts the person uploaded belong to the household and stay, with
    their photographs on the `uploads` volume. To remove those photographs too,
-   put the `id` from step 1 in place of `the-id`:
+   put the `id` from step 1 in place of `the-id`. For somebody removed in the
+   application, it is the `targetUserId` of their removal's line,
+   `docker compose logs app | grep '"reason":"removed"'`:
 
    ```bash
    docker compose exec -T db psql -U stoky -d stoky -At -v ON_ERROR_STOP=1 \
@@ -1088,9 +1090,8 @@ What stays after these steps:
   account's `id` and the addresses it signed in from until rotation removes
   them ([Logs](#logs)).
 
-The address is free again afterwards. An admin can add it to a household, or
-the person can register where registration is open, as a new account with
-nothing of the old one.
+The address is free again afterwards. An admin can add it to the household
+again, as a new account with nothing of the old one.
 
 ## Backup and restore
 
@@ -1267,9 +1268,9 @@ migration again.
 | Somebody lost the phone with their authenticator app, or is told at sign-in that the server can no longer check it | A backup code signs them in; without one, a household admin removes it from **Personas del hogar** — see [A lost authenticator](#a-lost-authenticator). Everybody told so at once means `STOKY_SECRET` changed; see [Rotating `STOKY_SECRET`](#rotating-stoky_secret) |
 | Turning two-step verification on or off, or asking for new recovery codes, says there have been too many tries | Five wrong passwords from one session, or twenty across the account, within 15 minutes; the screen can be used again once that window ends. Wrong passwords are on the log as `auth.reauth.refused` with `"via":"two-factor"` — many of them from a session the person does not recognise means somebody else has it: end it from **Tus dispositivos** |
 | The authenticator app does not take the QR code | Type the key shown under the code into the app instead, or, on the phone that has the app, use the link beside it. The phone's clock must be right to within a minute |
-| Somebody asks to be erased | The application cannot delete an account; see [Deleting somebody's account](#deleting-somebodys-account) |
+| Somebody asks to be erased | An admin removes them from **Personas del hogar**, which deletes the account; the last owner's is deleted in the database. See [Deleting somebody's account](#deleting-somebodys-account) |
 | `/register` says registration is closed, with no form | Expected once an account exists with `first-user`, or always with `closed`; an admin adds people from **Configuración → Personas del hogar**. See `STOKY_REGISTRATION` in step 2 |
-| App exits with `refusing to start: STOKY_REGISTRATION` | The value is not `open`, `first-user` or `closed`; fix `.env`, or remove the line for `first-user` |
+| App exits with `refusing to start: STOKY_REGISTRATION` | The value is not `first-user` or `closed` (`open` is not accepted: an installation is one household); fix `.env`, or remove the line for `first-user` |
 | Upload refused | JPEG/PNG/WebP/HEIC only, maximum 10 MiB |
 | A scanned code always opens the empty product form | Open Food Facts is not being asked: the app needs outbound HTTPS to `world.openfoodfacts.org`, Valkey must be healthy (a lookup that cannot be counted is not sent), and each account may send 60 lookups an hour for codes this instance has not looked up recently — past that the scan page says so. This bundle does not pass `RATE_LIMIT_PRODUCT_LOOKUP_*` to the app, so the default applies |
 | Empty inventory after moving directory | Check `-p`, `COMPOSE_PROJECT_NAME` and volume names before creating or deleting anything |

@@ -43,7 +43,6 @@ import {
   receiptItemRemoveSchema,
   receiptItemUpdateSchema,
   receiptQuadSchema,
-  receiptReframeSchema,
   receiptRegionSchema,
 } from "@/lib/validations/receipt";
 
@@ -109,9 +108,9 @@ const RECEIPT_HEADER = {
  * Refuse a store that is not this household's.
  *
  * `receipt.upload` takes an optional `storeId` and writes it onto the Receipt.
- * `price.recordPrice` verifies the identical field two files away — SEC-1 is
- * the entry that put the check there — and this one did not, so a receipt could
- * be filed against another household's shop. Everything the receipt later
+ * `inventory.addStock` verifies the identical field — SEC-1 is the entry that
+ * put the check there — and this one did not, so a receipt could be filed
+ * against another household's shop. Everything the receipt later
  * produces (its price records, the store comparison) inherits that reference.
  */
 async function assertOwnStore(
@@ -443,7 +442,7 @@ export const receiptRouter = createTRPCRouter({
    * upload does, so it spends the upload budget.
    */
   reframe: writeProcedure
-    .input(receiptReframeSchema)
+    .input(receiptRegionSchema)
     .mutation(async ({ ctx, input }) => {
       await enforceRateLimit(
         uploadRateLimit(),

@@ -131,6 +131,7 @@ describe("check-scope.sh", () => {
       "bun [run] [lint]",
       "bun [run] [check:format]",
       "bun [run] [check:react] [--scope] [full]",
+      "bun [run] [check:unused]",
       "check-ci [actionlint]",
       "check-ci [shellcheck]",
       "check-ci [zizmor]",

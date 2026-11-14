@@ -291,7 +291,7 @@ function headersFor(
 }
 
 /** A GET to the auth route, as the page's `fetch` sends it. */
-export async function authGet(
+async function authGet(
   path: string,
   state: BrowserState = {},
 ): Promise<RouteAnswer> {

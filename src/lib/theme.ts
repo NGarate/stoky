@@ -38,7 +38,7 @@ export function isThemeMode(value: unknown): value is ThemeMode {
 }
 
 /** Set (or clear) `data-theme` on `<html>`. Client only. */
-export function applyTheme(mode: ThemeMode): void {
+function applyTheme(mode: ThemeMode): void {
   const root = document.documentElement;
   if (mode === "system") {
     root.removeAttribute("data-theme");
@@ -54,7 +54,7 @@ export function applyTheme(mode: ThemeMode): void {
  * when storage is disabled or the origin is opaque — a private-mode browser
  * should get the system theme, not a blank page.
  */
-export function readStoredTheme(): ThemeMode {
+function readStoredTheme(): ThemeMode {
   try {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
     return isThemeMode(stored) ? stored : DEFAULT_THEME_MODE;
@@ -64,7 +64,7 @@ export function readStoredTheme(): ThemeMode {
 }
 
 /** Persist the choice. Failing to store is not worth breaking the click over. */
-export function storeTheme(mode: ThemeMode): void {
+function storeTheme(mode: ThemeMode): void {
   try {
     window.localStorage.setItem(THEME_STORAGE_KEY, mode);
   } catch {

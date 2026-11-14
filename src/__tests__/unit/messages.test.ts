@@ -67,8 +67,6 @@ describe("message catalogues", () => {
    */
   test("no English string is an untranslated copy of the Spanish", () => {
     const SAME_IN_BOTH = new Set([
-      "common.currency",
-      "common.no",
       "products.new.unitPack",
       "settings.spanish",
       "settings.english",
@@ -104,7 +102,7 @@ describe("message catalogues", () => {
  * last step — the same class of seam as I18N-1, only subtler because both words
  * are Spanish and neither looks wrong on its own.
  *
- * "Ticket" won because `REDESIGN_PLAN.md` §3 says no system vocabulary and
+ * "Ticket" won because `DECISIONS.md` SCREENS says no system vocabulary and
  * writes for somebody standing in a supermarket: a Spanish supermarket hands
  * you a ticket, while a recibo is what a bank sends. It was the *larger* change
  * — twenty-three strings against nine — which is the direction the argument

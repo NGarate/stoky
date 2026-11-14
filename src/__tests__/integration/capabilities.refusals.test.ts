@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { TRPCError } from "@trpc/server";
 import type { HouseholdRole } from "@/generated/prisma/client";
-import {
-  MatchStatus,
-  ReceiptStatus,
-  StockOperation,
-} from "@/generated/prisma/client";
+import { MatchStatus, ReceiptStatus } from "@/generated/prisma/client";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
@@ -58,8 +54,7 @@ import {
  *
  * Every fixture below exists to keep some *other* refusal out of the way:
  * NOT_FOUND for an id that is not there, CONFLICT for a row something points at,
- * CONFLICT for a transfer with an empty source, BAD_REQUEST for a receipt in the
- * wrong state. The last describe block is the proof that the effort worked —
+ * BAD_REQUEST for a receipt in the wrong state. The last describe block is the proof that the effort worked —
  * the same calls, from a role that may make them, and they land.
  */
 
@@ -80,11 +75,8 @@ let productId: string;
 let disposableProductId: string;
 let storeId: string;
 let spareStoreId: string;
-let stockedLocationId: string;
-let emptyLocationId: string;
 let renameableLocationId: string;
 let spareLocationId: string;
-let listWithItemId: string;
 let emptyListId: string;
 let listItemId: string;
 let reviewReceiptId: string;
@@ -173,16 +165,6 @@ beforeAll(async () => {
   });
   spareStoreId = spareStore.id;
 
-  const stocked = await prisma.storageLocation.create({
-    data: { name: `${PREFIX}Shelf`, householdId },
-  });
-  stockedLocationId = stocked.id;
-
-  const empty = await prisma.storageLocation.create({
-    data: { name: `${PREFIX}Cupboard`, householdId },
-  });
-  emptyLocationId = empty.id;
-
   const renameable = await prisma.storageLocation.create({
     data: { name: `${PREFIX}Rename Me`, householdId },
   });
@@ -193,24 +175,9 @@ beforeAll(async () => {
   });
   spareLocationId = spare.id;
 
-  // `transferStock` sums what is at the source and answers CONFLICT if it is
-  // short — which would refuse a red run for a reason that is not the role.
-  await prisma.stockEntry.create({
-    data: {
-      productId,
-      locationId: stockedLocationId,
-      quantity: 10,
-      remaining: 10,
-      unit: "L",
-      operationType: StockOperation.PURCHASE,
-      createdBy: kitchenUserId,
-    },
-  });
-
   const listWithItem = await prisma.shoppingList.create({
     data: { name: `${PREFIX}List`, householdId },
   });
-  listWithItemId = listWithItem.id;
 
   const item = await prisma.shoppingItem.create({
     data: {
@@ -384,6 +351,22 @@ describe("the household itself — admin tier", () => {
     expect(target.role).toBe("KITCHEN");
     expect(target.householdId).toBe(householdId);
   });
+
+  it("refuses either of them the household's name, and renames nothing", async () => {
+    for (const [role, caller] of [
+      ["kitchen", kitchen],
+      ["member", member],
+    ] as const) {
+      await expectTierRefusal(`household.update as ${role}`, () =>
+        caller.household.update({ name: `${PREFIX}Should Not Rename` }),
+      );
+    }
+
+    const household = await prisma.household.findUniqueOrThrow({
+      where: { id: householdId },
+    });
+    expect(household.name).toBe(HOUSEHOLD);
+  });
 });
 
 describe("the household's settings — admin tier", () => {
@@ -486,63 +469,18 @@ describe("stock writes — write tier", () => {
       before,
     );
   });
-
-  it("refuses a kitchen account a transfer, and the destination stays empty", async () => {
-    await expectTierRefusal("inventory.transferStock", () =>
-      kitchen.inventory.transferStock({
-        productId,
-        quantity: 1,
-        unit: "L",
-        fromLocationId: stockedLocationId,
-        toLocationId: emptyLocationId,
-      }),
-    );
-
-    // Named precisely: a count over the whole product would still be right if
-    // the stock had moved.
-    expect(
-      await prisma.stockEntry.count({ where: { locationId: emptyLocationId } }),
-    ).toBe(0);
-  });
-});
-
-describe("prices — write tier", () => {
-  it("refuses a kitchen account a price, and records none", async () => {
-    await expectTierRefusal("price.recordPrice", () =>
-      kitchen.price.recordPrice({
-        productId,
-        storeId,
-        price: 1.09,
-        unit: "L",
-        currency: "EUR",
-        quantity: 1,
-      }),
-    );
-
-    expect(await prisma.priceRecord.count({ where: { productId } })).toBe(0);
-  });
 });
 
 describe("shopping — the far side of the D88 boundary", () => {
   it("refuses a kitchen account the list itself, though it may add to one", async () => {
     // `create` and `addItem` are `householdProcedure` on purpose: the kitchen
-    // tablet is where a household notices something needs buying. Renaming,
-    // emptying and deleting stay refused, and that asymmetry is the thing this
-    // test pins.
-    await expectTierRefusal("shopping.update", () =>
-      kitchen.shopping.update({
-        id: listWithItemId,
-        name: "Should Not Rename",
-      }),
-    );
+    // tablet is where a household notices something needs buying. Emptying
+    // and deleting stay refused, and that asymmetry is the thing this test
+    // pins.
     await expectTierRefusal("shopping.delete", () =>
       kitchen.shopping.delete({ id: emptyListId }),
     );
 
-    const list = await prisma.shoppingList.findUnique({
-      where: { id: listWithItemId },
-    });
-    expect(list?.name).toBe(`${PREFIX}List`);
     expect(
       await prisma.shoppingList.findUnique({ where: { id: emptyListId } }),
     ).not.toBeNull();
@@ -652,6 +590,12 @@ describe("the same calls, from a role that may make them", () => {
     ).toBe("Admin Renamed");
   });
 
+  it("lets an admin rename the household", async () => {
+    expect((await admin.household.update({ name: "Admin Renamed" })).name).toBe(
+      "Admin Renamed",
+    );
+  });
+
   it("lets an admin delete the spare location and the spare shop", async () => {
     await admin.location.delete({ id: spareLocationId });
     await admin.store.delete({ id: spareStoreId });
@@ -666,22 +610,11 @@ describe("the same calls, from a role that may make them", () => {
     ).toBeNull();
   });
 
-  it("lets a member rename a product and record a price", async () => {
+  it("lets a member rename a product", async () => {
     expect(
       (await member.product.update({ id: productId, name: "Member Renamed" }))
         .name,
     ).toBe("Member Renamed");
-
-    await member.price.recordPrice({
-      productId,
-      storeId,
-      price: 1.09,
-      unit: "L",
-      currency: "EUR",
-      quantity: 1,
-    });
-
-    expect(await prisma.priceRecord.count({ where: { productId } })).toBe(1);
   });
 
   it("lets a member adjust stock and empty a shopping list", async () => {
@@ -692,10 +625,6 @@ describe("the same calls, from a role that may make them", () => {
       reason: "Recuento",
     });
 
-    await member.shopping.update({
-      id: listWithItemId,
-      name: "Member Renamed",
-    });
     await member.shopping.delete({ id: emptyListId });
 
     expect(

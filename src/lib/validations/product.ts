@@ -45,13 +45,6 @@ export const updateProductSchema = productSchema.partial().extend({
   minStock: minStockSchema.nullish(),
 });
 
-export const productSearchSchema = z.object({
-  query: z.string().trim().min(1).max(MAX_SEARCH_LENGTH),
-  // Interpolated into `LIMIT ${…}` by `searchByName`: parameterised, so not an
-  // injection, but -1 was a Postgres error and a billion was every row.
-  limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(10),
-});
-
 /**
  * A GTIN — EAN-8, EAN-13, UPC-A/E, GTIN-14 — which is what a food label
  * carries and the only thing Open Food Facts can look up.
@@ -89,17 +82,3 @@ export const productPaginationSchema = z.object({
   limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
   search: z.string().max(MAX_SEARCH_LENGTH).optional(),
 });
-
-export const productListSchema = z.object({
-  cursor: z.string().max(MAX_ID_LENGTH).optional(),
-  limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
-  search: z.string().max(MAX_SEARCH_LENGTH).optional(),
-});
-
-export type ProductInput = z.infer<typeof productSchema>;
-export type UpdateProductInput = z.infer<typeof updateProductSchema>;
-export type ProductSearchInput = z.infer<typeof productSearchSchema>;
-export type ProductByBarcodeInput = z.infer<typeof productByBarcodeSchema>;
-export type ResolveScanInput = z.infer<typeof resolveScanSchema>;
-export type ProductPaginationInput = z.infer<typeof productPaginationSchema>;
-export type ProductListInput = z.infer<typeof productListSchema>;

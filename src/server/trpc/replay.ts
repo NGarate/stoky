@@ -42,7 +42,7 @@ const ENVELOPE_KEYS = ["idempotencyKey", "composedByUserId"] as const;
  * swept per account, so the longer window costs little. It is stamped on each
  * claim as `expiresAt` when written, so changing it moves no existing row.
  */
-export const REPLAY_RETENTION_DAYS = 90;
+const REPLAY_RETENTION_DAYS = 90;
 
 /** Bounds for the transaction, rather than Prisma's 2s/5s defaults. */
 const TRANSACTION_BOUNDS = { maxWait: 5_000, timeout: 10_000 } as const;

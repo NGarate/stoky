@@ -42,7 +42,7 @@ export const isFullFrame = (quad: Quad) =>
   quad.every(([x, y], i) => x === FULL_FRAME[i]![0] && y === FULL_FRAME[i]![1]);
 
 /** The 3 × 3 homography taking `from[i]` to `to[i]`, as its 8 free numbers. */
-export function homography(from: Point[], to: Point[]): number[] {
+function homography(from: Point[], to: Point[]): number[] {
   const rows: number[][] = [];
   for (let i = 0; i < 4; i++) {
     const [x, y] = from[i]!;

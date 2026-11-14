@@ -78,7 +78,6 @@ mock.module("@/lib/trpc/client", () => ({
         },
       },
     }),
-    household: { create: { useMutation: () => idleMutation } },
     product: {
       create: { useMutation: () => idleMutation },
       list: { useQuery: () => ({ data: { products: [] }, isLoading: false }) },

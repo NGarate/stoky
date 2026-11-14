@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { PASSWORD, register, signIn } from "./account";
+import { PASSWORD, freshAccount, signIn } from "./account";
 import { settle } from "./settle";
 import es from "../messages/es.json";
 
@@ -7,7 +7,7 @@ const NEW_PASSWORD = "tarro de garbanzos azul";
 const t = es.password;
 
 test("changes the password, and the new one signs in", async ({ page }) => {
-  const email = await register(page, "password");
+  const email = await freshAccount(page, "password");
 
   await page.goto("/settings/security");
   await settle(page);

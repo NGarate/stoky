@@ -1,5 +1,3 @@
-import { cn } from "@/lib/utils";
-
 import type { JSX } from "react";
 
 /**
@@ -31,19 +29,14 @@ export function initialsOf(name: string, fallback = ""): string {
 export function Avatar({
   name,
   email = "",
-  className,
 }: {
   name: string;
   email?: string;
-  className?: string;
 }): JSX.Element {
   return (
     <span
       aria-hidden="true"
-      className={cn(
-        "inline-flex size-10 shrink-0 select-none items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground",
-        className,
-      )}
+      className="inline-flex size-10 shrink-0 select-none items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground"
     >
       {initialsOf(name, email)}
     </span>

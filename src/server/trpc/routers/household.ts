@@ -35,24 +35,13 @@ import {
   OWNERS_ONLY_MESSAGE,
   RESET_OWN_PASSWORD_MESSAGE,
   REMOVE_OWN_TWO_FACTOR_MESSAGE,
+  REMOVE_SELF_MESSAGE,
   removeMemberSchema,
   removeMemberTwoFactorSchema,
   resetMemberPasswordSchema,
   updateMemberRoleSchema,
 } from "@/lib/validations/household";
 
-/**
- * The household an account belongs to.
- *
- * `protectedProcedure` rather than `householdProcedure` throughout, and that is
- * the point: these are the procedures an account with **no** household needs,
- * so requiring one would make the router unreachable exactly when it matters.
- *
- * ISSUES.md HOUSE-1. Registration treats the household name as optional, so an
- * account can exist without one; before this, every household-scoped procedure
- * threw and the pages sat on a loading skeleton for ever, with nothing saying
- * why and no way forward.
- */
 /**
  * The member this call names, or `NOT_FOUND`.
  *
@@ -209,11 +198,23 @@ async function actorRole(
 }
 
 export const householdRouter = createTRPCRouter({
-  /** The caller's household, or null. Never throws for the missing case. */
+  /**
+   * The caller's household, or null. Never throws for the missing case.
+   *
+   * `protectedProcedure` rather than `householdProcedure`: an account with no
+   * household gets null rather than a refusal. There is no way out of that
+   * state to offer here any more: an installation holds one household, so
+   * `household.create` was removed (ISSUES.md HOUSE-1).
+   */
   current: protectedProcedure.query(async ({ ctx }) => {
     const user = await ctx.db.user.findUnique({
       where: { id: ctx.session.user.id },
-      select: { role: true, household: { select: { id: true, name: true } } },
+      select: {
+        role: true,
+        household: {
+          select: { id: true, name: true, tabName: true, appName: true },
+        },
+      },
     });
 
     if (!user) {
@@ -227,68 +228,22 @@ export const householdRouter = createTRPCRouter({
   }),
 
   /**
-   * Creates a household and puts the caller in it as its OWNER.
+   * Renames the caller's household, and names its browser tab and installed
+   * app (null for either restores its default: `src/lib/household-names.ts`).
    *
-   * Refuses if the caller already has one: this is the way out of the
-   * no-household state, not a way to move between households. Leaving a
-   * household, and being invited to another, are Phase 3's neighbours rather
-   * than part of it, and both need a membership model this schema does not
-   * have — `User.householdId` is a single nullable column.
+   * The row is `ctx.householdId`, never an id from the input: an admin has
+   * exactly one household to rename, so there is nothing for the input to
+   * choose and no other household's row it could reach.
    */
-  create: protectedProcedure
+  update: adminProcedure
     .input(householdSchema)
-    .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      const existing = await ctx.db.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
+    .mutation(async ({ ctx, input: { name, tabName, appName } }) => {
+      return ctx.db.household.update({
+        where: { id: ctx.householdId },
+        // Named, so a field householdSchema gains does not reach the row.
+        data: { name, tabName, appName },
+        select: { id: true, name: true, tabName: true, appName: true },
       });
-
-      if (!existing) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "This account no longer exists",
-        });
-      }
-
-      if (existing.householdId) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "This account already belongs to a household",
-        });
-      }
-
-      // One transaction: a household with no members is invisible in the
-      // interface and unreachable by anyone, so a half-applied create would
-      // leave a row nothing can ever clean up.
-      //
-      // The read above is only the early answer; the claim is the conditional
-      // update below. Two creates sent together from one account (a double
-      // tap, two tabs, one batched request) both pass that read, and an
-      // update keyed on `id` alone let the second overwrite the first and
-      // strand its household with no member. With `householdId: null` in the
-      // WHERE, the second waits on the first one's row lock, re-reads the row
-      // once it commits (READ COMMITTED), matches nothing, and throws — which
-      // rolls its own household back.
-      const household = await ctx.db.$transaction(async (tx) => {
-        const created = await tx.household.create({
-          data: { name: input.name },
-        });
-        const claimed = await tx.user.updateMany({
-          where: { id: userId, householdId: null },
-          data: { householdId: created.id, role: "OWNER" },
-        });
-        if (claimed.count === 0) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: "This account already belongs to a household",
-          });
-        }
-        return created;
-      });
-
-      return household;
     }),
 
   /**
@@ -331,9 +286,8 @@ export const householdRouter = createTRPCRouter({
    *
    * A duplicate email is answered by the database's own unique constraint,
    * which the Prisma middleware turns into `CONFLICT`. Checking first and then
-   * inserting would race with itself. `auth.register` still checks first, as a
-   * courtesy in front of the same constraint, and writes its household in the
-   * same transaction as the account so the race cannot leave one behind.
+   * inserting would race with itself. `auth.register` has no duplicate to
+   * meet: it only ever creates the first account.
    *
    * This is also the way in once registration is closed: `STOKY_REGISTRATION`
    * governs `auth.register` only, never this.
@@ -387,7 +341,7 @@ export const householdRouter = createTRPCRouter({
    * `householdProcedure` re-reads `role` from the database on every call and
    * ignores the token — `integration/session.freshness.test.ts` proves it — so
    * a demotion is as immediate as the session machinery allows. That is what
-   * makes this useful before session revocation exists (`REDESIGN_PLAN.md` §10).
+   * makes this useful before session revocation exists (`SECURITY_REVIEW.md` finding 8).
    */
   updateRole: adminProcedure
     .input(updateMemberRoleSchema)
@@ -415,35 +369,41 @@ export const householdRouter = createTRPCRouter({
     }),
 
   /**
-   * Remove somebody from the household.
+   * Remove somebody from the household, which deletes their account.
    *
-   * Sets `householdId` to null rather than deleting the account — see
-   * `removeMemberSchema` for why. The same three guards as `updateRole`, and
-   * the same immediacy: the next request that member makes gets
-   * `PRECONDITION_FAILED` from `householdProcedure`, because it re-reads the
-   * household too.
+   * An installation holds one household, so an account outside it has
+   * nowhere to be: a removed member's account goes, rather than lingering
+   * with no household and no way out of that. The same
+   * three guards as `updateRole`, in the same transaction as the delete, so
+   * a refused removal deletes nothing.
    *
-   * **And it signs them out everywhere** (ASVS 5.0.0 7.4.2, PROGRESS D146).
-   * Every session the member has is deleted in the same transaction that
-   * takes their household away (`endSessions`), so the phone in their pocket
-   * and the kitchen tablet they left signed in are signed out together, and
-   * neither the household nor the sessions can go without the other. Losing
-   * the household alone already refused every household request; what a
-   * session left alive still reached was the account itself — its password,
-   * its devices list, a new household of its own (`household.create`) — on
-   * a device the household may no longer control, such as the kitchen
-   * tablet. The account stays, so the person can sign in
-   * again, to an account with no household.
+   * **It signs them out everywhere** (ASVS 5.0.0 7.4.2, PROGRESS D146).
+   * `Session`, `Account`, `Passkey` and `TwoFactor` rows go with the `User`
+   * row (a cascade), but `endSessions` still runs first, in the transaction:
+   * it is what counts the sessions for the log, and what deletes the
+   * account's `Verification` rows — two-step sign-ins in progress and
+   * step-ups — which have no relation to `User` to cascade from.
+   * `ScreenChoice` and `MutationReplay` key on the account's id with no
+   * relation either and are the account's own, so they go here too.
+   * `StockEntry.createdBy` and `Receipt.uploadedBy` stay: they are the
+   * household's history, kept as an id.
    *
-   * Removing yourself, which an owner beside another owner may do, ends your
-   * own sessions too, this one included: you no longer belong anywhere, and
-   * nothing about that needs a session. Logged as `auth.session.ended` with
-   * `reason: "removed"`, after the transaction has committed, so a refused
-   * removal writes no line.
+   * Never the caller: removing yourself would delete the account in use,
+   * with no undo, so it is refused (`REMOVE_SELF_MESSAGE`) and the screen
+   * does not offer it. Logged as `auth.session.ended`
+   * with `reason: "removed"` — the account deleted with them — after the
+   * transaction has committed, so a refused removal writes no line.
    */
   removeMember: adminProcedure
     .input(removeMemberSchema)
     .mutation(async ({ ctx, input }) => {
+      if (input.userId === ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: REMOVE_SELF_MESSAGE,
+        });
+      }
+
       const removed = await withOwnersLocked(
         ctx.db,
         ctx.householdId,
@@ -460,15 +420,12 @@ export const householdRouter = createTRPCRouter({
           );
           await assertAnOwnerRemains(tx, ctx.householdId, member, null);
 
-          await tx.user.update({
-            where: { id: member.id },
-            data: { householdId: null },
-          });
+          const ended = await endSessions(tx, { userId: member.id });
+          await tx.screenChoice.deleteMany({ where: { userId: member.id } });
+          await tx.mutationReplay.deleteMany({ where: { userId: member.id } });
+          await tx.user.delete({ where: { id: member.id } });
 
-          return {
-            id: member.id,
-            ended: await endSessions(tx, { userId: member.id }),
-          };
+          return { id: member.id, ended };
         },
       );
 

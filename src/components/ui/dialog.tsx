@@ -186,7 +186,7 @@ export function Dialog({
  * The one shape a snackbar cannot serve: destructive, irreversible, and with
  * no inverse to offer afterwards.
  *
- * REDESIGN_PLAN section 7 says "undo instead of confirm", and that rule
+ * DECISIONS.md USABILITY says "undo instead of confirm", and that rule
  * assumes an undo exists. Deleting a shopping list cascades its items and
  * there is no procedure that puts them back, so the only honest moment to ask
  * is before.
@@ -198,7 +198,6 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel,
-  cancelLabel,
   pending = false,
   returnFocus,
   fallbackFocus,
@@ -210,7 +209,6 @@ export function ConfirmDialog({
   description?: string;
   /** Names what it destroys, so it still says so read out of context. */
   confirmLabel: string;
-  cancelLabel?: string;
   pending?: boolean;
   returnFocus?: RefObject<HTMLElement | null>;
   fallbackFocus?: RefObject<HTMLElement | null>;
@@ -223,7 +221,7 @@ export function ConfirmDialog({
       footer={
         <>
           <Button onClick={onCancel} type="button" variant="outline">
-            {cancelLabel ?? t("cancel")}
+            {t("cancel")}
           </Button>
           <Button
             disabled={pending}

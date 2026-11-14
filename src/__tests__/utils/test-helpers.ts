@@ -7,7 +7,6 @@ import type {
   HouseholdRole,
   Product,
   StockEntry,
-  StorageLocation,
 } from "@/generated/prisma/client";
 import type { AppSession } from "@/lib/auth/session";
 
@@ -43,14 +42,8 @@ export interface TestStockEntryData {
   unit?: string;
   locationId?: string;
   expirationDate?: Date;
-  operationType?: "PURCHASE" | "CONSUME" | "ADJUST" | "TRANSFER";
+  operationType?: "PURCHASE" | "CONSUME" | "ADJUST";
   createdBy: string;
-}
-
-export interface TestLocationData {
-  name: string;
-  householdId: string;
-  parentId?: string;
 }
 
 /**
@@ -155,21 +148,6 @@ export async function createTestProduct(
 }
 
 /**
- * Creates a test storage location
- */
-export async function createTestLocation(
-  data: TestLocationData,
-): Promise<StorageLocation> {
-  return prisma.storageLocation.create({
-    data: {
-      name: data.name,
-      householdId: data.householdId,
-      parentId: data.parentId,
-    },
-  });
-}
-
-/**
  * Creates a test stock entry
  */
 export async function createTestStockEntry(
@@ -229,77 +207,6 @@ export async function cleanupTestProducts(namePattern: string): Promise<void> {
       },
     },
   });
-}
-
-/**
- * Database cleanup helper - removes all test data
- */
-export async function cleanupAllTestData(): Promise<void> {
-  // Delete in correct order to respect foreign key constraints
-  await prisma.stockEntry.deleteMany({});
-  await prisma.priceRecord.deleteMany({});
-  await prisma.receiptItem.deleteMany({});
-  await prisma.receipt.deleteMany({});
-  await prisma.shoppingItem.deleteMany({});
-  await prisma.shoppingList.deleteMany({});
-  await prisma.product.deleteMany({});
-  await prisma.storageLocation.deleteMany({});
-  await prisma.store.deleteMany({});
-  await prisma.user.deleteMany({});
-  await prisma.household.deleteMany({});
-}
-
-/**
- * Creates a complete test scenario with user, household, and products
- */
-export async function createTestScenario() {
-  const timestamp = Date.now();
-
-  // Create household
-  const household = await createTestHousehold({
-    name: `Test Household ${timestamp}`,
-  });
-
-  // Create user with household
-  const user = await createTestUser({
-    email: `test.user.${timestamp}@example.com`,
-    name: "Test User",
-    password: "TestPassword123!",
-    householdId: household.id,
-    role: "OWNER",
-  });
-
-  // Create a location
-  const location = await createTestLocation({
-    name: "Test Pantry",
-    householdId: household.id,
-  });
-
-  // Create some products
-  const product1 = await createTestProduct({
-    name: `Test Product 1 ${timestamp}`,
-    barcode: `TEST-${timestamp}-001`,
-    brand: "Test Brand",
-    category: "Food",
-    householdId: household.id,
-    defaultUnit: "unit",
-    minStock: 2,
-  });
-
-  const product2 = await createTestProduct({
-    name: `Test Product 2 ${timestamp}`,
-    barcode: `TEST-${timestamp}-002`,
-    category: "Beverages",
-    householdId: household.id,
-    defaultUnit: "liter",
-  });
-
-  return {
-    household,
-    user,
-    location,
-    products: [product1, product2],
-  };
 }
 
 /**

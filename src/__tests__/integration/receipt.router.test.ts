@@ -280,8 +280,8 @@ describe("receipt.upload — what it refuses", () => {
   // rather than through one representative bad file.
 
   it("refuses a store that belongs to another household", async () => {
-    // SEC-1's shape a third time. `price.recordPrice` verifies this identical
-    // field two files away; upload wrote it onto the Receipt unchecked, and
+    // SEC-1's shape a third time. `inventory.addStock` verifies this identical
+    // field; upload wrote it onto the Receipt unchecked, and
     // everything the receipt later produces inherits the reference.
     const strangersStore = await prisma.store.create({
       data: { name: "Tienda ajena", householdId: otherHouseholdId },

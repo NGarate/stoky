@@ -1,13 +1,10 @@
 import { describe, it, expect } from "bun:test";
 import {
   householdSchema,
-  updateHouseholdSchema,
-  householdMemberSchema,
   addMemberSchema,
   type HouseholdInput,
-  type UpdateHouseholdInput,
-  type HouseholdMemberInput,
 } from "@/lib/validations/household";
+import { MAX_NAME_LENGTH } from "@/lib/validations/bounds";
 
 describe("Household Validation Schemas", () => {
   describe("householdSchema", () => {
@@ -44,112 +41,38 @@ describe("Household Validation Schemas", () => {
       const result = householdSchema.safeParse(validInput);
       expect(result.success).toBe(true);
     });
-  });
 
-  describe("updateHouseholdSchema", () => {
-    it("should accept valid update data", () => {
-      const validInput: UpdateHouseholdInput = {
-        id: "household-id-123",
-        name: "Updated Name",
-      };
+    it.each(["tabName", "appName"])(
+      "trims %s, stores an empty one as null and leaves a missing one alone",
+      (field) => {
+        const parse = (value?: string) =>
+          householdSchema.parse({ name: "Casa", [field]: value })[
+            field as "tabName" | "appName"
+          ];
 
-      const result = updateHouseholdSchema.safeParse(validInput);
-      expect(result.success).toBe(true);
-    });
+        expect(parse("  Casa García  ")).toBe("Casa García");
+        // Null is the default: the tab says Stoky, the app the household's name.
+        expect(parse("")).toBeNull();
+        expect(parse("   ")).toBeNull();
+        // Absent is "not this time", which Prisma leaves untouched.
+        expect(parse(undefined)).toBeUndefined();
+      },
+    );
 
-    it("should accept partial update with only id", () => {
-      const partialInput = {
-        id: "household-id-123",
-      };
-
-      const result = updateHouseholdSchema.safeParse(partialInput);
-      expect(result.success).toBe(true);
-    });
-
-    it("should accept partial update with only name", () => {
-      const partialInput = {
-        id: "household-id-123",
-        name: "New Name",
-      };
-
-      const result = updateHouseholdSchema.safeParse(partialInput);
-      expect(result.success).toBe(true);
-    });
-
-    it("should require id for update", () => {
-      const invalidInput = {
-        name: "New Name",
-      };
-
-      const result = updateHouseholdSchema.safeParse(invalidInput);
-      expect(result.success).toBe(false);
-    });
-
-    it("should reject empty id", () => {
-      const invalidInput = {
-        id: "",
-        name: "New Name",
-      };
-
-      const result = updateHouseholdSchema.safeParse(invalidInput);
-      expect(result.success).toBe(false);
-    });
-  });
-
-  describe("householdMemberSchema", () => {
-    it("should accept valid member data", () => {
-      const validInput: HouseholdMemberInput = {
-        userId: "user-id-123",
-        role: "ADMIN",
-      };
-
-      const result = householdMemberSchema.safeParse(validInput);
-      expect(result.success).toBe(true);
-    });
-
-    it("should accept all valid roles", () => {
-      const roles: Array<"OWNER" | "ADMIN" | "MEMBER"> = [
-        "OWNER",
-        "ADMIN",
-        "MEMBER",
-      ];
-
-      for (const role of roles) {
-        const result = householdMemberSchema.safeParse({
-          userId: "user-id-123",
-          role,
-        });
-        expect(result.success).toBe(true);
-      }
-    });
-
-    it("should reject invalid role", () => {
-      const invalidInput = {
-        userId: "user-id-123",
-        role: "GUEST",
-      };
-
-      const result = householdMemberSchema.safeParse(invalidInput);
-      expect(result.success).toBe(false);
-    });
-
-    it("should reject empty userId", () => {
-      const invalidInput = {
-        userId: "",
-        role: "MEMBER",
-      };
-
-      const result = householdMemberSchema.safeParse(invalidInput);
-      expect(result.success).toBe(false);
-    });
-
-    it("should reject missing userId", () => {
-      const invalidInput = {
-        role: "MEMBER",
-      };
-
-      const result = householdMemberSchema.safeParse(invalidInput);
-      expect(result.success).toBe(false);
+    it.each(["tabName", "appName"])("bounds %s like the name", (field) => {
+      // Both are served without a session, in HTML and in JSON.
+      expect(
+        householdSchema.safeParse({
+          name: "Casa",
+          [field]: "x".repeat(MAX_NAME_LENGTH),
+        }).success,
+      ).toBe(true);
+      expect(
+        householdSchema.safeParse({
+          name: "Casa",
+          [field]: "x".repeat(MAX_NAME_LENGTH + 1),
+        }).success,
+      ).toBe(false);
     });
   });
 

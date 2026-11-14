@@ -22,7 +22,7 @@ import type { JSX } from "react";
  * it sits in — so this one is inside the provider and `global-error.tsx` is
  * not, which is why that file says its piece in two hardcoded languages.
  *
- * `REDESIGN_PLAN.md` §7 rule 4: an error should say what to do next. Three
+ * `DECISIONS.md` USABILITY rule 4: an error should say what to do next. Three
  * things here try to earn that. It says the fault is the application's and that
  * nothing recorded was lost, because the first thought after a screen vanishes
  * is "did I just lose that?" — and the offline queue means the honest answer is

@@ -13,11 +13,11 @@ import { num } from "../utils/amount";
  * `addStock` optionally writes a `PriceRecord` alongside the stock entry, and
  * took `storeId` straight from input. The product and the location in the same
  * procedure were both verified against the household; the store was not, and
- * `price.recordPrice` verifies the identical write two files away. So any
+ * `price.recordPrice`, since removed, verified the identical write. So any
  * MEMBER could attach a price record to another household's `Store`, with no
  * interface in front of it and nothing to notice.
  *
- * `REDESIGN_PLAN.md` Phase 7 item 2 names this class as the failure that would
+ * Phase 7's item 2 (`SECURITY_REVIEW.md` §2) names this class as the failure that would
  * be invisible in single-household testing. It is checked here rather than
  * there because Phase 4 makes this procedure replayable from a queue, and a
  * queued write is a caller that is not a page.

@@ -2,12 +2,8 @@ import { describe, it, expect } from "bun:test";
 import {
   loginSchema,
   registerSchema,
-  createHouseholdSchema,
-  inviteMemberSchema,
   type LoginInput,
   type RegisterInput,
-  type CreateHouseholdInput,
-  type InviteMemberInput,
 } from "@/lib/validations/auth";
 
 describe("Authentication Validation Schemas", () => {
@@ -99,17 +95,6 @@ describe("Authentication Validation Schemas", () => {
         email: "newuser@example.com",
         name: "John Doe",
         password: "securepass123",
-      };
-
-      const result = registerSchema.safeParse(validInput);
-      expect(result.success).toBe(true);
-    });
-
-    it("should accept registration with optional household name", () => {
-      const validInput: RegisterInput = {
-        email: "newuser@example.com",
-        name: "John Doe",
-        password: "securepass123",
         householdName: "My Home",
       };
 
@@ -117,11 +102,28 @@ describe("Authentication Validation Schemas", () => {
       expect(result.success).toBe(true);
     });
 
+    it("refuses a registration without the household's name", () => {
+      // Whoever registers founds the household and owns it; an account
+      // without one had nothing to do but create one (HOUSE-1).
+      for (const householdName of [undefined, "", "   "]) {
+        const result = registerSchema.safeParse({
+          email: "newuser@example.com",
+          name: "John Doe",
+          password: "securepass123",
+          householdName,
+        });
+
+        expect(result.success, String(householdName)).toBe(false);
+        expect(result.error?.issues[0]?.path).toEqual(["householdName"]);
+      }
+    });
+
     it("should reject empty name", () => {
       const invalidInput = {
         email: "user@example.com",
         name: "",
         password: "password123",
+        householdName: "Casa",
       };
 
       const result = registerSchema.safeParse(invalidInput);
@@ -132,6 +134,7 @@ describe("Authentication Validation Schemas", () => {
       const invalidInput = {
         email: "user@example.com",
         password: "password123",
+        householdName: "Casa",
       };
 
       const result = registerSchema.safeParse(invalidInput);
@@ -145,6 +148,7 @@ describe("Authentication Validation Schemas", () => {
         // Twelve characters, no composition rules — DEBT-1 answered against
         // NIST SP 800-63B §5.1.1.2 rather than against its own suggestion.
         password: "nevera cocina",
+        householdName: "Casa",
       };
 
       const result = registerSchema.safeParse(minimalInput);
@@ -159,6 +163,7 @@ describe("Authentication Validation Schemas", () => {
         email: "  Noel@Example.COM ",
         name: "Noel",
         password: "nevera cocina despensa",
+        householdName: "Casa",
       });
       const signingIn = loginSchema.parse({
         email: "NOEL@example.com",
@@ -177,6 +182,7 @@ describe("Authentication Validation Schemas", () => {
           email: "johndoe@example.com",
           name: "John Doe",
           password,
+          householdName: "Casa",
         });
 
         expect(result.success, password).toBe(false);
@@ -189,113 +195,9 @@ describe("Authentication Validation Schemas", () => {
         email: "a@b.co",
         name: "A",
         password: "12345678",
+        householdName: "Casa",
       });
 
-      expect(result.success).toBe(false);
-    });
-  });
-});
-
-describe("Household Validation Schemas", () => {
-  describe("createHouseholdSchema", () => {
-    it("should accept valid household name", () => {
-      const validInput: CreateHouseholdInput = {
-        name: "My Household",
-      };
-
-      const result = createHouseholdSchema.safeParse(validInput);
-      expect(result.success).toBe(true);
-    });
-
-    it("should reject empty household name", () => {
-      const invalidInput = {
-        name: "",
-      };
-
-      const result = createHouseholdSchema.safeParse(invalidInput);
-      expect(result.success).toBe(false);
-    });
-
-    it("should reject whitespace-only name", () => {
-      const invalidInput = {
-        name: "   ",
-      };
-
-      const result = createHouseholdSchema.safeParse(invalidInput);
-      expect(result.success).toBe(false);
-    });
-
-    it("should accept single character name", () => {
-      const validInput: CreateHouseholdInput = {
-        name: "H",
-      };
-
-      const result = createHouseholdSchema.safeParse(validInput);
-      expect(result.success).toBe(true);
-    });
-
-    it("should accept long household names", () => {
-      const validInput: CreateHouseholdInput = {
-        name: "A".repeat(100),
-      };
-
-      const result = createHouseholdSchema.safeParse(validInput);
-      expect(result.success).toBe(true);
-    });
-  });
-
-  describe("inviteMemberSchema", () => {
-    it("should accept valid member invitation", () => {
-      const validInput: InviteMemberInput = {
-        email: "member@example.com",
-        role: "MEMBER",
-      };
-
-      const result = inviteMemberSchema.safeParse(validInput);
-      expect(result.success).toBe(true);
-    });
-
-    it("should accept invitation with default role", () => {
-      const validInput = {
-        email: "member@example.com",
-      };
-
-      const result = inviteMemberSchema.safeParse(validInput);
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.role).toBe("MEMBER");
-      }
-    });
-
-    it("should accept all valid role types", () => {
-      const roles = ["OWNER", "ADMIN", "MEMBER"] as const;
-
-      for (const role of roles) {
-        const result = inviteMemberSchema.safeParse({
-          email: "member@example.com",
-          role,
-        });
-        expect(result.success).toBe(true);
-      }
-    });
-
-    it("should reject invalid role", () => {
-      const invalidInput = {
-        email: "member@example.com",
-        role: "SUPERADMIN",
-      };
-
-      const result = inviteMemberSchema.safeParse(invalidInput);
-      expect(result.success).toBe(false);
-    });
-
-    it("should reject invalid email", () => {
-      const invalidInput = {
-        email: "not-an-email",
-        role: "MEMBER",
-      };
-
-      const result = inviteMemberSchema.safeParse(invalidInput);
       expect(result.success).toBe(false);
     });
   });
