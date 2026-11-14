@@ -35,9 +35,7 @@ import type { JSX } from "react";
  * the confirmation duration are the account's.
  *
  * What it still does not do, on purpose: household, profile and notification
- * settings. The `settings.household`, `settings.profile` and
- * `settings.notifications` strings exist in both catalogues, but no procedure
- * backs any of them.
+ * settings. No procedure backs any of them.
  */
 export default function SettingsPage(): JSX.Element {
   const t = useTranslations("settings.hub");

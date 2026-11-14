@@ -67,8 +67,6 @@ describe("message catalogues", () => {
    */
   test("no English string is an untranslated copy of the Spanish", () => {
     const SAME_IN_BOTH = new Set([
-      "common.currency",
-      "common.no",
       "products.new.unitPack",
       "settings.spanish",
       "settings.english",
