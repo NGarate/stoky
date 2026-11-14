@@ -1,7 +1,11 @@
 import { describe, it, expect } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import manifest from "@/app/manifest";
+import { webManifest } from "@/app/manifest";
+import {
+  installationNames,
+  readInstallationNames,
+} from "@/lib/household-names";
 import { proxyRuns } from "../utils/proxy-matcher";
 
 /**
@@ -42,7 +46,7 @@ function token(selector: string, name: string): string {
   return match![1].trim();
 }
 
-const m = manifest();
+const m = webManifest("Stoky");
 
 describe("the web app manifest", () => {
   it("meets the install criteria", () => {
@@ -75,6 +79,14 @@ describe("the web app manifest", () => {
   it("takes its colours from the light theme's tokens", () => {
     expect(m.background_color).toBe(token(":root", "background"));
     expect(m.theme_color).toBe(token(":root", "primary"));
+  });
+
+  it("is called by the household's name for the app", () => {
+    // `manifest()` itself reads the database; what it reads is
+    // `installationNames`, below.
+    const named = webManifest("Casa García");
+    expect(named.name).toBe("Casa García");
+    expect(named.short_name).toBe("Casa García");
   });
 
   it("keeps every shortcut inside the app's scope", () => {
@@ -124,5 +136,37 @@ describe("the browser chrome colour", () => {
     expect(layout).toContain(
       `{ media: "(prefers-color-scheme: dark)", color: "${token(':root[data-theme="dark"]', "background")}" }`,
     );
+  });
+});
+
+describe("the names of the tab and the installed app", () => {
+  // The owner's defaults (plan 2026-11-12, §2), which do not mirror each
+  // other: an unnamed tab never borrows the household's name, an unnamed app
+  // does.
+  const household = { name: "Casa García", tabName: null, appName: null };
+
+  it("say Stoky before the first registration has made a household", () => {
+    expect(installationNames(null)).toEqual({ tab: "Stoky", app: "Stoky" });
+  });
+
+  it("leave an unnamed tab saying Stoky, and give an unnamed app the household's name", () => {
+    expect(installationNames(household)).toEqual({
+      tab: "Stoky",
+      app: "Casa García",
+    });
+  });
+
+  it("use the names the household chose", () => {
+    expect(
+      installationNames({ ...household, tabName: "Casa", appName: "Despensa" }),
+    ).toEqual({ tab: "Casa", app: "Despensa" });
+  });
+
+  it("say Stoky when the database cannot be asked, rather than fail the page", async () => {
+    const down = () => Promise.reject(new Error("connection refused"));
+    expect(await readInstallationNames(down)).toEqual({
+      tab: "Stoky",
+      app: "Stoky",
+    });
   });
 });

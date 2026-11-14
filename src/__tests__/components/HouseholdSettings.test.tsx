@@ -12,12 +12,28 @@ import { renderWithIntl } from "../utils/render";
  */
 const updateCalls: unknown[] = [];
 const invalidated: string[] = [];
+let refreshes = 0;
+
+/** The names the server holds besides the household's own. */
+let names: { tabName: string | null; appName: string | null } = {
+  tabName: null,
+  appName: null,
+};
 
 /** Who the section thinks is looking. */
 let role = "OWNER";
 
 /** When set, the rename reports this instead of succeeding. */
 let failure: { data?: { code?: string } } | null = null;
+
+// A saved tab name reaches the title through a server render of the layout.
+mock.module("next/navigation", () => ({
+  usePathname: () => "/settings",
+  useRouter: () => ({ refresh: () => void refreshes++, push: () => {} }),
+  useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({}),
+  redirect: () => {},
+}));
 
 // The real snackbar needs a write queue to read; none of it matters here.
 mock.module("@/lib/offline/queue-context", () => ({
@@ -47,7 +63,7 @@ mock.module("@/lib/trpc/client", () => ({
     household: {
       current: {
         useQuery: () => ({
-          data: { household: { id: "h1", name: "Casa" }, role },
+          data: { household: { id: "h1", name: "Casa", ...names }, role },
         }),
       },
       update: {
@@ -82,6 +98,8 @@ const renderSection = () =>
 beforeEach(() => {
   updateCalls.length = 0;
   invalidated.length = 0;
+  refreshes = 0;
+  names = { tabName: null, appName: null };
   role = "OWNER";
   failure = null;
 });
@@ -118,11 +136,37 @@ describe("the household section of the settings hub", () => {
     await userEvent.type(field, "Casa de la playa");
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
 
-    expect(updateCalls).toEqual([{ name: "Casa de la playa" }]);
+    expect(updateCalls).toEqual([
+      { name: "Casa de la playa", tabName: "", appName: "" },
+    ]);
     expect(invalidated).toContain("household.current");
+    expect(refreshes).toBe(1);
     expect(
       await screen.findAllByText(/El hogar se llama ahora «Casa de la playa»/),
     ).not.toHaveLength(0);
+  });
+
+  it("offers the tab's and the app's names, each saying it is public", async () => {
+    names = { tabName: "Casa", appName: null };
+    renderSection();
+
+    const tab = screen.getByLabelText("Nombre en la pestaña del navegador");
+    const app = screen.getByLabelText("Nombre de la app instalada");
+    expect(tab).toHaveValue("Casa");
+    expect(app).toHaveValue("");
+    expect(tab).toHaveAccessibleDescription(/Vacío, la pestaña dice «Stoky»/);
+    expect(tab).toHaveAccessibleDescription(/Es público/);
+    expect(app).toHaveAccessibleDescription(/se llama como el hogar/);
+    expect(app).toHaveAccessibleDescription(/Es público/);
+    expect(app).toHaveAccessibleDescription(/al volver a instalarla/);
+
+    await userEvent.clear(tab);
+    await userEvent.type(app, "Despensa");
+    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(updateCalls).toEqual([
+      { name: "Casa", tabName: "", appName: "Despensa" },
+    ]);
   });
 
   it("says when the rename did not save", async () => {

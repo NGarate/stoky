@@ -1,7 +1,4 @@
 {
-  "metadata": {
-    "title": "Stoky · Household inventory"
-  },
   "auth": {
     "login": "Sign in",
     "register": "Sign up",
@@ -957,6 +954,10 @@
     "removeTwoFactorChanged": "This person no longer has two-step verification on, or their account changed. The list has been updated.",
     "settingsTitle": "Household",
     "nameLabel": "Household name",
+    "tabNameLabel": "Name in the browser tab",
+    "tabNameHint": "Empty, the tab says “Stoky”. It is public: it shows on the sign-in page too.",
+    "appNameLabel": "Name of the installed app",
+    "appNameHint": "Empty, the app takes the household's name. It is public, and so is the household's name if you leave this empty: anyone who reaches this address can read it. An app already installed picks up a new name when the browser reads it again: Chrome on its own schedule, iPhone and iPad only when it is installed again.",
     "renamed": "The household is now called “{name}”",
     "renameFailed": "The household's name could not be changed. Try again."
   },

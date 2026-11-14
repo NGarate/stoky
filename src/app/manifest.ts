@@ -1,4 +1,6 @@
 import type { MetadataRoute } from "next";
+import { connection } from "next/server";
+import { readInstallationNames } from "@/lib/household-names";
 
 /**
  * The web app manifest, served at `/manifest.webmanifest`.
@@ -13,19 +15,33 @@ import type { MetadataRoute } from "next";
  * makes the browser's own install action produce an app instead of a
  * bookmark.
  *
- * Static and Spanish, for the reason the root layout's description is: the
+ * Per request, because the name is the household's (`Household.appName`, else
+ * its name, else `Stoky`: `src/lib/household-names.ts`), and a prerender
+ * would bake in whatever `next build` saw; `connection()` keeps the query out
+ * of the build. The browser fetches this without credentials, so that name is
+ * public (SECURITY.md). An app already installed picks up a new one only when
+ * the browser re-reads this: Chrome on its own schedule, iOS not until it is
+ * installed again, and iOS reads the name from the root layout's
+ * `apple-mobile-web-app-title` rather than from here.
+ *
+ * The rest is Spanish, for the reason the root layout's description is: the
  * browser fetches this without the locale cookie, so a per-request
- * translation would resolve to Spanish for everyone anyway and cost the route
- * its prerender.
+ * translation would resolve to Spanish for everyone anyway.
  *
  * Colours are `--background` and `--primary` from `src/app/globals.css`, light
  * theme; `pwa-manifest.test.ts` fails if they drift from the tokens.
  */
-export default function manifest(): MetadataRoute.Manifest {
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  await connection();
+  return webManifest((await readInstallationNames()).app);
+}
+
+/** The manifest for an app called `name`, kept apart so a test needs no database. */
+export function webManifest(name: string): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Stoky",
-    short_name: "Stoky",
+    name,
+    short_name: name,
     description: "Gestión de inventario del hogar con privacidad",
     lang: "es",
     dir: "ltr",

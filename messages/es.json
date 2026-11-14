@@ -1,7 +1,4 @@
 {
-  "metadata": {
-    "title": "Stoky · Inventario de la casa"
-  },
   "auth": {
     "login": "Iniciar sesión",
     "register": "Registrarse",
@@ -957,6 +954,10 @@
     "removeTwoFactorChanged": "Esta persona ya no tiene la verificación en dos pasos activada, o su cuenta ha cambiado. Hemos actualizado la lista.",
     "settingsTitle": "Hogar",
     "nameLabel": "Nombre del hogar",
+    "tabNameLabel": "Nombre en la pestaña del navegador",
+    "tabNameHint": "Vacío, la pestaña dice «Stoky». Es público: se ve también en la página para iniciar sesión.",
+    "appNameLabel": "Nombre de la app instalada",
+    "appNameHint": "Vacío, la app se llama como el hogar. Es público, y el nombre del hogar también si lo dejas vacío: cualquiera que llegue a esta dirección puede leerlo. Una app ya instalada recoge el nombre nuevo cuando el navegador lo vuelve a leer: Chrome, cuando le toca; en iPhone y iPad, al volver a instalarla.",
     "renamed": "El hogar se llama ahora «{name}»",
     "renameFailed": "No se ha podido cambiar el nombre del hogar. Vuelve a intentarlo."
   },

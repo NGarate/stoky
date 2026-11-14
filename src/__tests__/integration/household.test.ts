@@ -111,9 +111,43 @@ describe("household.update", () => {
     expect(renamed).toEqual({
       id: mine.id,
       name: `${HOUSEHOLD_PREFIX} Renamed`,
+      tabName: null,
+      appName: null,
     });
     expect(await nameOf(mine.id)).toBe(`${HOUSEHOLD_PREFIX} Renamed`);
     expect(await nameOf(other.id)).toBe(`${HOUSEHOLD_PREFIX} Other`);
+  });
+
+  it("names the tab and the app, and an empty name clears either", async () => {
+    const { mine, other } = await twoHouseholds();
+    const { caller } = await callerForNewUser(mine.id, "OWNER");
+    const names = async (id: string) =>
+      prisma.household.findUniqueOrThrow({
+        where: { id },
+        select: { tabName: true, appName: true },
+      });
+
+    await caller.household.update({
+      name: `${HOUSEHOLD_PREFIX} Mine`,
+      tabName: " Casa ",
+      appName: "Despensa",
+    });
+    expect(await names(mine.id)).toEqual({
+      tabName: "Casa",
+      appName: "Despensa",
+    });
+    expect((await caller.household.current()).household).toMatchObject({
+      tabName: "Casa",
+      appName: "Despensa",
+    });
+
+    await caller.household.update({
+      name: `${HOUSEHOLD_PREFIX} Mine`,
+      tabName: "",
+      appName: "  ",
+    });
+    expect(await names(mine.id)).toEqual({ tabName: null, appName: null });
+    expect(await names(other.id)).toEqual({ tabName: null, appName: null });
   });
 
   it.each(["MEMBER", "KITCHEN"] as const)(

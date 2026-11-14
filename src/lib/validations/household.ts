@@ -7,8 +7,23 @@ import {
   withIdentityRule,
 } from "./password";
 
+/** A name the household may leave empty, which stores null: the default. */
+const optionalName = z
+  .string()
+  .trim()
+  .max(MAX_NAME_LENGTH)
+  .transform((value) => value || null)
+  .optional();
+
+/**
+ * The household's names. `tabName` and `appName` are served without a session
+ * (the tab on `/login`, the web manifest), so they are bounded and trimmed
+ * like the name, and reach a page only as text.
+ */
 export const householdSchema = z.object({
   name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
+  tabName: optionalName,
+  appName: optionalName,
 });
 
 /**

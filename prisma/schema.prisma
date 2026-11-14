@@ -243,6 +243,12 @@ model Verification {
 model Household {
   id        String    @id @default(cuid())
   name      String
+  /// What the browser tab says after the page's own title; null says `Stoky`,
+  /// never `name`. Served before sign-in, so public (SECURITY.md).
+  tabName   String?
+  /// The installed app's name (the web manifest); null falls back to `name`.
+  /// The manifest is fetched without credentials, so public as well.
+  appName   String?
   members   User[]
   products  Product[]
   stores    Store[]

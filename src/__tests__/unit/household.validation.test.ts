@@ -4,6 +4,7 @@ import {
   addMemberSchema,
   type HouseholdInput,
 } from "@/lib/validations/household";
+import { MAX_NAME_LENGTH } from "@/lib/validations/bounds";
 
 describe("Household Validation Schemas", () => {
   describe("householdSchema", () => {
@@ -39,6 +40,39 @@ describe("Household Validation Schemas", () => {
 
       const result = householdSchema.safeParse(validInput);
       expect(result.success).toBe(true);
+    });
+
+    it.each(["tabName", "appName"])(
+      "trims %s, stores an empty one as null and leaves a missing one alone",
+      (field) => {
+        const parse = (value?: string) =>
+          householdSchema.parse({ name: "Casa", [field]: value })[
+            field as "tabName" | "appName"
+          ];
+
+        expect(parse("  Casa García  ")).toBe("Casa García");
+        // Null is the default: the tab says Stoky, the app the household's name.
+        expect(parse("")).toBeNull();
+        expect(parse("   ")).toBeNull();
+        // Absent is "not this time", which Prisma leaves untouched.
+        expect(parse(undefined)).toBeUndefined();
+      },
+    );
+
+    it.each(["tabName", "appName"])("bounds %s like the name", (field) => {
+      // Both are served without a session, in HTML and in JSON.
+      expect(
+        householdSchema.safeParse({
+          name: "Casa",
+          [field]: "x".repeat(MAX_NAME_LENGTH),
+        }).success,
+      ).toBe(true);
+      expect(
+        householdSchema.safeParse({
+          name: "Casa",
+          [field]: "x".repeat(MAX_NAME_LENGTH + 1),
+        }).success,
+      ).toBe(false);
     });
   });
 
