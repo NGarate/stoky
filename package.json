@@ -36,7 +36,6 @@
     "release:tag": "bun scripts/release-tag.ts",
     "release:verify": "bash scripts/release-verify-draft.sh",
     "release:publish": "bash scripts/release-publish.sh",
-    "db:migrate": "bun --bun node_modules/prisma/build/index.js migrate dev",
     "db:generate": "bun --bun node_modules/prisma/build/index.js generate",
     "db:seed": "bun --bun node_modules/prisma/build/index.js db seed"
   },
