@@ -55,7 +55,7 @@ describe("the lookups every screen makes", () => {
   // the size of the household — the case where an index always wins.
 
   it("finds a product's stock ledger without reading the table", () => {
-    // The hottest query in the application: every consume, every transfer and
+    // The hottest query in the application: every consume, every adjustment and
     // every expiry calculation reads one product's entries, because a batch's
     // remaining quantity cannot be known without the rest of its ledger.
     expect(hasIndex("StockEntry", ["productId"])).toBe(true);

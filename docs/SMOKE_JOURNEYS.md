@@ -49,7 +49,7 @@ They are two doors onto the same data, not two applications.
 
 - **product**: the household item record. Has an optional **barcode** and an
   optional **minimum**, the level below which it counts as missing.
-- **stock movement**: an add, consume, adjust or transfer event. Always a
+- **stock movement**: an add, consume or adjust event. Always a
   *delta*, never an absolute quantity — this is what lets two people change the
   same stock offline without a conflict (§5.5).
 - **location**: the storage node where stock lives (fridge, pantry, cellar).

@@ -43,7 +43,7 @@ export interface TestStockEntryData {
   unit?: string;
   locationId?: string;
   expirationDate?: Date;
-  operationType?: "PURCHASE" | "CONSUME" | "ADJUST" | "TRANSFER";
+  operationType?: "PURCHASE" | "CONSUME" | "ADJUST";
   createdBy: string;
 }
 

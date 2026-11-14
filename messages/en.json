@@ -355,7 +355,7 @@
     "history": {
       "title": "Stock history",
       "titleOf": "Stock history of “{name}”",
-      "intro": "Every movement that explains today's number: purchases, consumptions, adjustments and transfers.",
+      "intro": "Every movement that explains today's number: purchases, consumptions and adjustments.",
       "currentTotal": "Right now: {stock} {unit}",
       "tableCaption": "Stock movements, newest to oldest",
       "dateHeader": "Date",
@@ -367,7 +367,6 @@
       "opPURCHASE": "Purchase",
       "opCONSUME": "Consumption",
       "opADJUST": "Adjustment",
-      "opTRANSFER": "Transfer",
       "empty": "No movements yet. The first stock you note down will show up here.",
       "loadMore": "Load earlier movements",
       "loadingMore": "Loading…",
