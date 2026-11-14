@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { test, expect } from "@playwright/test";
-import { PASSWORD, register, signIn, signedIn } from "./account";
+import { PASSWORD, freshAccount, signIn, signedIn } from "./account";
 import es from "../messages/es.json";
 
 const t = es.twoFactorSettings;
@@ -39,7 +39,7 @@ test("is set up in settings, then asked for at sign-in", async ({
   page,
   browser,
 }) => {
-  const email = await register(page, "twofa");
+  const email = await freshAccount(page, "twofa");
 
   await page.goto("/settings/security");
   const section = page.getByRole("region", { name: es.auth.twoFactorTitle });
