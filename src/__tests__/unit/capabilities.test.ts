@@ -64,6 +64,8 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // list the household's email addresses to whoever picks it up.
     members: "adminProcedure",
     addMember: "adminProcedure",
+    // Renaming the household is the matrix's "household settings".
+    update: "adminProcedure",
     // Changing who may do what, and who is in the household at all, is the
     // same authority as inviting — stricter if anything. The tier is not the
     // whole guard here: only an *owner* may grant or revoke ownership, and

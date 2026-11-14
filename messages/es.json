@@ -954,7 +954,11 @@
     "removeTwoFactorAction": "Quitar la verificación",
     "removeTwoFactorDone": "Se ha quitado la verificación en dos pasos de {name} y se han cerrado sus sesiones. Pídele que la configure de nuevo en cuanto entre.",
     "removeTwoFactorNotOwner": "Solo otra persona propietaria puede quitar la verificación en dos pasos de una persona propietaria.",
-    "removeTwoFactorChanged": "Esta persona ya no tiene la verificación en dos pasos activada, o su cuenta ha cambiado. Hemos actualizado la lista."
+    "removeTwoFactorChanged": "Esta persona ya no tiene la verificación en dos pasos activada, o su cuenta ha cambiado. Hemos actualizado la lista.",
+    "settingsTitle": "Hogar",
+    "nameLabel": "Nombre del hogar",
+    "renamed": "El hogar se llama ahora «{name}»",
+    "renameFailed": "No se ha podido cambiar el nombre del hogar. Vuelve a intentarlo."
   },
   "session": {
     "expiringIn": "Tu sesión se cerrará en {minutes} min por inactividad. Lo que no hayas guardado se perderá.",

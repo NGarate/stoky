@@ -351,6 +351,22 @@ describe("the household itself — admin tier", () => {
     expect(target.role).toBe("KITCHEN");
     expect(target.householdId).toBe(householdId);
   });
+
+  it("refuses either of them the household's name, and renames nothing", async () => {
+    for (const [role, caller] of [
+      ["kitchen", kitchen],
+      ["member", member],
+    ] as const) {
+      await expectTierRefusal(`household.update as ${role}`, () =>
+        caller.household.update({ name: `${PREFIX}Should Not Rename` }),
+      );
+    }
+
+    const household = await prisma.household.findUniqueOrThrow({
+      where: { id: householdId },
+    });
+    expect(household.name).toBe(HOUSEHOLD);
+  });
 });
 
 describe("the household's settings — admin tier", () => {
@@ -572,6 +588,12 @@ describe("the same calls, from a role that may make them", () => {
     expect(
       (await admin.store.update({ id: storeId, name: "Admin Renamed" })).name,
     ).toBe("Admin Renamed");
+  });
+
+  it("lets an admin rename the household", async () => {
+    expect((await admin.household.update({ name: "Admin Renamed" })).name).toBe(
+      "Admin Renamed",
+    );
   });
 
   it("lets an admin delete the spare location and the spare shop", async () => {
