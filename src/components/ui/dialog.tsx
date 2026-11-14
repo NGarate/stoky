@@ -198,7 +198,6 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel,
-  cancelLabel,
   pending = false,
   returnFocus,
   fallbackFocus,
@@ -210,7 +209,6 @@ export function ConfirmDialog({
   description?: string;
   /** Names what it destroys, so it still says so read out of context. */
   confirmLabel: string;
-  cancelLabel?: string;
   pending?: boolean;
   returnFocus?: RefObject<HTMLElement | null>;
   fallbackFocus?: RefObject<HTMLElement | null>;
@@ -223,7 +221,7 @@ export function ConfirmDialog({
       footer={
         <>
           <Button onClick={onCancel} type="button" variant="outline">
-            {cancelLabel ?? t("cancel")}
+            {t("cancel")}
           </Button>
           <Button
             disabled={pending}

@@ -8,8 +8,6 @@ import { api } from "@/lib/trpc/client";
 interface StoreSelectorProps {
   value?: string;
   onChange: (storeId: string) => void;
-  placeholder?: string;
-  className?: string;
   /** Lets a <label htmlFor> name the control — required anywhere it renders. */
   id?: string;
   ariaDescribedBy?: string;
@@ -27,8 +25,6 @@ interface StoreSelectorProps {
 export function StoreSelector({
   value,
   onChange,
-  placeholder,
-  className,
   id,
   ariaDescribedBy,
   ariaInvalid,
@@ -38,7 +34,7 @@ export function StoreSelector({
 
   if (isLoading) {
     return (
-      <Select className={className} disabled id={id}>
+      <Select disabled id={id}>
         <option>{t("select")}...</option>
       </Select>
     );
@@ -48,12 +44,11 @@ export function StoreSelector({
     <Select
       aria-describedby={ariaDescribedBy}
       aria-invalid={ariaInvalid}
-      className={className}
       id={id}
       onChange={(e) => onChange(e.target.value)}
       value={value || ""}
     >
-      <option value="">{placeholder || t("select")}</option>
+      <option value="">{t("select")}</option>
       {stores?.map((store: { id: string; name: string }) => (
         <option key={store.id} value={store.id}>
           {store.name}

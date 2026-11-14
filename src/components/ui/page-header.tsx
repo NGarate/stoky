@@ -37,17 +37,11 @@ export type PageWidth = keyof typeof PAGE_WIDTHS;
 export function PageShell({
   width,
   children,
-  className,
 }: {
   width: PageWidth;
   children: ReactNode;
-  className?: string;
 }): JSX.Element {
-  return (
-    <div className={cn("mx-auto", PAGE_WIDTHS[width], className)}>
-      {children}
-    </div>
-  );
+  return <div className={cn("mx-auto", PAGE_WIDTHS[width])}>{children}</div>;
 }
 
 /**

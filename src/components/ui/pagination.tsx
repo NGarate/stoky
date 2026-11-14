@@ -3,7 +3,6 @@
 import Link from "next/link";
 
 import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 import type { JSX } from "react";
 
@@ -32,7 +31,6 @@ export function Pagination({
   status,
   previousLabel,
   nextLabel,
-  className,
 }: {
   page: number;
   pageCount: number;
@@ -44,7 +42,6 @@ export function Pagination({
   status: string;
   previousLabel: string;
   nextLabel: string;
-  className?: string;
 }): JSX.Element | null {
   // One page is not a pager. Rendering it disabled would add two dead
   // controls to every short list in the application.
@@ -55,10 +52,7 @@ export function Pagination({
   return (
     <nav
       aria-label={label}
-      className={cn(
-        "mt-6 flex flex-wrap items-center justify-between gap-3",
-        className,
-      )}
+      className="mt-6 flex flex-wrap items-center justify-between gap-3"
     >
       {page > 1 ? (
         <Link className={step} href={hrefFor(page - 1)}>

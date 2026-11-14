@@ -120,7 +120,6 @@ export interface ItemRowProps extends VariantProps<typeof itemRowVariants> {
   actions?: ReactNode;
   /** `li` inside a `<ul>`, which is what every list here is. */
   as?: "li" | "div";
-  className?: string;
 }
 
 export function ItemRow({
@@ -134,12 +133,9 @@ export function ItemRow({
   tone,
   variant,
   as: Element = "li",
-  className,
 }: ItemRowProps): JSX.Element {
   return (
-    <Element
-      className={cn(itemRowVariants({ density, tone, variant }), className)}
-    >
+    <Element className={itemRowVariants({ density, tone, variant })}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         {href ? (
           <Link

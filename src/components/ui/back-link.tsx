@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
-import { cn } from "@/lib/utils";
-
 import type { JSX, MouseEventHandler, ReactNode } from "react";
 
 /**
@@ -30,20 +28,15 @@ import type { JSX, MouseEventHandler, ReactNode } from "react";
 export function BackLink({
   href,
   children,
-  className,
   onClick,
 }: {
   href: string;
   children: ReactNode;
-  className?: string;
   onClick?: MouseEventHandler<HTMLAnchorElement>;
 }): JSX.Element {
   return (
     <Link
-      className={cn(
-        "inline-flex min-h-[48px] items-center gap-2 text-primary underline underline-offset-4",
-        className,
-      )}
+      className="inline-flex min-h-[48px] items-center gap-2 text-primary underline underline-offset-4"
       href={href}
       onClick={onClick}
     >
