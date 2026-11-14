@@ -217,6 +217,12 @@ siguiente visita: sin señal, la lista de la compra o el inventario salían
 vacíos. Ahora solo se guarda lo que ya ha llegado, y una copia antigua dañada
 se descarta sin más.
 
+### Al registrarte, pones nombre al hogar
+
+El formulario de registro pide ahora el nombre del hogar y no deja seguir sin
+él: quien se registra crea el hogar y lo administra. Antes se podía dejar en
+blanco, y la cuenta quedaba sin hogar hasta crear uno después.
+
 ## English
 
 > [!CAUTION]
@@ -418,3 +424,10 @@ Reloading a page while something was still loading damaged the copy the app
 keeps for use offline, and the next visit threw the whole copy away: with no
 signal, the shopping list or the inventory came up empty. Now only what has
 already arrived is kept, and an old damaged copy is simply discarded.
+
+### Registering names the household
+
+The registration form now asks for the household's name and does not go on
+without it: whoever registers creates the household and runs it. Before, it
+could be left blank, and the account had no household until one was created
+afterwards.

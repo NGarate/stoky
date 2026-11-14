@@ -399,7 +399,11 @@ describe("stored text has a maximum length", () => {
     [
       "registered name",
       registerSchema,
-      { email: "a@example.es", password: "una frase larga" },
+      {
+        email: "a@example.es",
+        password: "una frase larga",
+        householdName: "Casa",
+      },
       "name",
       MAX_NAME_LENGTH,
     ],
@@ -463,7 +467,7 @@ describe("stored text has a maximum length", () => {
     const password = "una frase larga";
     for (const [schema, rest] of [
       [loginSchema, { password }],
-      [registerSchema, { name: "Ana", password }],
+      [registerSchema, { name: "Ana", password, householdName: "Casa" }],
       [addMemberSchema, { name: "Ana", password, role: "MEMBER" }],
     ] as const) {
       expect(

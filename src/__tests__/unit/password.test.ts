@@ -155,7 +155,7 @@ describe("where the policy applies", () => {
 describe("the identity rule, where a password is set", () => {
   const schemas = {
     registration: (fields: { email: string; name: string; password: string }) =>
-      registerSchema.safeParse(fields),
+      registerSchema.safeParse({ ...fields, householdName: "Casa" }),
     "an account an admin creates": (fields: {
       email: string;
       name: string;
@@ -271,6 +271,7 @@ describe("the identity rule, where a password is set", () => {
       email: "noel@example.com",
       name: "Noel",
       password: "noel en la cocina",
+      householdName: "Casa",
     });
 
     expect(isPasswordIdentityRefusal(refused.error?.message)).toBe(true);

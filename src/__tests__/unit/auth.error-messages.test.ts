@@ -46,6 +46,7 @@ describe("getAuthErrorKey", () => {
       email: "noel@example.com",
       name: "Noel",
       password: "noel en la cocina",
+      householdName: "Casa",
     });
 
     expect(getAuthErrorKey(refused.error?.message, "register")).toBe(
@@ -66,6 +67,7 @@ describe("getAuthErrorKey", () => {
       email: "ana@example.com",
       name: "Ana",
       password: "short",
+      householdName: "Casa",
     });
 
     expect(getAuthErrorKey(refused.error?.message, "register")).toBe(

@@ -40,7 +40,7 @@ export const registerSchema = withIdentityRule(
     email: emailSchema,
     name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
     password: newPasswordSchema,
-    householdName: z.string().trim().min(1).max(MAX_NAME_LENGTH).optional(),
+    householdName: z.string().trim().min(1).max(MAX_NAME_LENGTH),
   }),
 );
 
