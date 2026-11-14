@@ -1,9 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
-import {
-  addShoppingItemSchema,
-  shoppingItemSchema,
-} from "@/lib/validations/shopping";
+import { addShoppingItemSchema } from "@/lib/validations/shopping";
 import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
@@ -27,33 +24,34 @@ import { Decimal } from "@prisma/client-runtime-utils";
  * place there is to ask.
  */
 
-const LIST = { shoppingListId: "list-1", quantity: 1 };
+// What `shopping.addItem` takes: the item's fields and the replay envelope.
 const ENVELOPE = {
   idempotencyKey: randomUUID(),
   composedByUserId: "clttttttttttttttttttttttt",
 };
+const LIST = { shoppingListId: "list-1", quantity: 1, ...ENVELOPE };
 
 describe("what makes an item nameable", () => {
   it("accepts a product", () => {
     expect(
-      shoppingItemSchema.safeParse({ ...LIST, productId: "p1" }).success,
+      addShoppingItemSchema.safeParse({ ...LIST, productId: "p1" }).success,
     ).toBe(true);
   });
 
   it("refuses an item with no product", () => {
     // SHOP-1's defect and its successor at once: a row that names nothing
     // was accepted, and a row that names free text is now refused too.
-    expect(shoppingItemSchema.safeParse(LIST).success).toBe(false);
+    expect(addShoppingItemSchema.safeParse(LIST).success).toBe(false);
   });
 
   it("refuses an empty product id, which is not a product", () => {
     expect(
-      shoppingItemSchema.safeParse({ ...LIST, productId: "" }).success,
+      addShoppingItemSchema.safeParse({ ...LIST, productId: "" }).success,
     ).toBe(false);
   });
 
   it("ignores free text rather than storing it", () => {
-    const parsed = shoppingItemSchema.safeParse({
+    const parsed = addShoppingItemSchema.safeParse({
       ...LIST,
       productId: "p1",
       customName: "Sellos",
@@ -67,20 +65,24 @@ describe("what makes an item nameable", () => {
 
   it("refuses a quantity of zero, which asks you to buy nothing", () => {
     expect(
-      shoppingItemSchema.safeParse({ ...LIST, productId: "p1", quantity: 0 })
+      addShoppingItemSchema.safeParse({ ...LIST, productId: "p1", quantity: 0 })
         .success,
     ).toBe(false);
   });
 
   it("refuses a negative quantity", () => {
     expect(
-      shoppingItemSchema.safeParse({ ...LIST, productId: "p1", quantity: -2 })
-        .success,
+      addShoppingItemSchema.safeParse({
+        ...LIST,
+        productId: "p1",
+        quantity: -2,
+      }).success,
     ).toBe(false);
   });
 
   it("defaults the quantity to one, because that is what a tap means", () => {
-    const parsed = shoppingItemSchema.safeParse({
+    const parsed = addShoppingItemSchema.safeParse({
+      ...ENVELOPE,
       shoppingListId: "list-1",
       productId: "p1",
     });
@@ -90,23 +92,14 @@ describe("what makes an item nameable", () => {
 
   it("takes an optional store, and lets it be left out", () => {
     expect(
-      shoppingItemSchema.safeParse({ ...LIST, productId: "p1", storeId: "s1" })
-        .success,
+      addShoppingItemSchema.safeParse({
+        ...LIST,
+        productId: "p1",
+        storeId: "s1",
+      }).success,
     ).toBe(true);
     expect(
-      shoppingItemSchema.safeParse({ ...LIST, productId: "p1" }).success,
-    ).toBe(true);
-  });
-
-  it("applies the same rule with the replay envelope on", () => {
-    // The envelope is merged after the fields, and a rule attached to the
-    // wrong one of the two schemas is a rule the queue does not apply.
-    expect(
-      addShoppingItemSchema.safeParse({ ...LIST, ...ENVELOPE }).success,
-    ).toBe(false);
-    expect(
-      addShoppingItemSchema.safeParse({ ...LIST, ...ENVELOPE, productId: "p1" })
-        .success,
+      addShoppingItemSchema.safeParse({ ...LIST, productId: "p1" }).success,
     ).toBe(true);
   });
 });

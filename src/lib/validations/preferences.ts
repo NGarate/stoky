@@ -28,5 +28,3 @@ import { SNACKBAR_DURATIONS } from "@/lib/snackbar-duration";
 export const snackbarDurationSchema = z.object({
   snackbarDuration: z.enum(SNACKBAR_DURATIONS),
 });
-
-export type SnackbarDurationInput = z.infer<typeof snackbarDurationSchema>;

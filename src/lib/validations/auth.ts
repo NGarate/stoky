@@ -115,19 +115,6 @@ export const endSessionsSchema = z
     path: ["sessionId"],
   });
 
-export const createHouseholdSchema = z.object({
-  name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
-});
-
-export const inviteMemberSchema = z.object({
-  email: emailSchema,
-  role: z.enum(["OWNER", "ADMIN", "MEMBER"]).default("MEMBER"),
-});
-
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
-export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
-export type ConfirmPasswordInput = z.infer<typeof confirmPasswordSchema>;
 export type EndSessionsInput = z.infer<typeof endSessionsSchema>;
-export type CreateHouseholdInput = z.infer<typeof createHouseholdSchema>;
-export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;

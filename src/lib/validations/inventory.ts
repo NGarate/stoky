@@ -8,13 +8,6 @@ import {
 } from "./bounds";
 import { atScale, QUANTITY_PLACES, quantitySchema } from "./amounts";
 
-export const stockOperationSchema = z.enum([
-  "PURCHASE",
-  "CONSUME",
-  "ADJUST",
-  "TRANSFER",
-]);
-
 /**
  * What every stock movement carries, whatever kind it is.
  *
@@ -93,14 +86,6 @@ export const updateStorageLocationSchema = storageLocationSchema
   .extend({
     id: z.string().max(MAX_ID_LENGTH),
   });
-
-export type AddStockInput = z.infer<typeof addStockSchema>;
-export type ConsumeStockInput = z.infer<typeof consumeStockSchema>;
-export type AdjustStockInput = z.infer<typeof adjustStockSchema>;
-export type StorageLocationInput = z.infer<typeof storageLocationSchema>;
-export type UpdateStorageLocationInput = z.infer<
-  typeof updateStorageLocationSchema
->;
 
 /**
  * What the stock list asks for.

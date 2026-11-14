@@ -11,15 +11,6 @@ export const householdSchema = z.object({
   name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
 });
 
-export const updateHouseholdSchema = householdSchema.partial().extend({
-  id: z.string().trim().min(1).max(MAX_ID_LENGTH),
-});
-
-export const householdMemberSchema = z.object({
-  userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
-  role: z.enum(["OWNER", "ADMIN", "MEMBER"]),
-});
-
 /**
  * An account an admin creates for someone else in the household.
  *
@@ -56,10 +47,6 @@ export const addMemberSchema = withIdentityRule(
  * without it a sole owner can never hand the household on or leave it. The
  * escalation guard lives in the resolver instead, where it can see who is
  * asking: only an `OWNER` may grant or revoke `OWNER`.
- *
- * Not `householdMemberSchema`, which has the same shape and omits `KITCHEN` —
- * so it cannot express turning somebody's account into a kitchen tablet, which
- * is the change this exists for. That schema has no production caller.
  */
 export const updateMemberRoleSchema = z.object({
   userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
@@ -190,19 +177,4 @@ export const REMOVE_OWN_TWO_FACTOR_MESSAGE =
 export const OWN_SESSIONS_MESSAGE =
   "Your own sessions are in Settings, under Security, where ending them asks for your password";
 
-export type AddMemberInput = z.infer<typeof addMemberSchema>;
-export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
-export type RemoveMemberInput = z.infer<typeof removeMemberSchema>;
-export type EndMemberSessionsInput = z.infer<typeof endMemberSessionsSchema>;
-export type EndHouseholdSessionsInput = z.infer<
-  typeof endHouseholdSessionsSchema
->;
-export type RemoveMemberTwoFactorInput = z.infer<
-  typeof removeMemberTwoFactorSchema
->;
-export type ResetMemberPasswordInput = z.infer<
-  typeof resetMemberPasswordSchema
->;
 export type HouseholdInput = z.infer<typeof householdSchema>;
-export type UpdateHouseholdInput = z.infer<typeof updateHouseholdSchema>;
-export type HouseholdMemberInput = z.infer<typeof householdMemberSchema>;
