@@ -249,8 +249,9 @@ export const CAPABILITY_ROLES: Record<
 
 /**
  * Authenticated, and nothing more. Use it only where the household is
- * irrelevant — `auth.me` and `auth.logout`. Everything that touches household
- * data wants `householdProcedure` or one of its narrower forms.
+ * irrelevant — `auth.me` and the rest of the account's own procedures.
+ * Everything that touches household data wants `householdProcedure` or one of
+ * its narrower forms.
  */
 export const protectedProcedure = publicProcedure.use(({ ctx, next }) => {
   if (!ctx.session?.user) {

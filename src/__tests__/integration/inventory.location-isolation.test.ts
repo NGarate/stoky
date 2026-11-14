@@ -7,14 +7,13 @@ import type { AppSession } from "@/lib/auth/session";
 import { envelope } from "../utils/test-helpers";
 
 /**
- * Household isolation on the storage location, in the three stock procedures
- * that were missing it.
+ * Household isolation on the storage location, in the stock procedures that
+ * were missing it (`transferStock` was the third, since removed).
  *
  * `addStock` verifies the location against the household — `inventory.ts:357`,
  * and `inventory.store-isolation.test.ts` says so in as many words while
- * testing the store beside it. `consumeStock`, `adjustStock` and
- * `transferStock` take the same field from the same input and write it
- * straight onto a `StockEntry`.
+ * testing the store beside it. `consumeStock` and `adjustStock` take the same
+ * field from the same input and write it straight onto a `StockEntry`.
  *
  * Found by the Phase 7 review. The consequence is smaller than SEC-1's — the
  * row lands in the caller's own household, because the *product* is checked —
@@ -191,41 +190,6 @@ describe("a storage location belongs to one household", () => {
     );
 
     expect(error.code).toBe("NOT_FOUND");
-    expect(
-      await prisma.stockEntry.count({ where: { locationId: B.locationId } }),
-    ).toBe(0);
-  });
-
-  it("transferStock refuses one at either end", async () => {
-    await giveStock(5);
-    const api = await callerFor(A);
-
-    const into = await refusal(() =>
-      api.inventory.transferStock({
-        ...envelope(A.userId),
-        productId: A.productId,
-        quantity: 1,
-        unit: "L",
-        fromLocationId: A.locationId,
-        toLocationId: B.locationId,
-      }),
-    );
-    expect(into.code).toBe("NOT_FOUND");
-
-    // Both ends, because a check on one is a check somebody will assume covers
-    // the other.
-    const outOf = await refusal(() =>
-      api.inventory.transferStock({
-        ...envelope(A.userId),
-        productId: A.productId,
-        quantity: 1,
-        unit: "L",
-        fromLocationId: B.locationId,
-        toLocationId: A.locationId,
-      }),
-    );
-    expect(outOf.code).toBe("NOT_FOUND");
-
     expect(
       await prisma.stockEntry.count({ where: { locationId: B.locationId } }),
     ).toBe(0);

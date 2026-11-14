@@ -9,9 +9,9 @@ import { envelope } from "../utils/test-helpers";
 /**
  * The product row lock is taken inside the caller's household, or not at all.
  *
- * `consumeStock`, `adjustStock`, `transferStock` and `product.update` hold the
- * product row (`SELECT … FOR UPDATE`) so that two writes to one product
- * serialise (ISSUES.md INV-2). Until 2026-10-12 that lock named the product by
+ * `consumeStock`, `adjustStock` and `product.update` hold the product row
+ * (`SELECT … FOR UPDATE`) so that two writes to one product serialise
+ * (ISSUES.md INV-2). Until 2026-10-12 that lock named the product by
  * id alone and ran *before* the `findFirst({ id, householdId })` that refuses a
  * foreign id. So a caller holding another household's product id locked that
  * household's row before being told it did not exist — and, whenever the owner
@@ -38,7 +38,7 @@ const SETTLE_CEILING_MS = 5_000;
 const TEST_TIMEOUT_MS = 30_000;
 
 const A = { userId: "", householdId: "", productId: "" };
-const B = { userId: "", householdId: "", shelfId: "", pantryId: "" };
+const B = { userId: "", householdId: "", shelfId: "" };
 
 async function callerFor(account: { userId: string; householdId: string }) {
   const session: AppSession = {
@@ -94,16 +94,12 @@ beforeAll(async () => {
     },
   });
 
-  // B's own shelves, so the location checks that run before the transaction
-  // pass and the call reaches the product lock.
+  // B's own shelf, so the location check that runs before the transaction
+  // passes and the call reaches the product lock.
   const shelf = await prisma.storageLocation.create({
     data: { name: "Estante B", householdId: B.householdId },
   });
-  const pantry = await prisma.storageLocation.create({
-    data: { name: "Despensa B", householdId: B.householdId },
-  });
   B.shelfId = shelf.id;
-  B.pantryId = pantry.id;
 });
 
 afterAll(async () => {
@@ -230,26 +226,6 @@ describe("another household's product id takes no row lock", () => {
             unit: "L",
             locationId: B.shelfId,
             reason: "Recuento",
-          }),
-        ),
-      );
-    },
-    TEST_TIMEOUT_MS,
-  );
-
-  it(
-    "transferStock is refused while the owner holds the product",
-    async () => {
-      const api = await callerFor(B);
-
-      expectNotFound(
-        await whileOwnerHoldsTheLock(() =>
-          api.inventory.transferStock({
-            productId: A.productId,
-            quantity: 1,
-            unit: "L",
-            fromLocationId: B.shelfId,
-            toLocationId: B.pantryId,
           }),
         ),
       );

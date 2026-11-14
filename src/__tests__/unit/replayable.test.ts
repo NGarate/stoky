@@ -32,8 +32,8 @@ const REPLAYABLE = [
 /**
  * Excluded on purpose, each for a stated reason.
  *
- * `adjustStock` and `transferStock` are absolute-valued or depend on state at
- * the moment they apply, so replaying one is not the same as applying it once.
+ * `adjustStock` is absolute-valued and depends on state at the moment it
+ * applies, so replaying it is not the same as applying it once.
  * `product.scanBarcode` makes an outbound Open Food Facts call *inside* the
  * resolver, and holding a pooled connection across a third-party request in a
  * transaction is a hazard the others do not have — which is exactly why
@@ -43,10 +43,8 @@ const REPLAYABLE = [
  */
 const NOT_REPLAYABLE = [
   "inventory.adjustStock",
-  "inventory.transferStock",
   "product.scanBarcode",
   "product.create",
-  "price.recordPrice",
   "receipt.upload",
 ] as const;
 
@@ -113,7 +111,7 @@ describe("the procedures that must not carry a key", () => {
       }) as { success: boolean; data?: Record<string, unknown> };
 
       // Zod strips unknown keys rather than rejecting them, and stripping is
-      // the property that matters: two of these resolvers spread their input
+      // the property that matters: `product.create` spreads its input
       // straight into a Prisma `data` argument, where an extra field is a
       // runtime error no type would have caught.
       if (parsed.success) {

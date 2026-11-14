@@ -157,16 +157,6 @@ describe("a row that is no longer there", () => {
     ).toBe("NOT_FOUND");
   });
 
-  it("reports a deleted list as missing when it is updated", async () => {
-    const api = await caller();
-    const list = await api.shopping.create({ name: "Temporal" });
-    await prisma.shoppingList.delete({ where: { id: list.id } });
-
-    expect(
-      await codeOf(api.shopping.update({ id: list.id, name: "Otro" })),
-    ).toBe("NOT_FOUND");
-  });
-
   it("reports a deleted product as missing when it is updated", async () => {
     const api = await caller();
     await prisma.product.delete({ where: { id: OWNER.productId } });

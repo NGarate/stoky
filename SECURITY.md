@@ -496,11 +496,11 @@ Verified against the files named in each row.
   the household out of every device. Procedures with an input refuse a form
   body at validation; the three that took none did not. (`auth.endSessions`
   replaced it on 2026-10-15, and asks for the password.)
-- **Every mutation declares an input**, and the two that take nothing —
-  `auth.logout` and `shopping.generateFromLowStock`, and
-  `auth.revokeMySessions` until `auth.endSessions` replaced it — declare
-  `z.void()`, so a form body that got past the rule below would now fail
-  validation there too, with 400 and nothing written. `z.void()` and not
+- **Every mutation declares an input**, and the one that takes nothing —
+  `shopping.generateFromLowStock`, and `auth.logout` and
+  `auth.revokeMySessions` until they were removed — declares `z.void()`, so
+  a form body that got past the rule below would now fail validation there
+  too, with 400 and nothing written. `z.void()` and not
   `z.object({})`, which a `FormData` satisfies. It does not refuse every JSON
   body: superjson reads only a body's `json` field, so `{}` or any object
   without one arrives as no input. The application's own call sends
@@ -508,10 +508,10 @@ Verified against the files named in each row.
   as `undefined`; a bare `{"json":null}` is `null`, and `z.void()` now
   refuses it with 400.
   `src/__tests__/unit/procedure-inputs.test.ts` walks the running router and
-  names any mutation without an input parser; `integration/auth.flow.test.ts`
-  shows `auth.logout` refusing an object and a `FormData` on the running
-  router. The nine queries that take no input do not declare one: they write
-  nothing.
+  names any mutation without an input parser;
+  `integration/shopping.generate.test.ts` shows `generateFromLowStock`
+  refusing an object and a `FormData` on the running router. The eleven
+  queries that take no input do not declare one: they write nothing.
 - **A POST whose content type is not `application/json` is refused with 415**
   before its body is read. Both of the application's links send JSON, and a
   receipt photograph travels base64'd inside it; nothing sends multipart or
@@ -1383,8 +1383,8 @@ Verified against the files named in each row.
 - Stock writes and `product.update` hold the product row
   (`SELECT … FOR UPDATE`) so that two writes to one product take turns
   (`ISSUES.md` INV-2). The lock's own `WHERE` names the caller's household as
-  well as the id, in all five places: `addStock`, `consumeStock`,
-  `adjustStock`, `transferStock` and `product.update`.
+  well as the id, in all four places: `addStock`, `consumeStock`,
+  `adjustStock` and `product.update`.
 - Until 2026-10-12 four of them locked by id alone, before the household
   check that refuses a foreign id. A caller holding another household's
   product id therefore locked that household's row for the instant before
@@ -1396,10 +1396,10 @@ Verified against the files named in each row.
   it carries the predicate too, so there is one rule.
 - `src/__tests__/integration/product.lock-isolation.test.ts` has household A
   hold its product's lock in an open transaction while household B calls each
-  of the four procedures with A's id. B must be refused with `NOT_FOUND` while
-  A still holds the lock. Removing the predicate from any one procedure made
-  that procedure's case fail ("blocked" after the 5-second ceiling) and left
-  the other three passing.
+  of the three that lock before checking with A's id. B must be refused with
+  `NOT_FOUND` while A still holds the lock. Removing the predicate from any
+  one procedure made that procedure's case fail ("blocked" after the 5-second
+  ceiling) and left the others passing.
 
 ### Supply chain — `.github/workflows/`, `bunfig.toml`, `package.json`
 
@@ -2471,7 +2471,7 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 (`AppSession`) non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 79 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+and all 73 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
 pinning every one against the matrix rather than sampling, and failing when the
 count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the session, so a
