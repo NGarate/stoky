@@ -13,7 +13,7 @@
  */
 
 /** A stable account, so a test can assert what an envelope carried. */
-export const TEST_COMPOSER = {
+const TEST_COMPOSER = {
   userId: "clttttttttttttttttttttttt",
   householdId: "clhhhhhhhhhhhhhhhhhhhhhhh",
 };

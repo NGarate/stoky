@@ -96,5 +96,3 @@ export function Badge({
     </span>
   );
 }
-
-export { badgeVariants };

@@ -110,7 +110,7 @@ export const receiptItemMatchSchema = z.discriminatedUnion("action", [
  * the line cost, not each unit. Optional, because a line without one still
  * books stock; it only records no price.
  */
-export const receiptLineSchema = z.object({
+const receiptLineSchema = z.object({
   name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
   price: priceSchema.optional(),
   quantity: quantitySchema,
@@ -137,9 +137,6 @@ export const receiptRegionSchema = z.object({
   receiptId: z.string().min(1).max(MAX_ID_LENGTH),
   quad: receiptQuadSchema,
 });
-
-/** The ticket framed again on its photo, to be read again (`receipt.reframe`). */
-export const receiptReframeSchema = receiptRegionSchema;
 
 /** A line taken out of a receipt: one that was never an article. */
 export const receiptItemRemoveSchema = z.object({

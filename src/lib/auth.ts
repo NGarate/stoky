@@ -57,7 +57,7 @@ interface LibrarySession {
  * the deadline is measured against is the session's kind's: a day, or a year
  * for a remembered one (`capFor`).
  */
-export function toAppSession(result: LibrarySession): AppSession {
+function toAppSession(result: LibrarySession): AppSession {
   const { session, user } = result;
   const expiresAt = new Date(session.expiresAt);
   return {

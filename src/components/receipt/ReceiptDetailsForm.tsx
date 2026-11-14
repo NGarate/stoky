@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/lib/trpc/client";
 
 /** What `receipt.updateDetails` takes, less the receipt. */
-export interface ReceiptDetails {
+interface ReceiptDetails {
   storeId?: string;
   storeName?: string;
   purchaseDate: Date | null;

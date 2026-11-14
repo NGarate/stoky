@@ -6,7 +6,7 @@ import { MAX_PRICE, MAX_QUANTITY } from "./bounds";
 export const QUANTITY_PLACES = 3;
 
 /** Decimals a money column keeps (`@db.Decimal(12, 2)`): a cent. */
-export const MONEY_PLACES = 2;
+const MONEY_PLACES = 2;
 
 /**
  * A number from the wire as the exact amount its column will hold.

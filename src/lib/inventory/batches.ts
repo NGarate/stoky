@@ -16,7 +16,7 @@ export function netStock(entries: readonly { quantity: Decimal }[]): Decimal {
  * time zone in the schema; the application is Spanish-first, so Madrid's
  * calendar is the one used.
  */
-export const EXPIRY_TIME_ZONE = "Europe/Madrid";
+const EXPIRY_TIME_ZONE = "Europe/Madrid";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

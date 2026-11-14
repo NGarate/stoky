@@ -179,7 +179,7 @@ export function rememberedRefreshDue(updatedAt: Date, now: Date): boolean {
  * The keep-alive asks at most every four minutes, so this only stops two tabs
  * that both saw activity from writing the same row twice in a row.
  */
-export const SLIDE_MARGIN_S = 60;
+const SLIDE_MARGIN_S = 60;
 
 /**
  * The expiry a session should have at `now`: fifteen idle minutes from now,

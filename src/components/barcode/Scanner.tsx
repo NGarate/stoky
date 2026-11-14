@@ -49,7 +49,7 @@ type CameraProblem =
  * The `name` is the standard part (`getUserMedia` rejects with these
  * `DOMException`s), and each one has a different next step.
  */
-export function cameraProblem(error: Error | undefined): CameraProblem {
+function cameraProblem(error: Error | undefined): CameraProblem {
   switch (error?.name) {
     case "NotAllowedError":
     case "SecurityError":

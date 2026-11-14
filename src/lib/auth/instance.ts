@@ -148,7 +148,7 @@ export function logEndpointError(error: unknown): void {
  * could use. Refused here, after the signature is verified and before
  * anything is written (ASVS 5.0.0 6.6.x, PROGRESS D151).
  */
-export const USER_VERIFICATION_REQUIRED = "USER_VERIFICATION_REQUIRED";
+const USER_VERIFICATION_REQUIRED = "USER_VERIFICATION_REQUIRED";
 
 function requireUserVerification(verified: boolean | undefined): void {
   if (verified === true) return;

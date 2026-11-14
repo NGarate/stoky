@@ -86,7 +86,7 @@ export function refuseNonJson(req: Request): Response | null {
   return refusal(415, "Only application/json is accepted");
 }
 
-export function refusal(status: number, message: string): Response {
+function refusal(status: number, message: string): Response {
   return new Response(message, {
     status,
     headers: { "content-type": "text/plain; charset=utf-8" },

@@ -111,7 +111,7 @@ export function passwordProblems(
  * fields than the password (`household.addMember`) cannot read every
  * BAD_REQUEST as "too easy", and recognises this one by its words.
  */
-export const PASSWORD_TOO_EASY_MESSAGE = "That password is too easy to guess";
+const PASSWORD_TOO_EASY_MESSAGE = "That password is too easy to guess";
 
 /** Whether a refusal's message is the policy's "too easy to guess". */
 export function isPasswordTooEasyRefusal(message: string | undefined): boolean {

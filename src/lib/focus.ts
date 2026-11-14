@@ -20,7 +20,7 @@
  */
 
 /** Everything that can hold focus, in DOM order. */
-export const FOCUSABLE_SELECTOR =
+const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function tabbableWithin(container: HTMLElement): HTMLElement[] {

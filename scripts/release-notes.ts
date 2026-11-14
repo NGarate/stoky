@@ -43,15 +43,14 @@ import { readFileSync } from "node:fs";
 
 export const REPOSITORY = "https://github.com/NGarate/stoky";
 const TAG = /^v\d+\.\d+\.\d+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$/;
-export const START = (previous: string) =>
-  `<!-- cambios:inicio ${previous} -->`;
-export const END = "<!-- cambios:fin -->";
+const START = (previous: string) => `<!-- cambios:inicio ${previous} -->`;
+const END = "<!-- cambios:fin -->";
 const MARKED = /<!-- cambios:inicio (\S+) -->\n([\s\S]*?)<!-- cambios:fin -->/;
 
 /** Files an operator reads; a docs commit that touches one is listed. */
 const OPERATOR_DOCS = new Set(["README.md", "SECURITY.md", "docs/INSTALL.md"]);
 
-export interface Commit {
+interface Commit {
   sha: string;
   subject: string;
   body: string;
@@ -76,7 +75,7 @@ type Section = (typeof SECTIONS)[number][0];
 const HEADER = /^(\w+)(?:\(([^)]+)\))?(!)?: \S/;
 
 /** Where a commit is listed, or null when it is internal. */
-export function sectionOf(commit: Commit): Section | null {
+function sectionOf(commit: Commit): Section | null {
   if (commit.changelog.includes("skip")) return null;
   const header = commit.subject.match(HEADER);
   if (!header) return "other";
@@ -114,11 +113,7 @@ function line(commit: Commit): string {
 }
 
 /** The marked list for `commits` (oldest first), between two tags. */
-export function render(
-  commits: Commit[],
-  previous: string,
-  next: string,
-): string {
+function render(commits: Commit[], previous: string, next: string): string {
   const grouped = new Map<Section, Commit[]>();
   for (const commit of commits) {
     const section = sectionOf(commit);
@@ -151,7 +146,7 @@ function git(args: string[]): string {
 }
 
 /** The commits after `previous` up to HEAD, oldest first, merges left out. */
-export function commitsSince(previous: string): Commit[] {
+function commitsSince(previous: string): Commit[] {
   const FIELD = "\x1f";
   const RECORD = "\x1e";
   const log = git([

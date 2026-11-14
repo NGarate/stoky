@@ -19,7 +19,7 @@ import * as argon2 from "argon2";
  * encoded hash carries its own parameters); it also means regenerating
  * {@link DUMMY_PASSWORD_HASH}, which `password-hash.test.ts` will insist on.
  */
-export const PASSWORD_HASH_OPTIONS = {
+const PASSWORD_HASH_OPTIONS = {
   type: argon2.argon2id,
   memoryCost: 65536,
   timeCost: 3,

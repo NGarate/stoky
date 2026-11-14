@@ -19,7 +19,7 @@ import type { DeadlineKind } from "@/lib/auth/session-policy";
  * authority: `householdProcedure` reads membership and role from the database
  * on every call (`src/server/trpc/trpc.ts`).
  */
-export interface AppSessionUser {
+interface AppSessionUser {
   id: string;
   email: string;
   name: string;

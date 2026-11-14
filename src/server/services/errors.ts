@@ -24,7 +24,7 @@
  */
 
 /** Base for everything a service raises on purpose. */
-export abstract class ServiceError extends Error {
+abstract class ServiceError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);
     this.name = new.target.name;

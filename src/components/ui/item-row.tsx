@@ -98,7 +98,7 @@ const metaVariants = cva("mt-3 grid grid-cols-2 gap-x-4 gap-y-2", {
   defaultVariants: { density: "default" },
 });
 
-export interface MetaEntry {
+interface MetaEntry {
   label: string;
   value: ReactNode;
 }
@@ -174,5 +174,3 @@ export function ItemRow({
     </Element>
   );
 }
-
-export { itemRowVariants };

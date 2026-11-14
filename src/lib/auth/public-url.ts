@@ -77,7 +77,7 @@ export type PublicUrlEntry =
   | { kind: "insecure-http"; origin: string };
 
 /** The variable that lists the addresses, as messages name it. */
-export const URLS_ENV = "STOKY_URLS";
+const URLS_ENV = "STOKY_URLS";
 
 /**
  * Where Better Auth is told it lives when nothing says otherwise: `bun run

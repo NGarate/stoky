@@ -57,7 +57,7 @@ export const ROUTE_TITLES: Readonly<Record<string, string>> = {
 };
 
 /** The brand, appended to every title. A name, so never translated. */
-export const TITLE_SUFFIX = "Stoky";
+const TITLE_SUFFIX = "Stoky";
 
 /** `"Inventario"` → `"Inventario · Stoky"`. */
 export function documentTitle(pageTitle: string): string {

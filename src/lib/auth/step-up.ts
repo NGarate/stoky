@@ -33,7 +33,7 @@ import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 export const STEP_UP_PREFIX = "stoky-step-up:";
 
 /** How long a confirmed password stands for one change: five minutes. */
-export const STEP_UP_TTL_S = 5 * 60;
+const STEP_UP_TTL_S = 5 * 60;
 
 /** The refusal's code, which the browser words (`src/lib/auth/error-messages.ts`). */
 export const STEP_UP_REQUIRED = "STEP_UP_REQUIRED";
@@ -42,7 +42,7 @@ export type StepUpDb =
   | Pick<PrismaClient, "verification">
   | Pick<Prisma.TransactionClient, "verification">;
 
-export function stepUpIdentifier(sessionId: string): string {
+function stepUpIdentifier(sessionId: string): string {
   return `${STEP_UP_PREFIX}${sessionId}`;
 }
 

@@ -160,7 +160,7 @@ export interface SignInSessions {
   end: (previous: PresentedSession, account: string) => Promise<unknown>;
 }
 
-export const AUTH_BASE_PATH = "/api/auth";
+const AUTH_BASE_PATH = "/api/auth";
 
 /**
  * Every endpoint the auth API answers, as "METHOD /path" under

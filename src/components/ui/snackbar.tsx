@@ -65,7 +65,7 @@ import type { JSX, ReactNode } from "react";
  * drawing a button that will stop working before it can be pressed.
  */
 
-export type SnackbarInput =
+type SnackbarInput =
   | { kind: "confirm"; message: OpLabel; tone?: "neutral" | "danger" }
   | { kind: "undo-queued"; message: OpLabel; opId: string }
   | {
