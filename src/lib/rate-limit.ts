@@ -250,8 +250,7 @@ export function productLookupRateLimit(): RateLimit {
  * runs Argon2id at 64 MiB and three passes *before* the database is asked
  * anything, because hashing is what the procedure is for. A duplicate address
  * pays the full hash too — the unique index only answers once the row is
- * written. Unmetered, any account that admins a household — and on an
- * instance with open registration, that is anyone who registers one — could
+ * written. Unmetered, any account that admins a household could
  * ask for those hashes in a loop, or hundreds at a time in one batched
  * request. The reasoning that leaves ordinary procedures unmetered ("they read
  * rows") does not hold for this one (security review, 2026-10-12).

@@ -768,9 +768,10 @@ rather than `undefined` when editing.
 
 **Files:** `src/server/trpc/routers/household.ts` (`create`)
 **Severity:** INFO — data integrity, not a security weakness: only the
-caller's own account is involved, and under `STOKY_REGISTRATION=open` (and on
-v0.1.0-alpha.3, which has no other mode) registration already lets anyone
-create a household with a name of their choosing
+caller's own account is involved, and when it was found registration let
+anyone create a household with a name of their choosing anyway
+(`STOKY_REGISTRATION=open`, refused since 2026-11-14, and v0.1.0-alpha.3,
+which has no other mode)
 **Status:** RESOLVED 2026-10-12 — found by the 2026-10-12 security review,
 confirmed by both verifiers, who lowered it from low to info
 
@@ -973,10 +974,10 @@ migration that refuses with a message naming the rows, as
 **Files:** `src/server/trpc/routers/receipt.ts` (`upload`),
 `src/lib/rate-limit.ts` (`uploadRateLimit`), `deploy/docker-compose.yml`
 (the `uploads` volume)
-**Severity:** LOW under the default `STOKY_REGISTRATION=first-user`, where
-only people an admin adds can upload; MEDIUM on an instance that sets it to
-`open`, where every self-registered account is a household of its own with
-its own allowance
+**Severity:** LOW — an installation is one household, and only the account
+that claims it and the people its admins add can upload. It was MEDIUM under
+`STOKY_REGISTRATION=open`, refused since 2026-11-14, where every
+self-registered account was a household of its own with its own allowance
 **Status:** OPEN — deferred by the 2026-10-12 security review: a quota needs a
 schema change, accounting and a screen to explain a refusal
 

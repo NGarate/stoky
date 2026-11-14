@@ -9,6 +9,7 @@ import {
 } from "bun:test";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { TRPCError } from "@trpc/server";
+import * as argon2 from "argon2";
 import { join } from "node:path";
 import { createPrismaClient, prisma } from "@/lib/prisma";
 import { appRouter } from "@/server/trpc/router";
@@ -199,6 +200,39 @@ describe("first-user", () => {
     expect(await db.household.count()).toBe(1);
   });
 
+  it("makes the account it was asked for: the household named, the address lower-cased, the password hashed", async () => {
+    env[REGISTRATION_ENV] = "first-user";
+    const caller = await callerOn(db);
+    const lower = `${RUN}.typed@example.com`;
+
+    // The spaces and capitals as a person might type them.
+    const result = await caller.auth.register({
+      email: `  ${lower.toUpperCase()} `,
+      name: "Registro",
+      password: PASSWORD,
+      householdName: `Casa ${RUN}`,
+    });
+
+    expect(result.user.email).toBe(lower);
+    const owner = await db.user.findUniqueOrThrow({
+      where: { email: lower },
+      include: { household: true },
+    });
+    expect(owner.name).toBe("Registro");
+    expect(owner.role).toBe("OWNER");
+    expect(owner.household?.name).toBe(`Casa ${RUN}`);
+    // The credential row its password lives in, keyed on its own id.
+    const credential = await db.account.findFirstOrThrow({
+      where: {
+        userId: owner.id,
+        accountId: owner.id,
+        providerId: "credential",
+      },
+    });
+    expect(credential.password).toStartWith("$argon2id$");
+    expect(await argon2.verify(credential.password ?? "", PASSWORD)).toBe(true);
+  });
+
   it("refuses an address that exists the same way, so it cannot be used to ask", async () => {
     env[REGISTRATION_ENV] = "first-user";
     const caller = await callerOn(db);
@@ -303,65 +337,13 @@ describe("first-user", () => {
     expect((registering as TRPCError).code).toBe("FORBIDDEN");
     expect(await db.user.count()).toBe(1);
   }, 30_000);
-});
-
-describe("open", () => {
-  it("lets several accounts register, each with its own household", async () => {
-    env[REGISTRATION_ENV] = "open";
-    const caller = await callerOn(db);
-
-    for (const suffix of ["uno", "dos", "tres"]) {
-      const result = await caller.auth.register(
-        account(suffix, `Casa ${suffix} ${RUN}`),
-      );
-      expect(result.success).toBe(true);
-    }
-
-    expect(await db.user.count()).toBe(3);
-    expect(await db.household.count()).toBe(3);
-    // Each with the credential row its password lives in, keyed on its own id.
-    const users = await db.user.findMany({ select: { id: true } });
-    for (const { id } of users) {
-      expect(
-        await db.account.count({
-          where: { userId: id, accountId: id, providerId: "credential" },
-        }),
-      ).toBe(1);
-    }
-  });
-
-  it("leaves no household behind when two registrations race for one address", async () => {
-    // Both pass the courtesy existence check; the unique index refuses the
-    // second. The household used to be a separate write before the account's,
-    // so the loser left one that nobody belonged to.
-    env[REGISTRATION_ENV] = "open";
-    const caller = await callerOn(db);
-
-    const results = await Promise.allSettled([
-      caller.auth.register(account("same", `Primera ${RUN}`)),
-      caller.auth.register(account("same", `Segunda ${RUN}`)),
-    ]);
-
-    expect(
-      results.filter((result) => result.status === "fulfilled"),
-    ).toHaveLength(1);
-    const [rejected] = results.filter((result) => result.status === "rejected");
-    expect(((rejected as PromiseRejectedResult).reason as TRPCError).code).toBe(
-      "CONFLICT",
-    );
-    expect(await db.user.count()).toBe(1);
-    expect(await db.household.count()).toBe(1);
-    expect(await db.household.count({ where: { members: { none: {} } } })).toBe(
-      0,
-    );
-  });
 
   it("a failure after the user insert leaves no orphan user or account", async () => {
     // The account is two rows now, the user and its credential Account, and
     // the second can fail after the first is written. The household and the
     // user must go with it: a user without a credential cannot sign in and
     // holds its address against registering again.
-    env[REGISTRATION_ENV] = "open";
+    env[REGISTRATION_ENV] = "first-user";
     const caller = await callerOn(db);
 
     await refuseCredentialRows(async () => {
@@ -373,6 +355,20 @@ describe("open", () => {
     expect(await db.user.count()).toBe(0);
     expect(await db.account.count()).toBe(0);
     expect(await db.household.count()).toBe(0);
+  });
+});
+
+describe("open, a mode until one household per installation", () => {
+  it("is refused like closed, the first account included, without touching the database", async () => {
+    // `open` let every stranger register a household of their own. It is now
+    // a value the application does not know, which is closed — never an older
+    // name for first-user, which would have let this first account in.
+    env[REGISTRATION_ENV] = "open";
+    const caller = await callerOn(untouchable);
+
+    const refused = await refusal(caller.auth.register(account("first")));
+    expect(refused.code).toBe("FORBIDDEN");
+    expect(refused.message).toBe(REGISTRATION_CLOSED_MESSAGE);
   });
 });
 

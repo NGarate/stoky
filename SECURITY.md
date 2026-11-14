@@ -274,7 +274,7 @@ Verified against the files named in each row.
   to it from a visitor's browser as any unauthenticated client on that
   network could. It carries no session — cookies belong to the name they were
   set for — so it reaches what the sign-in page reaches, including
-  `/register` while registration is open. A proxy that serves Stoky for its
+  `/register` before the first account exists. A proxy that serves Stoky for its
   own name only, and a port bound to `127.0.0.1`, stop it where Traefik's
   `Host` rule did.
 - **Between the proxy and the app the request is plain HTTP.** On the same
@@ -1206,7 +1206,7 @@ Verified against the files named in each row.
   machine, and CI and the browser suite serve there.
   `src/__tests__/unit/public-url.test.ts` pins each case and that the hook
   warns without exiting.
-- Self-registration is the operator's to open: `STOKY_REGISTRATION` is
+- Self-registration claims the instance: `STOKY_REGISTRATION` is
   `first-user` unless set, so the first account claims the instance and later
   people are added by a household admin. See
   [Registration closes after the first account](#registration-closes-after-the-first-account).
@@ -1761,7 +1761,7 @@ publishing an instance:
   `resolveScan` of a code the household does not have went out to
   `world.openfoodfacts.org` from the instance's one address, and Open Food
   Facts throttles API clients per address. A member scanning random codes in a
-  loop — under open registration, anyone — could get the instance throttled
+  loop could get the instance throttled
   and barcode enrichment stopped for every household on it. Only a request
   that actually leaves is counted, after the household's own products and the
   shared cache (hits, and codes known to be unknown) have missed, so rescanning
@@ -1779,8 +1779,7 @@ publishing an instance:
   `household.addMember` runs Argon2id at 64 MiB on every call before the
   database is asked anything, and a duplicate address pays that hash as well,
   because the unique index only answers once the row is written. Unmetered,
-  any account that admins a household — on an instance with open registration,
-  anyone who registers one — could ask for those hashes in a loop, or hundreds
+  any account that admins the household could ask for those hashes in a loop, or hundreds
   at once in one batched request. An address that is already taken is
   counted like any other call — it has already paid the hash. What is refused
   before the count, by the role check or the input schema, never reaches the
@@ -1818,7 +1817,7 @@ publishing an instance:
   on a shared household instance. It is not only reads, either:
   `product.create`, `store.create` and the other writes are unlimited too.
   Until 2026-10-12 each of them could store as much text as the 15 MiB request
-  body carried, so open registration plus a loop of writes could fill the
+  body carried, so one account and a loop of writes could fill the
   disk every household shares. The per-field bounds above cap what one call
   stores — under 700 characters of text for a product, about 100,000 for the
   largest, a 500-line receipt review that creates a product per line — but
@@ -2000,7 +1999,7 @@ publishing an instance:
   `RATE_LIMIT_PASSKEY_OPTIONS_WINDOW_SECONDS`,
   `RATE_LIMIT_TWO_FACTOR_CODE_ATTEMPTS` and
   `RATE_LIMIT_TWO_FACTOR_CODE_WINDOW_SECONDS`. Raising them raises the
-  exposure; the browser suite raises the sign-in, known-device, registration,
+  exposure; the browser suite raises the sign-in, known-device,
   add-member and product-lookup attempts (`playwright.config.ts` says why for
   each), and a
   unit test asserts the shipped defaults with the environment unset so that
@@ -2276,21 +2275,24 @@ may call. Until 2026-10-12 nothing let an operator close it (security review,
 upload volume nothing cleans, and every unmetered procedure, and tenant
 isolation became the only thing between them and the owner's household.
 
-`STOKY_REGISTRATION` (`src/lib/auth/registration.ts`) takes `open`,
-`first-user` or `closed`. **Unset, it is `first-user` in production** and `open`
-elsewhere, and the release bundle passes `${STOKY_REGISTRATION:-first-user}`
-explicitly. A household does not need open registration: an admin adds people
-through `household.addMember`, which the setting does not govern.
+`STOKY_REGISTRATION` (`src/lib/auth/registration.ts`) takes `first-user` or
+`closed`. **Unset, it is `first-user`**, in production and everywhere else,
+and the release bundle passes `${STOKY_REGISTRATION:-first-user}` explicitly.
+A household does not need open registration: an admin adds people through
+`household.addMember`, which the setting does not govern. There is no `open`
+since 2026-11-14: an installation is one household, and `open` made every
+stranger who registered a household of their own on it.
 
-- **Parsed strictly.** An unknown value is `closed` at run time, never `open`,
-  and in production the server refuses to start over it, from the same
+- **Parsed strictly.** An unknown value, `open` included, is `closed` at run
+  time, and in production the server refuses to start over it, from the same
   instrumentation hook and in the same way as the signing-key guard above. Both
   problems are reported before the exit.
 - **In this order**, in `auth.register`: `closed` refuses with `FORBIDDEN`
   before the rate limiter and before any query; then the per-address limiter;
-  then, in `first-user`, a count of accounts, before the existence check, so a
-  refusal says nothing about whether an address is registered; then the
-  existence check and the Argon2id hash. Every refusal is an `access.denied`
+  then, in `first-user`, a count of accounts, so a refusal says nothing about
+  whether an address is registered; then the Argon2id hash. There is no
+  existence check: before the first account no address is registered, and
+  after it nobody gets this far. Every refusal is an `access.denied`
   line in the security log, with the path `auth.register`.
 - **The first-user count cannot race.** The account is created in a
   transaction that holds a PostgreSQL advisory lock
@@ -2310,8 +2312,8 @@ through `household.addMember`, which the setting does not govern.
   its own. The sign-in page still links to `/register`, which now explains
   instead of refusing after submit.
 - **Tested against PostgreSQL** on a database of its own
-  (`src/__tests__/integration/registration.test.ts`): `closed` refuses
-  everyone without touching the database; `first-user` admits exactly one;
+  (`src/__tests__/integration/registration.test.ts`): `closed`, and `open`
+  with it, refuses everyone without touching the database; `first-user` admits exactly one;
   two simultaneous claims leave one account and one household; a registration
   waits while the lock is held and is then refused; a credential row that
   cannot be written leaves no user, account or household behind. Removing the
@@ -2326,8 +2328,6 @@ What is still open:
   guide](docs/INSTALL.md) says to register immediately, and to start again from
   empty volumes if someone else did. A one-time setup token printed to the logs
   would close the window; it is not built.
-- **`open` is still what it was.** An installation that sets it accepts
-  strangers, and registration still reveals whether an address has an account.
 
 ---
 
@@ -2651,11 +2651,10 @@ full in the section named.
   installation owns it; register at once, and start again if somebody else did
   ([*Registration closes after the first account*](#registration-closes-after-the-first-account)).
   A one-time setup token would close it, and is out of proportion for an alpha.
-- **An address's existence is visible** through `register` under
-  `STOKY_REGISTRATION=open` and through `addMember` to an admin. `first-user`
-  closes the first after the first account; the second is admin-only and
-  metered, and a uniform answer would hide real errors from the household's
-  own admins.
+- **An address's existence is visible** through `addMember` to an admin.
+  `register` does not show it: once an account exists, `first-user` refuses
+  without looking at the address. `addMember` is admin-only and metered, and a
+  uniform answer would hide real errors from the household's own admins.
 - ~~**No per-session sign-out.**~~ Closed by PROGRESS D135 and D143
   (2026-10-15): sessions are database rows, and signing out deletes this
   device's, so a copied cookie is refused at once; **Tus dispositivos**
@@ -2690,7 +2689,7 @@ full in the section named.
 - **No per-household storage quota, and uploaded photographs are never
   deleted** (`ISSUES.md` UPLOAD-1, Phase 7 finding 16). Uploads are metered and
   bounded per file; a quota needs a schema change, accounting and a screen.
-  Revisit before any open-registration or multi-tenant use.
+  Revisit before any multi-tenant use.
 - **No `CHECK` constraints in the database** (`ISSUES.md` DB-1). Zod bounds
   guard every write path; a constraint migration needs a data audit first.
 - **No account erasure in the application.** The operator is the data

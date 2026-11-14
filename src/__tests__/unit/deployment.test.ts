@@ -117,7 +117,7 @@ describe("the downloadable installation", () => {
     );
   });
 
-  it("closes registration after the first account unless the operator opens it", () => {
+  it("closes registration after the first account unless the operator closes it to all", () => {
     // Defaulted in Compose, unlike the credentials: an .env written for an
     // earlier release has no such line, and for that installation — accounts
     // already exist — first-user means closed, which is the safe answer.
@@ -128,11 +128,11 @@ describe("the downloadable installation", () => {
     // install.sh appends every key example.env declares to an existing .env,
     // so this line is also what an upgrade through the script writes.
     expect(template).toMatch(/^STOKY_REGISTRATION=first-user$/m);
-    // Each value the line's comment offers is one the application accepts:
-    // anything else stops it starting.
-    for (const mode of REGISTRATION_MODES) {
-      expect(template).toMatch(new RegExp(`^#\\s+${mode}:`, "m"));
-    }
+    // The values the line's comment offers are exactly the ones the
+    // application accepts: anything else stops it starting, `open` included.
+    expect(
+      [...template.matchAll(/^#\s+([a-z-]+):/gm)].map((match) => match[1]),
+    ).toEqual([...REGISTRATION_MODES]);
   });
 
   it("reports the database healthy only once it accepts TCP connections", () => {

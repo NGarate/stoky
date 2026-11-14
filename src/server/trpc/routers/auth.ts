@@ -104,16 +104,16 @@ export const authRouter = createTRPCRouter({
    *
    * **Whether anyone may call it at all is the operator's**, through
    * `STOKY_REGISTRATION` (`src/lib/auth/registration.ts`): `first-user` by
-   * default in production, so the person who installs the instance claims it
+   * default, so the person who installs the instance claims it
    * and everybody after is added through `household.addMember`. The order of
    * the checks below is the point of them:
    *
    * 1. `closed` refuses before anything — no limiter call, no query, no hash.
    * 2. The per-address limiter, before any query.
-   * 3. `first-user` counts accounts and refuses once one exists. Before the
-   *    existence check, so a refusal says nothing about whether an address
-   *    is registered.
-   * 4. The existence check, then the hash.
+   * 3. `first-user` counts accounts and refuses once one exists. Until then
+   *    no address is registered, so there is no duplicate to look for, and
+   *    a refusal says nothing about any address.
+   * 4. The hash.
    * 5. One transaction creates the household and the account together, under
    *    an advisory lock, re-counting in `first-user` mode — see there.
    */
@@ -152,26 +152,8 @@ export const authRouter = createTRPCRouter({
       // After the limiter, so a closed-after-first-user instance cannot be
       // made to count its accounts on demand. A fast answer for the common
       // refusal; the decision that counts is the one inside the transaction.
-      if (
-        mode === "first-user" &&
-        !registrationAllows(mode, await ctx.db.user.count())
-      ) {
+      if (!registrationAllows(mode, await ctx.db.user.count())) {
         throw registrationClosed();
-      }
-
-      // A courtesy, not the guard: it answers a duplicate before spending
-      // Argon2id on it, with the message the screens match. Two registrations
-      // of one address at once both pass it, and the unique index on `email`
-      // refuses the second — as P2002, which `domainErrors` answers CONFLICT.
-      const existingUser = await ctx.db.user.findUnique({
-        where: { email },
-      });
-
-      if (existingUser) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "Email already registered",
-        });
       }
 
       // Hash password with Argon2id. Outside the transaction: a quarter of a
@@ -187,17 +169,12 @@ export const authRouter = createTRPCRouter({
         // the second registration waits here until the first has committed,
         // then counts one. Released at commit or rollback; nothing to undo.
         //
-        // Taken in every mode, not only `first-user`: registration is metered
-        // to a handful an hour, so serialising it costs nothing, and one code
-        // path is one thing to test. `$executeRaw` because the function
+        // `$executeRaw` because the function
         // returns `void`, which `$queryRaw` cannot deserialise. The key is a
         // bound `bigint`, so Postgres resolves the one-argument overload.
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(${REGISTRATION_LOCK_KEY})`;
 
-        if (
-          mode === "first-user" &&
-          !registrationAllows(mode, await tx.user.count())
-        ) {
+        if (!registrationAllows(mode, await tx.user.count())) {
           throw registrationClosed();
         }
 
