@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import es from "../../../messages/es.json";
 import en from "../../../messages/en.json";
 
@@ -184,12 +184,22 @@ describe("the keys components actually ask for", () => {
  * - a `key: "…"` literal, the snackbar and op-label shape (the scan above);
  * - its full dotted path as a string literal anywhere — tables such as
  *   `ROUTE_TITLES` hold keys as data;
- * - its last segment as a string literal in a file whose translator has the
- *   key's namespace — the maps from a state to its key, `REASON_KEY` and
- *   `serverErrorKey` and their kind, which feed `t(variable)`;
+ * - its last segment as a quoted literal in a file that calls a translator
+ *   of the key's namespace with something other than a literal, or in a file
+ *   with no translator that such a file imports — the maps from a state to
+ *   its key (`REASON_KEY`, `serverErrorKey`, `navigation.ts`'s `labelKey`,
+ *   `getAuthErrorKey`), which feed `t(variable)`;
  * - a prefix in `DYNAMIC_PREFIXES`: keys composed at runtime from a value
  *   (`receipts.status.${status}`), which no static scan can see. Each entry
  *   names where it is composed, so it can be checked when it stops being true.
+ *   It is the one allow-list: a key nothing above finds and no prefix covers
+ *   is dead.
+ *
+ * Until 2026-11-14 the last segment counted in any file of the namespace or
+ * any file without a translator, and a backtick in a comment counted as a
+ * literal. That let 36 dead keys stand — `common.no` because some file says
+ * `"no"`, `auth.logout` because a comment names the tRPC procedure,
+ * `receipts.confirm` because a dialog has `kind: "confirm"`.
  */
 const DYNAMIC_PREFIXES: Record<string, string> = {
   // `ReceiptStatus` and the applied summary: statusLabel(status.toLowerCase()).
@@ -205,12 +215,30 @@ const DYNAMIC_PREFIXES: Record<string, string> = {
   "products.history.op": "src/app/(dashboard)/products/[id]/history/page.tsx",
 };
 
+/** Quoted strings only: a backtick here is a comment naming code, not data. */
 function literalsIn(file: string): Set<string> {
   const source = readFileSync(file, "utf8");
   return new Set(
-    [...source.matchAll(/["'`]([A-Za-z][\w.]*)["'`]/g)].map(
+    [...source.matchAll(/["']([A-Za-z][\w.]*)["']/g)].map(
       (match) => match[1] as string,
     ),
+  );
+}
+
+/** The source files `file` imports through `@/…` or a relative path. */
+function importsOf(file: string, files: Set<string>): string[] {
+  const source = readFileSync(file, "utf8");
+  return [...source.matchAll(/from\s+"(@\/|\.{1,2}\/)([^"]+)"/g)].flatMap(
+    (match) => {
+      const base =
+        match[1] === "@/"
+          ? join(SOURCE_ROOT, match[2] as string)
+          : join(dirname(file), `${match[1]}${match[2]}`);
+      const found = ["", ".ts", ".tsx", "/index.ts", "/index.tsx"]
+        .map((suffix) => `${base}${suffix}`)
+        .find((path) => files.has(path));
+      return found ? [found] : [];
+    },
   );
 }
 
@@ -224,24 +252,34 @@ function catalogueKeys(node: Record<string, unknown>, prefix = ""): string[] {
 
 describe("the keys the catalogue holds", () => {
   const files = sourceFiles(SOURCE_ROOT);
+  const fileSet = new Set(files);
   const called = new Set(ALL_USAGES.map((usage) => usage.key));
   const everyLiteral = new Set<string>();
-  /** namespace → literals written in files that translate in it. */
+  /**
+   * namespace → literals written in files that translate in it, and in the
+   * files without a translator that those import.
+   */
   const byNamespace = new Map<string, Set<string>>();
 
-  /** Literals in files with no translator of their own. */
-  const untranslatedLiterals = new Set<string>();
+  const translates = (file: string) =>
+    translatorsIn(readFileSync(file, "utf8")).size > 0;
 
   for (const file of files) {
     const literals = literalsIn(file);
     for (const literal of literals) everyLiteral.add(literal);
     const source = readFileSync(file, "utf8");
-    if (translatorsIn(source).size === 0) {
-      for (const literal of literals) untranslatedLiterals.add(literal);
-    }
-    for (const namespace of translatorsIn(source).values()) {
+    // Only a translator called with something other than a string literal —
+    // `t(REASON_KEY[reason])` — can reach a key through data.
+    const namespaces = [...translatorsIn(source)]
+      .filter(([name]) => new RegExp(`\\b${name}\\(\\s*[^"\\s)]`).test(source))
+      .map(([, namespace]) => namespace);
+    const read = [
+      file,
+      ...importsOf(file, fileSet).filter((path) => !translates(path)),
+    ].flatMap((path) => [...literalsIn(path)]);
+    for (const namespace of namespaces) {
       const bucket = byNamespace.get(namespace) ?? new Set<string>();
-      for (const literal of literals) bucket.add(literal);
+      for (const literal of read) bucket.add(literal);
       byNamespace.set(namespace, bucket);
     }
   }
@@ -256,13 +294,7 @@ describe("the keys the catalogue holds", () => {
     const cut = key.lastIndexOf(".");
     const namespace = key.slice(0, cut);
     const last = key.slice(cut + 1);
-    if (byNamespace.get(namespace)?.has(last)) return true;
-    // The key's last segment written as data in a file that does not translate
-    // — `navigation.ts`'s `labelKey: "scan"`, `getAuthErrorKey`'s return
-    // values — and read through `t(variable)` elsewhere. Loose on purpose: a
-    // false "used" leaves one dead key standing; a false "unused" would fail
-    // correct code.
-    return untranslatedLiterals.has(last) && byNamespace.has(namespace);
+    return byNamespace.get(namespace)?.has(last) ?? false;
   }
 
   it("are all asked for somewhere", () => {
