@@ -68,7 +68,6 @@ mock.module("@/lib/trpc/client", () => ({
         list: { invalidate: noop },
       },
     }),
-    household: { create: { useMutation: () => idleMutation } },
     // The add form creates a product inline now, and the picker reads the
     // catalogue to offer one.
     product: {

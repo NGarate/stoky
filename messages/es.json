@@ -866,13 +866,6 @@
     "boundaryReferenceHint": "Ese código está también en el registro del servidor, por si quien administra el hogar necesita buscarlo."
   },
   "household": {
-    "noHouseholdTitle": "Todavía no tienes un hogar",
-    "noHouseholdBody": "Un hogar es donde viven el inventario, la lista de la compra y los precios. Crea el tuyo para empezar; podrás cambiarle el nombre más adelante.",
-    "nameLabel": "Nombre del hogar",
-    "nameHint": "Cómo lo llamáis en casa. «Casa» sirve perfectamente.",
-    "createHousehold": "Crear hogar",
-    "creating": "Creando hogar…",
-    "createFailed": "No se ha podido crear el hogar. Inténtalo de nuevo.",
     "loadFailedTitle": "No se han podido cargar los datos",
     "loadFailedBody": "Puede que la conexión se haya cortado un momento. Vuelve a intentarlo.",
     "loading": "Cargando…",

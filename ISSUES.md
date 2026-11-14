@@ -2222,6 +2222,10 @@ scoped to it and name it as the reason.
 **Severity:** HIGH  
 **Status:** RESOLVED 2026-08-10 (Phase 3)
 
+**Update 2026-11-14.** The way out below (`household.create` and its form) was
+removed: an installation holds one household, which registration names, so an
+account must not make a second; `PRECONDITION_FAILED` now gets the retry.
+
 **Resolution.** Of the three fixes suggested below, the third: detect the state
 and offer a way out. Requiring a household at registration would break the
 invitation flow Phase 3's neighbours need — someone joining an existing

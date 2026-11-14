@@ -65,9 +65,6 @@ mock.module("@/lib/trpc/client", () => ({
         getAutoList: { invalidate: () => Promise.resolve() },
       },
     }),
-    household: {
-      create: { useMutation: () => ({ mutate: noop, isPending: false }) },
-    },
     shopping: {
       list: {
         useQuery: () => ({

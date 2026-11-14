@@ -31,9 +31,8 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // reads or moves nothing but the caller's own session row.
     session: "publicProcedure",
     // An account setting, so `protectedProcedure` and deliberately not
-    // `householdProcedure`: an account with no household still sees
-    // snackbars — the form that creates the household raises them — and the
-    // matrix has no column for "how long you need to read a message". It is
+    // `householdProcedure`: snackbars are about the person, not the household,
+    // and the matrix has no column for "how long you need to read a message". It is
     // nobody's household data.
     setSnackbarDuration: "protectedProcedure",
     // Listing and ending one's own sessions (D143). An account with no
@@ -55,12 +54,11 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // have passkeys, the kitchen's shared account included.
     confirmPassword: "protectedProcedure",
   },
-  // Reachable by an account with no household, which is the whole reason it
-  // exists — see ISSUES.md HOUSE-1. `householdProcedure` here would make the
-  // way out of that state unreachable from inside it.
+  // `current` answers null for an account with no household rather than
+  // refusing it. `create`, the way out of that state, went with the state
+  // itself (ISSUES.md HOUSE-1).
   "household.ts": {
     current: "protectedProcedure",
-    create: "protectedProcedure",
     // The rest are admin: the matrix puts "invite people" and "see account
     // data and emails" there, and a kitchen tablet left on a counter must not
     // list the household's email addresses to whoever picks it up.

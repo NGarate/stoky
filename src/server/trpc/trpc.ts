@@ -273,13 +273,8 @@ export const protectedProcedure = publicProcedure.use(({ ctx, next }) => {
  * **Membership and role are read from the database, not from the session.**
  * The session carries both so the interface can hide what an account cannot do,
  * but the interface is not the control: hiding a button is not a restriction
- * (`DECISIONS.md` ROLES). Reading them here has two consequences worth
- * having:
- *
- * - a role change or a removal takes effect on the next request, whatever the
- *   session was read as;
- * - an account that has just created its household can use it immediately,
- *   without signing out and in again.
+ * (`DECISIONS.md` ROLES). Reading them here means a role change or a
+ * removal takes effect on the next request, whatever the session was read as.
  *
  * The cost is one primary-key lookup per call, and in four of the eight
  * routers it is not even that — those procedures were already making exactly
@@ -319,9 +314,10 @@ export const householdProcedure = protectedProcedure
     }
 
     if (!membership.householdId) {
-      // PRECONDITION_FAILED rather than FORBIDDEN: nothing is wrong with the
-      // account, it is missing a household, and that is a state the client can
-      // resolve by creating one. See ISSUES.md HOUSE-1.
+      // Kept although the client can no longer resolve it: `household.create`
+      // is gone (ISSUES.md HOUSE-1). Every query below is scoped by this id,
+      // so an account outside the household — removed from it, or a row
+      // edited by hand — is refused here rather than trusted to be null-safe.
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
         message: "This account does not belong to a household yet",
