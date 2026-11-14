@@ -15,7 +15,7 @@ export const householdSchema = z.object({
  * An account an admin creates for someone else in the household.
  *
  * **`OWNER` and `ADMIN` are deliberately not offered.** The capability matrix
- * (`REDESIGN_PLAN.md` §5.2) lets an admin invite people; letting one mint
+ * (`DECISIONS.md` ROLES) lets an admin invite people; letting one mint
  * another admin is a privilege escalation with no undo in a schema where
  * `User.householdId` is a single column. Promoting somebody is a decision that
  * deserves its own procedure and its own thought.

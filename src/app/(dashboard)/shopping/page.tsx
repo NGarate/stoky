@@ -16,7 +16,7 @@ import { useQuantityFormat } from "@/lib/inventory/quantity";
 import type { Decimal } from "@prisma/client-runtime-utils";
 
 /**
- * Screen A — the phone, "day to day" (`REDESIGN_PLAN.md` §3).
+ * Screen A — the phone, "day to day" (`DECISIONS.md` SCREENS).
  *
  * One person in a supermarket. Standing, one hand, in a hurry, possibly poor
  * signal. It answers one question: *what do I need to buy?*

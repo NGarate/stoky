@@ -176,7 +176,7 @@ width: phone sparse, tablet middling, desktop dense. The kitchen tablet inverts
 it. It is read **from a metre away**, propped on a worktop, often by someone
 walking past — so it needs the **largest** type of the three and the **fewest**
 things on screen, at a width where a naive layout would start adding columns.
-`REDESIGN_PLAN.md` §4 already specifies 20–24px body and 40px+ headings for it,
+`DECISIONS.md` SCREENS already specifies 20–24px body and 40px+ headings for it,
 which is bigger than the desktop tier.
 
 So the rule is *distance*, not width:

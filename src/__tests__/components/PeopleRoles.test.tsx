@@ -26,7 +26,7 @@ import { useState } from "react";
 afterEach(cleanup);
 
 /**
- * The member row's own rules — `/settings/people`, `REDESIGN_PLAN.md` §10.
+ * The member row's own rules — `/settings/people`, `SECURITY_REVIEW.md` finding 8.
  *
  * The server half is covered by `integration/household.roles.test.ts`, which
  * proves the three guards refuse. This covers the two things the server cannot:

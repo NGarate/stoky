@@ -8,7 +8,7 @@
  * `output: "standalone"` is irrelevant here; the Dockerfile already copies
  * `public/` verbatim.
  *
- * `REDESIGN_PLAN.md` §5.4: the worker ships without ever prompting anyone to
+ * `DECISIONS.md` PWA: the worker ships without ever prompting anyone to
  * "install the app". The app *is* installable through the browser's own
  * action (`src/app/manifest.ts`); an install prompt and push are deferred on
  * iOS grounds. The worker and the offline cache are not, and iOS Safari

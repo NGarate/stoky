@@ -11,7 +11,7 @@ import { createQueueStorage, type QueueStorage } from "./storage";
 /**
  * The queue of changes made without a signal.
  *
- * **A `zustand` store rather than React state**, and `REDESIGN_PLAN.md` §5.7
+ * **A `zustand` store rather than React state**, and `DECISIONS.md` CLIENT-STATE
  * states the case: this is read by four unrelated surfaces, written from
  * outside React by the `online` event, a backoff timer and another tab, and it
  * outlives every component that reads it. A context would re-render every

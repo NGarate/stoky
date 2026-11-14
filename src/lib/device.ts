@@ -1,6 +1,6 @@
 /**
  * The identifier for *this browser*, so a screen choice can be remembered for
- * it (`REDESIGN_PLAN.md` §5.1, Journey 8).
+ * it (`DECISIONS.md` SCREEN-CHOICE, Journey 8).
  *
  * **A cookie rather than `localStorage`, and that is the whole design.** The
  * choice is stored per `(userId, deviceId)`, and the screen it decides is the

@@ -225,7 +225,7 @@ function isHouseholdMiss(error: TRPCError): boolean {
 }
 
 /**
- * The capability matrix of `docs/REDESIGN_PLAN.md` §5.2, as roles.
+ * The capability matrix of `docs/DECISIONS.md` ROLES, as roles.
  *
  * The matrix has three columns — Admin, User, Kitchen — and OWNER and ADMIN
  * share the first. It collapses to three tiers because every row in it is one
@@ -273,7 +273,7 @@ export const protectedProcedure = publicProcedure.use(({ ctx, next }) => {
  * **Membership and role are read from the database, not from the session.**
  * The session carries both so the interface can hide what an account cannot do,
  * but the interface is not the control: hiding a button is not a restriction
- * (`REDESIGN_PLAN.md` §5.2). Reading them here has two consequences worth
+ * (`DECISIONS.md` ROLES). Reading them here has two consequences worth
  * having:
  *
  * - a role change or a removal takes effect on the next request, whatever the

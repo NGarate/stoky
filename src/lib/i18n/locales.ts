@@ -17,7 +17,7 @@ export const LOCALES = ["es", "en"] as const;
 
 export type Locale = (typeof LOCALES)[number];
 
-/** Spanish. `REDESIGN_PLAN.md` §5.6: the primary language, not a fallback. */
+/** Spanish. `DECISIONS.md` LANGUAGES: the primary language, not a fallback. */
 export const DEFAULT_LOCALE: Locale = "es";
 
 export function isSupportedLocale(value: unknown): value is Locale {

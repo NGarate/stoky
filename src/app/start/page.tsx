@@ -6,7 +6,7 @@ import type { JSX } from "react";
 
 /**
  * "Which screen do you want to start on?" — asked once per person per device
- * (`REDESIGN_PLAN.md` §5.1, Journey 8).
+ * (`DECISIONS.md` SCREEN-CHOICE, Journey 8).
  *
  * Outside the `(dashboard)` group deliberately: the navigation is a way to move
  * between screens, and this is the moment before there is a screen to move

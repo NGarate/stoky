@@ -12,7 +12,7 @@ import {
 } from "../utils/test-helpers";
 
 /**
- * Changing a member's role, and removing one — `REDESIGN_PLAN.md` §10's
+ * Changing a member's role, and removing one — `SECURITY_REVIEW.md` finding 8's
  * household admin panel, server half.
  *
  * `addMemberSchema` has said since it was written that promoting somebody

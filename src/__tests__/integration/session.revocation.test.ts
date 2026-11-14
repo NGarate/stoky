@@ -14,7 +14,7 @@ import {
 } from "../utils/test-helpers";
 
 /**
- * Session revocation — `REDESIGN_PLAN.md` §10, and the "yes" to
+ * Session revocation — the owner's ask of 2026-08-27, and the "yes" to
  * `SECURITY_REVIEW.md` finding 8's open question.
  *
  * **The procedures are the easy half.** Deleting rows is not a feature; the

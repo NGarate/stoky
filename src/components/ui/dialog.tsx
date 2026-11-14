@@ -186,7 +186,7 @@ export function Dialog({
  * The one shape a snackbar cannot serve: destructive, irreversible, and with
  * no inverse to offer afterwards.
  *
- * REDESIGN_PLAN section 7 says "undo instead of confirm", and that rule
+ * DECISIONS.md USABILITY says "undo instead of confirm", and that rule
  * assumes an undo exists. Deleting a shopping list cascades its items and
  * there is no procedure that puts them back, so the only honest moment to ask
  * is before.

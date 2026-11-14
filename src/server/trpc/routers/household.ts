@@ -387,7 +387,7 @@ export const householdRouter = createTRPCRouter({
    * `householdProcedure` re-reads `role` from the database on every call and
    * ignores the token — `integration/session.freshness.test.ts` proves it — so
    * a demotion is as immediate as the session machinery allows. That is what
-   * makes this useful before session revocation exists (`REDESIGN_PLAN.md` §10).
+   * makes this useful before session revocation exists (`SECURITY_REVIEW.md` finding 8).
    */
   updateRole: adminProcedure
     .input(updateMemberRoleSchema)

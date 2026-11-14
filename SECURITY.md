@@ -3104,4 +3104,4 @@ docker buildx imagetools inspect \
 |---|---|
 | `docs/STATUS.md` | Command-verified state of the project, including the dependency audit |
 | `ISSUES.md` | Open issues, with file references — CRITICAL-4 is the rate limiting gap |
-| `docs/REDESIGN_PLAN.md` | Where the product is going, and which phase closes each gap |
+| `docs/DECISIONS.md` | ROLES, the capability matrix each role is held to |

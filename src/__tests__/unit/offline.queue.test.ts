@@ -164,7 +164,7 @@ describe("a refused consumption", () => {
     await queue.drain();
 
     // They did take the milk. Only a person who can see the shelf knows what
-    // is actually there — REDESIGN_PLAN §5.5.3.
+    // is actually there — DECISIONS.md OFFLINE.3.
     expect(queue.getState().failed[0]?.reason).toBe("needs-reconciliation");
   });
 

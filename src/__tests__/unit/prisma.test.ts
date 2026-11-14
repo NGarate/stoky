@@ -27,7 +27,7 @@ describe("Prisma Client", () => {
   });
 
   it("should carry every household role the capability matrix names", () => {
-    // The matrix in REDESIGN_PLAN.md §5.2 has three columns — Admin, User,
+    // The matrix in DECISIONS.md ROLES has three columns — Admin, User,
     // Kitchen — and OWNER/ADMIN share the first. KITCHEN is the value the
     // kitchen tablet runs under; without it, a tablet that walks out of the
     // house holds an account that can write.

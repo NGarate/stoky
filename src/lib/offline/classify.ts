@@ -27,7 +27,7 @@ import { TRPCClientError } from "@trpc/client";
  * server is refused. Reporting that as "it did not save" throws away a real
  * event — they *did* take the milk. It is instead the question only a person
  * can answer: the count and the house disagree, and someone has to look at the
- * shelf. `REDESIGN_PLAN.md` §5.5.3 — allow and reconcile, never discard.
+ * shelf. `DECISIONS.md` OFFLINE.3 — allow and reconcile, never discard.
  */
 export type MutationOutcome =
   "transient" | "auth" | "permanent" | "reconcile" | "review";

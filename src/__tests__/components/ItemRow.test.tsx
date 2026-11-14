@@ -94,7 +94,7 @@ describe("ItemRow", () => {
     );
 
     expect(container.querySelector("li")?.className).toContain("bg-warn");
-    // REDESIGN_PLAN §8: colour is never the only carrier. The word is there.
+    // DECISIONS.md ACCESSIBILITY: colour is never the only carrier. The word is there.
     expect(screen.getByText("Stock bajo")).toBeInTheDocument();
   });
 
@@ -135,7 +135,7 @@ describe("ItemRow densities", () => {
     const className = container.querySelector("li")!.className;
 
     // Screen A is used with a trolley in one hand and Screen B is read from a
-    // metre away (REDESIGN_PLAN §3). One size for all three tiers would be
+    // metre away (DECISIONS.md SCREENS). One size for all three tiers would be
     // wrong on two of them, so `touch` declares a floor the other two do not.
     const height = await minimumHeight(className);
     expect(height, `resolved from: ${className}`).toBeGreaterThanOrEqual(64);

@@ -51,7 +51,7 @@ export function PageShell({
  * some screens and not on others, so moving between two settings pages
  * changed the title's size for no reason anyone had written down. `touch` is
  * the kitchen's, which is read from a metre away and is `text-4xl` at every
- * width (`REDESIGN_PLAN.md` §4: 40px+ headings).
+ * width (`DECISIONS.md` SCREENS: 40px+ headings).
  */
 const titleVariants = cva("font-bold text-heading", {
   variants: {
@@ -75,7 +75,7 @@ export interface PageHeaderProps {
   intro?: ReactNode;
   /**
    * `<Button>`s. At most one `default` — the screen's primary action — and
-   * the rest `outline` (`REDESIGN_PLAN.md` §7: one primary action per
+   * the rest `outline` (`DECISIONS.md` USABILITY: one primary action per
    * screen).
    */
   actions?: ReactNode;

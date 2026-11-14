@@ -4,11 +4,11 @@ Updated: 2026-09-12
 
 These are the minimum user-visible journeys that should be proven before closing
 Stoky product work. They are rewritten around the two entry screens defined in
-`docs/REDESIGN_PLAN.md`, which is the source of truth for what is being built.
+`docs/DECISIONS.md` SCREENS.
 The previous four journeys described an information architecture that has been
 replaced.
 
-Each journey is tagged with the phase from `REDESIGN_PLAN.md` §9 that makes it
+Each journey is tagged with the redesign phase (`PROGRESS.md`) that makes it
 passable, and carries a state **re-audited against the code and the suites on
 2026-08-17** — which found that this table had drifted a long way from the
 bodies below it (the table said Journey 2 "not yet" while its own body said
@@ -38,7 +38,7 @@ plan rather than being silently absorbed; the stepper half (Journey 4) landed
 
 - **phone screen**, "day to day": one person in a supermarket. Standing, one
   hand, in a hurry, possibly no signal. Answers *what do I need to buy, and is
-  this a good buy?* (`REDESIGN_PLAN.md` §3)
+  this a good buy?* (`DECISIONS.md` SCREENS)
 - **kitchen screen**, "at home": a tablet propped up, read from a metre away,
   possibly untouched for days. Answers *what should we eat before it goes off?*
   (§4)

@@ -845,7 +845,7 @@ inside the window.
 
 **Mitigated:** `REPLAY_RETENTION_DAYS` went from 7 to 90. Seven days was
 shorter than a holiday, and the redesign's own kitchen tablet is "possibly
-untouched for days" (`docs/REDESIGN_PLAN.md` §4). Rows hold a few ids each and
+untouched for days" (`docs/DECISIONS.md` SCREENS). Rows hold a few ids each and
 are swept per account, so the longer window is a slightly larger table and
 nothing else. Pinned by "still recognises a change applied thirty days ago" in
 `src/__tests__/integration/replay.test.ts` (real PostgreSQL): it ages a claim
@@ -1594,7 +1594,7 @@ polluting a stranger's price history with prices they never paid. There is no
 interface that does it, which is exactly why nobody noticed: the control that
 was missing is the one a hidden form does not need.
 
-`REDESIGN_PLAN.md` Phase 7 item 2 names this class — "every query is checked
+Phase 7's item 2 (`docs/SECURITY_REVIEW.md` §2) names this class — "every query is checked
 for a `householdId` filter … it would be invisible in single-household
 testing". Found in Phase 4 rather than Phase 7 because Phase 4 makes this
 procedure replayable from a device-composed queue, so the review of what a
@@ -2459,7 +2459,7 @@ inside a larger change would have buried it.
 **Suggested fix:** pick one. "Ticket" is what the paper is called in a Spanish
 supermarket; "recibo" is the more formal word and the one the navigation uses.
 
-**Resolution — "ticket" won.** `REDESIGN_PLAN.md` §3 writes for somebody
+**Resolution — "ticket" won.** `docs/DECISIONS.md` SCREENS writes for somebody
 standing in a supermarket and rules out system vocabulary; a Spanish supermarket
 hands you a ticket, and a recibo is what a bank sends. Twenty-three strings
 changed rather than nine, which is the direction the argument pointed rather
@@ -4649,7 +4649,7 @@ which is short:
   smallest (LOC-1's lock); DB-1 and UPLOAD-1 each need a schema change, and
   DB-1 a data audit before it.
 - Everything else that remains is *unbuilt or human-shaped, not a defect*, and
-  lives in `docs/REDESIGN_PLAN.md` §10: the three manual passes, T7, and
+  lives in `docs/STATUS.md`, *What remains*: the three manual passes, T7, and
   Phase 8's done-when — the owner repeating their pass. The Phase 7 review
   document, the ± stepper, the per-device screen choice and TEST-6, which this
   list once carried, have all closed; the entries above name the commits.
@@ -4666,4 +4666,4 @@ which is short:
 
 For gate results and overall project state, see `docs/STATUS.md`.
 For which phase closed each item, the entries above name it; for what remains,
-`docs/REDESIGN_PLAN.md` §10.
+`docs/STATUS.md`.

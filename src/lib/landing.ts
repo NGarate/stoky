@@ -1,7 +1,7 @@
 import type { HouseholdRole, LandingScreen } from "@/generated/prisma/browser";
 
 /**
- * Where a person lands, and who decides it (`REDESIGN_PLAN.md` §5.1,
+ * Where a person lands, and who decides it (`DECISIONS.md` SCREEN-CHOICE,
  * Journey 8).
  *
  * Kept pure and separate from the route that uses it, because the interesting

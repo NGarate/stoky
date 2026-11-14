@@ -127,7 +127,7 @@ export function ShoppingItem({
    * Held for ten seconds and undone by cancelling the queued change, which is
    * D57's rule and the same window the kitchen uses. This screen is not
    * Screen A: it has no trolley to hold a removal, so before this the bin was
-   * one tap, silent and final. `REDESIGN_PLAN.md` §7 asks for an undo rather
+   * one tap, silent and final. `DECISIONS.md` USABILITY asks for an undo rather
    * than a confirmation, and that only works where an undo exists — so here
    * is one.
    */

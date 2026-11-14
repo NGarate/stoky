@@ -145,7 +145,7 @@ describe("source shape", () => {
 /**
  * The navigation timeout, driven rather than read.
  *
- * `REDESIGN_PLAN.md` §10 lists this constant as "a guess calibrated on
+ * `STATUS.md` lists this constant as "a guess calibrated on
  * supermarket lie-fi, not a measurement", and half of that is now measurable.
  * On the production standalone build a shell navigation answers in 14–37ms
  * warm and 368ms on the first cold hit, so 2,500ms is roughly seventy times a
@@ -156,7 +156,7 @@ describe("source shape", () => {
  * The other end it cannot: whether 2,500ms is the right moment to give up on a
  * connection that is present but hopeless is a judgement about how long a
  * person will stare at a blank screen, and no local measurement produces it.
- * §10 keeps the entry for that reason.
+ * `STATUS.md` keeps the entry for that reason.
  *
  * What is tested here is the wiring, which is the part that could silently
  * break: that the fallback is reached *through* the timeout, at the constant

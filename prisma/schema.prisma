@@ -468,7 +468,7 @@ enum HouseholdRole {
 
 /// Which screen a person starts on. The three that exist, and no fourth.
 ///
-/// `DASHBOARD` is the Panel, `SHOPPING` is Screen A (REDESIGN_PLAN §3) and
+/// `DASHBOARD` is the Panel, `SHOPPING` is Screen A (docs/DECISIONS.md SCREENS) and
 /// `KITCHEN` is Screen B (§4). Whether three entry points is the right number
 /// is DESIGN_AUDIT A5.4's still-open half, and this enum deliberately does not
 /// answer it: offering all three retires nothing, and what people actually
@@ -479,7 +479,7 @@ enum LandingScreen {
   KITCHEN
 }
 
-/// Where this person, on this device, wants to land. REDESIGN_PLAN §5.1.
+/// Where this person, on this device, wants to land. docs/DECISIONS.md SCREEN-CHOICE.
 ///
 /// Keyed on the pair, and that is the requirement rather than a normalisation
 /// choice: a shared tablet must not inherit the choice of whoever signed in

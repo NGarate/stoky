@@ -66,12 +66,12 @@ for end-to-end type inference. This is an enforced constraint, not a stage.
   signing in and out — and the browser reaches it through
   `src/lib/auth/client.ts` and nothing else. There is no
   server-side tRPC caller; do not reintroduce one, or move a dashboard page to
-  SSR, without revisiting the offline design (`REDESIGN_PLAN.md` §5).
+  SSR, without revisiting the offline design (`docs/DECISIONS.md` OFFLINE).
 - **Server state is TanStack Query's. Local UI state is React's. A `zustand`
   store is neither and must not become either.** The one store that exists is
   Phase 4's offline write queue — read from everywhere, written from outside
   React (the `online` event, a backoff timer, another tab), and outliving the
-  components that read it. `REDESIGN_PLAN.md` §5.7 has the case and the scope. A
+  components that read it. `docs/DECISIONS.md` CLIENT-STATE has the case and the scope. A
   second store is a decision, not a convenience.
 - **`prisma/schema.prisma` is the single source of truth** for the data model.
   Changing it means a migration, committed with the change.
@@ -101,7 +101,7 @@ opposite it, the details as a two-column **meta** definition list, and
 |---|---|---|
 | `compact` | dense desktop lists | fits more on a screen read at a desk |
 | `default` | inventory, products, prices, receipts, settings | the reference — this is the row the owner picked |
-| `touch` | `/kitchen`, `/shopping` | Screen A is used with a trolley in one hand and Screen B is read from a metre away (`REDESIGN_PLAN.md` §3) |
+| `touch` | `/kitchen`, `/shopping` | Screen A is used with a trolley in one hand and Screen B is read from a metre away (`docs/DECISIONS.md` SCREENS) |
 
 Two rules the component enforces, and callers must not work around:
 
@@ -109,7 +109,7 @@ Two rules the component enforces, and callers must not work around:
   announces its whole contents as its accessible name and leaves nowhere to
   put an action.
 - **`tone` is never the only carrier.** A tinted row always has the badge that
-  says the same thing in words (`REDESIGN_PLAN.md` §8).
+  says the same thing in words (`docs/DECISIONS.md` ACCESSIBILITY).
 
 A screen that needs a different arrangement needs a conversation, not a fourth
 hand-written `<li>`.

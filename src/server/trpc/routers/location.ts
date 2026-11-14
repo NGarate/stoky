@@ -20,7 +20,7 @@ import {
  * **`adminProcedure` for every write.** Locations are household configuration
  * rather than household data: moving stock between them is an everyday act, but
  * inventing or removing one changes what everybody else's forms offer
- * (REDESIGN_PLAN §5.2).
+ * (DECISIONS.md ROLES).
  */
 /**
  * A location with its own sub-locations hanging off it, as `getTree` returns

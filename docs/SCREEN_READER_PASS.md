@@ -6,7 +6,7 @@ This is the execution guide for the one accessibility check no tool and no agent
 can make: driving Stoky with a **real screen reader**, driven by a person, and
 judging whether it *sounds* sensible. `docs/DESIGN_AUDIT.md` §5 owns the *why*
 and the tool rationale; this file is the *how* and the todo list. It is the last
-open item of Phase 2b (`REDESIGN_PLAN.md`), and the result of this pass is dated
+open item of Phase 2b (`docs/STATUS.md`, *What remains*), and the result of this pass is dated
 in `docs/STATUS.md` when it is done.
 
 **Why this pass exists.** Automated testing decides roughly a third of real
@@ -36,7 +36,7 @@ pass.
 **iOS Safari with VoiceOver is a required, separate pass** — Playwright's WebKit
 is not iOS Safari, and Stoky's offline queue, `localStorage` and service worker
 all need a real-device check (that pass is tracked separately in
-`REDESIGN_PLAN.md` §10). If you can do this pass on an iPhone, do the offline
+`docs/STATUS.md`). If you can do this pass on an iPhone, do the offline
 tests there too and note it.
 
 ### 2. Learn four keys before anything else
@@ -265,7 +265,7 @@ The pass is done when:
 - [ ] The result — who ran it, on which screen reader(s) and device(s), and the
       date — is written into **`docs/STATUS.md`** (the Accessibility section's
       "the manual screen-reader pass has not happened" note is updated), and the
-      **`REDESIGN_PLAN.md` §10** item is struck.
+      item in its *What remains* is struck.
 
 Until that last step, the item stays open. A green automated suite is not this
 pass, and this pass is not done until it is dated.

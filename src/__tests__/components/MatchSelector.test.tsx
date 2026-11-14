@@ -53,7 +53,7 @@ describe("what a candidate says", () => {
   it("names the product, not the matcher's score", () => {
     // "Leche entera 82 %" — a trigram similarity, read aloud as part of the
     // choice and tinted by thresholds nobody is told. It is the system's
-    // confidence in its own guess (REDESIGN_PLAN §7 rule 2, no system
+    // confidence in its own guess (DECISIONS.md USABILITY rule 2, no system
     // vocabulary), and the order of the list already says which it thinks
     // likeliest.
     renderWithIntl(

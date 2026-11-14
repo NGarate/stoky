@@ -7,7 +7,7 @@ import { appRouter } from "@/server/trpc/router";
 /**
  * The capability matrix, per procedure.
  *
- * `REDESIGN_PLAN.md` §5.2 says every restriction has to hold on the server,
+ * `DECISIONS.md` ROLES says every restriction has to hold on the server,
  * and the phase's *done when* says the check is repeated per procedure rather
  * than sampled. This is the per-procedure half: it reads how each procedure is
  * declared and compares it against the table below.

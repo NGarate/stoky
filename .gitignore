@@ -107,7 +107,7 @@ storybook-static/
 # PWA
 #
 # `public/sw.js` is NOT ignored. It is hand-written and committed — see
-# REDESIGN_PLAN §5.4. It used to be listed here, left over from a next-pwa
+# docs/DECISIONS.md PWA. It used to be listed here, left over from a next-pwa
 # template, which meant `git add public/sw.js` silently no-opped: CI and the
 # Docker image would have shipped an application whose /sw.js 404s, with every
 # test green. The two lines below are for generated files this project does not

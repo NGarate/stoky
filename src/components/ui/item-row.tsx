@@ -15,7 +15,7 @@ import type { JSX, ReactNode } from "react";
  * the inventory card, so this is the inventory card — lifted, not redesigned.
  *
  * `density` is the one thing that varies, and it varies for a reason
- * REDESIGN_PLAN keeps: Screen A is used with a trolley in one hand and Screen
+ * DECISIONS.md SCREENS keeps: Screen A is used with a trolley in one hand and Screen
  * B is read from a metre away, so their rows are deliberately bigger than the
  * desktop's. Three sizes, one grammar — rather than one size that is wrong on
  * two of the three tiers.
