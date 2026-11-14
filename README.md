@@ -145,7 +145,7 @@ bun run test:e2e             # browsers come from Playwright's image
 Individually:
 
 ```bash
-bun run lint                 # oxlint
+bun run lint                 # oxlint, failing on warnings too
 bun run typecheck            # tsc --noEmit
 bun run test:unit            # no database needed
 bun run test:components      # no database needed
