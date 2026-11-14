@@ -457,7 +457,6 @@ enum StockOperation {
   PURCHASE
   CONSUME
   ADJUST
-  TRANSFER
 }
 
 enum HouseholdRole {
