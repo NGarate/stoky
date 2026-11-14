@@ -154,6 +154,7 @@ case "$SCOPE" in
     run "oxlint" bun run lint
     run "format" bun run check:format
     run "React Doctor" bun run check:react --scope full
+    run "knip" bun run check:unused
     if $PIPELINE_LINT; then
       run "actionlint" bash scripts/check-ci.sh actionlint
       run "shellcheck" bash scripts/check-ci.sh shellcheck
