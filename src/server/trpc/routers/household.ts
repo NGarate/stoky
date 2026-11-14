@@ -209,7 +209,12 @@ export const householdRouter = createTRPCRouter({
   current: protectedProcedure.query(async ({ ctx }) => {
     const user = await ctx.db.user.findUnique({
       where: { id: ctx.session.user.id },
-      select: { role: true, household: { select: { id: true, name: true } } },
+      select: {
+        role: true,
+        household: {
+          select: { id: true, name: true, tabName: true, appName: true },
+        },
+      },
     });
 
     if (!user) {
@@ -223,7 +228,8 @@ export const householdRouter = createTRPCRouter({
   }),
 
   /**
-   * Renames the caller's household.
+   * Renames the caller's household, and names its browser tab and installed
+   * app (null for either restores its default: `src/lib/household-names.ts`).
    *
    * The row is `ctx.householdId`, never an id from the input: an admin has
    * exactly one household to rename, so there is nothing for the input to
@@ -231,11 +237,12 @@ export const householdRouter = createTRPCRouter({
    */
   update: adminProcedure
     .input(householdSchema)
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input: { name, tabName, appName } }) => {
       return ctx.db.household.update({
         where: { id: ctx.householdId },
-        data: input,
-        select: { id: true, name: true },
+        // Named, so a field householdSchema gains does not reach the row.
+        data: { name, tabName, appName },
+        select: { id: true, name: true, tabName: true, appName: true },
       });
     }),
 

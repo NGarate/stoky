@@ -103,6 +103,13 @@ describe("route titles", () => {
   it("puts the page before the brand", () => {
     // The page first: a list of tabs, or a reader skimming titles, reads the
     // distinguishing word before the one every tab shares.
-    expect(documentTitle("Inventario")).toBe("Inventario · Stoky");
+    expect(documentTitle("Inventario", "Stoky")).toBe("Inventario · Stoky");
+    expect(documentTitle("Inventario", "Casa García")).toBe(
+      "Inventario · Casa García",
+    );
+  });
+
+  it("gives a route with no title of its own the name alone", () => {
+    expect(documentTitle(undefined, "Casa García")).toBe("Casa García");
   });
 });

@@ -120,6 +120,8 @@ CREATE TABLE "Verification" (
 CREATE TABLE "Household" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "tabName" TEXT,
+    "appName" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Household_pkey" PRIMARY KEY ("id")

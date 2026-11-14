@@ -2491,7 +2491,8 @@ fixed; a test now fails on the shape of them.
 
 Opening without a signal is a requirement, so a copy of household data lives
 on every device that has used the app: the cached shell (the service worker's
-copy of six pages, which carry no household data), the write queue
+copy of six pages, which carry no household data but the tab's and the app's
+names, public by decision), the write queue
 (`stoky.queue.v1.<account>`), and the **saved reads** — the seven allowlisted
 queries in `PERSISTED_QUERIES` (`src/lib/offline/persist.ts`: the shopping
 lists, the stock overview, expiring and expired items, the product list),
@@ -2742,6 +2743,7 @@ is stored, logged or sent.
 
 | Data | Where | How long |
 |---|---|---|
+| The household's name, and the names it gives its browser tab and installed app, which are public ([below](#what-anyone-who-reaches-the-address-can-read)) | PostgreSQL `Household` | Until an owner or admin changes them |
 | Accounts: email address, name, role, language and display preference | PostgreSQL `User`, on the `postgres_data` volume | Until an admin removes the person from **Personas del hogar**, which deletes the account, or it is deleted in the database — the household's last owner, whom the application does not remove ([Install](docs/INSTALL.md#deleting-somebodys-account)) |
 | Each account's Argon2id password hash, in its `credential` row: the account id, the hash and when the row was written | PostgreSQL `Account`, on the `postgres_data` volume | As long as the account. The database deletes the row with its `User` row (a cascade, PROGRESS D134), so no hash outlives its account |
 | Sessions, one row each: the account id, the session token (the value the cookie signs), when it expires, was created, last written and was signed in, whether it is remembered, the browser's User-Agent string, and the `stoky_device` cookie value the sign-in carried (`deviceId`, D143), which the list of a person's sessions joins to `ScreenChoice` and never returns. No IP address: Better Auth's address tracking is off, so `ipAddress` stays null | PostgreSQL `Session` | Until the session ends: signing out, ending sessions (one's own, a member's, or the whole household's, D147), a password being set, removal from the household (D146), signing in again in the same browser, an eleventh session ending the least recently used one (D140), or the account's deletion (a cascade) delete it, and an expired row is deleted the next time its cookie is read or the account next signs in (D139). A row whose cookie is never sent again stays, expired, until one of them happens. At most fifteen idle minutes and a day in all for a live browser session (PROGRESS D135); ninety idle days and a year in all for a remembered one (D141) |
@@ -2770,6 +2772,28 @@ address has tried to sign in during the window, or has a known device.
 
 No request body or receipt text reaches a log. What the operator's proxy
 records of each request is its own configuration's to say.
+
+### What anyone who reaches the address can read
+
+Two of the household's names are served without a session, by the owner's
+decision (`docs/superpowers/plans/2026-11-12-one-household-per-installation.md`,
+§2), and the settings form says so beside each field:
+
+- **The tab's name** (`Household.tabName`), which ends every document title,
+  `/login` and `/register` included. Left empty, the tab says `Stoky` and
+  never the household's name.
+- **The installed app's name** (`Household.appName`): the web manifest's
+  `name` and `short_name`, and the `apple-mobile-web-app-title` of every page.
+  The browser fetches the manifest without credentials. Left empty, the app
+  takes the household's name, which is then public too; with no household
+  yet, `Stoky`.
+
+Both are bounded and trimmed like the household's name
+(`src/lib/validations/household.ts`), written only by an owner or admin
+(`household.update`), and reach a response only as text: React escapes them
+in the HTML and the manifest is JSON. Neither goes into a header or a query
+string. An installation holds one household; a database edited to hold
+several shows the oldest one's names (`src/lib/household-names.ts`).
 
 ### What the JSON export does not include
 

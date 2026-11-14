@@ -238,6 +238,18 @@ Quien es propietario o administra el hogar puede cambiarle el nombre en
 **Configuración → Hogar**. Hasta ahora el nombre que se ponía al registrarse
 no se podía cambiar después.
 
+### Pon nombre a la pestaña del navegador y a la app instalada
+
+En **Configuración → Hogar** hay dos nombres más. El de la **pestaña** sale
+detrás del título de cada página; vacío, la pestaña sigue diciendo «Stoky».
+El de la **app instalada** es el que lleva el icono en el móvil; vacío, la app
+se llama como el hogar. Los dos son públicos: el de la pestaña se ve también
+en la página para iniciar sesión, y el de la app lo puede leer cualquiera que
+llegue a la dirección de Stoky, así que si lo dejas vacío, también el nombre
+del hogar. Una app ya instalada recoge el nombre nuevo cuando el navegador lo
+vuelve a leer: Chrome, cuando le toca; en iPhone y iPad, al volver a
+instalarla.
+
 ## Cambios incompatibles
 
 * **Una instalación es un hogar, y `STOKY_REGISTRATION=open` ya no se
@@ -469,6 +481,17 @@ own row no longer offers it.
 Whoever owns or runs the household can rename it in
 **Configuración → Hogar**. Until now the name given at registration could not
 be changed afterwards.
+
+### Name the browser tab and the installed app
+
+**Configuración → Hogar** has two more names. The **tab**'s follows each
+page's title; left empty, the tab still says "Stoky". The **installed app**'s
+is the one under its icon on the phone; left empty, the app takes the
+household's name. Both are public: the tab's shows on the sign-in page too,
+and anyone who reaches Stoky's address can read the app's, so if you leave it
+empty, the household's name as well. An app already installed picks up a new
+name when the browser reads it again: Chrome on its own schedule, iPhone and
+iPad only when it is installed again.
 
 ### Breaking changes
 

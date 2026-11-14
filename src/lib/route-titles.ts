@@ -56,12 +56,24 @@ export const ROUTE_TITLES: Readonly<Record<string, string>> = {
   "/settings/unsaved": "offline.unsavedTitle",
 };
 
-/** The brand, appended to every title. A name, so never translated. */
-const TITLE_SUFFIX = "Stoky";
+/**
+ * The brand: what every title ends in while the household has not named its
+ * tab (`Household.tabName`), and the installed app's name before there is a
+ * household at all (`src/lib/household-names.ts`). A name, so never
+ * translated.
+ */
+export const BRAND = "Stoky";
 
-/** `"Inventario"` → `"Inventario · Stoky"`. */
-export function documentTitle(pageTitle: string): string {
-  return `${pageTitle} · ${TITLE_SUFFIX}`;
+/**
+ * `("Inventario", "Stoky")` → `"Inventario · Stoky"`. The name is the tab's,
+ * `BRAND` unless the household chose one; a route with no title of its own
+ * wears the name alone.
+ */
+export function documentTitle(
+  pageTitle: string | undefined,
+  name: string,
+): string {
+  return pageTitle ? `${pageTitle} · ${name}` : name;
 }
 
 /**
