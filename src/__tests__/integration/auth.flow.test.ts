@@ -593,55 +593,6 @@ describe("Authentication Flow Integration Tests", () => {
     });
   });
 
-  describe("User Logout", () => {
-    it("should logout successfully when authenticated", async () => {
-      const email = runEmail("logout");
-      const name = generateTestName("Logout User");
-      const password = "SecurePassword123!";
-
-      // Create user
-      const user = await createTestUser({ email, name, password });
-
-      // Create authenticated context
-      const session = createMockSession(user);
-      const authCtx = await createTRPCContext({ session });
-      const authCaller = appRouter.createCaller(authCtx);
-
-      // Call logout endpoint
-      const result = await authCaller.auth.logout();
-
-      expect(result.success).toBe(true);
-    });
-
-    it("should fail to logout when not authenticated", async () => {
-      expect(await codeOf(caller.auth.logout())).toBe("UNAUTHORIZED");
-    });
-
-    it("refuses an input", async () => {
-      // It takes nothing, so it accepts nothing. Before `z.void()` it had no
-      // parser and ran on whatever arrived — a cross-site form's body
-      // included. `unit/procedure-inputs.test.ts` holds every mutation to
-      // having one; this shows the refusal happens on the running router.
-      const user = await createTestUser({
-        email: runEmail("logout-input"),
-        name: generateTestName("Logout Input User"),
-      });
-      const authCaller = appRouter.createCaller(
-        await createTRPCContext({ session: createMockSession(user) }),
-      );
-      const form = new FormData();
-      form.set("anything", "1");
-
-      // The cast is the point: the type already says no, the runtime must too.
-      const logout = authCaller.auth.logout as (
-        input: unknown,
-      ) => Promise<unknown>;
-      expect(await codeOf(logout({}))).toBe("BAD_REQUEST");
-      expect(await codeOf(logout(form))).toBe("BAD_REQUEST");
-      expect(await logout(undefined)).toEqual({ success: true });
-    });
-  });
-
   describe("Password Security", () => {
     it("should store password as Argon2id hash", async () => {
       const email = runEmail("password-hash");

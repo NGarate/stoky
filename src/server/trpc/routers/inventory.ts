@@ -20,9 +20,7 @@ import { replayable } from "@/lib/validations/idempotency";
 import {
   MAX_DAYS,
   MAX_ID_LENGTH,
-  MAX_NOTE_LENGTH,
   MAX_PAGE_SIZE,
-  MAX_UNIT_LENGTH,
 } from "@/lib/validations/bounds";
 import { withReplay } from "../replay";
 import { folded } from "@/server/fold";
@@ -31,11 +29,7 @@ import type {
   StockOverviewInput,
   StockSort,
 } from "@/lib/validations/inventory";
-import {
-  priceSchema,
-  QUANTITY_PLACES,
-  quantitySchema,
-} from "@/lib/validations/amounts";
+import { priceSchema, QUANTITY_PLACES } from "@/lib/validations/amounts";
 // The value namespace, not only the type: `Prisma.sql` is a function.
 import {
   Prisma,
@@ -358,9 +352,9 @@ export const inventoryRouter = createTRPCRouter({
    * created outside the receipt pipeline — and the reason this procedure had a
    * cross-household hole (SEC-1): it wrote the price against whatever `storeId`
    * it was given, without checking the store belonged to the caller's
-   * household, while `price.recordPrice` verified the identical write. The
-   * store is now checked alongside the product and the location, before
-   * anything is written.
+   * household, while the manual price write beside it verified the same
+   * field. The store is now checked alongside the product and the location,
+   * before anything is written.
    *
    * Replayable. A shop composed in a supermarket basement may arrive twice.
    */
@@ -415,8 +409,8 @@ export const inventoryRouter = createTRPCRouter({
 
       // Verify the store the same way, and before anything is written.
       //
-      // The price record below took `storeId` straight from input while
-      // `price.recordPrice` verified the identical write, so any MEMBER could
+      // The price record below took `storeId` straight from input while the
+      // manual price write verified the same field, so any MEMBER could
       // attach a price record to another household's Store — a cross-household
       // write with no interface in front of it. The product and the location
       // above were already checked; the store was the one that was not.
@@ -752,147 +746,6 @@ export const inventoryRouter = createTRPCRouter({
           createdBy: userId,
         });
       });
-    }),
-
-  /**
-   * Moves stock between locations, as two entries rather than an edit.
-   *
-   * A negative row at the origin and a positive one at the destination, in one
-   * transaction — the ledger has no notion of a row moving. The availability
-   * guard holds the product row for the same reason `consumeStock` does
-   * (INV-2): read-then-write let two concurrent transfers each see the same
-   * four litres and move eight.
-   */
-  transferStock: writeProcedure
-    .input(
-      z.object({
-        productId: z.string().max(MAX_ID_LENGTH),
-        quantity: quantitySchema,
-        unit: z.string().max(MAX_UNIT_LENGTH),
-        fromLocationId: z.string().max(MAX_ID_LENGTH),
-        toLocationId: z.string().max(MAX_ID_LENGTH),
-        note: z.string().max(MAX_NOTE_LENGTH).optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      // Both ends. A check on one is a check somebody later assumes covers the
-      // other, and a transfer has two chances to name a shelf that is not yours.
-      await assertOwnLocation(ctx.db, input.fromLocationId, ctx.householdId);
-      await assertOwnLocation(ctx.db, input.toLocationId, ctx.householdId);
-
-      if (input.fromLocationId === input.toLocationId) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Cannot transfer to the same location",
-        });
-      }
-
-      /**
-       * Guard and write in one transaction, with the product held.
-       *
-       * The guard used to sit outside the `$transaction`, which covered only
-       * the two writes — so two transfers of the same stock could both read
-       * the same figure, both pass, and both write, emptying a shelf twice
-       * (ISSUES.md INV-2). `consumeStock`'s half was closed in Phase 4; this
-       * is the other, and it is the same lock on the same row for the same
-       * reason.
-       *
-       * Locking the product rather than its entries means every movement of
-       * that product serialises, whichever location it is going between —
-       * which is what a transfer needs, since it touches two.
-       */
-      return ctx.db.$transaction(
-        async (tx) => {
-          await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} AND "householdId" = ${ctx.householdId} FOR UPDATE`;
-
-          const product = await tx.product.findFirst({
-            where: {
-              id: input.productId,
-              householdId: ctx.householdId,
-            },
-          });
-
-          if (!product) {
-            throw new TRPCError({
-              code: "NOT_FOUND",
-              message: "Product not found",
-            });
-          }
-
-          const movement = inProductUnit(input, product.defaultUnit);
-
-          const locations = await tx.storageLocation.findMany({
-            where: {
-              id: { in: [input.fromLocationId, input.toLocationId] },
-              householdId: ctx.householdId,
-            },
-          });
-
-          if (locations.length !== 2) {
-            throw new TRPCError({
-              code: "NOT_FOUND",
-              message: "One or more locations not found",
-            });
-          }
-
-          /**
-           * One pair of rows per batch moved, soonest expiry first.
-           *
-           * There is no screen that asks which batch to move, so FEFO
-           * (`allocate`) chooses. The outgoing row names the batch it leaves;
-           * the incoming one is a batch of its own at the destination, with
-           * the date of the one it came from, so moved milk stays on the
-           * expiring and expired screens.
-           */
-          const parts = await allocate(tx, product.id, movement.quantity, {
-            locationId: input.fromLocationId,
-          });
-          if (!parts) {
-            throw new TRPCError({
-              code: "CONFLICT",
-              message: "Not enough stock in source location",
-            });
-          }
-
-          const toName = locations.find(
-            (l) => l.id === input.toLocationId,
-          )?.name;
-          const fromName = locations.find(
-            (l) => l.id === input.fromLocationId,
-          )?.name;
-          const fromEntries = await withdraw(tx, parts, {
-            productId: product.id,
-            unit: movement.unit,
-            operationType: "TRANSFER",
-            note: input.note || `Transfer to ${toName}`,
-            createdBy: userId,
-          });
-          const toEntries = [];
-          for (const { batch, quantity } of parts) {
-            toEntries.push(
-              await tx.stockEntry.create({
-                data: {
-                  productId: product.id,
-                  quantity,
-                  remaining: quantity,
-                  unit: movement.unit,
-                  expirationDate: batch.expirationDate,
-                  locationId: input.toLocationId,
-                  operationType: "TRANSFER" as StockOperation,
-                  note: input.note || `Transfer from ${fromName}`,
-                  createdBy: userId,
-                },
-                include: { product: true, location: true },
-              }),
-            );
-          }
-
-          return { fromEntries, toEntries };
-        },
-        { maxWait: 5_000, timeout: 10_000 },
-      );
     }),
 
   /**

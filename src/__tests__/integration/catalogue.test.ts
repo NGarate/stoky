@@ -153,9 +153,6 @@ describe("the product list", () => {
       });
       expect(second.products.map((p) => p.name)).toEqual(["Cebolla"]);
       expect(second.nextCursor).toBeUndefined();
-
-      // The whole catalogue, not a page of it.
-      expect(await pages.product.count()).toBe(3);
     } finally {
       await prisma.product.deleteMany({ where: { householdId: other.id } });
       await prisma.user.deleteMany({ where: { id: owner.id } });

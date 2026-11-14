@@ -3,7 +3,6 @@ import {
   productByBarcodeSchema,
   productPaginationSchema,
   productSchema,
-  productSearchSchema,
   updateProductSchema,
 } from "@/lib/validations/product";
 import { storeQuerySchema } from "@/lib/validations/store";
@@ -175,17 +174,13 @@ describe("a minimum stock is never negative", () => {
 
 describe("page sizes, windows and searches are bounded", () => {
   it("refuses a page size that is negative, fractional or enormous", () => {
-    // searchByName puts `limit` into `LIMIT ${…}`: -1 was a Postgres error.
+    // getStockOverview puts `limit` into `LIMIT ${…}`: -1 is a Postgres error.
     for (const limit of [-1, 0, 1.5, MAX_PAGE_SIZE + 1, 1e9]) {
-      expect(accepts(productSearchSchema, { query: "leche", limit })).toBe(
-        false,
-      );
+      expect(accepts(stockOverviewSchema, { limit })).toBe(false);
       expect(accepts(storeQuerySchema, { limit })).toBe(false);
       expect(accepts(productPaginationSchema, { limit })).toBe(false);
     }
-    expect(accepts(productSearchSchema, { query: "leche", limit: 10 })).toBe(
-      true,
-    );
+    expect(accepts(stockOverviewSchema, { limit: MAX_PAGE_SIZE })).toBe(true);
     expect(accepts(storeQuerySchema, { limit: MAX_PAGE_SIZE })).toBe(true);
   });
 
@@ -201,10 +196,9 @@ describe("page sizes, windows and searches are bounded", () => {
 
   it("refuses a search string no search box sends", () => {
     const long = "a".repeat(MAX_SEARCH_LENGTH + 1);
-    expect(accepts(productSearchSchema, { query: long })).toBe(false);
     expect(accepts(storeQuerySchema, { search: long })).toBe(false);
     expect(accepts(productPaginationSchema, { search: long })).toBe(false);
-    expect(accepts(productSearchSchema, { query: "leche entera" })).toBe(true);
+    expect(accepts(storeQuerySchema, { search: "leche entera" })).toBe(true);
   });
 });
 

@@ -15,7 +15,6 @@ import { envelope } from "../utils/test-helpers";
 const OWNER = { userId: "", householdId: "" };
 let productId = "";
 let shelfId = "";
-let cupboardId = "";
 
 async function caller() {
   const session: AppSession = {
@@ -55,11 +54,6 @@ beforeAll(async () => {
   shelfId = (
     await prisma.storageLocation.create({
       data: { name: "Nevera", householdId: household.id },
-    })
-  ).id;
-  cupboardId = (
-    await prisma.storageLocation.create({
-      data: { name: "Despensa", householdId: household.id },
     })
   ).id;
   productId = (
@@ -116,13 +110,6 @@ describe("a batch's stored balance", () => {
       quantity: 0.5,
       unit: "L",
     });
-    await api.inventory.transferStock({
-      productId,
-      quantity: 1.5,
-      unit: "L",
-      fromLocationId: shelfId,
-      toLocationId: cupboardId,
-    });
     await api.inventory.adjustStock({
       productId,
       quantity: -0.25,
@@ -147,7 +134,7 @@ describe("a batch's stored balance", () => {
         LEFT JOIN "StockEntry" drawn ON drawn."batchId" = batch.id
        WHERE batch."productId" = ${productId} AND batch.quantity > 0
        GROUP BY batch.id`;
-    expect(batches.length).toBeGreaterThan(3);
+    expect(batches).toHaveLength(3);
     for (const batch of batches) expect(batch.remaining).toBe(batch.replayed);
 
     // And together they are the product's stock: 7 − 4 − 0.5 − 0.25 + 2.

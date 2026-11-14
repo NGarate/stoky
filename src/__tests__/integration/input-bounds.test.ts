@@ -25,7 +25,8 @@ import {
  *
  * The shared schemas are pinned in `unit/validation-bounds.test.ts`. These are
  * the ones written beside their procedure, which a unit test cannot import —
- * and `product.searchByName`, because it is the one whose `limit` reaches SQL.
+ * and `inventory.getStockOverview`, because it is the one whose `limit`
+ * reaches SQL.
  *
  * Every assertion names the field the refusal is about. A bare "it threw
  * BAD_REQUEST" would pass for an envelope typo just as well as for the bound
@@ -88,9 +89,7 @@ async function refusedFields(
 describe("inputs declared beside their procedure", () => {
   it("refuses a page size that would reach LIMIT as -1", async () => {
     expect(
-      await refusedFields(() =>
-        api.product.searchByName({ query: "leche", limit: -1 }),
-      ),
+      await refusedFields(() => api.inventory.getStockOverview({ limit: -1 })),
     ).toEqual(["limit"]);
     expect(await refusedFields(() => api.receipt.list({ limit: -1 }))).toEqual([
       "limit",
@@ -131,12 +130,11 @@ describe("inputs declared beside their procedure", () => {
     ).toEqual(["price"]);
     expect(
       await refusedFields(() =>
-        api.inventory.transferStock({
+        api.inventory.addStock({
+          ...envelope(userId),
           productId: "p",
           unit: "unidad",
           quantity: Infinity,
-          fromLocationId: "a",
-          toLocationId: "b",
         }),
       ),
     ).toEqual(["quantity"]);
@@ -183,27 +181,15 @@ describe("inputs declared beside their procedure", () => {
     ).toEqual(["name"]);
     expect(
       await refusedFields(() =>
-        api.inventory.transferStock({
+        api.inventory.addStock({
+          ...envelope(userId),
           productId: "p",
           unit: "unidad",
           quantity: 1,
-          fromLocationId: "a",
-          toLocationId: "b",
           note: "n".repeat(MAX_NOTE_LENGTH + 1),
         }),
       ),
     ).toEqual(["note"]);
-    expect(
-      await refusedFields(() =>
-        api.price.recordPrice({
-          productId: "p",
-          storeId: "s",
-          price: 1,
-          unit: "unidad",
-          currency: "EURO",
-        }),
-      ),
-    ).toEqual(["currency"]);
   });
 
   it("still takes the ordinary values", async () => {
@@ -216,10 +202,7 @@ describe("inputs declared beside their procedure", () => {
     expect(
       Array.isArray(await api.inventory.getExpiringItems({ days: 30 })),
     ).toBe(true);
-    expect(
-      Array.isArray(
-        await api.product.searchByName({ query: "leche", limit: 10 }),
-      ),
-    ).toBe(true);
+    const overview = await api.inventory.getStockOverview({ limit: 100 });
+    expect(overview.products.map((row) => row.id)).toEqual([productId]);
   });
 });

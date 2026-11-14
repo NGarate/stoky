@@ -12,7 +12,6 @@ import { MAX_ID_LENGTH } from "@/lib/validations/bounds";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import {
   shoppingListSchema,
-  updateShoppingListSchema,
   addShoppingItemSchema,
   updateShoppingItemSchema,
   shoppingListQuerySchema,
@@ -55,9 +54,9 @@ import { withReplay } from "../replay";
  * inside a response the caller had every right to read.
  *
  * This is the same hole, on the same field, that SEC-1 closed for
- * `inventory.addStock`, and that `price.recordPrice` has guarded since it was
- * written. Two sibling procedures had the check and these two did not, which
- * is the argument for one function rather than a third copy of the paragraph.
+ * `inventory.addStock`. Sibling procedures had the check and these two did
+ * not, which is the argument for one function rather than another copy of the
+ * paragraph.
  *
  * `null` and `undefined` pass without a query: "anywhere" names no row, so
  * there is nothing to own.
@@ -176,30 +175,6 @@ export const shoppingRouter = createTRPCRouter({
           ...input,
           householdId: ctx.householdId,
         },
-        include: {
-          items: {
-            include: {
-              product: true,
-            },
-          },
-        },
-      });
-
-      return list;
-    }),
-
-  /** Renames a list. */
-  update: writeProcedure
-    .input(updateShoppingListSchema)
-    .mutation(async ({ ctx, input }) => {
-      const { id, ...data } = input;
-
-      const list = await ctx.db.shoppingList.update({
-        where: {
-          id,
-          householdId: ctx.householdId,
-        },
-        data,
         include: {
           items: {
             include: {
@@ -476,8 +451,14 @@ export const shoppingRouter = createTRPCRouter({
    * render: it writes rows a person will then tick off, and regenerating under
    * somebody mid-shop would be rude.
    *
-   * `z.void()` for the reason given on `auth.logout`: it takes nothing, so it
-   * accepts nothing.
+   * **`z.void()`, because it takes nothing.** With no parser tRPC hands the
+   * resolver whatever body arrived, a multipart form included, so the one
+   * check every other procedure has on what reaches it was absent from the
+   * mutations a cross-site form could most easily trigger (`auth.logout` and
+   * `revokeMySessions` were the others, both since removed). `z.void()`
+   * refuses anything but `undefined`, which is what the client sends;
+   * `z.object({})` would not, because a `FormData` is an object and passes.
+   * `src/__tests__/unit/procedure-inputs.test.ts` holds every mutation to it.
    */
   generateFromLowStock: writeProcedure
     .input(z.void())

@@ -1,13 +1,12 @@
 import type { PrismaClient } from "@/generated/prisma/client";
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
   MAX_ID_LENGTH,
   MAX_PAGE_SIZE,
   MAX_SEARCH_LENGTH,
 } from "@/lib/validations/bounds";
-import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
-import { priceRecordSchema, priceHistorySchema } from "@/lib/validations/price";
+import { createTRPCRouter, householdProcedure } from "../trpc";
+import { priceHistorySchema } from "@/lib/validations/price";
 import { inUnit, withUnitPrices } from "@/lib/prices/unitPrice";
 
 /**
@@ -17,11 +16,10 @@ import { inUnit, withUnitPrices } from "@/lib/prices/unitPrice";
  * one moment. Nothing is ever updated, so the history is the data and every
  * query here is an aggregation over it.
  *
- * **Two things write these**, and only one of them is here. This router's
- * `recordPrice` is the manual path; the other two are `inventory.addStock`
- * when a purchase carries a price, and the receipt pipeline when a scanned
- * receipt is applied. All three must verify that the store belongs to the
- * caller's household — the one that did not was SEC-1.
+ * **Two things write these, and neither is here**: `inventory.addStock` when
+ * a purchase carries a price, and the receipt pipeline when a scanned receipt
+ * is applied. Both must verify that the store belongs to the caller's
+ * household — the one that did not was SEC-1.
  *
  * **`price` is a total, not a unit price**: what was paid for `quantity`
  * units. Every read below therefore returns `unitPrice` beside it, computed
@@ -45,54 +43,6 @@ async function comparisonUnit(
 }
 
 export const priceRouter = createTRPCRouter({
-  /**
-   * Records what something cost at a shop, by hand.
-   *
-   * Verifies both the product and the store against the caller's household
-   * before writing, which `inventory.addStock` did not do and should have.
-   */
-  recordPrice: writeProcedure
-    .input(priceRecordSchema)
-    .mutation(async ({ ctx, input }) => {
-      // Verify product belongs to household
-      const product = await ctx.db.product.findFirst({
-        where: {
-          id: input.productId,
-          householdId: ctx.householdId,
-        },
-      });
-
-      if (!product) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Product not found",
-        });
-      }
-
-      // Verify store belongs to household
-      const store = await ctx.db.store.findFirst({
-        where: {
-          id: input.storeId,
-          householdId: ctx.householdId,
-        },
-      });
-
-      if (!store) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Store not found",
-        });
-      }
-
-      const priceRecord = await ctx.db.priceRecord.create({
-        data: {
-          ...input,
-        },
-      });
-
-      return priceRecord;
-    }),
-
   /** One product's sightings over time, for the chart. */
   getHistory: householdProcedure
     .input(priceHistorySchema)

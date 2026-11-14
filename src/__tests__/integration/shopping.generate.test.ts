@@ -138,6 +138,26 @@ describe("generateFromLowStock", () => {
     expect(num(rows[0]?.quantity)).toBe(3);
   });
 
+  it("refuses an input, and writes nothing", async () => {
+    // It takes nothing, so it accepts nothing. Before `z.void()` it had no
+    // parser and ran on whatever arrived — a cross-site form's body
+    // included. `unit/procedure-inputs.test.ts` holds every mutation to
+    // having one; this shows the refusal happens on the running router.
+    const api = await caller();
+    const form = new FormData();
+    form.set("anything", "1");
+
+    // The cast is the point: the type already says no, the runtime must too.
+    const generate = api.shopping.generateFromLowStock as (
+      input: unknown,
+    ) => Promise<unknown>;
+    await expect(generate({})).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(generate(form)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    expect(await autoRows()).toHaveLength(0);
+  });
+
   it("leaves alone what another list already covers", async () => {
     await writeOnManualList(3);
 

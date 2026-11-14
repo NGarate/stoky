@@ -30,7 +30,6 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // because "no session" is an answer (null) rather than a refusal, and it
     // reads or moves nothing but the caller's own session row.
     session: "publicProcedure",
-    logout: "protectedProcedure",
     // An account setting, so `protectedProcedure` and deliberately not
     // `householdProcedure`: an account with no household still sees
     // snackbars — the form that creates the household raises them — and the
@@ -110,7 +109,6 @@ const EXPECTED: Record<string, Record<string, string>> = {
     consumeStock: "householdProcedure",
     addStock: "writeProcedure",
     adjustStock: "writeProcedure",
-    transferStock: "writeProcedure",
   },
   "location.ts": {
     list: "householdProcedure",
@@ -124,16 +122,13 @@ const EXPECTED: Record<string, Record<string, string>> = {
     getHistory: "householdProcedure",
     getLatestPrices: "householdProcedure",
     getProductPrices: "householdProcedure",
-    recordPrice: "writeProcedure",
   },
   "product.ts": {
     list: "householdProcedure",
-    count: "householdProcedure",
     getById: "householdProcedure",
     getByBarcode: "householdProcedure",
     // Read like the catalogue it summarises, so the kitchen may see it too.
     suggestions: "householdProcedure",
-    searchByName: "householdProcedure",
     create: "writeProcedure",
     update: "writeProcedure",
     // Owner-directed (Phase 8 item 5, D90): a hard delete with no undo is the
@@ -174,7 +169,6 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // The two D88 moved to the kitchen-callable tier (owner's pass,
     // 2026-08-18): start a list, add an item. Nothing else moved.
     create: "householdProcedure",
-    update: "writeProcedure",
     delete: "writeProcedure",
     addItem: "householdProcedure",
     updateItem: "writeProcedure",

@@ -1,5 +1,4 @@
 import { TRPCError } from "@trpc/server";
-import { z } from "zod";
 import { enforceRateLimit } from "../throttle";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import {
@@ -69,10 +68,17 @@ function registrationClosed(): TRPCError {
  * protections the real one has. It was removed;
  * `src/__tests__/utils/authorize.ts` drives the real path instead.
  *
+ * **Nor is signing out.** It is `signOutAction` (`src/lib/auth/actions.ts`),
+ * a server action so it can clear the cookie as it deletes the row, called by
+ * `SignOutButton`, which first purges the offline queue and tells the service
+ * worker to forget the cached shell. It ends this device's session and nothing
+ * else; the others end when they sit idle, a day after their sign-in
+ * (`src/lib/auth/session-policy.ts`), or through `endSessions` below. An
+ * `auth.logout` that did nothing stood here for shape until it was removed.
+ *
  * So what is left is the parts Better Auth is not asked to do: creating an
  * account, reading the current one and its session's expiry, changing its
- * password, listing and ending its sessions, and a `logout` that exists for
- * shape.
+ * password, and listing and ending its sessions.
  */
 export const authRouter = createTRPCRouter({
   /**
@@ -592,38 +598,4 @@ export const authRouter = createTRPCRouter({
       });
       return { expiresAt: expiresAt.toISOString() };
     }),
-
-  /**
-   * Does nothing, on purpose, and is not how anybody signs out.
-   *
-   * Ending a session is `signOutAction` in `src/lib/auth/actions.ts` — a
-   * server action, so it can clear the cookie as it deletes the row —
-   * called by `SignOutButton`, which first purges the offline queue and tells
-   * the service worker to forget the cached shell. Those two are the reason
-   * signing out is a component's job rather than an endpoint's.
-   *
-   * This is kept so that a caller who goes looking for `auth.logout` finds this
-   * paragraph instead of concluding that signing out is unimplemented, which is
-   * what its previous silence invited.
-   *
-   * **Signing out ends this device's session and nothing else**: its row is
-   * deleted, so a copy of the cookie taken before is refused too. The other
-   * devices' sessions end when they sit idle for fifteen minutes, a day after
-   * their sign-in (`src/lib/auth/session-policy.ts`), or when somebody ends
-   * the account's sessions — `endSessions` above, or an admin from the
-   * members panel.
-   *
-   * **`z.void()` on the mutations that take nothing** — this and
-   * `shopping.generateFromLowStock`, and `revokeMySessions` until
-   * `endSessions` replaced it. With no parser tRPC hands the resolver
-   * whatever body arrived, a multipart form included, so the one check every
-   * other procedure has on what reaches it was absent from the three a
-   * cross-site form could most easily trigger. `z.void()`
-   * refuses anything but `undefined`, which is what the client sends;
-   * `z.object({})` would not, because a `FormData` is an object and passes.
-   * `src/__tests__/unit/procedure-inputs.test.ts` holds every mutation to it.
-   */
-  logout: protectedProcedure.input(z.void()).mutation(async () => {
-    return { success: true };
-  }),
 });

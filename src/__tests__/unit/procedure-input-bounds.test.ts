@@ -2,12 +2,7 @@ import { describe, it, expect } from "bun:test";
 import type { AnyProcedure } from "@trpc/server";
 import { z } from "zod";
 import { appRouter } from "@/server/trpc/router";
-import {
-  MAX_ID_LENGTH,
-  MAX_MIME_TYPE_LENGTH,
-  MAX_NOTE_LENGTH,
-  MAX_UNIT_LENGTH,
-} from "@/lib/validations/bounds";
+import { MAX_ID_LENGTH, MAX_MIME_TYPE_LENGTH } from "@/lib/validations/bounds";
 
 /**
  * Every string and every array any procedure accepts has a maximum.
@@ -22,9 +17,9 @@ import {
  *
  * **It walks the parsers tRPC actually runs**, not the files in
  * `src/lib/validations/`. Half the inputs here are declared beside their
- * procedure (`transferStock`, `receipt.upload`, every `{ id }`), which a scan of
- * the shared schemas cannot see, and a schema that is exported but not used
- * proves nothing about one that is.
+ * procedure (`receipt.upload`, every `{ id }`), which a scan of the shared
+ * schemas cannot see, and a schema that is exported but not used proves
+ * nothing about one that is.
  *
  * **A wrapper this walk does not understand is a failure, not a pass.** A
  * future `z.record()` or `z.lazy()` would otherwise be skipped silently, and
@@ -247,41 +242,6 @@ describe("the bounds on inputs declared beside their procedure", () => {
   // no shared schema owns.
   const accepts = (path: string, value: unknown) =>
     inputsOf(path)[0].safeParse(value).success;
-
-  const transfer = {
-    productId: "p",
-    quantity: 1,
-    unit: "unidad",
-    fromLocationId: "a",
-    toLocationId: "b",
-  };
-
-  it("bounds a transfer's note, unit and ids", () => {
-    expect(
-      accepts("inventory.transferStock", {
-        ...transfer,
-        note: "n".repeat(MAX_NOTE_LENGTH),
-      }),
-    ).toBe(true);
-    expect(
-      accepts("inventory.transferStock", {
-        ...transfer,
-        note: "n".repeat(MAX_NOTE_LENGTH + 1),
-      }),
-    ).toBe(false);
-    expect(
-      accepts("inventory.transferStock", {
-        ...transfer,
-        unit: "u".repeat(MAX_UNIT_LENGTH + 1),
-      }),
-    ).toBe(false);
-    expect(
-      accepts("inventory.transferStock", {
-        ...transfer,
-        toLocationId: "b".repeat(MAX_ID_LENGTH + 1),
-      }),
-    ).toBe(false);
-  });
 
   it("bounds an upload's declared type before the allowlist is consulted", () => {
     const upload = { fileBase64: "" };
