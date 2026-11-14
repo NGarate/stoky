@@ -223,6 +223,13 @@ El formulario de registro pide ahora el nombre del hogar y no deja seguir sin
 él: quien se registra crea el hogar y lo administra. Antes se podía dejar en
 blanco, y la cuenta quedaba sin hogar hasta crear uno después.
 
+## Cambios incompatibles
+
+* **Una instalación es un hogar, y `STOKY_REGISTRATION=open` ya no se
+  acepta.** Con ese valor Stoky no arranca y lo dice en
+  `docker compose logs app`; los valores son `first-user`, el de siempre por
+  defecto, y `closed`.
+
 ## English
 
 > [!CAUTION]
@@ -431,3 +438,10 @@ The registration form now asks for the household's name and does not go on
 without it: whoever registers creates the household and runs it. Before, it
 could be left blank, and the account had no household until one was created
 afterwards.
+
+### Breaking changes
+
+* **An installation is one household, and `STOKY_REGISTRATION=open` is no
+  longer accepted.** With it, Stoky does not start and says why in
+  `docker compose logs app`; the values are `first-user`, the default as
+  before, and `closed`.

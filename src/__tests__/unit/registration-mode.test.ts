@@ -13,7 +13,8 @@ import {
 
 /**
  * `STOKY_REGISTRATION`, as a value: what each spelling means, and that a
- * spelling it does not know never means `open`.
+ * spelling it does not know — `open`, a mode until 2026-11-14, included —
+ * never lets anybody register.
  *
  * What the setting *does* to `auth.register` — the order of the checks, the
  * first-user race — needs a real database and is in
@@ -21,36 +22,37 @@ import {
  */
 
 describe("parsing the setting", () => {
-  it("is first-user when unset in production, the bundle's own default", () => {
-    expect(parseRegistrationMode(undefined, "production")).toEqual({
+  it("is first-user when unset, the bundle's own default", () => {
+    expect(parseRegistrationMode(undefined)).toEqual({
       mode: "first-user",
       problem: null,
     });
   });
 
-  it("is open when unset anywhere else, so development and the suites can register", () => {
-    for (const nodeEnv of ["development", "test", undefined]) {
-      expect(parseRegistrationMode(undefined, nodeEnv)).toEqual({
-        mode: "open",
-        problem: null,
-      });
+  it("is first-user when unset in development and the suites too, not open", () => {
+    for (const NODE_ENV of ["production", "development", "test", undefined]) {
+      expect(registrationMode({ NODE_ENV })).toBe("first-user");
     }
   });
 
   it("treats empty as unset, which is what Compose's :- default does too", () => {
-    expect(parseRegistrationMode("", "production").mode).toBe("first-user");
-    expect(parseRegistrationMode("", "development").mode).toBe("open");
+    expect(parseRegistrationMode("").mode).toBe("first-user");
+    expect(
+      registrationMode({ NODE_ENV: "development", [REGISTRATION_ENV]: "" }),
+    ).toBe("first-user");
   });
 
-  it("takes each known value as written, whatever NODE_ENV says", () => {
+  it("takes each known value as written", () => {
     for (const mode of REGISTRATION_MODES) {
-      for (const nodeEnv of ["production", "development", undefined]) {
-        expect(parseRegistrationMode(mode, nodeEnv)).toEqual({
-          mode,
-          problem: null,
-        });
-      }
+      expect(parseRegistrationMode(mode)).toEqual({ mode, problem: null });
     }
+  });
+
+  it("knows first-user and closed, and no longer open: one household per installation", () => {
+    expect([...REGISTRATION_MODES].sort()).toEqual(["closed", "first-user"]);
+    const setting = parseRegistrationMode("open");
+    expect(setting.mode).toBe("closed");
+    expect(setting.problem).toContain('"open"');
   });
 
   it("closes on anything it does not know — never falls back to open", () => {
@@ -68,15 +70,14 @@ describe("parsing the setting", () => {
       "first_user",
       "disabled",
     ]) {
-      const setting = parseRegistrationMode(raw, "production");
+      const setting = parseRegistrationMode(raw);
       expect(setting.mode).toBe("closed");
       expect(setting.problem).not.toBeNull();
-      expect(parseRegistrationMode(raw, "development").mode).toBe("closed");
     }
   });
 
   it("says which variable, what it was, and what it may be", () => {
-    const { problem } = parseRegistrationMode("Open", "production");
+    const { problem } = parseRegistrationMode("Open");
     expect(problem).toContain(REGISTRATION_ENV);
     expect(problem).toContain('"Open"');
     for (const mode of REGISTRATION_MODES) expect(problem).toContain(mode);
@@ -86,7 +87,7 @@ describe("parsing the setting", () => {
     expect(registrationMode({ NODE_ENV: "production" })).toBe("first-user");
     expect(
       registrationMode({ NODE_ENV: "production", STOKY_REGISTRATION: "open" }),
-    ).toBe("open");
+    ).toBe("closed");
     expect(
       registrationMode({
         NODE_ENV: "development",
@@ -100,11 +101,6 @@ describe("parsing the setting", () => {
 });
 
 describe("whether one more account may register", () => {
-  it("always, when open", () => {
-    for (const count of [0, 1, 50])
-      expect(registrationAllows("open", count)).toBe(true);
-  });
-
   it("only while there are no accounts, when first-user", () => {
     expect(registrationAllows("first-user", 0)).toBe(true);
     expect(registrationAllows("first-user", 1)).toBe(false);
@@ -139,12 +135,6 @@ describe("whether the register screen offers its form", () => {
     return tally;
   }
 
-  it("offers it when open, without counting", async () => {
-    const users = counter(50);
-    expect(await registrationOpen("open", users.count)).toBe(true);
-    expect(users.calls).toBe(0);
-  });
-
   it("refuses when closed, without counting — not even on an empty instance", async () => {
     const users = counter(0);
     expect(await registrationOpen("closed", users.count)).toBe(false);
@@ -171,6 +161,14 @@ describe("refusing to start", () => {
     expect(() =>
       assertKnownRegistrationMode("Open", "production", undefined),
     ).toThrow(/refusing to start.*STOKY_REGISTRATION/);
+  });
+
+  it("throws on open, saying what to set instead", () => {
+    expect(() =>
+      assertKnownRegistrationMode("open", "production", undefined),
+    ).toThrow(
+      'STOKY_REGISTRATION is "open"; it must be one of first-user, closed. Set it in .env, or remove the line to use first-user.',
+    );
   });
 
   it("accepts every known value and the unset default in production", () => {

@@ -468,8 +468,8 @@ certificate: routing, redirect, registration/login, service health and restored
 household/upload persistence passed. **Public DNS and Let's Encrypt issuance were
 not exercised**; operators must check their actual HTTPS hostname. This alpha
 supports Linux amd64 and trusted testers; its registration is open to anyone.
-`master` closes registration after the first account unless `STOKY_REGISTRATION`
-opens it (SECURITY.md); no release carries that yet. The release
+`master` closes registration after the first account (`STOKY_REGISTRATION`,
+SECURITY.md); no release carries that yet. The release
 workflow scans the published image by its pushed digest with Trivy (since
 2026-10-12; no tag has run it yet) and runs it on a fresh database before
 creating a draft; the maintainer publishes the reviewed prerelease afterward.

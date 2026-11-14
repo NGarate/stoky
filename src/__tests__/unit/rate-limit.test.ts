@@ -253,7 +253,7 @@ describe("the configured limits", () => {
   it("defaults to the specification when nothing overrides it", () => {
     // CLAUDE.md, Security Constraints: 5 login attempts/15min per IP, 3
     // registrations/hour per IP. The limits are configurable so the browser
-    // suite is not locked out by its own registrations; this assertion is why
+    // suite is not locked out by its own sign-ins; this assertion is why
     // that override cannot quietly become the product's behaviour.
     delete process.env.RATE_LIMIT_LOGIN_ATTEMPTS;
     delete process.env.RATE_LIMIT_LOGIN_WINDOW_SECONDS;

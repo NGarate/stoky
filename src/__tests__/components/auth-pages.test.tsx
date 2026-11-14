@@ -900,11 +900,14 @@ describe("which screen /register chooses", () => {
     });
   });
 
-  it("shows the form when open, without asking the database", async () => {
-    await withSetting("open", 7, async () => {
+  it("shows the closed screen for open, no longer a mode, without asking the database", async () => {
+    // An empty instance, where first-user would offer the form: `open` is
+    // read as a value it does not know, not as an older name for first-user.
+    await withSetting("open", 0, async () => {
       const page = await renderPage();
 
-      expect(page.querySelector("form")).not.toBeAbsent();
+      expect(page.querySelector("form")).toBeAbsent();
+      expect(headings()).toEqual(["El registro está cerrado"]);
       expect(pageSteps).toEqual(["connection"]);
     });
   });

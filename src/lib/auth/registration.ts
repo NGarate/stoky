@@ -13,21 +13,23 @@
  * A household does not need open registration: an admin already adds people
  * through **Configuración → Personas del hogar** (`household.addMember`). So:
  *
- * - `open` — anybody may register, as before.
  * - `first-user` — registration is open until the first account exists, then
  *   closed. The person who installs the instance claims it; everybody after
  *   that is added by them.
  * - `closed` — nobody may register.
  *
- * **Unset, it is `first-user` in production and `open` everywhere else.**
- * Production is where strangers can reach it; development and the suites
- * register dozens of accounts and would otherwise need the variable set by
- * every runner. The release bundle passes `first-user` explicitly as well
- * (`deploy/docker-compose.yml`), so the default there is written down twice
- * on purpose: a hand-edited Compose file that drops the line still gets it.
+ * There is no `open` any more: an installation is one household, and `open`
+ * made every stranger who registered a household of their own on it.
  *
- * **Parsed strictly.** An unknown value — a typo, `Open`, `false` — is
- * `closed` at run time, never a fallback to `open`, and in production the
+ * **Unset, it is `first-user`, everywhere.** The suites make their accounts
+ * directly, and the one that registers has a database of its own
+ * (`registration.test.ts`). The release bundle passes
+ * `first-user` explicitly as well (`deploy/docker-compose.yml`), so the
+ * default there is written down twice on purpose: a hand-edited Compose file
+ * that drops the line still gets it.
+ *
+ * **Parsed strictly.** An unknown value — a typo, `false`, or the `open` that
+ * used to be a mode — is `closed` at run time, and in production the
  * server refuses to start over it (`src/lib/auth/startup.ts`), the same way it
  * refuses an unusable signing key. A typo in a security setting must not mean
  * the least safe value. Empty is treated as unset, which is what Compose's
@@ -37,7 +39,7 @@
  * screen reaches it through `getAuthErrorKey` (`error-messages.ts`).
  */
 
-export const REGISTRATION_MODES = ["open", "first-user", "closed"] as const;
+export const REGISTRATION_MODES = ["first-user", "closed"] as const;
 
 export type RegistrationMode = (typeof REGISTRATION_MODES)[number];
 
@@ -80,16 +82,12 @@ export interface RegistrationSetting {
   problem: string | null;
 }
 
-/** The setting, from the raw variable and `NODE_ENV`. Pure, for the tests. */
+/** The setting, from the raw variable. Pure, for the tests. */
 export function parseRegistrationMode(
   raw: string | undefined,
-  nodeEnv: string | undefined,
 ): RegistrationSetting {
   if (raw === undefined || raw === "") {
-    return {
-      mode: nodeEnv === "production" ? "first-user" : "open",
-      problem: null,
-    };
+    return { mode: "first-user", problem: null };
   }
 
   if (isRegistrationMode(raw)) return { mode: raw, problem: null };
@@ -104,7 +102,7 @@ export function parseRegistrationMode(
 export function registrationMode(
   env: Record<string, string | undefined> = process.env,
 ): RegistrationMode {
-  return parseRegistrationMode(env[REGISTRATION_ENV], env.NODE_ENV).mode;
+  return parseRegistrationMode(env[REGISTRATION_ENV]).mode;
 }
 
 /**
@@ -120,8 +118,6 @@ export function registrationAllows(
   userCount: number,
 ): boolean {
   switch (mode) {
-    case "open":
-      return true;
     case "first-user":
       return userCount === 0;
     case "closed":
@@ -133,8 +129,8 @@ export function registrationAllows(
  * Whether `/register` should offer its form, asking for the account count only
  * when the mode depends on it.
  *
- * `open` and `closed` are settled by the setting alone, so the page does not
- * query the database for them — a visitor to a closed instance costs it
+ * `closed` is settled by the setting alone, so the page does not query the
+ * database for it — a visitor to a closed instance costs it
  * nothing. The answer is advice to the screen, not the guard: `auth.register`
  * decides again, under its lock, whatever this said.
  */
@@ -142,7 +138,7 @@ export async function registrationOpen(
   mode: RegistrationMode,
   countUsers: () => Promise<number>,
 ): Promise<boolean> {
-  // The count passed for open and closed is never read by the rule.
+  // The count passed for closed is never read by the rule.
   if (mode !== "first-user") return registrationAllows(mode, 0);
   return registrationAllows(mode, await countUsers());
 }
@@ -164,6 +160,6 @@ export function assertKnownRegistrationMode(
   if (phase === "phase-production-build") return;
   if (nodeEnv !== "production") return;
 
-  const { problem } = parseRegistrationMode(raw, nodeEnv);
+  const { problem } = parseRegistrationMode(raw);
   if (problem) throw new Error(`[auth] refusing to start: ${problem}`);
 }

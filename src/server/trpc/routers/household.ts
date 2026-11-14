@@ -331,9 +331,8 @@ export const householdRouter = createTRPCRouter({
    *
    * A duplicate email is answered by the database's own unique constraint,
    * which the Prisma middleware turns into `CONFLICT`. Checking first and then
-   * inserting would race with itself. `auth.register` still checks first, as a
-   * courtesy in front of the same constraint, and writes its household in the
-   * same transaction as the account so the race cannot leave one behind.
+   * inserting would race with itself. `auth.register` has no duplicate to
+   * meet: it only ever creates the first account.
    *
    * This is also the way in once registration is closed: `STOKY_REGISTRATION`
    * governs `auth.register` only, never this.
