@@ -157,7 +157,6 @@ const offResponseSchema = z.object({
 });
 
 export type OpenFoodFactsProduct = z.infer<typeof offProductSchema>;
-export type OpenFoodFactsResponse = z.infer<typeof offResponseSchema>;
 
 /** Whether an Open Food Facts record says what the product is. */
 function identifiesAProduct(product: OpenFoodFactsProduct): boolean {
