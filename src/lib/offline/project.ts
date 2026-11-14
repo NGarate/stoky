@@ -223,19 +223,3 @@ export function projectOnListQuantities(
 
   return projected;
 }
-
-/** The product ids a queued change would move, for highlighting a row. */
-export function pendingProductIds(pending: readonly QueuedOp[]): Set<string> {
-  const ids = new Set<string>();
-  for (const op of pending) {
-    if (
-      op.path !== "inventory.addStock" &&
-      op.path !== "inventory.consumeStock"
-    ) {
-      continue;
-    }
-    const productId = (op.input as { productId?: unknown }).productId;
-    if (typeof productId === "string") ids.add(productId);
-  }
-  return ids;
-}

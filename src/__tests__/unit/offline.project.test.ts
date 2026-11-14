@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { Decimal } from "@prisma/client-runtime-utils";
-import { pendingProductIds, projectShoppingItems } from "@/lib/offline/project";
+import { projectShoppingItems } from "@/lib/offline/project";
 import * as project from "@/lib/offline/project";
 import type { QueuedOp, ReplayablePath } from "@/lib/offline/queue";
 
@@ -357,24 +357,6 @@ describe("projectStockTotals", () => {
     ]);
 
     expect(projected.get("milk")).toBe(-1);
-  });
-});
-
-describe("pendingProductIds", () => {
-  it("names the products a queued change would move", () => {
-    const ids = pendingProductIds([
-      op("inventory.addStock", { productId: "milk", quantity: 1 }),
-      op("inventory.consumeStock", { productId: "coffee", quantity: 1 }),
-      op("shopping.updateItem", { id: "a", isChecked: true }),
-    ]);
-
-    expect([...ids].sort()).toEqual(["coffee", "milk"]);
-  });
-
-  it("is empty when only list changes are waiting", () => {
-    expect(
-      pendingProductIds([op("shopping.removeItem", { id: "a" })]).size,
-    ).toBe(0);
   });
 });
 
