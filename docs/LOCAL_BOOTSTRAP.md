@@ -16,6 +16,9 @@ to iterate in, not because it is more correct.
 - **Bun**, at the version in `.bun-version`. It is the package manager as well
   as the runtime — `bun run dev` and `bun run start` both run `bun --bun` — so
   without it nothing below works, starting with `bun: not found`
+  `package.json` says so in `devEngines.packageManager`, so `pnpm` and `npm`
+  refuse to run here (`This project is configured to use bun`) instead of
+  resolving a second, unpinned tree over `node_modules`
 
 Dependency installation, Next builds, Prisma commands and the application all
 run with Bun. The Dockerfile uses the pinned Bun Alpine image in every stage.

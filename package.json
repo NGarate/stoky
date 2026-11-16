@@ -2,6 +2,12 @@
   "name": "stoky",
   "version": "0.1.0-alpha.4",
   "description": "Privacy-first household inventory management",
+  "devEngines": {
+    "packageManager": {
+      "name": "bun",
+      "onFail": "error"
+    }
+  },
   "scripts": {
     "dev": "bun --bun node_modules/next/dist/bin/next dev",
     "dev:setup": "bash scripts/dev-local.sh",
