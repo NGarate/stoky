@@ -334,10 +334,10 @@ describe("preparing a release", () => {
     const repo = repository();
     expect(repo.run("preminor", "--no-push")).toBe(0);
     expect(repo.git("rev-parse", "--abbrev-ref", "HEAD").trim()).toBe(
-      "release/v0.2.0-alpha.1",
+      "release/v0.2.0-alpha.0",
     );
     expect(read(repo.dir, "deploy/example.env")).toContain(
-      "STOKY_VERSION=v0.2.0-alpha.1\n",
+      "STOKY_VERSION=v0.2.0-alpha.0\n",
     );
   });
 

@@ -54,12 +54,12 @@ describe("the next release's tag", () => {
   for (const [current, request, expected] of [
     ["0.1.0-alpha.4", "prerelease", "v0.1.0-alpha.5"],
     ["0.1.0-alpha.9", "prerelease", "v0.1.0-alpha.10"],
-    ["1.0.0-alpha", "prerelease", "v1.0.0-alpha.1"],
-    ["0.1.0-alpha.5", "prepatch", "v0.1.1-alpha.1"],
-    ["0.1.0-alpha.5", "preminor", "v0.2.0-alpha.1"],
-    ["0.1.0-alpha.5", "premajor", "v1.0.0-alpha.1"],
-    ["0.1.0", "prepatch", "v0.1.1-alpha.1"],
-    ["0.1.0", "preminor", "v0.2.0-alpha.1"],
+    ["1.0.0-alpha", "prerelease", "v1.0.0-alpha.0"],
+    ["0.1.0-alpha.5", "prepatch", "v0.1.1-alpha.0"],
+    ["0.1.0-alpha.5", "preminor", "v0.2.0-alpha.0"],
+    ["0.1.0-alpha.5", "premajor", "v1.0.0-alpha.0"],
+    ["0.1.0", "prepatch", "v0.1.1-alpha.0"],
+    ["0.1.0", "preminor", "v0.2.0-alpha.0"],
     ["0.1.0-alpha.5", "release", "v0.1.0"],
     ["0.1.0-alpha.5", "patch", "v0.1.0"],
     ["0.1.0", "patch", "v0.1.1"],
@@ -97,7 +97,7 @@ describe("the next release's tag", () => {
       "v0.1.0-alpha.3",
       /not greater/,
     ],
-    // Another identifier restarts at alpha.1, which sorts before beta.
+    // Another identifier restarts at alpha.0, which sorts before beta.
     ["a prerelease after a beta", "1.0.0-beta.2", "prerelease", /not greater/],
     [
       "a version with build metadata",
@@ -131,9 +131,9 @@ describe("the next release's tag", () => {
     expect(error.message).toContain("usage:");
   });
 
-  it("starts every new prerelease series at 1", () => {
+  it("starts every new prerelease series at 0, as semver does", () => {
     for (const bump of ["prepatch", "preminor", "premajor"] as const) {
-      expect(increment("0.1.0-alpha.5", bump)).toEndWith("-alpha.1");
+      expect(increment("0.1.0-alpha.5", bump)).toEndWith("-alpha.0");
     }
   });
 });

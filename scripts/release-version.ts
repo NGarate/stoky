@@ -5,19 +5,19 @@
  *
  *   prerelease  0.1.0-alpha.4 → v0.1.0-alpha.5   (a stable version refuses:
  *                                                  use prepatch or preminor)
- *   prepatch    0.1.0-alpha.5 → v0.1.1-alpha.1
- *   preminor    0.1.0-alpha.5 → v0.2.0-alpha.1
- *   premajor    0.1.0-alpha.5 → v1.0.0-alpha.1
+ *   prepatch    0.1.0-alpha.5 → v0.1.1-alpha.0
+ *   preminor    0.1.0-alpha.5 → v0.2.0-alpha.0
+ *   premajor    0.1.0-alpha.5 → v1.0.0-alpha.0
  *   patch       0.1.0-alpha.5 → v0.1.0            0.1.0 → v0.1.1
  *   minor       0.1.0-alpha.5 → v0.1.0            0.1.1 → v0.2.0
  *   major       0.1.0-alpha.5 → v1.0.0            1.0.0-alpha.2 → v1.0.0
  *   release     0.1.0-alpha.5 → v0.1.0
  *   v0.3.0      exactly that tag
  *
- * The increments are semver's (npm's `semver.inc`), with two choices of this
- * project: the prerelease identifier is always `alpha`, and the first
- * prerelease number is 1, because the history starts at v0.1.0-alpha.1 and
- * semver's 0 would put an `alpha.0` before it.
+ * The increments are semver's (npm's `semver.inc`), with one choice of this
+ * project: the prerelease identifier is always `alpha`. A new series starts
+ * at 0, as semver's does. The 0.1.0 alphas started at 1 (v0.1.0-alpha.1),
+ * the project's choice until v0.2.0-alpha.0.
  *
  * It prints the tag, with its `v`, on stdout and nothing else, so
  * `scripts/release-prepare.ts` and a shell can both take it as it is. It
@@ -95,10 +95,10 @@ export function isBump(request: string): request is Bump {
   return (BUMPS as readonly string[]).includes(request);
 }
 
-/** `current` (no `v`) incremented by `bump`, as semver does with this project's two choices. */
+/** `current` (no `v`) incremented by `bump`, as semver does, always under `alpha`. */
 export function increment(current: string, bump: Bump): string {
   const v = parse(current);
-  const first = [PRERELEASE_ID, "1"];
+  const first = [PRERELEASE_ID, "0"];
   const prerelease = v.pre.length > 0;
   switch (bump) {
     case "prerelease": {
@@ -114,11 +114,11 @@ export function increment(current: string, bump: Bump): string {
           pre: [...v.pre.slice(0, -1), String(Number(last) + 1)],
         });
       }
-      // 1.0.0-alpha → 1.0.0-alpha.1; another identifier (beta) restarts at
-      // alpha.1, which sorts lower and is refused by the order check.
+      // 1.0.0-alpha → 1.0.0-alpha.0; another identifier (beta) restarts at
+      // alpha.0, which sorts lower and is refused by the order check.
       return format({
         ...v,
-        pre: v.pre[0] === PRERELEASE_ID ? [...v.pre, "1"] : first,
+        pre: v.pre[0] === PRERELEASE_ID ? [...v.pre, "0"] : first,
       });
     }
     case "prepatch":

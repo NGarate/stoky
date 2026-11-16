@@ -42,7 +42,8 @@ not a push.
 `.git/config`; the key is on the account as a signing key), checks it with
 `git verify-tag`, and refuses to tag without it. Run it where that key is
 loaded.
-The first release is `v0.1.0-alpha.1`. Alpha releases are GitHub **prereleases**,
+The first release is `v0.1.0-alpha.1`; a new series since then starts at 0
+(`preminor` gives `v0.2.0-alpha.0`), as semver's does. Alpha releases are GitHub **prereleases**,
 not stable releases. The repository and the GHCR package are public; the
 attestation and anonymous-pull steps below depend on that (see
 [Security](../SECURITY.md#verifying-an-images-provenance)).
