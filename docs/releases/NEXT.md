@@ -1,4 +1,4 @@
-# Stoky: próxima versión
+# Stoky vNEXT
 
 > [!CAUTION]
 > **El paquete ya no incluye Traefik ni pide certificados.** Stoky atiende
@@ -252,10 +252,104 @@ instalarla.
 
 ## Cambios incompatibles
 
-* **Una instalación es un hogar, y `STOKY_REGISTRATION=open` ya no se
-  acepta.** Con ese valor Stoky no arranca y lo dice en
-  `docker compose logs app`; los valores son `first-user`, el de siempre por
-  defecto, y `closed`.
+1. **Esta versión se instala desde cero.** PostgreSQL pasa de la 16 a la 18,
+   que no abre los datos de la 16, y el esquema parte de una única migración
+   base que no se aplica sobre una base de alpha.4. Mientras Stoky sea alpha
+   no se mantiene un camino de actualización.
+2. **El paquete ya no incluye Traefik.** `traefik.yml` y `ACME_EMAIL`
+   desaparecen; el TLS lo pone tu proxy, y Stoky solo cree sus cabeceras si
+   lo nombras en `STOKY_TRUSTED_PROXIES` (aviso de arriba).
+3. **Una instalación es un hogar, y `STOKY_REGISTRATION=open` ya no se
+   acepta.** Con ese valor Stoky no arranca y lo dice en
+   `docker compose logs app`; los valores son `first-user`, el de siempre por
+   defecto, y `closed`.
+4. **Una cuenta sin hogar ya no puede crear uno.** El hogar lo crea quien se
+   registra; a los demás los añade quien lo administra.
+5. **`NEXTAUTH_SECRET` y `NEXTAUTH_URL` ya no se leen.** Solo valen
+   `STOKY_SECRET` y `STOKY_URLS`, los nombres que ya escribía el `install.sh`
+   de alpha.4.
+
+## Cómo actualizar
+
+No hay actualización desde `v0.1.0-alpha.4`: instala esta versión en una
+carpeta nueva, como dice [Instalación](#instalación), y regístrate otra vez.
+Lo que había en la instalación anterior no pasa a la nueva. Si quieres
+conservarlo, guarda antes la copia de seguridad que describe la
+[guía de alpha.4](https://github.com/NGarate/stoky/blob/v0.1.0-alpha.4/docs/INSTALL.md#backup-and-restore);
+solo se puede restaurar en alpha.4.
+
+Para retirar la instalación anterior, en su carpeta:
+
+```bash
+docker compose down
+```
+
+Sus volúmenes siguen ahí hasta que los borres con `docker volume rm`.
+
+## Instalación
+
+Lee la [guía de instalación de esta versión](https://github.com/NGarate/stoky/blob/vNEXT/docs/INSTALL.md).
+En una carpeta vacía:
+
+```bash
+STOKY_RELEASE=vNEXT
+for asset in install.sh SHA256SUMS; do
+  curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --location \
+    --output "$asset" \
+    "https://github.com/NGarate/stoky/releases/download/${STOKY_RELEASE}/${asset}"
+done
+grep -E '  install\.sh$' SHA256SUMS | sha256sum -c
+less install.sh
+bash install.sh
+```
+
+Después rellena `DOMAIN` en `.env`, revísalo y arranca:
+
+```bash
+docker compose config --quiet
+docker compose pull
+docker compose up -d --wait --wait-timeout 180
+```
+
+Pon tu proxy con TLS delante del puerto 3000 y nómbralo en
+`STOKY_TRUSTED_PROXIES` («Your proxy», en la guía). **Regístrate en cuanto
+arranque**: la primera cuenta es la única que se puede crear desde
+`/register`, y pone nombre al hogar.
+
+Imagen: `ghcr.io/ngarate/stoky:vNEXT` (**Linux amd64**), que el
+Compose de esta versión fija por digest.
+
+## Límites conocidos
+
+* No se puede actualizar desde una alpha anterior.
+* Solo hay imágenes para Linux amd64.
+* No hay recuperación de contraseña por correo: la restablece quien administra
+  el hogar.
+* Las llaves de acceso solo funcionan en la primera dirección de `STOKY_URLS`.
+* Siguen pendientes las comprobaciones humanas con lector de pantalla, con
+  Safari en iOS y en la tableta de cocina. Que el iPhone muestre el nombre de
+  la app instalada tampoco se ha comprobado en un dispositivo.
+
+Consulta [estado](https://github.com/NGarate/stoky/blob/vNEXT/docs/STATUS.md)
+y [seguridad](https://github.com/NGarate/stoky/blob/vNEXT/SECURITY.md).
+Comunica los errores en [Issues](https://github.com/NGarate/stoky/issues), sin
+secretos ni tickets con datos personales, y las vulnerabilidades por el
+[formulario privado](https://github.com/NGarate/stoky/security/advisories/new).
+
+## Verificación
+
+No se probó actualizar desde alpha.4, porque no hay camino. Tampoco el proxy
+ni el TLS de ninguna instalación real, que ahora son del operador:
+`scripts/smoke-proxy.sh --live TU_DOMINIO` comprueba el tuyo.
+
+Antes del tag pasó completa la CI de `master`: lint, tipos y contraste; las
+pruebas unitarias, de componentes y de integración; la suite de navegador; y
+la compilación de la imagen con su escaneo. La CI del tag arranca la imagen
+publicada con el Compose publicado, en volúmenes nuevos, antes de
+etiquetarla, y escanea las imágenes de PostgreSQL y Valkey que el Compose
+nombra.
+
+## Qué ha cambiado
 
 ## English
 
@@ -495,7 +589,27 @@ iPad only when it is installed again.
 
 ### Breaking changes
 
+* **This release is installed from scratch.** PostgreSQL goes from 16 to 18,
+  which does not open 16's data, and the schema starts from a single baseline
+  migration that does not apply over an alpha.4 database. While Stoky is an
+  alpha no upgrade path is kept: install it in a new directory (Instalación,
+  above) and register again.
+* **The bundle no longer includes Traefik.** `traefik.yml` and `ACME_EMAIL`
+  are gone; TLS is your proxy's, and Stoky believes its headers only when
+  `STOKY_TRUSTED_PROXIES` names it.
 * **An installation is one household, and `STOKY_REGISTRATION=open` is no
   longer accepted.** With it, Stoky does not start and says why in
   `docker compose logs app`; the values are `first-user`, the default as
   before, and `closed`.
+* **An account without a household can no longer create one.** Whoever
+  registers creates the household; an administrator adds everybody else.
+* **`NEXTAUTH_SECRET` and `NEXTAUTH_URL` are no longer read**, only
+  `STOKY_SECRET` and `STOKY_URLS`.
+
+### Known limits and what was tested
+
+No upgrade from an earlier alpha; Linux amd64 only; no password recovery by
+email; passkeys only at the first `STOKY_URLS` address. The human checks with
+a screen reader, Safari on iOS and the kitchen tablet are still outstanding,
+and so is seeing the installed app's name on an iPhone. `master`'s CI passed
+whole before the tag; no real installation's proxy or TLS was tested.
