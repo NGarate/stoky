@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CiJob, CiRun } from "../../../scripts/release-github";
 import {
+  BUILD_JOB,
   PUBLISH_JOB,
   type TagDeps,
   tagRelease,
@@ -43,6 +44,16 @@ const jobs = (publish: Partial<CiJob> | null): CiJob[] => [
         },
       ]
     : []),
+];
+
+const reviewed: CiRun = {
+  databaseId: 9,
+  status: "completed",
+  conclusion: "success",
+  url: "https://ci.example/run/9",
+};
+const built: CiJob[] = [
+  { name: BUILD_JOB, status: "completed", conclusion: "success" },
 ];
 
 const saved: Record<string, string | undefined> = {};
@@ -125,6 +136,9 @@ function repository(options: { subject?: string; version?: string } = {}) {
   const state = {
     ci: green as CiRun | null,
     jobs: jobs({}),
+    // The release pull request's run of the same commit, and its jobs.
+    pr: null as CiRun | null,
+    prJobs: [] as CiJob[],
     remoteTags: [] as string[],
     tagRun: {
       ...green,
@@ -149,9 +163,10 @@ function repository(options: { subject?: string; version?: string } = {}) {
       calls.ciRun.push(sha);
       return state.ci;
     },
+    prRun: () => state.pr,
     ciJobs: (id) => {
       calls.ciJobs.push(id);
-      return state.jobs;
+      return id === state.pr?.databaseId ? state.prJobs : state.jobs;
     },
     push: (refspec) => {
       calls.pushed.push(refspec);
@@ -183,6 +198,20 @@ function repository(options: { subject?: string; version?: string } = {}) {
 }
 
 describe("tagging a merged release", () => {
+  // A fast-forward keeps the commit, so the pull request's run tested what
+  // is being tagged: the tag does not wait for master to test it again.
+  it("tags on the release pull request's green run while master's is still going", () => {
+    const repo = repository();
+    repo.state.pr = reviewed;
+    repo.state.prJobs = built;
+    repo.state.ci = { ...green, status: "in_progress", conclusion: "" };
+    expect(repo.run()).toBe(0);
+    expect(repo.err).toEqual([]);
+    expect(repo.calls.ciJobs).toEqual([reviewed.databaseId]);
+    expect(repo.calls.ciRun).toEqual([]);
+    expect(repo.originTags()).toContain(`refs/tags/${tag}\n`);
+  });
+
   it("signs the preparation commit, verifies the signature, pushes the tag and names its CI run", () => {
     const repo = repository();
     const head = repo.git("rev-parse", "master").trim();
@@ -308,7 +337,27 @@ describe("refusing to tag", () => {
       (r) => r.state.remoteTags.push(tag),
       /already exists on origin/,
     ],
-    ["no CI run", {}, (r) => (r.state.ci = null), /no CI push run/],
+    ["no CI run", {}, (r) => (r.state.ci = null), /no CI run has passed/],
+    [
+      "a release pull request whose run failed, and master's still going",
+      {},
+      (r) => {
+        r.state.pr = { ...reviewed, conclusion: "failure" };
+        r.state.prJobs = built;
+        r.state.ci = { ...green, status: "in_progress", conclusion: "" };
+      },
+      /still in_progress/,
+    ],
+    [
+      "a release pull request's run that built no image, and master's still going",
+      {},
+      (r) => {
+        r.state.pr = reviewed;
+        r.state.prJobs = jobs(null);
+        r.state.ci = { ...green, status: "in_progress", conclusion: "" };
+      },
+      /still in_progress/,
+    ],
     [
       "a CI run still going",
       {},
@@ -361,6 +410,13 @@ describe("refusing to tag", () => {
       expect(repo.calls.pushed).toEqual([]);
     });
   }
+
+  // The jobs are found by name; a renamed one would be read as "not built".
+  it("names jobs the pipeline has", () => {
+    const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
+    for (const job of [BUILD_JOB, PUBLISH_JOB])
+      expect(workflow).toContain(`    name: ${job}\n`);
+  });
 
   it("takes no arguments", () => {
     const repo = repository();

@@ -14,9 +14,11 @@
  *     orphans the SHAs the notes' change list links;
  *   - package.json at that commit holds <tag>'s version;
  *   - <tag> exists neither here nor on origin;
- *   - the newest CI push run of that commit on master succeeded, its
- *     `Publish image` job included: the tag run promotes an image built from
- *     this tree, and master's run is where a broken build shows first;
+ *   - CI has passed on that very commit, image build included. The release
+ *     pull request's run counts: a fast-forward keeps the commit's SHA, and
+ *     with master unmoved the merge that run tested is this tree. So the tag
+ *     can follow the merge at once. Without such a run, master's own push
+ *     run must have succeeded, its `Publish image` job included;
  *   - tag signing is configured (`gpg.format`, `user.signingkey` and, for SSH
  *     keys, `gpg.ssh.allowedSignersFile`, without which nothing here can
  *     verify the signature).
@@ -43,6 +45,8 @@ import {
 } from "./release-version";
 
 export const PUBLISH_JOB = "Publish image";
+/** A pull request's run publishes nothing; this is the job that built and scanned the image. */
+export const BUILD_JOB = "Build and scan image";
 const PREPARE = /^chore: prepare (\S+)$/;
 
 export interface TagDeps {
@@ -51,6 +55,8 @@ export interface TagDeps {
   remoteTagExists: (tag: string) => boolean;
   /** The newest CI push run of `sha` on master, or null. */
   ciRun: (sha: string) => github.CiRun | null;
+  /** The newest CI run of `sha` in the release pull request of `tag`, or null. */
+  prRun: (sha: string, tag: string) => github.CiRun | null;
   ciJobs: (id: number) => github.CiJob[];
   push: (refspec: string) => void;
   /** The newest CI run of `tag`, or null while GitHub has not listed it. */
@@ -67,6 +73,12 @@ export function defaultDeps(cwd: string): TagDeps {
     remoteTagExists: (tag) => originTagExists(cwd, tag),
     ciRun: (sha) =>
       github.newestCiRun(cwd, { branch: "master", event: "push", sha }),
+    prRun: (sha, tag) =>
+      github.newestCiRun(cwd, {
+        branch: `release/${tag}`,
+        event: "pull_request",
+        sha,
+      }),
     ciJobs: (id) => github.ciJobs(cwd, id),
     push: (refspec) => github.pushOverHttps(cwd, refspec),
     tagRun: (tag) => github.newestCiRun(cwd, { branch: tag }),
@@ -144,10 +156,20 @@ function checkPreconditions(deps: TagDeps) {
     throw new ReleaseError(`${tag} already exists here (git tag -l ${tag}).`);
   if (deps.remoteTagExists(tag))
     throw new ReleaseError(`${tag} already exists on origin.`);
+  const reviewed = deps.prRun(sha, tag);
+  if (
+    reviewed?.status === "completed" &&
+    reviewed.conclusion === "success" &&
+    deps.ciJobs(reviewed.databaseId).find((job) => job.name === BUILD_JOB)
+      ?.conclusion === "success"
+  ) {
+    checkSigning(cwd);
+    return { sha, tag, run: reviewed };
+  }
   const run = deps.ciRun(sha);
   if (!run)
     throw new ReleaseError(
-      `no CI push run on master for ${sha.slice(0, 7)} yet. Wait for it.`,
+      `no CI run has passed on ${sha.slice(0, 7)}: neither the release pull request's nor a push run on master. Wait for master's.`,
     );
   if (run.status !== "completed") {
     throw new ReleaseError(

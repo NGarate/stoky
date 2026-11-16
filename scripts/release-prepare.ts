@@ -19,7 +19,8 @@
  *
  *   1. Refuses, changing nothing, unless: the checkout is on a clean master
  *      equal to origin/master; the newest CI push run for that commit on
- *      master succeeded; docs/releases/NEXT.md exists with every heading in
+ *      master has not failed (one still running is not waited for: the pull
+ *      request's own run is the gate); docs/releases/NEXT.md exists with every heading in
  *      REQUIRED_HEADINGS; the guide
  *      describes the current release only (no "the release after"); and the
  *      tag the bump names is free (release-version.ts's refusals).
@@ -309,18 +310,12 @@ function checkPreconditions(options: Options, deps: PrepareDeps) {
         "A release is cut from what has landed: push master, or pull it, until they are the same.",
     );
   }
+  // Only a run that already failed stops a release here. One still going, or
+  // not listed yet, does not: the preparation commit is tested by its own
+  // pull request's run, and waiting for master's first tested nothing the
+  // release would not test again.
   const run = deps.ciRun(local);
-  if (!run) {
-    throw new ReleaseError(
-      `no CI push run on master for ${local.slice(0, 7)} yet. Push master and wait for its run.`,
-    );
-  }
-  if (run.status !== "completed") {
-    throw new ReleaseError(
-      `CI for ${local.slice(0, 7)} is still ${run.status}: wait for it to pass. ${run.url}`,
-    );
-  }
-  if (run.conclusion !== "success") {
+  if (run?.status === "completed" && run.conclusion !== "success") {
     throw new ReleaseError(
       `CI for ${local.slice(0, 7)} ended ${run.conclusion}: master must be green first. ${run.url}`,
     );

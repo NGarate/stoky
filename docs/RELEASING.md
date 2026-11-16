@@ -20,8 +20,8 @@ bun run release:refresh-images --check       # optional: newer PostgreSQL/Valkey
 bun run release:prepare prerelease           # or prepatch|preminor|premajor|patch|minor|major|release|vX.Y.Z[-alpha.N]
 #   → opens the pull request "chore: prepare vVERSION" from release/vVERSION;
 #     add --refresh-images to take the newer service images in the same PR
-#   read it, then merge it with a fast-forward (not a squash, below) and push master
-bun run release:tag                          # after master's CI, image included, is green: signed tag, pushed
+#   read it; when its CI is green, merge it with a fast-forward (not a squash, below) and push master
+bun run release:tag                          # at once: the pull request's run tested this commit. Signed tag, pushed
 #   → the tag's CI run builds, scans, smokes, promotes and drafts the release
 bun run release:verify vVERSION              # the draft's fourteen checks; nothing is published
 bun run release:publish vVERSION             # verifies again, publishes, checks the notes, dispatches rescan.yml
@@ -29,6 +29,17 @@ bun run release:publish vVERSION             # verifies again, publishes, checks
 
 `bun run release:version <bump>` prints the tag a bump would give, without
 changing anything.
+
+**A release waits for CI twice: the pull request's run, and the tag's.** The
+preparation commit is tested by its pull request; a fast-forward lands that
+same commit on `master`, so `release:tag` takes the pull request's green run,
+image build included, as the proof and does not wait for `master` to test the
+commit again. `release:prepare` does not wait for `master`'s run either: it
+refuses only one that has failed. Until 2026-11-16 both waited, four waits of
+a quarter of an hour a release, two of them for an answer the next step asked
+again. What the tag ships is still decided by the tag's own run alone: every
+gate, an image built from nothing, the pushed digest scanned and smoked
+before the version tag names it.
 
 **The release pull request is merged with a fast-forward**, from a checkout
 of `master`: `git merge --ff-only origin/release/vVERSION` and a push of
@@ -215,8 +226,9 @@ chosen by `TARGETARCH`.
 
 `bun run release:tag` does this, after checking that `origin/master`'s head is
 the merged `chore: prepare vVERSION`, that `package.json` there names that
-version, that no such tag exists here or on GitHub, and that master's CI run
-of that commit succeeded with its `Publish image` job. By hand it is:
+version, that no such tag exists here or on GitHub, and that CI has passed on
+that commit with its image built: the release pull request's run, or failing
+that master's push run with its `Publish image` job. By hand it is:
 
 ```bash
 git tag -s vVERSION -m 'Stoky vVERSION'

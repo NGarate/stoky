@@ -471,22 +471,6 @@ describe("refusing to start", () => {
       /is not origin\/master/,
     ],
     [
-      "no CI run for the commit",
-      (r) => (r.ci.run = null),
-      /no CI push run on master/,
-    ],
-    [
-      "a CI run still going",
-      (r) =>
-        (r.ci.run = {
-          databaseId: 2,
-          status: "in_progress",
-          conclusion: "",
-          url: "https://ci.example/run/2",
-        }),
-      /still in_progress.*run\/2/,
-    ],
-    [
       "a failed CI run",
       (r) =>
         (r.ci.run = {
@@ -587,6 +571,28 @@ describe("refusing to start", () => {
       expect(repo.err.join("\n")).toMatch(message);
       expect(repo.snapshot()).toEqual(before);
       expect(repo.calls).toEqual({ pushed: [], pulls: [], refreshed: 0 });
+    });
+  }
+
+  // Waiting for master's run tested nothing the release does not test again:
+  // the preparation commit has its pull request's run, and the tag its own.
+  for (const [label, run] of [
+    ["has no CI run yet", null],
+    [
+      "is still in CI",
+      {
+        databaseId: 2,
+        status: "in_progress",
+        conclusion: "",
+        url: "https://ci.example/run/2",
+      },
+    ],
+  ] as const) {
+    it(`prepares from a master that ${label}, without waiting`, () => {
+      const repo = repository();
+      repo.ci.run = run;
+      expect(repo.run("prerelease")).toBe(0);
+      expect(repo.calls.pushed).toEqual([`${branch}:refs/heads/${branch}`]);
     });
   }
 
