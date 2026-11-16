@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -12,6 +13,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  missingHeadings,
+  NEXT_NOTES,
   type PrepareDeps,
   prepare,
   replaceSection,
@@ -34,13 +37,25 @@ const guide = "https://github.com/NGarate/stoky/blob/master/docs/INSTALL.md";
 const appImage = `    image: "ghcr.io/example/stoky:\${STOKY_VERSION:?Define STOKY_VERSION en .env}"`;
 const placeholder = "Se genera al preparar la versión.";
 const nextNotes = [
-  `# Stoky ${tag}`,
+  "# Stoky vNEXT",
   "",
   "Una alpha de prueba.",
   "",
   "## Cómo actualizar",
   "",
   "Cambia STOKY_VERSION.",
+  "",
+  "## Instalación",
+  "",
+  "Descarga vNEXT, no vNEXTER.",
+  "",
+  "## Límites conocidos",
+  "",
+  "Ninguno.",
+  "",
+  "## Verificación",
+  "",
+  "Nada.",
   "",
   "## Qué ha cambiado",
   "",
@@ -266,7 +281,14 @@ describe("preparing a release", () => {
     );
     expect(list).toContain("feat(inventory): scan a barcode");
     const notes = read(dir, `docs/releases/${tag}.md`);
-    expect(notes).toBe(nextNotes.replace(placeholder, list.trimEnd()));
+    // …and the tag wherever NEXT.md wrote vNEXT, as a whole word.
+    expect(notes).toBe(
+      nextNotes
+        .replace("# Stoky vNEXT", `# Stoky ${tag}`)
+        .replace("Descarga vNEXT,", `Descarga ${tag},`)
+        .replace(placeholder, list.trimEnd()),
+    );
+    expect(notes).toContain("no vNEXTER.");
     expect(notes).not.toContain(placeholder);
 
     const body = git("log", "-1", "--format=%b");
@@ -506,6 +528,17 @@ describe("refusing to start", () => {
       /lacks "## Qué ha cambiado"/,
     ],
     [
+      "a NEXT.md without what was tested",
+      (r) =>
+        r.land("docs: trim the notes", () =>
+          r.write(
+            "docs/releases/NEXT.md",
+            nextNotes.replace("## Verificación", "Verificación"),
+          ),
+        ),
+      /lacks "## Verificación"/,
+    ],
+    [
       "a guide that speaks of the release after",
       (r) =>
         r.land("docs: forward-looking guide", () =>
@@ -589,4 +622,19 @@ describe("filling the change list's section", () => {
       ),
     ).toBe("# T\n\n## Qué ha cambiado\n\nlist\n");
   });
+});
+
+// A release found its notes without three of these on the day it was cut
+// (2026-11-16): each change had added its own section and nothing else.
+// The headings are there from the file's first commit, so a change that
+// needs an upgrade step, sets a limit or was tested has where to say so.
+describe("the next release's notes on master", () => {
+  it.skipIf(!existsSync(NEXT_NOTES))(
+    "have every heading a release needs, under a title that names no version",
+    () => {
+      const notes = readFileSync(NEXT_NOTES, "utf8");
+      expect(missingHeadings(notes)).toEqual([]);
+      expect(notes.split("\n")[0]).toBe("# Stoky vNEXT");
+    },
+  );
 });

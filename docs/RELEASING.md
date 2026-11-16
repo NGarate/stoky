@@ -59,7 +59,16 @@ attestation and anonymous-pull steps below depend on that (see
    written as the changes land, in the commit that makes each one visible to
    a household or an operator, so cutting a release is a rename and a read
    rather than an archaeology of the log; whoever lands the first such change
-   after a release creates it. The notes are Spanish first, in the shape
+   after a release creates it, **with every heading below from that first
+   commit** and `vNEXT` wherever the tag goes, its title included
+   (`# Stoky vNEXT`): `master` names no release that does not exist yet, and
+   `release:prepare` writes the tag in. A change that needs an upgrade step,
+   sets a limit or was tested adds its lines under `## Cómo actualizar`,
+   `## Límites conocidos` or `## Verificación` in its own commit, as it adds
+   its section under `## Destacado`; a section with nothing to say says so in
+   a line. `src/__tests__/unit/release-prepare.test.ts` fails while a heading
+   is missing, so the gap shows on the commit that makes it and not on the
+   day of the release. The notes are Spanish first, in the shape
    Immich's releases use, because it puts what an operator must do before
    what is new:
    - **Alerts first.** A GitHub `> [!WARNING]` for anything that breaks an
@@ -75,8 +84,9 @@ attestation and anonymous-pull steps below depend on that (see
      the tag-specific links, what is not supported yet, and what was
      actually tested. Do not claim that automated tests settle the
      outstanding human checks.
-   - **`## Qué ha cambiado`**: the generated list, pasted as it prints,
-     markers included:
+   - **`## Qué ha cambiado`**: the heading alone in NEXT.md;
+     `release:prepare` fills it with the generated list. By hand, pasted as
+     it prints, markers included:
 
      ```bash
      bun scripts/release-notes.ts vPREVIOUS vVERSION

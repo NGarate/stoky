@@ -19,8 +19,8 @@
  *
  *   1. Refuses, changing nothing, unless: the checkout is on a clean master
  *      equal to origin/master; the newest CI push run for that commit on
- *      master succeeded; docs/releases/NEXT.md exists with its
- *      `## Cómo actualizar`, `## Qué ha cambiado` and `## English`; the guide
+ *      master succeeded; docs/releases/NEXT.md exists with every heading in
+ *      REQUIRED_HEADINGS; the guide
  *      describes the current release only (no "the release after"); and the
  *      tag the bump names is free (release-version.ts's refusals).
  *   2. Creates release/<tag> from master.
@@ -31,8 +31,9 @@
  *      deploy/example.env (STOKY_VERSION) and deploy/install.sh
  *      (DEFAULT_VERSION); the previous tag replaced by the new one in
  *      README.md and docs/INSTALL.md, the README's link to its notes
- *      included; NEXT.md renamed to docs/releases/<tag>.md with its
- *      `## Qué ha cambiado` filled by `bun scripts/release-notes.ts`. The list
+ *      included; NEXT.md renamed to docs/releases/<tag>.md with every
+ *      `vNEXT` replaced by the tag and its `## Qué ha cambiado` filled by
+ *      `bun scripts/release-notes.ts`. The list
  *      is generated after step 3, so the refresh commit is in it.
  *   5. Runs scripts/release-assets.sh with a placeholder digest, the same
  *      check the tag's CI run starts with.
@@ -75,9 +76,14 @@ import {
 export const NEXT_NOTES = "docs/releases/NEXT.md";
 export const REQUIRED_HEADINGS = [
   "## Cómo actualizar",
+  "## Instalación",
+  "## Límites conocidos",
+  "## Verificación",
   "## Qué ha cambiado",
   "## English",
 ];
+/** What NEXT.md writes where the tag goes: master names no release that does not exist yet. */
+const TAG_PLACEHOLDER = /\bvNEXT\b/g;
 const CHANGES_HEADING = "## Qué ha cambiado";
 /** The guide describes the release it ships with; upgrade paths live in the notes. */
 const RELEASE_AFTER = /the release after/i;
@@ -224,7 +230,11 @@ export function applyPreparation(
   const notesPath = join(cwd, notes);
   writeFileSync(
     notesPath,
-    replaceSection(readFileSync(notesPath, "utf8"), CHANGES_HEADING, list),
+    replaceSection(
+      readFileSync(notesPath, "utf8").replace(TAG_PLACEHOLDER, tag),
+      CHANGES_HEADING,
+      list,
+    ),
   );
 
   return {

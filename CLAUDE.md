@@ -267,7 +267,11 @@ rules below hard, on a branch as much as on the trunk:
    says which one owns what; if two disagree, the owner wins and the other is
    the bug. A change a household or an operator would notice also adds its
    lines to `docs/releases/NEXT.md`, the next release's notes, in the same
-   commit.
+   commit: its section under `## Destacado`, and a line under
+   `## Cómo actualizar`, `## Límites conocidos` or `## Verificación` when it
+   needs an upgrade step, sets a limit or was tested. Those headings are
+   never removed, and the notes write `vNEXT` where the tag goes: the
+   release writes it in (`docs/RELEASING.md`).
 6. **Never start, tag or publish a release.** `release:prepare`,
    `release:tag` and `release:publish` are the owner's
    (`docs/RELEASING.md`); an agent may run `release:version`,
