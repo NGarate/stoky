@@ -150,7 +150,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | PARSE-2 | An article whose price equals the sum of those above it is dropped as a damaged total | 🟡 Open — found reviewing PR #19; reproduced |
 | PARSE-3 | A weighed article with its name on the weight line is lost | 🟡 Open — found reviewing PR #19; reproduced |
 | PARSE-4 | Any receipt with a `P.UNIT` column is filed as Mercadona | 🟡 Open — found reviewing PR #19; reproduced |
-| PARSE-5 | What the parser knows of each chain and its tickets is code, so a new shop or a changed ticket needs a release | 🟡 Open — the owner's requirement, 2026-11-12; waits for one household per installation |
+| PARSE-5 | What the parser knows of each chain and its tickets is code, so a new shop or a changed ticket needs a release | 🟡 Open — the owner's requirement, 2026-11-12; who may edit the rules is settled, the household's administrators |
 | OCR-4 | One of a photo's readings failing or timing out fails the whole receipt | 🟡 Open — found reviewing PR #19 |
 | OCR-5 | A photo the preparation cannot crop fails instead of being read uncropped | 🟡 Open — found reviewing PR #19 |
 | OCR-6 | Cropping decodes the whole photograph into memory, and a sideways crop is made twice | 🟡 Open — found reviewing PR #19 |
@@ -1070,8 +1070,10 @@ article (`TOTAL_WORDS`, `NOT_A_PURCHASE`, `DISCOUNT_LABEL`, `HEADER_FIELD`,
 article count's labels (`COUNT_AFTER_LABEL`)
 **Severity:** MEDIUM — every chain the parser does not know, and every change
 a chain makes to its till, is a code change and a release
-**Status:** OPEN — the owner's requirement, 2026-11-12. Waits for one
-household per installation, which settles who may edit the rules
+**Status:** OPEN — the owner's requirement, 2026-11-12. The question it
+waited on is settled: an installation holds one household (PR #26), so the
+rules are the household's and its OWNER and ADMINs edit them, through
+`adminProcedure`
 
 The owner, on `ARTPESO` being Costco's alone: what a ticket prints changes by
 chain, by kind of ticket, and within one chain over time, so it belongs in
