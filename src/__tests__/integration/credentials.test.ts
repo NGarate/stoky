@@ -15,7 +15,8 @@ import {
  * signs in through it, its hash sits in the row Better Auth reads, and a
  * guarded password write lands on nobody who has stopped matching the guard.
  *
- * Each hash here is a real 64 MiB Argon2id run, so the file keeps them few.
+ * Each hash here is a real Argon2id run, at the minimum cost the test preload
+ * sets (`src/__tests__/setup/password-cost.ts`), not the production 64 MiB.
  */
 
 const RUN = `cred-${process.pid}-${Date.now().toString(36)}`;

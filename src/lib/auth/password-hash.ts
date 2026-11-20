@@ -49,7 +49,8 @@ let hashOptions: argon2.Options = PASSWORD_HASH_OPTIONS;
  * For tests, and held to them twice: `password-hash.test.ts` fails if any file
  * outside `src/__tests__/` names it, and it throws in a production build,
  * where Next inlines `process.env.NODE_ENV`, so no environment reopens it.
- * The accounts the application hashes itself —
+ * The test preload `src/__tests__/setup/password-cost.ts` lowers the cost for
+ * every `bun test` process. The accounts the application hashes itself —
  * registration, an admin adding a member or setting a password, a password
  * change, and the hash Better Auth spends on an address with no account —
  * cost the integration suite six seconds at the production cost, which

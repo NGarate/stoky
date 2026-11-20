@@ -24,7 +24,13 @@ minimumReleaseAge = 259200 # seconds: 3 days
 # `next/headers` first left Next's request storage broken for the rest of the
 # process (ISSUES TEST-11). Applies to every `bun test`, including a single
 # file run alone; a suite's own `--preload` adds to it.
-preload = ["./src/__tests__/setup/next-environment.ts"]
+#
+# password-cost.ts hashes passwords at Argon2id's minimum cost; the tests of
+# the production cost put it back for themselves.
+preload = [
+  "./src/__tests__/setup/next-environment.ts",
+  "./src/__tests__/setup/password-cost.ts",
+]
 
 [fmt]
 # `bun fmt` is Bun's port of Prettier, and these are Prettier's options under

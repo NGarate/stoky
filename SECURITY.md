@@ -597,9 +597,11 @@ Verified against the files named in each row.
   `replacePasswordHashCost`, which is for tests: `password-hash.test.ts`
   fails if any file under `src/` outside `src/__tests__/`, `prisma/`, `e2e/`
   or `scripts/` names it, and it throws when `NODE_ENV` is `production`,
-  which a Next build inlines. No environment variable or setting reaches it.
-  Verifying is the same either way, since a stored hash names the cost it
-  was made at.
+  which a Next build inlines. The test preload
+  (`src/__tests__/setup/password-cost.ts`) lowers every `bun test` to
+  Argon2id's minimum with it, and the tests of the cost put it back. No
+  environment variable or setting reaches it. Verifying is the same either
+  way, since a stored hash names the cost it was made at.
   Where the hash is stored is known to one module of ours,
   `src/lib/auth/credentials.ts`: every caller of ours that creates an
   account with a password, reads a stored hash or sets a new one goes

@@ -14,8 +14,10 @@ import {
  * verifies a password, so these are the only assertions standing between a
  * parameter edit and a silent change to the cost of every new account.
  *
- * The cost production hashes at is asked of a fresh copy of the module, which
- * nothing has called `replacePasswordHashCost` on: what the server loads.
+ * The test preload hashes at Argon2id's minimum cost
+ * (`src/__tests__/setup/password-cost.ts`), so the cost production hashes at
+ * is asked of a fresh copy of the module, which nothing has called
+ * `replacePasswordHashCost` on: what the server loads.
  * Each of those is a real 64 MiB Argon2id run, so the file keeps them few.
  */
 
