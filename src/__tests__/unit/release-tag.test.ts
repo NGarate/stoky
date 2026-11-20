@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
+  cpSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -73,15 +74,34 @@ afterAll(() => {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   }
+  if (template) rmSync(template, { recursive: true, force: true });
 });
 afterEach(() => {
   for (const fixture of fixtures.splice(0))
     rmSync(fixture, { recursive: true, force: true });
 });
 
-function repository(options: { subject?: string; version?: string } = {}) {
-  const base = mkdtempSync(join(tmpdir(), "stoky-tag-"));
-  fixtures.push(base);
+/** git in the working copy at `dir`. */
+const gitIn =
+  (dir: string) =>
+  (...args: string[]) =>
+    execFileSync("git", args, {
+      cwd: dir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+let template: string | undefined;
+
+/**
+ * What every test's repository has in common, built once: the key, the
+ * previous release and a commit since it. Some fifteen commands and a key,
+ * about 45 ms, which every test used to pay again; `repository()` gives each
+ * test its own copy, so nothing one test does reaches another.
+ */
+function templateRepository(): string {
+  if (template) return template;
+  const base = mkdtempSync(join(tmpdir(), "stoky-tag-template-"));
   const origin = join(base, "origin.git");
   const dir = join(base, "work");
   const key = join(base, "signing-key");
@@ -96,26 +116,18 @@ function repository(options: { subject?: string; version?: string } = {}) {
     "-f",
     key,
   ]);
-  const allowed = join(base, "allowed-signers");
   writeFileSync(
-    allowed,
+    join(base, "allowed-signers"),
     `test@example.invalid ${readFileSync(`${key}.pub`, "utf8")}`,
   );
   execFileSync("git", ["init", "-q", "--bare", "-b", "master", origin]);
   mkdirSync(dir);
-  const git = (...args: string[]) =>
-    execFileSync("git", args, {
-      cwd: dir,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+  const git = gitIn(dir);
   git("init", "-q", "-b", "master");
   git("config", "user.name", "Test");
   git("config", "user.email", "test@example.invalid");
   git("config", "commit.gpgSign", "false");
   git("config", "gpg.format", "ssh");
-  git("config", "user.signingkey", key);
-  git("config", "gpg.ssh.allowedSignersFile", allowed);
   writeFileSync(
     join(dir, "package.json"),
     JSON.stringify({ version: "0.1.0-alpha.4" }),
@@ -124,6 +136,22 @@ function repository(options: { subject?: string; version?: string } = {}) {
   git("commit", "-q", "-m", "chore: prepare v0.1.0-alpha.4");
   git("tag", "v0.1.0-alpha.4");
   git("commit", "-q", "--allow-empty", "-m", "feat(inventory): scan a barcode");
+  template = base;
+  return base;
+}
+
+function repository(options: { subject?: string; version?: string } = {}) {
+  const base = mkdtempSync(join(tmpdir(), "stoky-tag-"));
+  fixtures.push(base);
+  cpSync(templateRepository(), base, { recursive: true });
+  const origin = join(base, "origin.git");
+  const dir = join(base, "work");
+  const key = join(base, "signing-key");
+  const allowed = join(base, "allowed-signers");
+  const git = gitIn(dir);
+  // This copy's key and signers, which a test may change, not the template's.
+  git("config", "user.signingkey", key);
+  git("config", "gpg.ssh.allowedSignersFile", allowed);
   writeFileSync(
     join(dir, "package.json"),
     JSON.stringify({ version: options.version ?? "0.1.0-alpha.5" }),
