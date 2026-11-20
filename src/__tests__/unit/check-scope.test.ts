@@ -302,29 +302,13 @@ describe("check-scope.sh", () => {
     expect(result.stdout).toContain("skipped  dependency audit: offline");
   });
 
-  it("leaves actionlint, shellcheck and zizmor to check-ci.sh with --no-pipeline-lint", () => {
-    const fixture = repo();
-    stageMixedChange(fixture);
-    for (const scope of ["all", "staged"]) {
-      const result = fixture.run([scope, "--no-pipeline-lint"]);
-      expect(result.exitCode).toBe(0);
-      expect(
-        result.calls.filter((call) => call.startsWith("check-ci")),
-      ).toEqual([]);
-      expect(result.stdout).toContain(
-        "skipped  actionlint: --no-pipeline-lint",
-      );
-      expect(result.stdout).toContain(
-        "skipped  shellcheck: --no-pipeline-lint",
-      );
-      expect(result.stdout).toContain("skipped  zizmor: --no-pipeline-lint");
-    }
-  });
-
   it("refuses an unknown scope, and --base outside `changed`", () => {
     const fixture = repo();
     expect(fixture.run(["everything"]).exitCode).toBe(2);
     expect(fixture.run(["staged", "--base", "HEAD"]).exitCode).toBe(2);
+    // CI no longer runs a scope in the image, so nothing may skip the
+    // pipeline linters.
+    expect(fixture.run(["all", "--no-pipeline-lint"]).exitCode).toBe(2);
     expect(fixture.run([]).exitCode).toBe(2);
   });
 

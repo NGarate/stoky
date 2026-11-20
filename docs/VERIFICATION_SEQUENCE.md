@@ -211,8 +211,10 @@ React Doctor's flags (no telemetry, **no supply-chain upload to Socket.dev**,
 errors only) live once, in `check:react`; every scope calls it and only adds
 the scope.
 
-**On a pull request, CI runs `changed`** against the PR's base inside the
-development image, before the whole-project `quality` step, which still runs.
+**CI does not run them.** A pull request's run used to start with `changed`
+against its base, in the development image; it gated nothing the
+whole-project `quality` step does not, and cost 37s of the run. Its answer is
+worth having before the push, so run `check:changed` then.
 
 **Before every commit, if you want it:** `bash scripts/install-hooks.sh`
 installs a git pre-commit hook that runs `check:staged`; `--uninstall` removes

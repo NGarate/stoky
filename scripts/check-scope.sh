@@ -6,10 +6,6 @@
 #   bash scripts/check-scope.sh staged              # before a commit
 #   bash scripts/check-scope.sh changed [--base R]  # a PR, or a branch before pushing
 #
-# --no-pipeline-lint reports actionlint, shellcheck and zizmor as skipped. It is for
-# the development image in CI, which has neither Docker nor shellcheck, and
-# where check-ci.sh has already linted every workflow and script on the runner.
-#
 # Exists because a whole-project scan before a commit reports old findings in
 # files nobody touched, and that teaches people to stop reading it. `staged`
 # and `changed` answer the question actually being asked: is what *I* did
@@ -21,8 +17,8 @@
 #
 # `changed` compares the working tree with the merge base of R and HEAD, which
 # is what React Doctor's own `--scope changed` does: committed and uncommitted
-# work alike. In CI the two are the same. R defaults to origin/master, fetched
-# first if this clone has never seen it.
+# work alike. R defaults to origin/master, fetched first if this clone has
+# never seen it.
 #
 # Every check runs even after one fails, and the summary says which ran, which
 # failed and which were skipped. An empty file list is reported as skipped,
@@ -34,7 +30,7 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 usage() {
-  echo "usage: $0 {all|staged|changed [--base REF]} [--no-pipeline-lint]" >&2
+  echo "usage: $0 {all|staged|changed [--base REF]}" >&2
   exit 2
 }
 
@@ -42,17 +38,12 @@ SCOPE="${1:-}"
 [ -n "$SCOPE" ] || usage
 shift
 BASE_REF=""
-PIPELINE_LINT=true
 while [ $# -gt 0 ]; do
   case "$1" in
     --base)
       [ "$SCOPE" = changed ] && [ $# -ge 2 ] || usage
       BASE_REF="$2"
       shift 2
-      ;;
-    --no-pipeline-lint)
-      PIPELINE_LINT=false
-      shift
       ;;
     *) usage ;;
   esac
@@ -155,11 +146,9 @@ case "$SCOPE" in
     run "format" bun run check:format
     run "React Doctor" bun run check:react --scope full
     run "knip" bun run check:unused
-    if $PIPELINE_LINT; then
-      run "actionlint" bash scripts/check-ci.sh actionlint
-      run "shellcheck" bash scripts/check-ci.sh shellcheck
-      run "zizmor" bash scripts/check-ci.sh zizmor
-    fi
+    run "actionlint" bash scripts/check-ci.sh actionlint
+    run "shellcheck" bash scripts/check-ci.sh shellcheck
+    run "zizmor" bash scripts/check-ci.sh zizmor
     run "dependency audit" bun run check:audit
     ;;
   staged | changed)
@@ -181,24 +170,22 @@ case "$SCOPE" in
       skip "format" "no $SCOPE files"
     fi
 
-    if $PIPELINE_LINT; then
-      if [ "${#WORKFLOWS[@]}" -gt 0 ]; then
-        run "actionlint ($(count WORKFLOWS))" bash scripts/check-ci.sh actionlint "${WORKFLOWS[@]}"
-      else
-        skip "actionlint" "no $SCOPE workflows"
-      fi
+    if [ "${#WORKFLOWS[@]}" -gt 0 ]; then
+      run "actionlint ($(count WORKFLOWS))" bash scripts/check-ci.sh actionlint "${WORKFLOWS[@]}"
+    else
+      skip "actionlint" "no $SCOPE workflows"
+    fi
 
-      if [ "${#SCRIPTS[@]}" -gt 0 ]; then
-        run "shellcheck ($(count SCRIPTS))" bash scripts/check-ci.sh shellcheck "${SCRIPTS[@]}"
-      else
-        skip "shellcheck" "no $SCOPE scripts"
-      fi
+    if [ "${#SCRIPTS[@]}" -gt 0 ]; then
+      run "shellcheck ($(count SCRIPTS))" bash scripts/check-ci.sh shellcheck "${SCRIPTS[@]}"
+    else
+      skip "shellcheck" "no $SCOPE scripts"
+    fi
 
-      if [ "${#GITHUB_CONFIG[@]}" -gt 0 ]; then
-        run "zizmor ($(count GITHUB_CONFIG))" bash scripts/check-ci.sh zizmor "${GITHUB_CONFIG[@]}"
-      else
-        skip "zizmor" "no $SCOPE workflows or Dependabot configuration"
-      fi
+    if [ "${#GITHUB_CONFIG[@]}" -gt 0 ]; then
+      run "zizmor ($(count GITHUB_CONFIG))" bash scripts/check-ci.sh zizmor "${GITHUB_CONFIG[@]}"
+    else
+      skip "zizmor" "no $SCOPE workflows or Dependabot configuration"
     fi
 
     # A new dependency is when the risk arrives, so that is when to look.
@@ -209,12 +196,6 @@ case "$SCOPE" in
     fi
     ;;
 esac
-
-if ! $PIPELINE_LINT; then
-  skip "actionlint" "--no-pipeline-lint"
-  skip "shellcheck" "--no-pipeline-lint"
-  skip "zizmor" "--no-pipeline-lint"
-fi
 
 # Types do not scope by file: a change to one signature breaks its callers,
 # which are not in the list. Whole project, every scope.
