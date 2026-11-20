@@ -118,8 +118,9 @@ jobs:
       #
       # That same answer is why no test step in this job, `test` or `e2e`
       # runs on a tag: the commit passed them in the run the guard found, on
-      # the same tree, and testing it again was ten minutes for an answer
-      # already on the commit. The steps are skipped, never the jobs: each
+      # the same tree, and testing it again was eight runner minutes (156s,
+      # 203s and 144s in run 43873232262) for an answer already on the
+      # commit. The steps are skipped, never the jobs: each
       # still ends green, so image-publish's `needs` gates as before and
       # nothing opts into always(). Only tests are skipped. The audit, the
       # image's build and scan, the bundle's scan and everything after
