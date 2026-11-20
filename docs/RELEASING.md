@@ -16,11 +16,12 @@ hold, and says what to do. What each one checks, and why, is the rest of this
 document.
 
 ```bash
-bun run release:refresh-images --check       # optional: newer PostgreSQL/Valkey of the same major, scanned
+bun run release:refresh-images               # optional: newer PostgreSQL/Valkey of the same major, scanned;
+#   commit what it writes to master as a change of its own, before preparing
 bun run release:prepare prerelease           # or prepatch|preminor|premajor|patch|minor|major|release|vX.Y.Z[-alpha.N]
 #   → waits for master's CI run if it is still going, and refuses a red one;
 #     opens the pull request "chore: prepare vVERSION" from release/vVERSION;
-#     add --refresh-images to take the newer service images in the same PR
+#     its one commit changes the version and the notes, never a dependency
 #   read it; when its CI is green, merge it with a fast-forward (not a squash, below) and push master
 bun run release:tag                          # at once: the pull request's run tested this commit. Signed tag, pushed
 #   → the tag's CI run builds, scans, smokes, promotes and drafts the release
@@ -143,8 +144,11 @@ attestation and anonymous-pull steps below depend on that (see
    updates](#dependency-updates)), a week behind upstream at best, so a release
    that skips this can ship stale builds. `bun run release:refresh-images`
    does all of this, scan included, and writes nothing if any candidate is
-   red; `release:prepare --refresh-images` commits its result on the release
-   branch. By hand: for each, take the newest release of the same major, which is what
+   red. Commit what it writes to `master` as a change of its own, before
+   `release:prepare`: a release branch changes the version and the notes
+   and no dependency, so `release:prepare` has had no `--refresh-images`
+   since 2026-11-20. The release's pull request still scans the bundle's
+   images (`release-images`). By hand: for each, take the newest release of the same major, which is what
    the floating tag (`ghcr.io/ngarate/stoky/postgres:18-alpine`,
    `valkey/valkey:8-alpine`) names that day, and the digest of
    its multi-platform index, not one platform's manifest:

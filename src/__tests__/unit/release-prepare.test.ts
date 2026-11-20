@@ -151,7 +151,6 @@ function repository() {
   const calls = {
     pushed: [] as string[],
     pulls: [] as Parameters<PrepareDeps["createPullRequest"]>[0][],
-    refreshed: 0,
     slept: 0,
   };
   const out: string[] = [];
@@ -167,17 +166,12 @@ function repository() {
     next: () => ci.run,
   };
   const remoteTags: string[] = [];
-  let refresh = () => 0;
   const deps = (): PrepareDeps => ({
     cwd: dir,
     fetch: () => git("fetch", "-q", "origin"),
     remoteTagExists: (name) => remoteTags.includes(name),
     ciRun: () => ci.next(),
     sleep: () => calls.slept++,
-    refreshImages: () => {
-      calls.refreshed++;
-      return refresh();
-    },
     push: (refspec) => {
       calls.pushed.push(refspec);
       git("push", "-q", "origin", refspec);
@@ -227,7 +221,6 @@ function repository() {
     err,
     ci,
     remoteTags,
-    setRefresh: (fn: () => number) => (refresh = fn),
   };
 }
 
@@ -321,7 +314,6 @@ describe("preparing a release", () => {
       "https://github.com/example/stoky/pull/42",
     );
     expect(repo.out.join("\n")).toContain("release-tag.ts");
-    expect(repo.calls.refreshed).toBe(0);
   });
 
   it("stops before pushing with --no-push", () => {
@@ -361,80 +353,6 @@ describe("preparing a release", () => {
     expect(said).toContain("v0.0.9");
     expect(said).toContain(`git branch -D ${branch}`);
     expect(repo.git("rev-parse", "--abbrev-ref", "HEAD").trim()).toBe(branch);
-    expect(repo.calls.pushed).toEqual([]);
-  });
-});
-
-describe("refreshing the service images first", () => {
-  const refreshed = (dir: string) => () => {
-    const compose = join(dir, "deploy/docker-compose.yml");
-    writeFileSync(
-      compose,
-      readFileSync(compose, "utf8").replace(
-        "postgres:16.14-alpine",
-        "postgres:16.15-alpine",
-      ),
-    );
-    return 0;
-  };
-
-  it("commits the refresh alone, before the preparation, and lists it", () => {
-    const repo = repository();
-    repo.setRefresh(refreshed(repo.dir));
-    expect(repo.run("prerelease", "--refresh-images", "--no-push")).toBe(0);
-    expect(
-      repo.git("log", "--format=%s", "master..HEAD").trim().split("\n"),
-    ).toEqual([
-      `chore: prepare ${tag}`,
-      `build(docker): refresh the bundle's service images for ${tag}`,
-    ]);
-    expect(repo.git("show", "--name-only", "--format=", "HEAD~1").trim()).toBe(
-      "deploy/docker-compose.yml",
-    );
-    const notes = read(repo.dir, `docs/releases/${tag}.md`);
-    expect(notes).toContain("### 📦 Dependencias e imágenes");
-    expect(notes).toContain(
-      `* build(docker): refresh the bundle's service images for ${tag}`,
-    );
-  });
-
-  it("commits nothing for images already current", () => {
-    const repo = repository();
-    expect(repo.run("prerelease", "--refresh-images", "--no-push")).toBe(0);
-    expect(repo.calls.refreshed).toBe(1);
-    expect(repo.git("log", "--format=%s", "master..HEAD").trim()).toBe(
-      `chore: prepare ${tag}`,
-    );
-  });
-
-  for (const [label, code, message] of [
-    ["a red candidate", 1, "red under the release scan"],
-    ["an error", 2, "failed (exit 2)"],
-  ] as const) {
-    it(`stops on ${label}, leaving the branch with nothing on it`, () => {
-      const repo = repository();
-      repo.setRefresh(() => code);
-      const master = repo.git("rev-parse", "master").trim();
-      expect(repo.run("prerelease", "--refresh-images")).toBe(1);
-      expect(repo.err.join("\n")).toContain(message);
-      expect(repo.err.join("\n")).toContain("left as it is");
-      expect(repo.git("rev-parse", "--abbrev-ref", "HEAD").trim()).toBe(branch);
-      expect(repo.git("rev-parse", "HEAD").trim()).toBe(master);
-      expect(repo.git("status", "--porcelain")).toBe("");
-      expect(repo.calls.pushed).toEqual([]);
-    });
-  }
-
-  it("stops when the refresh touched anything but the Compose file", () => {
-    const repo = repository();
-    repo.setRefresh(() => {
-      writeFileSync(join(repo.dir, "deploy/example.env"), "changed\n");
-      return 0;
-    });
-    expect(repo.run("prerelease", "--refresh-images")).toBe(1);
-    expect(repo.err.join("\n")).toContain(
-      "more than deploy/docker-compose.yml",
-    );
     expect(repo.calls.pushed).toEqual([]);
   });
 });
@@ -578,7 +496,6 @@ describe("refusing to start", () => {
       expect(repo.calls).toEqual({
         pushed: [],
         pulls: [],
-        refreshed: 0,
         slept: 0,
       });
     });
@@ -654,6 +571,8 @@ describe("refusing to start", () => {
     const before = repo.snapshot();
     expect(repo.run()).toBe(2);
     expect(repo.run("prerelease", "--force")).toBe(2);
+    // Gone since 2026-11-20: a release branch changes no dependency.
+    expect(repo.run("prerelease", "--refresh-images")).toBe(2);
     expect(repo.err.join("\n")).toContain("usage:");
     expect(repo.snapshot()).toEqual(before);
   });
