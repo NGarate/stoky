@@ -1,6 +1,14 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, it, expect, beforeEach, afterEach, spyOn } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  spyOn,
+  jest,
+} from "bun:test";
 import {
   OpenFoodFactsClient,
   openFoodFacts,
@@ -506,6 +514,7 @@ describe("OpenFoodFacts Service", () => {
     const deadlineMs = 100;
     let server: ReturnType<typeof Bun.serve>;
     let requests: number;
+    let requestArrived: () => void;
     let originalFetch: typeof fetch;
     // The service logs every failed lookup; a timeout's DOMException would
     // bury the run's output.
@@ -517,11 +526,13 @@ describe("OpenFoodFacts Service", () => {
 
     function serve(answer: () => Response | Promise<Response>) {
       requests = 0;
+      requestArrived = () => {};
       server = Bun.serve({
         port: 0,
         hostname: "127.0.0.1",
         fetch() {
           requests += 1;
+          requestArrived();
           return answer();
         },
       });
@@ -566,11 +577,36 @@ describe("OpenFoodFacts Service", () => {
      * The lookup, or "still waiting" if it has not settled well past the
      * deadline — so a missing deadline fails the test instead of hanging the
      * run behind a request that never ends.
+     *
+     * `fastForward` runs the deadline's clock forward the moment the request
+     * reaches the server, instead of waiting it out. `AbortSignal.timeout` is
+     * one of the timers Bun's fake clock drives (checked on Bun 1.4.4); the
+     * request, the server and the abort's way back through fetch stay real,
+     * and the guard is a real timer again by the time it is set. Only for an
+     * answer that never starts: one whose body stalls has to be read first,
+     * which only real time can wait for.
      */
-    async function lookUp(client: OpenFoodFactsClient) {
+    async function lookUp(client: OpenFoodFactsClient, fastForward = false) {
+      let lookup: ReturnType<OpenFoodFactsClient["getProductByBarcode"]>;
+      if (fastForward) {
+        const arrived = new Promise<void>((resolve) => {
+          requestArrived = resolve;
+        });
+        jest.useFakeTimers();
+        try {
+          lookup = client.getProductByBarcode(barcode);
+          // Or its answer, if it never sent one: the test judges that.
+          await Promise.race([arrived, lookup]);
+          jest.advanceTimersByTime(deadlineMs);
+        } finally {
+          jest.useRealTimers();
+        }
+      } else {
+        lookup = client.getProductByBarcode(barcode);
+      }
       let guard: ReturnType<typeof setTimeout> | undefined;
       const result = await Promise.race([
-        client.getProductByBarcode(barcode),
+        lookup,
         new Promise<"still waiting">((resolve) => {
           guard = setTimeout(() => resolve("still waiting"), deadlineMs * 20);
         }),
@@ -584,7 +620,7 @@ describe("OpenFoodFacts Service", () => {
       const { cache, writes } = countingCache();
       const client = new OpenFoodFactsClient(cache, deadlineMs);
 
-      const result = await lookUp(client);
+      const result = await lookUp(client, true);
 
       expect(result).toBeNull();
       expect(requests).toBe(1);
@@ -620,8 +656,8 @@ describe("OpenFoodFacts Service", () => {
       serve(() => new Promise<Response>(() => {}));
       const client = new OpenFoodFactsClient(memoryProductCache(), deadlineMs);
 
-      await lookUp(client);
-      await lookUp(client);
+      await lookUp(client, true);
+      await lookUp(client, true);
 
       expect(requests).toBe(2);
     });
