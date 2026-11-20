@@ -490,7 +490,7 @@ On 2026-10-22 `scripts/scan-bundle-images.sh` found `v3.7.14`, then on
 `postgres:16.15-alpine` was rebuilt upstream (index `sha256:0cefaabd…`) and
 `master` takes that build, clean under the same scan.
 
-`bun audit --audit-level high`, the gate since 2026-11-20, reports no high or critical advisory across 695 packages and seven below that level, all moderate and all against next 16.4.3 (2026-11-20). At `moderate`, the gate until then, it reported no vulnerabilities across 682 packages (2026-10-31, after the minimatch override; 598 on 2026-10-25, after taking happy-dom 21.0.4, fast-uri 3.1.9 and zod 4, before which it reported two high advisories and two moderate ones, three of them published on 2026-10-23, and zod's had no 3.x fix).
+`bun audit --audit-level high`, the gate since 2026-11-20, reports no vulnerabilities across 695 packages, at any level (2026-11-20, after next 16.4.6; with next 16.4.3 that day, seven moderate ones below the gate). At `moderate`, the gate until then, it reported no vulnerabilities across 682 packages (2026-10-31, after the minimatch override; 598 on 2026-10-25, after taking happy-dom 21.0.4, fast-uri 3.1.9 and zod 4, before which it reported two high advisories and two moderate ones, three of them published on 2026-10-23, and zod's had no 3.x fix).
 Trivy 0.69.3 (the CI version), with a fresh 2026-09-25 database, scans the Bun-only
 production image with zero fixable HIGH/CRITICAL findings. The image was exported
 and scanned read-only, without exposing the Docker socket to the scanner.
@@ -620,7 +620,7 @@ binary you happen to be holding.
 | Schema drift | `bunx --bun prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code` | ✅ no difference between `schema.prisma` and what the one baseline migration builds (2026-10-27); run after `migrate deploy` by CI's test job and `test-integration-local.sh` |
 | Seed | `bun run db:seed` | ✅ idempotent across re-runs |
 | E2E | `bun run test:e2e` | ✅ 12 pass / 0 fail in 46.7 s at four workers, 51 s wall with the build (2026-10-27; 205 tests in 3.3 min before, after the suite became one happy path per process, D154), in Playwright's image with Bun from `.bun-version` (`scripts/e2e-in-image.sh`) — Chromium from the image, nothing installed on the host |
-| Dependency audit | `bun audit --audit-level high` | ✅ nothing high or critical across 695 packages, seven moderate below the level (2026-11-20). At `moderate`, the gate until then: no vulnerabilities across 682 packages (2026-10-31, after the minimatch override; 598 on 2026-10-25; 563 at the security branch head, 2026-10-12) |
+| Dependency audit | `bun audit --audit-level high` | ✅ no vulnerabilities across 695 packages at any level (2026-11-20, after next 16.4.6). At `moderate`, the gate until then: no vulnerabilities across 682 packages (2026-10-31, after the minimatch override; 598 on 2026-10-25; 563 at the security branch head, 2026-10-12) |
 
 **Nothing enforces the installer version any more.** corepack left with pnpm,
 and `setup-bun` pins only the copy CI runs, so on a developer's own machine the
@@ -1391,8 +1391,8 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 
 | Package | Version |
 |---|---|
-| next | 16.4.3 — since 2026-10-28, a backport of bug fixes. 16.4.2 from 16.4.0 on 2026-10-22, for GHSA-p3m5-59mp-jv5r (high, Server Actions DoS), GHSA-2464-fhr4-w9xw and GHSA-673q-mjm6-r5xr (critical RCEs in image optimization with SVG and in `use cache`), all published that day and fixed in 16.4.1 |
-| react | 19.3.1 — what the component tests and the types use; the App Router renders with the React Next vendors (19.3.0-canary in Next 16.4.3) |
+| next | 16.4.6 — since 2026-11-20, for the seven moderate advisories fixed in 16.4.5 (GHSA-mfr8-8qww-v76h, GHSA-vc7v-qv4w-wrv8, GHSA-vvgp-ww4w-46vf, GHSA-rhh4-g77r-r9qj, GHSA-pc58-hwjq-p385, GHSA-7qx7-33qx-rqx2, GHSA-f3mh-rxg3-f5g2); 16.4.6 also compresses route handler responses that are not already compressed. 16.4.3 since 2026-10-28, a backport of bug fixes. 16.4.2 from 16.4.0 on 2026-10-22, for GHSA-p3m5-59mp-jv5r (high, Server Actions DoS), GHSA-2464-fhr4-w9xw and GHSA-673q-mjm6-r5xr (critical RCEs in image optimization with SVG and in `use cache`), all published that day and fixed in 16.4.1 |
+| react | 19.3.1 — what the component tests and the types use; the App Router renders with the React Next vendors (19.3.0-canary in Next 16.4.6) |
 | @trpc/server, @trpc/client | 11.19.0 |
 | prisma, @prisma/client | 7.10.1 — from 6.19.3 on 2026-10-26, with `@prisma/adapter-pg` (node-postgres): Prisma 7 has no query engine of its own, and the URL Migrate uses lives in `prisma.config.ts`, which ships in the image. The `prisma-client` generator writes the client to `src/generated/prisma` (ignored, generated per checkout and per image): server code imports `@/generated/prisma/client`, browser code `@/generated/prisma/browser`, which carries the enums and types and no runtime |
 | better-auth | 1.7.12 — exact (1.7.7 from 2026-10-15, replacing next-auth 5.0.0-beta.32, D135; 1.7.12 since 2026-10-25); `bun audit` clean with it, no new override |
