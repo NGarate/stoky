@@ -225,6 +225,7 @@ src/__tests__/
 ├── setup/                     # preloads and helpers, not tests
 │   ├── matchers.ts
 │   ├── next-environment.ts    # bunfig.toml preloads it into every bun test
+│   ├── password-cost.ts       # and this: Argon2id at its minimum cost
 │   ├── register-dom.ts
 │   └── tailwind.ts            # resolves class lists through Tailwind's compiler
 └── utils/
@@ -253,6 +254,20 @@ Next's server modules is evaluated. Without it, the first test file to import
 `next/headers` or `next/server` left Next's request storage throwing for every
 file after it in the same process (ISSUES TEST-11);
 `unit/next-environment.test.ts` goes red if the preload is gone.
+
+`setup/password-cost.ts` is preloaded the same way. It calls
+`replacePasswordHashCost` (`src/lib/auth/password-hash.ts`), so every
+password the application hashes under `bun test` — registration, members
+added or reset, a password change, Better Auth's hash for an address with no
+account — costs Argon2id at its minimum (1 MiB, one pass, one lane, about a
+millisecond) instead of the production 64 MiB, three passes and four lanes.
+Measured 2026-11-20, that was about a hundred hashes and six seconds of the
+integration suite. A test that asserts the production cost puts it back for
+itself with `replacePasswordHashCost()` and restores what that returns:
+`unit/password-hash.test.ts` pins the parameters on a fresh copy of the
+module, and the sign-in timing test in `integration/auth.flow.test.ts`
+compares an unknown address with a wrong password, which at a millisecond
+each would pass whatever sign-in did.
 
 ## Test Data Cleanup
 
