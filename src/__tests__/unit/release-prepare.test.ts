@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -89,25 +90,40 @@ afterAll(() => {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   }
+  if (template) rmSync(template, { recursive: true, force: true });
 });
 afterEach(() => {
   for (const fixture of fixtures.splice(0))
     rmSync(fixture, { recursive: true, force: true });
 });
 
-function repository() {
-  const base = mkdtempSync(join(tmpdir(), "stoky-prepare-"));
-  fixtures.push(base);
+/** `git` and `write` in the working copy at `dir`. */
+function tools(dir: string) {
+  return {
+    git: (...args: string[]) =>
+      execFileSync("git", args, { cwd: dir, encoding: "utf8" }),
+    write: (file: string, text: string) => {
+      mkdirSync(join(dir, file, ".."), { recursive: true });
+      writeFileSync(join(dir, file), text);
+    },
+  };
+}
+
+let template: string | undefined;
+
+/**
+ * The repository every test starts from, built once. It is some twenty git
+ * commands, about 70 ms, which every test used to pay again; `repository()`
+ * gives each test its own copy, so nothing one test does reaches another.
+ */
+function built(): string {
+  if (template) return template;
+  const base = mkdtempSync(join(tmpdir(), "stoky-prepare-template-"));
   const origin = join(base, "origin.git");
   const dir = join(base, "work");
   execFileSync("git", ["init", "-q", "--bare", "-b", "master", origin]);
   mkdirSync(dir);
-  const git = (...args: string[]) =>
-    execFileSync("git", args, { cwd: dir, encoding: "utf8" });
-  const write = (file: string, text: string) => {
-    mkdirSync(join(dir, file, ".."), { recursive: true });
-    writeFileSync(join(dir, file), text);
-  };
+  const { git, write } = tools(dir);
   git("init", "-q", "-b", "master");
   git("config", "user.name", "Test");
   git("config", "user.email", "test@example.invalid");
@@ -147,6 +163,19 @@ function repository() {
   git("remote", "add", "origin", origin);
   git("push", "-q", "origin", "master", previous);
   git("fetch", "-q", "origin");
+  template = base;
+  return base;
+}
+
+function repository() {
+  const base = mkdtempSync(join(tmpdir(), "stoky-prepare-"));
+  fixtures.push(base);
+  cpSync(built(), base, { recursive: true });
+  const origin = join(base, "origin.git");
+  const dir = join(base, "work");
+  const { git, write } = tools(dir);
+  // The copy still names the template's origin until it is pointed at its own.
+  git("remote", "set-url", "origin", origin);
 
   const calls = {
     pushed: [] as string[],
