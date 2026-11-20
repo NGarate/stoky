@@ -363,7 +363,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     api | --include) ;;
     --method) method="$2"; shift ;;
-    --input) input="$(cat)"; shift ;;
+    --input) IFS= read -r -d '' input; shift ;;
     *) endpoint="$1" ;;
   esac
   shift
@@ -379,9 +379,9 @@ if [ ! -f "$file" ]; then
   echo "gh: Not Found (HTTP 404)" >&2
   exit 1
 fi
-status="$(head -n 1 "$file")"
-printf 'HTTP/2.0 %s X\\n\\n' "$status"
-tail -n +2 "$file"
+# Builtins only: a head and a tail per call were most of this file's time.
+{ read -r status; IFS= read -r -d '' body; } < "$file"
+printf 'HTTP/2.0 %s X\\n\\n%s' "$status" "$body"
 [ "$status" -lt 400 ]
 `,
     { mode: 0o755 },
