@@ -156,8 +156,13 @@ jobs:
       #
       # The image is built here rather than pulled: `container:` needs a
       # registry, which needs `packages: write` and a job ordering, and neither
-      # buys anything a build does not. The layers that matter cache; only
-      # `COPY . .` and `prisma generate` re-run per commit.
+      # buys anything a build does not. Each job builds it from nothing, in
+      # about 35s, and that is the fast way: nothing on a fresh runner caches
+      # it. A buildx build that read its layers from the Actions cache and
+      # loaded the image into the daemon took 47s, every layer a cache hit,
+      # plus 9s to set buildx up (probe runs 44740211459, 44740883447): 30s
+      # fetching the cached layers and 13s handing the image to the daemon,
+      # where `bun install` from the network costs 5.
       #
       # `scripts/ci-in-image.sh` is the same script a developer runs, and
       # `check-ci.sh` above shellchecks it.
