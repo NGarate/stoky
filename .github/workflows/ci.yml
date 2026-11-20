@@ -578,6 +578,13 @@ jobs:
       # this same commit from these layers. A tag's image-publish does not read
       # them — see there.
       #
+      # Not on a pull request. Its cache is scoped to the pull request's ref,
+      # so only a later run of the same pull request could read it, and the
+      # job that reuses these layers, image-publish, never runs on one. The
+      # export was the larger half of this job on a pull request: 122s of its
+      # 252s in run 44734419906, against a 71s build. cache-from stays, and
+      # reads master's layers.
+      #
       # Except the production stage, which is rebuilt every time: its
       # `apk upgrade` is the only thing that fetches Alpine's fixes, and from
       # the cache it never ran again while the base digest stood still. zlib
@@ -591,7 +598,7 @@ jobs:
           load: true
           tags: stoky:scan
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: ${{ github.event_name != 'pull_request' && 'type=gha,mode=max' || '' }}
           no-cache-filters: production
 
       # The SARIF pair below is reporting, not enforcement — the gate that
