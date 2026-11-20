@@ -5,7 +5,7 @@ import {
   openWriteQueue,
   type QueuedOp,
 } from "@/lib/offline/queue";
-import { createMemoryStorage } from "@/lib/offline/storage";
+import { createMemoryStorage, type QueueStorage } from "@/lib/offline/storage";
 
 /**
  * The queue's state machine, with no DOM and no renderer.
@@ -356,8 +356,31 @@ describe("a queue composed in another household", () => {
 });
 
 describe("room", () => {
+  /**
+   * Storage that keeps the queue as it was handed over, not as SuperJSON text.
+   * These cases fill the queue to MAX_PENDING, and every change reads and
+   * rewrites the whole stored queue, so encoding it cost each case hundreds of
+   * milliseconds of SuperJSON — for a count the encoding cannot change. The
+   * queue never edits a list in place, so keeping the same objects cannot
+   * change an answer here; every other case in this file still goes through
+   * the encoding.
+   */
+  function plainStorage(): QueueStorage {
+    let stored: unknown = null;
+    return {
+      read: () => stored,
+      write: (_, value) => {
+        stored = value;
+        return true;
+      },
+      clear: () => {
+        stored = null;
+      },
+    };
+  }
+
   it("refuses the newest change rather than evicting the oldest", () => {
-    const queue = open(async () => {});
+    const queue = open(async () => {}, { storage: plainStorage() });
 
     for (let i = 0; i < MAX_PENDING; i += 1) queue.enqueue(tick());
     const result = queue.enqueue(tick());
@@ -370,7 +393,7 @@ describe("room", () => {
   });
 
   it("stops saying it is full once there is room again", async () => {
-    const queue = open(async () => {});
+    const queue = open(async () => {}, { storage: plainStorage() });
     for (let i = 0; i < MAX_PENDING; i += 1) queue.enqueue(tick());
     queue.enqueue(tick());
 
@@ -382,7 +405,7 @@ describe("room", () => {
   });
 
   it("stops saying it is full when a change is taken back", () => {
-    const queue = open(async () => {});
+    const queue = open(async () => {}, { storage: plainStorage() });
     const first = queue.enqueue(tick());
     for (let i = 1; i < MAX_PENDING; i += 1) queue.enqueue(tick());
     queue.enqueue(tick());
