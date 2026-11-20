@@ -141,14 +141,17 @@ describe("reading a receipt", () => {
   });
 
   it("reads the ticket from the frame stored with the receipt", async () => {
-    // A band 400 x 60 framed on a 400 x 300 photo: read standing, it is
-    // nearly seven times as tall as it is wide; the whole photo, 4:3.
-    const receipt = await receiptWith(pngOf(400, 300), {
+    // A square 60 x 60 framed on a 60 x 400 photo: read, it is as tall as it
+    // is wide; the whole photo, nearly seven times as tall. This way round,
+    // not a long band framed on a 4:3 photo: every ticket is prepared
+    // OCR_TICKET_WIDTH across, so a long one is millions more pixels to
+    // prepare, and the frame is what is prepared when the code is right.
+    const receipt = await receiptWith(pngOf(60, 400), {
       ticketQuad: [
-        [0, 0.4],
-        [1, 0.4],
-        [1, 0.6],
-        [0, 0.6],
+        [0, 0.425],
+        [1, 0.425],
+        [1, 0.575],
+        [0, 0.575],
       ],
     });
 
@@ -160,7 +163,7 @@ describe("reading a receipt", () => {
     });
 
     expect(shapes.length).toBeGreaterThan(0);
-    for (const shape of shapes) expect(shape).toBeGreaterThan(5);
+    for (const shape of shapes) expect(shape).toBeCloseTo(1, 1);
   });
 
   it("moves to FAILED when recognition runs out of time", async () => {
