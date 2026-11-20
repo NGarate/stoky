@@ -28,6 +28,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { pngOf } from "../utils/png";
+import { PREPARING } from "../utils/tickets";
 import { num } from "../utils/amount";
 
 /**
@@ -140,28 +141,36 @@ describe("reading a receipt", () => {
     expect(updated.rawOcrText).toBe("LECHE 1,25\n");
   });
 
-  it("reads the ticket from the frame stored with the receipt", async () => {
-    // A band 400 x 60 framed on a 400 x 300 photo: read standing, it is
-    // nearly seven times as tall as it is wide; the whole photo, 4:3.
-    const receipt = await receiptWith(pngOf(400, 300), {
-      ticketQuad: [
-        [0, 0.4],
-        [1, 0.4],
-        [1, 0.6],
-        [0, 0.6],
-      ],
-    });
+  it(
+    "reads the ticket from the frame stored with the receipt",
+    async () => {
+      // A square 60 x 60 framed on a 60 x 120 photo: read, it is as tall as it
+      // is wide; the whole photo, twice as tall. This way round, not a long
+      // band framed on a 4:3 photo: every ticket is prepared OCR_TICKET_WIDTH
+      // across, so a long one is millions more pixels to prepare. The photo is
+      // short too, so a reading of the whole of it fails on the shape, not on
+      // the clock.
+      const receipt = await receiptWith(pngOf(60, 120), {
+        ticketQuad: [
+          [0, 0.25],
+          [1, 0.25],
+          [1, 0.75],
+          [0, 0.75],
+        ],
+      });
 
-    const shapes: number[] = [];
-    await processReceiptOcr(receipt.id, async (image) => {
-      const { width, height } = await new Bun.Image(image).metadata();
-      shapes.push(height! / width!);
-      return "LECHE 1,25\n";
-    });
+      const shapes: number[] = [];
+      await processReceiptOcr(receipt.id, async (image) => {
+        const { width, height } = await new Bun.Image(image).metadata();
+        shapes.push(height! / width!);
+        return "LECHE 1,25\n";
+      });
 
-    expect(shapes.length).toBeGreaterThan(0);
-    for (const shape of shapes) expect(shape).toBeGreaterThan(5);
-  });
+      expect(shapes.length).toBeGreaterThan(0);
+      for (const shape of shapes) expect(shape).toBeCloseTo(1, 1);
+    },
+    PREPARING,
+  );
 
   it("moves to FAILED when recognition runs out of time", async () => {
     const receipt = await receiptWith(pngOf(60, 40));
