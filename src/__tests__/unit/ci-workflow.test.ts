@@ -34,6 +34,10 @@ const workflow = Bun.YAML.parse(
       name?: unknown;
       needs?: unknown;
       if?: unknown;
+      strategy?: {
+        "fail-fast"?: unknown;
+        matrix?: { include?: Array<Record<string, string>> };
+      };
       "timeout-minutes"?: unknown;
       permissions?: Record<string, unknown>;
       steps?: Array<{
@@ -1303,7 +1307,7 @@ describe("a tag's run refuses a hand-made tag and repeats no test", () => {
   /** Each test job, and the commands that are its tests. */
   const tests: Record<string, string[]> = {
     quality: ["bash scripts/ci-in-image.sh quality"],
-    test: ["bash scripts/ci-in-image.sh test"],
+    test: ['bash scripts/ci-in-image.sh test "$SUITE"'],
     e2e: [
       "bun install --frozen-lockfile",
       "bun run db:generate",
@@ -1357,8 +1361,65 @@ describe("a tag's run refuses a hand-made tag and repeats no test", () => {
     expect(bun).toBeLessThan(steps.findIndex((step) => step.run === GUARD));
   });
 
+  /** A job's names as GitHub lists them: one per leg of its matrix. */
+  const names = (id: string) =>
+    (job(id).strategy?.matrix?.include ?? [{}]).map((leg) =>
+      interpolate(
+        job(id).name,
+        Object.fromEntries(
+          Object.entries(leg).map(([key, value]) => [`matrix.${key}`, value]),
+        ),
+      ),
+    );
+
   it("guards the jobs the workflow has, by name", () => {
-    expect(Object.keys(tests).map((id) => job(id).name)).toEqual(TEST_JOBS);
+    expect(Object.keys(tests).flatMap(names)).toEqual(TEST_JOBS);
+  });
+
+  // A leg dropped from the matrix would drop its suite from CI, and the run
+  // would still be green.
+  it("runs every suite of `ci-in-image.sh test`, one per leg", () => {
+    const script = readFileSync(join(root, "scripts/ci-in-image.sh"), "utf8");
+    const block = script.match(/^ {2}test\)\n([\s\S]*?)^ {4};;$/m)?.[1];
+    const parts = [...(block ?? "").matchAll(/^ {6}(\w+)\) COMMANDS=/gm)].map(
+      (match) => match[1],
+    );
+    expect(parts.length).toBeGreaterThan(0);
+    const legs = (job("test").strategy?.matrix?.include ?? []).map(
+      (leg) => leg.suite,
+    );
+    expect(legs.toSorted()).toEqual(parts.toSorted());
+
+    // The integration leg still migrates the empty database, and compares the
+    // schema with what the migrations built, before its suite.
+    const migrate = block?.match(/^ {4}MIGRATE='([^']*)'$/m)?.[1] ?? "";
+    expect(migrate).toMatch(
+      /^bunx --bun prisma migrate deploy \\\n\s+&& bunx --bun prisma migrate diff .*--exit-code$/,
+    );
+    expect(block).toMatch(
+      /^ {6}integration\) COMMANDS="\$MIGRATE && bun run test:integration:only" ;;$/m,
+    );
+    // With no suite named, as a developer runs it: the migrations, then all three.
+    expect(block).toMatch(
+      /^ {6}\*\) COMMANDS="\$MIGRATE && bun run test:unit && bun run test:components && bun run test:integration:only" ;;$/m,
+    );
+    // One failing leg must not cancel the others: the run names every suite
+    // that fails.
+    expect(job("test").strategy?.["fail-fast"]).toBe(false);
+  });
+
+  it("refuses a suite ci-in-image.sh does not know, before building anything", () => {
+    for (const args of [["test", "e2e"], ["quality", "unit"], ["unit"]]) {
+      const result = Bun.spawnSync(
+        ["bash", "scripts/ci-in-image.sh", ...args],
+        {
+          cwd: root,
+          env: { PATH: process.env.PATH },
+        },
+      );
+      expect([args, result.exitCode]).toEqual([args, 2]);
+      expect(result.stdout.toString()).not.toContain("Building");
+    }
   });
 
   for (const [id, commands] of Object.entries(tests)) {
@@ -1381,6 +1442,11 @@ describe("a tag's run refuses a hand-made tag and repeats no test", () => {
       expect(job(id).if).toBeUndefined();
       expect(job(id).needs).toBeUndefined();
       expect(job("image-publish").needs).toContain(id);
+      // A failed leg skips image-publish only while it opts into no status
+      // function; `needs: test` waits for every leg of the matrix.
+      expect(String(job("image-publish").if)).not.toMatch(
+        /always\(|failure\(|cancelled\(|!success\(/,
+      );
     });
   }
 
@@ -1398,7 +1464,7 @@ describe("a tag's run refuses a hand-made tag and repeats no test", () => {
     );
     expect(skipped).toEqual([
       "quality: Lint, types, contrast — in the image",
-      "test: Unit, component, integration — in the image",
+      "test: Tests — in the image",
       "e2e: bun install --frozen-lockfile",
       "e2e: bun run db:generate",
       "e2e: The image and the package must agree on Playwright",

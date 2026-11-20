@@ -24,7 +24,8 @@
 #
 # Usage:
 #   scripts/ci-in-image.sh quality
-#   scripts/ci-in-image.sh test
+#   scripts/ci-in-image.sh test                # unit, components, integration
+#   scripts/ci-in-image.sh test integration    # one of them, as CI runs it
 #
 # Environment:
 #   CI_NETWORK    Docker network for the container. Defaults to `host`, which
@@ -42,13 +43,22 @@
 set -euo pipefail
 
 SUITE="${1:-}"
+PART="${2:-}"
 IMAGE_TAG="${IMAGE_TAG:-stoky-dev:ci}"
 CI_NETWORK="${CI_NETWORK:-host}"
 
+USAGE="usage: $0 {quality|test [unit|components|integration]}"
 if [ "$SUITE" != "quality" ] && [ "$SUITE" != "test" ]; then
-  echo "usage: $0 {quality|test}" >&2
+  echo "$USAGE" >&2
   exit 2
 fi
+case "$SUITE:$PART" in
+  test: | test:unit | test:components | test:integration | quality:) ;;
+  *)
+    echo "$USAGE" >&2
+    exit 2
+    ;;
+esac
 
 echo "==> Building the development image"
 # `--target development`: it adds Bash and Git for the suites, while both
@@ -78,15 +88,21 @@ case "$SUITE" in
     # `bunx --bun prisma`, because prisma is a binary rather than a script; and
     # `bun run test:*` rather than `bun test:*`, because the bare form would
     # invoke Bun's own runner and sweep every suite at once.
-    COMMANDS='bunx --bun prisma migrate deploy \
-      && bunx --bun prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code \
-      && bun run test:unit \
-      && bun run test:components \
-      && bun run test:integration:only'
+    #
+    # One suite when PART names it: CI runs each on its own runner. Only the
+    # integration suite reads the database, so the migrations run before it.
+    MIGRATE='bunx --bun prisma migrate deploy \
+      && bunx --bun prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code'
+    case "$PART" in
+      unit) COMMANDS='bun run test:unit' ;;
+      components) COMMANDS='bun run test:components' ;;
+      integration) COMMANDS="$MIGRATE && bun run test:integration:only" ;;
+      *) COMMANDS="$MIGRATE && bun run test:unit && bun run test:components && bun run test:integration:only" ;;
+    esac
     ;;
 esac
 
-echo "==> Running '$SUITE' inside $IMAGE_TAG (network: $CI_NETWORK)"
+echo "==> Running '$SUITE${PART:+ $PART}' inside $IMAGE_TAG (network: $CI_NETWORK)"
 docker run --rm \
   --network "$CI_NETWORK" \
   --volume "$PWD:/app" \
