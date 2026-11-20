@@ -237,6 +237,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The failure summary at the end runs on this runner, after a container
+      # that holds the checkout as root and runs every dev dependency: a
+      # package that rewrote scripts/junit-summary.ts, .bun-version or a
+      # bunfig.toml there would run on the host. So the script and the Bun
+      # version it needs are copied out first, and it runs from that copy, in
+      # its own folder.
+      - name: Keep the failure summary out of the suite's reach
+        run: |
+          mkdir "$RUNNER_TEMP/junit-summary"
+          cp scripts/junit-summary.ts .bun-version "$RUNNER_TEMP/junit-summary/"
+
       # The suite inside the development image, for the reason the quality
       # job states. This is the job where it matters most: these
       # suites import the generated Prisma client, decode images through
@@ -257,11 +268,32 @@ jobs:
       #
       # Not on a tag: its commit already passed this, or quality's guard
       # refuses the tag.
+      #
+      # TEST_REPORTS: the suite also writes a JUnit report there, outside the
+      # checkout, for the step below.
       - name: Tests — in the image
         if: github.ref_type != 'tag'
         env:
           SUITE: ${{ matrix.suite }}
+          TEST_REPORTS: ${{ runner.temp }}/test-reports
         run: bash scripts/ci-in-image.sh test "$SUITE"
+
+      # Only when the job failed: the failing tests' names, files, lines and
+      # messages go to the job's summary, and the first ten become error
+      # annotations, which `gh run view <id>` prints. What failed, without
+      # reading thousands of passing lines. Bun is downloaded, never restored
+      # from the cache, as in every job here (see e2e).
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        if: failure()
+        with:
+          bun-version-file: ${{ runner.temp }}/junit-summary/.bun-version
+          no-cache: true
+      - name: Name the failing tests
+        if: failure()
+        working-directory: ${{ runner.temp }}/junit-summary
+        env:
+          TEST_REPORTS: ${{ runner.temp }}/test-reports
+        run: bun ./junit-summary.ts "$TEST_REPORTS"
 
   # ------------------------------------------------------------------- e2e --
   e2e:

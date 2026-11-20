@@ -47,6 +47,7 @@ const workflow = Bun.YAML.parse(
         "continue-on-error"?: unknown;
         uses?: unknown;
         run?: unknown;
+        "working-directory"?: unknown;
         env?: Record<string, unknown>;
         with?: Record<string, unknown>;
       }>;
@@ -1397,11 +1398,11 @@ describe("a tag's run refuses a hand-made tag and repeats no test", () => {
       /^bunx --bun prisma migrate deploy \\\n\s+&& bunx --bun prisma migrate diff .*--exit-code$/,
     );
     expect(block).toMatch(
-      /^ {6}integration\) COMMANDS="\$MIGRATE && bun run test:integration:only" ;;$/m,
+      /^ {6}integration\) COMMANDS="\$MIGRATE && \$\(suite integration test:integration:only\)" ;;$/m,
     );
     // With no suite named, as a developer runs it: the migrations, then all three.
     expect(block).toMatch(
-      /^ {6}\*\) COMMANDS="\$MIGRATE && bun run test:unit && bun run test:components && bun run test:integration:only" ;;$/m,
+      /^ {6}\*\) COMMANDS="\$MIGRATE && \$\(suite unit test:unit\) && \$\(suite components test:components\) && \$\(suite integration test:integration:only\)" ;;$/m,
     );
     // One failing leg must not cancel the others: the run names every suite
     // that fails.
@@ -1489,5 +1490,58 @@ describe("the CI workflow's quality job", () => {
     const script = readFileSync(join(root, "scripts/ci-in-image.sh"), "utf8");
     const quality = script.match(/^ {2}quality\)\n([\s\S]*?)^ {4};;$/m)?.[1];
     expect(quality).toContain("bun run check:unused");
+  });
+});
+
+// A failed leg names its failing tests where `gh run view` shows them, from
+// the reports its suite wrote, so the two steps must agree on where.
+describe("the CI workflow's test jobs", () => {
+  const steps = workflow.jobs?.test?.steps ?? [];
+  const suite = steps.find((step) => step.name === "Tests — in the image");
+  const summary = steps.find((step) => step.name === "Name the failing tests");
+  const copy = "${{ runner.temp }}/junit-summary";
+
+  it("name the failing tests from the reports the suite wrote", () => {
+    expect(suite?.env?.TEST_REPORTS).toBe("${{ runner.temp }}/test-reports");
+    expect(summary?.env?.TEST_REPORTS).toBe(suite?.env?.TEST_REPORTS);
+    expect(summary?.run).toBe('bun ./junit-summary.ts "$TEST_REPORTS"');
+  });
+
+  it("do so only when the job has failed, with Bun downloaded first", () => {
+    expect(summary?.if).toBe("failure()");
+    const bun = steps.findIndex(
+      (step) =>
+        String(step.uses).startsWith("oven-sh/setup-bun@") &&
+        step.if === "failure()",
+    );
+    expect(bun).toBeGreaterThan(steps.indexOf(suite ?? {}));
+    expect(bun).toBeLessThan(steps.indexOf(summary ?? {}));
+    expect(steps[bun]?.with?.["bun-version-file"]).toBe(`${copy}/.bun-version`);
+  });
+
+  // The suite's container holds the checkout as root and runs every dev
+  // dependency; what the runner itself runs after it must come from before.
+  it("run the summary from a copy taken before the suite, out of its reach", () => {
+    const taken = steps.findIndex((step) =>
+      String(step.run).includes("cp scripts/junit-summary.ts .bun-version"),
+    );
+    expect(taken).toBeGreaterThanOrEqual(0);
+    expect(taken).toBeLessThan(steps.indexOf(suite ?? {}));
+    expect(steps[taken]?.if).toBeUndefined();
+    expect(steps[taken]?.run).toBe(
+      'mkdir "$RUNNER_TEMP/junit-summary"\ncp scripts/junit-summary.ts .bun-version "$RUNNER_TEMP/junit-summary/"\n',
+    );
+    // Its own folder, so Bun reads no bunfig.toml the suite could have written.
+    expect(summary?.["working-directory"]).toBe(copy);
+    // Not inside the reports folder, which the container mounts.
+    expect(`${copy}/`.startsWith(`${suite?.env?.TEST_REPORTS}/`)).toBe(false);
+  });
+
+  it("have the suite write its report where the summary reads it", () => {
+    const script = readFileSync(join(root, "scripts/ci-in-image.sh"), "utf8");
+    expect(script).toContain('--volume "$TEST_REPORTS:/reports"');
+    expect(script).toContain(
+      "${TEST_REPORTS:+ --reporter=junit --reporter-outfile=/reports/$1.xml}",
+    );
   });
 });

@@ -39,6 +39,10 @@
 #                 counters left by an earlier run against the shared dev
 #                 cache. In CI the services are fresh per job and this does
 #                 not arise; measured both ways.
+#   TEST_REPORTS  For `test`: an absolute directory that each suite also
+#                 writes a JUnit report into, `<suite>.xml`, for
+#                 scripts/junit-summary.ts. Unset, none is written. CI sets
+#                 it outside the checkout, since the container writes as root.
 
 set -euo pipefail
 
@@ -93,21 +97,34 @@ case "$SUITE" in
     # integration suite reads the database, so the migrations run before it.
     MIGRATE='bunx --bun prisma migrate deploy \
       && bunx --bun prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code'
+    # `suite NAME SCRIPT`: one suite's command. With TEST_REPORTS it also
+    # writes a JUnit report, NAME.xml; the console output stays as it is.
+    suite() {
+      echo "bun run $2${TEST_REPORTS:+ --reporter=junit --reporter-outfile=/reports/$1.xml}"
+    }
     case "$PART" in
-      unit) COMMANDS='bun run test:unit' ;;
-      components) COMMANDS='bun run test:components' ;;
-      integration) COMMANDS="$MIGRATE && bun run test:integration:only" ;;
-      *) COMMANDS="$MIGRATE && bun run test:unit && bun run test:components && bun run test:integration:only" ;;
+      unit) COMMANDS="$(suite unit test:unit)" ;;
+      components) COMMANDS="$(suite components test:components)" ;;
+      integration) COMMANDS="$MIGRATE && $(suite integration test:integration:only)" ;;
+      *) COMMANDS="$MIGRATE && $(suite unit test:unit) && $(suite components test:components) && $(suite integration test:integration:only)" ;;
     esac
     ;;
 esac
 
+REPORTS_VOLUME=()
+if [ -n "${TEST_REPORTS:-}" ]; then
+  mkdir -p "$TEST_REPORTS"
+  REPORTS_VOLUME=(--volume "$TEST_REPORTS:/reports")
+fi
+
 echo "==> Running '$SUITE${PART:+ $PART}' inside $IMAGE_TAG (network: $CI_NETWORK)"
+# The `+` form: Bash before 4.4 calls an empty array unbound under `set -u`.
 docker run --rm \
   --network "$CI_NETWORK" \
   --volume "$PWD:/app" \
   --volume /app/node_modules \
   --volume /app/src/generated \
+  ${REPORTS_VOLUME[@]+"${REPORTS_VOLUME[@]}"} \
   --env "DATABASE_URL=${DATABASE_URL:-}" \
   --env "VALKEY_URL=${VALKEY_URL:-}" \
   --env "STOKY_SECRET=${STOKY_SECRET:-ci-only-not-a-real-secret}" \

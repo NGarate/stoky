@@ -116,6 +116,13 @@ bun run verify:ci
 This runs the fast gate plus `bun run test:integration` (which brings up its own
 database and cache) and `bun run build`.
 
+In CI the unit, component and integration suites are three jobs, each on its
+own runner (`scripts/ci-in-image.sh test <suite>`). When one fails, `gh run view
+<id>` lists its first ten failing tests as annotations, with file, line and
+message, and the job's summary on the run page has every one
+(`scripts/junit-summary.ts`); read the log only for what they do not say,
+such as a test file that failed to load, which Bun leaves out of its report.
+
 ### 3. Browser suite
 
 Before a push, whole (see "When to run what"):
