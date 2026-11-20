@@ -82,11 +82,11 @@ jobs:
       # it — and a credential nothing needs is only ever available to an
       # attacker in a compromised dependency.
       #
-      # Full history, so a pull request's merge base with master is in the
-      # clone for the scoped step below. Fetching it later would need the
-      # credential just declined, which on a private repository is the
-      # "could not read Username" the `changes` job ran into. The whole
-      # history is under 8 MB.
+      # Full history, for release-assets.sh on a tag, which checks the notes'
+      # change list against the commits since the previous release's tag.
+      # Fetching it later would need the credential just declined, which on a
+      # private repository is the "could not read Username" the `changes` job
+      # ran into. The whole history is under 8 MB.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -166,17 +166,13 @@ jobs:
       #
       # `scripts/ci-in-image.sh` is the same script a developer runs, and
       # `check-ci.sh` above shellchecks it.
-      # A pull request's own changes first: oxlint over the files it touched
-      # and React Doctor reporting only issues it introduced, so the first red
-      # line is about this change rather than buried in a whole-project scan.
-      # Feedback, not the gate — a change can break a file it did not touch —
-      # so the full step below still runs. Its image build is a cache hit.
-      - name: Lint the pull request's changes — in the image
-        if: github.event_name == 'pull_request'
-        env:
-          CHANGED_BASE: ${{ github.event.pull_request.base.sha }}
-        run: bash scripts/ci-in-image.sh changed
-
+      #
+      # The whole project only. A pull request used to lint its own changes
+      # first (`ci-in-image.sh changed`, check-scope.sh), as feedback: it gated
+      # nothing this step does not, and cost 37s of a pull request's run in
+      # 44734419906, React Doctor 33 of them. It stays a local command, which
+      # is where that early answer is worth having: before the push.
+      #
       # Not on a tag: the guard above found the run in which this passed.
       - name: Lint, types, contrast — in the image
         if: github.ref_type != 'tag'

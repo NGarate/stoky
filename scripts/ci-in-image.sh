@@ -32,9 +32,9 @@
 #                 is how a GitHub runner reaches its service containers through
 #                 their published ports. Locally, pass the compose network
 #                 (`stoky_default`) and address the services by name.
-#   CHANGED_BASE  For `changed`: the commit a pull request is compared with.
-#                 Its merge base with HEAD has to be in the clone, which is
-#                 why the quality job checks out the full history.
+#   CHANGED_BASE  For `changed`: the commit to compare with, such as a pull
+#                 request's base. Its merge base with HEAD has to be in the
+#                 clone. CI no longer runs `changed`; it is a local command.
 #   DATABASE_URL  Passed through. The integration suite needs it; `quality`
 #                 does not and does not read it.
 #   VALKEY_URL    As above. Locally, give it a spare database index —
@@ -74,13 +74,13 @@ case "$SUITE" in
       && bun run check:unused'
     ;;
   changed)
-    # The pull request's own changes, before the whole-project gates: a fast
-    # answer about what this change did. It proves nothing on its own — a
-    # change can break a file it did not touch — so `quality` still runs.
+    # A branch's own changes: a fast answer about what this change did, in
+    # the image. It proves nothing on its own — a change can break a file it
+    # did not touch — so `quality` is still the gate.
     # --no-pipeline-lint: this image has no Docker to run actionlint, its
-    # bundled shellcheck or zizmor from, and check-ci.sh has already linted
-    # every workflow and script on the runner. CHANGED_BASE expands inside the container, which
-    # receives it below.
+    # bundled shellcheck or zizmor from; `bash scripts/check-ci.sh` runs them
+    # outside it. CHANGED_BASE expands inside the container, which receives
+    # it below.
     COMMANDS='bash scripts/check-scope.sh changed --base "$CHANGED_BASE" --no-pipeline-lint'
     ;;
   test)
