@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { TEST_JOBS } from "../../../scripts/ci-tag-guard";
 
 /**
  * Only a push publishes an image. A manual dispatch selects any ref, and
@@ -30,6 +31,8 @@ const workflow = Bun.YAML.parse(
   jobs?: Record<
     string,
     {
+      name?: unknown;
+      needs?: unknown;
       if?: unknown;
       "timeout-minutes"?: unknown;
       permissions?: Record<string, unknown>;
@@ -1267,6 +1270,72 @@ describe("the PostgreSQL image workflow", () => {
 
 // knip is the only check that sees an unused export; it is a gate only while
 // the quality job runs it, which happens inside scripts/ci-in-image.sh.
+// A pushed `v*` tag starts a release. The quality job's guard
+// (scripts/ci-tag-guard.ts) refuses one `release:tag` would not have made. It
+// must run on every tag, in a job the publication waits for, and not be
+// something a run can step around.
+describe("a tag's run refuses a hand-made tag", () => {
+  const tag = run("push", "refs/tags/v0.2.0-alpha.0", "tag");
+  /** The jobs that test a commit. */
+  const tests = ["quality", "test", "e2e"];
+  const GUARD = "bun scripts/ci-tag-guard.ts";
+
+  const job = (id: string) => {
+    const found = workflow.jobs?.[id];
+    if (!found) throw new Error(`ci.yml has no ${id} job`);
+    return found;
+  };
+  const onTag = (context: Context) => context["github.ref_type"] === "tag";
+
+  it("guards in the quality job, on every tag and on nothing else", () => {
+    const guards = Object.entries(workflow.jobs ?? {}).flatMap(([id, found]) =>
+      (found.steps ?? [])
+        .filter(
+          (step) =>
+            typeof step.run === "string" && step.run.includes("ci-tag-guard"),
+        )
+        .map((step) => ({ id, step })),
+    );
+    expect(guards.map(({ id }) => id)).toEqual(["quality"]);
+    const { step } = guards[0];
+    expect(step.run).toBe(GUARD);
+    expect(step.env).toEqual({ GITHUB_TOKEN: "${{ github.token }}" });
+    expect(step["continue-on-error"]).toBeUndefined();
+    for (const [name, context] of triggers) {
+      expect([name, condition(step.if, context)]).toEqual([
+        name,
+        onTag(context),
+      ]);
+    }
+    expect(job("quality").permissions).toEqual({
+      contents: "read",
+      actions: "read",
+    });
+  });
+
+  it("has Bun on a tag before the guard", () => {
+    const steps = job("quality").steps ?? [];
+    const bun = steps.findIndex(
+      (step) =>
+        typeof step.uses === "string" &&
+        step.uses.startsWith("oven-sh/setup-bun@") &&
+        condition(step.if, tag) === true,
+    );
+    expect(bun).toBeGreaterThanOrEqual(0);
+    expect(bun).toBeLessThan(steps.findIndex((step) => step.run === GUARD));
+  });
+
+  it("guards the jobs the workflow has, by name", () => {
+    expect(tests.map((id) => job(id).name)).toEqual(TEST_JOBS);
+  });
+
+  it("is in a job the publication waits for, itself never skipped", () => {
+    expect(job("quality").if).toBeUndefined();
+    expect(job("quality").needs).toBeUndefined();
+    expect(job("image-publish").needs).toContain("quality");
+  });
+});
+
 describe("the CI workflow's quality job", () => {
   it("runs knip's unused-code check in the development image", () => {
     const runs = (workflow.jobs?.quality?.steps ?? []).map((step) => step.run);

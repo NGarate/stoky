@@ -37,9 +37,17 @@ image build included, as the proof and does not wait for `master` to test the
 commit again. `release:prepare` does not wait for `master`'s run either: it
 refuses only one that has failed. Until 2026-11-16 both waited, four waits of
 a quarter of an hour a release, two of them for an answer the next step asked
-again. What the tag ships is still decided by the tag's own run alone: every
-gate, an image built from nothing, the pushed digest scanned and smoked
-before the version tag names it.
+again. What the tag ships is still decided by the tag's own run alone: an
+image built from nothing, the pushed digest scanned and smoked before the
+version tag names it.
+
+**A tag `release:tag` would not have made starts no release.** GitHub cannot
+tell the tag that command pushed from one pushed without it, so the tag's run
+asks for itself, first, what the command asks (`scripts/ci-tag-guard.ts`, in
+the `quality` job): the tag is on `master`'s merged `chore: prepare <tag>`,
+and a pull request's run or `master`'s has passed the tests on that very
+commit. Otherwise the job fails and nothing is published. A refused tag stays,
+immutable, so its version is spent: the next attempt is the next version.
 
 **The release pull request is merged with a fast-forward**, from a checkout
 of `master`: `git merge --ff-only origin/release/vVERSION` and a push of
@@ -224,17 +232,16 @@ chosen by `TARGETARCH`.
 
 ## Tag, inspect, publish
 
-`bun run release:tag` does this, after checking that `origin/master`'s head is
-the merged `chore: prepare vVERSION`, that `package.json` there names that
-version, that no such tag exists here or on GitHub, and that CI has passed on
-that commit with its image built: the release pull request's run, or failing
-that master's push run with its `Publish image` job. By hand it is:
-
-```bash
-git tag -s vVERSION -m 'Stoky vVERSION'
-git verify-tag vVERSION
-git push origin vVERSION
-```
+**`bun run release:tag` is the only way a release is tagged.** It checks that
+`origin/master`'s head is the merged `chore: prepare vVERSION`, that
+`package.json` there names that version, that no such tag exists here or on
+GitHub, and that CI has passed on that commit with its image built: the
+release pull request's run, or failing that master's push run with its
+`Publish image` job. Then it signs the tag, verifies the signature and pushes
+it. A `git tag` and a `git push` typed by hand check none of that, and a `v*`
+tag cannot be deleted or moved afterwards, so a release is never tagged that
+way. The ruleset admits any tag an admin pushes; the tag's run is what refuses
+one made without those checks (above).
 
 The `v*` tag runs the complete CI pipeline and validates the package/environment
 version. The image is built and scanned before publication, and `release-images`

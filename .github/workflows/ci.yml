@@ -72,6 +72,10 @@ jobs:
     name: Lint, types, contrast
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    # `actions: read` for the tag guard, which reads this commit's earlier runs.
+    permissions:
+      contents: read
+      actions: read
     steps:
       # checkout persists the workflow token into .git/config for the rest of
       # the job by default. Nothing in this pipeline pushes, so no step needs
@@ -102,6 +106,20 @@ jobs:
         with:
           bun-version-file: .bun-version
           no-cache: true
+
+      # A pushed `v*` tag starts a release, and GitHub cannot tell the tag
+      # `release:tag` pushed after its checks from one typed by hand without
+      # them. So the run asks what that command asks, and stops here unless
+      # the tag is on master's merged `chore: prepare <tag>` and a pull
+      # request's run or master's has passed the tests on that very commit
+      # (scripts/ci-tag-guard.ts). image-publish needs this job, so a refused
+      # tag publishes nothing; it cannot be deleted either, so its version is
+      # spent. ci-workflow.test.ts holds the step.
+      - name: Refuse a tag release:tag would not have made
+        if: github.ref_type == 'tag'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bun scripts/ci-tag-guard.ts
 
       # A tag must name the version actually packaged. Check this before the
       # publish gate so a typo cannot create an image with the wrong version.
