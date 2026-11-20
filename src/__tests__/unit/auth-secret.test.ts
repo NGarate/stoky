@@ -249,7 +249,7 @@ describe("the key that actually signs sessions", () => {
    * A fresh process because the instance is built once per process, and
    * every other file in this suite shares one.
    */
-  function resolvedSecret(env: Record<string, string>) {
+  async function resolvedSecret(env: Record<string, string>) {
     const base: Record<string, string | undefined> = { ...process.env };
     for (const key of Object.keys(base)) {
       if (/^(STOKY_SECRET|AUTH_SECRET|BETTER_AUTH_)/.test(key))
@@ -260,7 +260,7 @@ describe("the key that actually signs sessions", () => {
       const ctx = await getAuth().$context;
       console.log(JSON.stringify({ secret: ctx.secret }));
       process.exit(0);`;
-    const child = Bun.spawnSync([process.execPath, "-e", script], {
+    const child = Bun.spawn([process.execPath, "-e", script], {
       cwd: join(import.meta.dir, "../../.."),
       env: {
         ...base,
@@ -268,44 +268,56 @@ describe("the key that actually signs sessions", () => {
         STOKY_URLS: "https://stoky.example.com",
         ...env,
       },
+      stderr: "pipe",
     });
-    if (child.exitCode !== 0) throw new Error(child.stderr.toString());
-    const last = child.stdout.toString().trim().split("\n").at(-1)!;
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    if (exitCode !== 0) throw new Error(stderr);
+    const last = stdout.trim().split("\n").at(-1)!;
     return {
       secret: (JSON.parse(last) as { secret: unknown }).secret,
-      stderr: child.stderr.toString(),
+      stderr,
     };
   }
 
-  it("is the STOKY_SECRET the guard checked, whatever Better Auth's own variables say", () => {
+  it("is the STOKY_SECRET the guard checked, whatever Better Auth's own variables say", async () => {
     // Better Auth prefers BETTER_AUTH_SECRETS, then BETTER_AUTH_SECRET, then
     // AUTH_SECRET, and the guard reads only ours. Without an explicit
     // `secret` and `secrets` this started — the guard passed on REAL — and
     // signed every session with "changeme".
     expect(
-      resolvedSecret({
-        NODE_ENV: "production",
-        STOKY_SECRET: REAL,
-        BETTER_AUTH_SECRETS: "1:changeme-changeme-changeme-changeme",
-        BETTER_AUTH_SECRET: "changeme",
-        AUTH_SECRET: "changeme",
-      }).secret,
+      (
+        await resolvedSecret({
+          NODE_ENV: "production",
+          STOKY_SECRET: REAL,
+          BETTER_AUTH_SECRETS: "1:changeme-changeme-changeme-changeme",
+          BETTER_AUTH_SECRET: "changeme",
+          AUTH_SECRET: "changeme",
+        })
+      ).secret,
     ).toBe(REAL);
   });
 
-  it("is the trimmed value the guard judged, not the line as written", () => {
-    expect(
-      resolvedSecret({ NODE_ENV: "production", STOKY_SECRET: `  ${REAL}\n` })
-        .secret,
-    ).toBe(REAL);
+  it("is the trimmed value the guard judged, not the line as written", async () => {
+    const { secret } = await resolvedSecret({
+      NODE_ENV: "production",
+      STOKY_SECRET: `  ${REAL}\n`,
+    });
+    expect(secret).toBe(REAL);
   });
 
-  it("is a key of this process's own outside production, when none is set", () => {
+  it("is a key of this process's own outside production, when none is set", async () => {
     // Empty rather than absent: Bun fills an absent variable from `.env`, and
     // an empty one is what Compose passes for an unset `${X:-}`.
     const none = { NODE_ENV: "development", STOKY_SECRET: "" };
-    const first = resolvedSecret(none);
-    const second = resolvedSecret(none);
+    // Two processes, side by side: nothing passes between them either way.
+    const [first, second] = await Promise.all([
+      resolvedSecret(none),
+      resolvedSecret(none),
+    ]);
 
     expect(typeof first.secret).toBe("string");
     expect(String(first.secret).length).toBeGreaterThanOrEqual(

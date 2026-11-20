@@ -9,7 +9,10 @@ import {
   spyOn,
 } from "bun:test";
 import { prisma } from "@/lib/prisma";
-import { hashPassword } from "@/lib/auth/password-hash";
+import {
+  hashPassword,
+  replacePasswordHashCost,
+} from "@/lib/auth/password-hash";
 import { createCredentialUser } from "@/lib/auth/credentials";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
@@ -271,28 +274,33 @@ describe("Authentication Flow Integration Tests", () => {
       // A ratio rather than a number, and a generous one, so a slow machine
       // or a busy CI runner cannot make it flake: the difference it catches is
       // two orders of magnitude, not a few percent.
-      // At the production cost: `createTestUser`'s cheap hash would make the
-      // wrong password the fast one, and this pass whatever sign-in does.
-      const email = runEmail("timing");
-      await createCredentialUser(
-        prisma,
-        { email, name: generateTestName("Timing"), role: "MEMBER" },
-        await hashPassword("CorrectPassword123!"),
-      );
-
-      const elapsed = async (address: string): Promise<number> => {
-        const started = performance.now();
-        await signInWith({ email: address, password: "WrongPassword123!" });
-        return performance.now() - started;
-      };
-      const median = (values: number[]) => values.sort((a, b) => a - b)[1];
-
+      // At the production cost, for the account's hash and for the one Better
+      // Auth spends on an address with none: at the test preload's cost both
+      // take a millisecond, and this would pass whatever sign-in does.
+      const restore = replacePasswordHashCost();
       const wrongPassword: number[] = [];
       const noAccount: number[] = [];
-      for (let i = 0; i < 3; i++) {
-        wrongPassword.push(await elapsed(email));
-        noAccount.push(await elapsed(runEmail(`timing-missing-${i}`)));
+      try {
+        const email = runEmail("timing");
+        await createCredentialUser(
+          prisma,
+          { email, name: generateTestName("Timing"), role: "MEMBER" },
+          await hashPassword("CorrectPassword123!"),
+        );
+
+        const elapsed = async (address: string): Promise<number> => {
+          const started = performance.now();
+          await signInWith({ email: address, password: "WrongPassword123!" });
+          return performance.now() - started;
+        };
+        for (let i = 0; i < 3; i++) {
+          wrongPassword.push(await elapsed(email));
+          noAccount.push(await elapsed(runEmail(`timing-missing-${i}`)));
+        }
+      } finally {
+        restore();
       }
+      const median = (values: number[]) => values.sort((a, b) => a - b)[1];
 
       expect(median(noAccount)).toBeGreaterThan(median(wrongPassword) * 0.5);
     });

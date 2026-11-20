@@ -3,6 +3,7 @@ import * as argon2 from "argon2";
 import {
   DUMMY_PASSWORD_HASH,
   hashPassword,
+  replacePasswordHashCost,
   verifyPassword,
 } from "@/lib/auth/password-hash";
 
@@ -11,7 +12,11 @@ import {
  * verifies a password, so these are the only assertions standing between a
  * parameter edit and a silent change to the cost of every new account.
  *
- * Each hash here is a real 64 MiB Argon2id run, so the file keeps them few.
+ * The test preload hashes at Argon2id's minimum cost
+ * (`src/__tests__/setup/password-cost.ts`), so the cost production hashes at
+ * is asked of a fresh copy of the module, which nothing has called
+ * `replacePasswordHashCost` on: what the server loads.
+ * Each of those is a real 64 MiB Argon2id run, so the file keeps them few.
  */
 
 /** The `m=…,t=…,p=…` segment of a PHC-encoded Argon2 hash. */
@@ -22,11 +27,37 @@ function parameters(encoded: string): string {
 
 const PASSWORD = "cocina despensa nevera";
 
+/** `hashPassword` as the server loads it, unreplaced by the test preload. */
+async function productionHash(password: string): Promise<string> {
+  // A variable, so TypeScript does not try to resolve the query string.
+  const fresh: string = "@/lib/auth/password-hash?as-production-loads-it";
+  const module: { hashPassword: typeof hashPassword } = await import(fresh);
+  return module.hashPassword(password);
+}
+
 describe("hashPassword", () => {
   it("hashes with Argon2id at 64 MiB, three passes and four lanes", async () => {
-    const hash = await hashPassword(PASSWORD);
+    const hash = await productionHash(PASSWORD);
 
     expect(parameters(hash)).toBe("argon2id$v=19$m=65536,t=3,p=4");
+  });
+
+  it("hashes at a replaced cost only until it is put back, and still with Argon2id", async () => {
+    const before = parameters(await hashPassword(PASSWORD));
+    const restore = replacePasswordHashCost({
+      memoryCost: 2048,
+      timeCost: 2,
+      parallelism: 1,
+    });
+    let replaced: string;
+    try {
+      replaced = await hashPassword(PASSWORD);
+    } finally {
+      restore();
+    }
+
+    expect(parameters(replaced)).toBe("argon2id$v=19$m=2048,t=2,p=1");
+    expect(parameters(await hashPassword(PASSWORD))).toBe(before);
   });
 
   it("salts every hash, so two hashes of one password differ", async () => {
@@ -45,6 +76,14 @@ describe("verifyPassword", () => {
 
     expect(await verifyPassword(hash, PASSWORD)).toBe(true);
     expect(await verifyPassword(hash, `${PASSWORD} `)).toBe(false);
+  });
+
+  // The stored hash names its own cost, so the tests' cheap hashes and the
+  // server's are checked by one function, each at the cost it was made with.
+  it("accepts a hash made at the production cost too", async () => {
+    expect(await verifyPassword(await productionHash(PASSWORD), PASSWORD)).toBe(
+      true,
+    );
   });
 
   it("answers false when there is no stored hash", async () => {
@@ -76,7 +115,7 @@ describe("DUMMY_PASSWORD_HASH", () => {
   // an unknown address answer faster than a wrong password — the timing
   // difference it exists to close — and no other test would notice.
   it("names the parameters every account is hashed with", async () => {
-    const hash = await hashPassword(PASSWORD);
+    const hash = await productionHash(PASSWORD);
 
     expect(parameters(DUMMY_PASSWORD_HASH)).toBe(parameters(hash));
   });

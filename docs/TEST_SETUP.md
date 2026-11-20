@@ -135,6 +135,32 @@ bun run test:unit
 bun run test:components
 ```
 
+**The unit and component suites run their files in parallel; the
+integration suite does not.** The counts were measured on CI's 4-vCPU
+runner (probe runs `44755095303`, `44756289181`):
+
+- `test:unit` is `--parallel=4`: four worker processes, each file in a fresh
+  global (Bun's default under `--parallel`). 33 s serial, 22 s in parallel.
+  Without isolation it was 20 s, but a file could then read another file's
+  late `console.warn` (a stray `auth.signin.failed` in `auth-handler.test.ts`),
+  and that cross-file state is the shape of TEST-11. Two seconds is not worth
+  bringing that back. Three workers was no faster than serial in one probe:
+  Bun hands each worker a contiguous run of paths, and `ocr-prepare` and
+  `ocr-read`, the two slow files, are neighbours.
+- `test:components` is `--parallel=3 --no-isolate`: 18 s serial, 8–11 s in
+  parallel. Isolation brought this suite nothing (16 s), because each file
+  pays for happy-dom and React again. Without it, a worker keeps one global
+  across its files, as the serial run always did, but the order of those
+  files changes from run to run. **A component test must leave things as
+  it found them**: module state, `localStorage`, timers. `bun run
+  test:components --randomize` shows a file that does not.
+- The integration suite's files share one database and one Valkey and are
+  not written to run side by side, so it stays serial.
+
+`--timings` (start the slowest file first) was measured and not adopted: it
+made no difference at these worker counts, and a committed timings file would
+need regenerating.
+
 ### Integration Tests
 ```bash
 bun run test:integration
@@ -225,6 +251,7 @@ src/__tests__/
 ├── setup/                     # preloads and helpers, not tests
 │   ├── matchers.ts
 │   ├── next-environment.ts    # bunfig.toml preloads it into every bun test
+│   ├── password-cost.ts       # and this: Argon2id at its minimum cost
 │   ├── register-dom.ts
 │   └── tailwind.ts            # resolves class lists through Tailwind's compiler
 └── utils/
@@ -253,6 +280,20 @@ Next's server modules is evaluated. Without it, the first test file to import
 `next/headers` or `next/server` left Next's request storage throwing for every
 file after it in the same process (ISSUES TEST-11);
 `unit/next-environment.test.ts` goes red if the preload is gone.
+
+`setup/password-cost.ts` is preloaded the same way. It calls
+`replacePasswordHashCost` (`src/lib/auth/password-hash.ts`), so every
+password the application hashes under `bun test` — registration, members
+added or reset, a password change, Better Auth's hash for an address with no
+account — costs Argon2id at its minimum (1 MiB, one pass, one lane, about a
+millisecond) instead of the production 64 MiB, three passes and four lanes.
+Measured 2026-11-20, that was about a hundred hashes and six seconds of the
+integration suite. A test that asserts the production cost puts it back for
+itself with `replacePasswordHashCost()` and restores what that returns:
+`unit/password-hash.test.ts` pins the parameters on a fresh copy of the
+module, and the sign-in timing test in `integration/auth.flow.test.ts`
+compares an unknown address with a wrong password, which at a millisecond
+each would pass whatever sign-in did.
 
 ## Test Data Cleanup
 

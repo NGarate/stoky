@@ -53,11 +53,12 @@ export interface TestStockEntryData {
  * Sign-in verifies at whatever cost the stored hash names, so a production
  * hash here (64 MiB, three passes) made every sign-in of the integration
  * suite pay a quarter of a second for a cost nothing asserts. The cost
- * itself is pinned where it matters: `unit/password-hash.test.ts`, and the
- * accounts the application hashes itself (registration, a reset, a
- * password change) keep it. A test that needs a full-cost account, such as
- * the timing of a wrong password against an unknown address, hashes with
- * `hashPassword`.
+ * itself is pinned where it matters: `unit/password-hash.test.ts`. The
+ * accounts the application hashes itself go through `hashPassword`, which
+ * the test preload lowers to this same cost (`setup/password-cost.ts`). A
+ * test that needs a full-cost account, such as the timing of a wrong
+ * password against an unknown address, calls `replacePasswordHashCost()`
+ * and then hashes with `hashPassword`.
  */
 const testHashes = new Map<string, Promise<string>>();
 function testPasswordHash(password: string): Promise<string> {

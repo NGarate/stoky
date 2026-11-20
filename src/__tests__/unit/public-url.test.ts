@@ -378,14 +378,14 @@ describe("the session cookie", () => {
    * The session cookie's name in a fresh process built with `url`. A fresh
    * process, because the instance is built once per process.
    */
-  function sessionCookieName(url: string): string {
+  async function sessionCookieName(url: string): Promise<string> {
     const base: Record<string, string | undefined> = { ...process.env };
     delete base.NEXT_PHASE;
     const script = `const { getAuth } = await import("@/lib/auth/instance");
       const ctx = await getAuth().$context;
       console.log(JSON.stringify(ctx.authCookies.sessionToken));
       process.exit(0);`;
-    const child = Bun.spawnSync([process.execPath, "-e", script], {
+    const child = Bun.spawn([process.execPath, "-e", script], {
       cwd: join(import.meta.dir, "../../.."),
       env: {
         ...base,
@@ -393,11 +393,15 @@ describe("the session cookie", () => {
         STOKY_SECRET: "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=",
         STOKY_URLS: url,
       },
+      stderr: "pipe",
     });
-    if (child.exitCode !== 0) throw new Error(child.stderr.toString());
-    const cookie = JSON.parse(
-      child.stdout.toString().trim().split("\n").at(-1)!,
-    ) as {
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    if (exitCode !== 0) throw new Error(stderr);
+    const cookie = JSON.parse(stdout.trim().split("\n").at(-1)!) as {
       name: string;
       attributes: { secure: boolean };
     };
@@ -405,23 +409,27 @@ describe("the session cookie", () => {
     return cookie.name;
   }
 
-  it("is marked Secure exactly when the first entry is https", () => {
-    expect(sessionCookieName("https://stoky.example.com")).toBe(
+  it("is marked Secure exactly when the first entry is https", async () => {
+    // One process per list, run side by side: each builds its own instance,
+    // so nothing one does can change another's answer.
+    expect(
+      await Promise.all(
+        [
+          "https://stoky.example.com",
+          "http://192.168.1.10:3000",
+          "http://127.0.0.1:3100",
+          // The first decides, whatever follows it.
+          "https://stoky.example.com, http://localhost:3000",
+          "http://localhost:3000, https://stoky.example.com",
+        ].map(sessionCookieName),
+      ),
+    ).toEqual([
       "__Secure-stoky.session_token",
-    );
-    expect(sessionCookieName("http://192.168.1.10:3000")).toBe(
       "stoky.session_token",
-    );
-    expect(sessionCookieName("http://127.0.0.1:3100")).toBe(
       "stoky.session_token",
-    );
-    // The first decides, whatever follows it.
-    expect(
-      sessionCookieName("https://stoky.example.com, http://localhost:3000"),
-    ).toBe("__Secure-stoky.session_token");
-    expect(
-      sessionCookieName("http://localhost:3000, https://stoky.example.com"),
-    ).toBe("stoky.session_token");
+      "__Secure-stoky.session_token",
+      "stoky.session_token",
+    ]);
   });
 });
 

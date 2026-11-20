@@ -55,7 +55,10 @@ interface Answer {
  * cookie — the one a forging page could make post here — in a fresh process
  * built with `env`.
  */
-function signInFrom(origins: string[], env: Record<string, string>): Answer[] {
+async function signInFrom(
+  origins: string[],
+  env: Record<string, string>,
+): Promise<Answer[]> {
   const base: Record<string, string | undefined> = { ...process.env };
   delete base.NEXT_PHASE;
   const script = `const { signInWith } = await import("@/__tests__/utils/authorize");
@@ -70,7 +73,7 @@ function signInFrom(origins: string[], env: Record<string, string>): Answer[] {
     }
     console.log(JSON.stringify(answers));
     process.exit(0);`;
-  const child = Bun.spawnSync([process.execPath, "-e", script], {
+  const child = Bun.spawn([process.execPath, "-e", script], {
     cwd: join(import.meta.dir, "../../.."),
     env: {
       ...base,
@@ -81,16 +84,25 @@ function signInFrom(origins: string[], env: Record<string, string>): Answer[] {
       EMAIL_UNDER_TEST: email,
       PASSWORD_UNDER_TEST: PASSWORD,
     },
+    stderr: "pipe",
   });
-  if (child.exitCode !== 0) throw new Error(child.stderr.toString());
-  return JSON.parse(
-    child.stdout.toString().trim().split("\n").at(-1)!,
-  ) as Answer[];
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  if (exitCode !== 0) throw new Error(stderr);
+  return JSON.parse(stdout.trim().split("\n").at(-1)!) as Answer[];
 }
 
 describe("a sign-in with two addresses listed", () => {
-  it("is accepted at either one, and refused from anywhere else, in production", () => {
-    const [first, second, unlisted, developmentHost] = signInFrom(
+  // Both processes start together, each test then reading its own: separate
+  // processes build separate instances, and no answer below depends on the
+  // order the two sign in.
+  let production: Promise<Answer[]>;
+  let development: Promise<Answer[]>;
+  beforeAll(() => {
+    production = signInFrom(
       [FIRST, SECOND, "https://evil.example", "http://192.168.1.20:3000"],
       {
         NODE_ENV: "production",
@@ -100,6 +112,19 @@ describe("a sign-in with two addresses listed", () => {
         PORT: "3000",
       },
     );
+    development = signInFrom(["http://192.168.1.20:3000"], {
+      NODE_ENV: "development",
+      STOKY_URLS: `${FIRST}, ${SECOND}`,
+      DEV_ALLOWED_ORIGIN: "192.168.1.20",
+      PORT: "3000",
+    });
+    // Read by the test that wants it; a failure is reported there.
+    production.catch(() => {});
+    development.catch(() => {});
+  });
+
+  it("is accepted at either one, and refused from anywhere else, in production", async () => {
+    const [first, second, unlisted, developmentHost] = await production;
 
     expect(first).toEqual({ status: 200, code: undefined });
     // Not 403: the second address is as much this instance as the first.
@@ -108,15 +133,10 @@ describe("a sign-in with two addresses listed", () => {
     expect(developmentHost).toEqual({ status: 403, code: "INVALID_ORIGIN" });
   });
 
-  it("trusts a DEV_ALLOWED_ORIGIN host outside production, which is what it is for", () => {
+  it("trusts a DEV_ALLOWED_ORIGIN host outside production, which is what it is for", async () => {
     // The contrast to the last case above: the same host, the same request,
     // and only NODE_ENV differs.
-    const [developmentHost] = signInFrom(["http://192.168.1.20:3000"], {
-      NODE_ENV: "development",
-      STOKY_URLS: `${FIRST}, ${SECOND}`,
-      DEV_ALLOWED_ORIGIN: "192.168.1.20",
-      PORT: "3000",
-    });
+    const [developmentHost] = await development;
 
     expect(developmentHost).toEqual({ status: 200, code: undefined });
   });
