@@ -766,7 +766,7 @@ The build gated nothing but the publish, yet waited for every test: on run
 05:49:05. It is now two jobs. `image-build` declares no `needs`, so it runs
 beside the tests, and it holds neither `packages: write` nor a push step — a
 run whose tests fail can waste a build but cannot ship one. `image-publish`
-waits for all four test jobs plus the build and rebuilds the same commit from
+waits for every test job plus the build and rebuilds the same commit from
 the layer cache the first job wrote, which is why it costs 44 seconds rather
 than a second build. On a tag it no longer does: since 2026-10-12 a
 release's publish build reads no cache (RELEASING.md, *Verification
@@ -841,6 +841,23 @@ newest run to arrive in a group replaces the pending one whatever
 `cancel-in-progress` says, so a dispatch on master sharing the pushes' group
 would cancel a pending push and leave its commit unpublished. Not yet
 exercised on GitHub.
+
+**2026-11-20: a pull request's run, 275s → 149s** (run `44734419906`, PR #27,
+against `44743300455`, the same tree plus PR #28). Four cuts, each measured on
+its own run in PR #28. `image-build` no longer exports the layer cache on a pull
+request, which only a later run of the same pull request could read: 122s of
+its 252s. The scoped "Lint the pull request's changes" step is gone from
+`quality` (37s); `check:changed` is where that answer is worth having, before
+the push. The unit, component and integration suites are three jobs on three
+runners instead of one job in series (194s → 104s for the slowest leg).
+`image-build` keeps its buildx builder at the end rather than spend 3–25s
+deleting it from a runner about to be discarded. A cached development image was
+measured and rejected: 47s from the Actions cache plus 9s for buildx, against
+35s for the plain build (probe runs `44740211459`, `44740883447`). Master and
+tags still export the layer cache; they share the split test jobs, whose names
+`scripts/ci-tag-guard.ts` (TEST_JOBS) asks for, and the kept builder.
+`image-build` (137s, from 11s into the run, after `changes`) is now the
+critical path; `e2e` (124s) and `quality` (120s) are next.
 
 **The pipeline lints itself.** `bash scripts/check-ci.sh` runs actionlint
 over the workflow and shellcheck over `scripts/*.sh`, and runs as the first step
