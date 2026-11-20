@@ -593,8 +593,12 @@ Verified against the files named in each row.
   adding a member or setting a member's password, and for a person changing
   their own password, and verifies for sign-in and for that change. A test
   pins the parameters and that the dummy hash for unknown addresses was made
-  with the same ones. Where the hash is stored is known to one module of
-  ours, `src/lib/auth/credentials.ts`: every caller of ours that creates an
+  with the same ones. Only code can hash at another cost, through
+  `replacePasswordHashCost`, which is for tests and which the application
+  never calls; no environment variable or setting reaches it. Verifying is
+  the same either way, since a stored hash names the cost it was made at.
+  Where the hash is stored is known to one module of ours,
+  `src/lib/auth/credentials.ts`: every caller of ours that creates an
   account with a password, reads a stored hash or sets a new one goes
   through it. Better Auth is the one other reader and writer: it reads the
   hash at sign-in and writes it when a person changes their own password
