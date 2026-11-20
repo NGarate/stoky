@@ -30,51 +30,63 @@ import {
 describe("readReceiptPhoto", () => {
   const READ = "LECHE ENTERA 1,00\nPAN 0,50\nTOTAL 1,50";
 
-  it("reads the prepared ticket once for each of the readings, at their sizes", async () => {
-    const seen: { width: number; options: unknown }[] = [];
-    const text = await readReceiptPhoto(
-      ticketOnATable(),
-      async (image, options) => {
-        seen.push({
-          width: (await new Bun.Image(image).metadata()).width,
-          options,
-        });
+  it(
+    "reads the prepared ticket once for each of the readings, at their sizes",
+    async () => {
+      const seen: { width: number; options: unknown }[] = [];
+      const text = await readReceiptPhoto(
+        ticketOnATable(),
+        async (image, options) => {
+          seen.push({
+            width: (await new Bun.Image(image).metadata()).width,
+            options,
+          });
+          return READ;
+        },
+      );
+
+      expect(text).toBe(READ);
+      expect(seen.map(({ width }) => width).sort()).toEqual(
+        OCR_READINGS.map(({ scale }) =>
+          Math.round(OCR_TICKET_WIDTH * scale),
+        ).sort(),
+      );
+      for (const { options } of seen) expect(options).toEqual(OCR_OPTIONS);
+    },
+    PREPARING,
+  );
+
+  it(
+    "asks for every reading before the first one answers",
+    async () => {
+      let asked = 0;
+      let answer!: () => void;
+      const answered = new Promise<void>((resolve) => (answer = resolve));
+      const reading = readReceiptPhoto(ticketOnATable(), async () => {
+        if (++asked === OCR_READINGS.length) answer();
+        await answered;
         return READ;
-      },
-    );
+      });
 
-    expect(text).toBe(READ);
-    expect(seen.map(({ width }) => width).sort()).toEqual(
-      OCR_READINGS.map(({ scale }) =>
-        Math.round(OCR_TICKET_WIDTH * scale),
-      ).sort(),
-    );
-    for (const { options } of seen) expect(options).toEqual(OCR_OPTIONS);
-  });
+      expect(await reading).toBe(READ);
+      expect(asked).toBe(OCR_READINGS.length);
+    },
+    PREPARING,
+  );
 
-  it("asks for every reading before the first one answers", async () => {
-    let asked = 0;
-    let answer!: () => void;
-    const answered = new Promise<void>((resolve) => (answer = resolve));
-    const reading = readReceiptPhoto(ticketOnATable(), async () => {
-      if (++asked === OCR_READINGS.length) answer();
-      await answered;
-      return READ;
-    });
+  it(
+    "reads it half turned when nothing was read and no judge said which way up",
+    async () => {
+      let calls = 0;
+      const text = await readReceiptPhoto(ticketOnATable(), async () =>
+        ++calls > OCR_READINGS.length ? READ : "",
+      );
 
-    expect(await reading).toBe(READ);
-    expect(asked).toBe(OCR_READINGS.length);
-  });
-
-  it("reads it half turned when nothing was read and no judge said which way up", async () => {
-    let calls = 0;
-    const text = await readReceiptPhoto(ticketOnATable(), async () =>
-      ++calls > OCR_READINGS.length ? READ : "",
-    );
-
-    expect(text).toBe(READ);
-    expect(calls).toBe(2 * OCR_READINGS.length);
-  });
+      expect(text).toBe(READ);
+      expect(calls).toBe(2 * OCR_READINGS.length);
+    },
+    PREPARING,
+  );
 
   it(
     "does not read it again when its text said which way up",
@@ -91,36 +103,44 @@ describe("readReceiptPhoto", () => {
     PREPARING,
   );
 
-  it("calls off the readings still waiting when one fails", async () => {
-    const signals: (AbortSignal | undefined)[] = [];
-    const reading = readReceiptPhoto(
-      ticketOnATable(),
-      async (_image, _options, signal) => {
-        signals.push(signal);
-        if (signals.length === 1) throw new Error("timed out");
+  it(
+    "calls off the readings still waiting when one fails",
+    async () => {
+      const signals: (AbortSignal | undefined)[] = [];
+      const reading = readReceiptPhoto(
+        ticketOnATable(),
+        async (_image, _options, signal) => {
+          signals.push(signal);
+          if (signals.length === 1) throw new Error("timed out");
+          return READ;
+        },
+      );
+
+      await expect(reading).rejects.toThrow("timed out");
+      expect(signals).toHaveLength(OCR_READINGS.length);
+      for (const signal of signals) expect(signal?.aborted).toBe(true);
+    },
+    PREPARING,
+  );
+
+  it(
+    "reads the ticket with its ink thinned as well as as it is",
+    async () => {
+      const inkAt = new Map<number, number[]>();
+      await readReceiptPhoto(ticketOnATable(), async (image) => {
+        const { width, ink } = inkOf(image);
+        inkAt.set(width, [...(inkAt.get(width) ?? []), ink]);
         return READ;
-      },
-    );
+      });
 
-    await expect(reading).rejects.toThrow("timed out");
-    expect(signals).toHaveLength(OCR_READINGS.length);
-    for (const signal of signals) expect(signal?.aborted).toBe(true);
-  });
-
-  it("reads the ticket with its ink thinned as well as as it is", async () => {
-    const inkAt = new Map<number, number[]>();
-    await readReceiptPhoto(ticketOnATable(), async (image) => {
-      const { width, ink } = inkOf(image);
-      inkAt.set(width, [...(inkAt.get(width) ?? []), ink]);
-      return READ;
-    });
-
-    // Each size is read twice, and one of the two has visibly less ink.
-    expect(inkAt.size).toBe(3);
-    for (const [, [one, two]] of inkAt) {
-      expect(Math.min(one!, two!)).toBeLessThan(Math.max(one!, two!) * 0.99);
-    }
-  });
+      // Each size is read twice, and one of the two has visibly less ink.
+      expect(inkAt.size).toBe(3);
+      for (const [, [one, two]] of inkAt) {
+        expect(Math.min(one!, two!)).toBeLessThan(Math.max(one!, two!) * 0.99);
+      }
+    },
+    PREPARING,
+  );
 });
 
 describe("readFramedLines", () => {
