@@ -135,6 +135,25 @@ bun run test:unit
 bun run test:components
 ```
 
+**The unit suite runs its files in parallel; the others do not.** The
+counts were measured on CI's 4-vCPU runner (probe runs `44755095303`,
+`44756289181`):
+
+- `test:unit` is `--parallel=4`: four worker processes, each file in a fresh
+  global (Bun's default under `--parallel`). 33 s serial, 22 s in parallel.
+  Without isolation it was 20 s, but a file could then read another file's
+  late `console.warn` (a stray `auth.signin.failed` in `auth-handler.test.ts`),
+  and that cross-file state is the shape of TEST-11. Two seconds is not worth
+  bringing that back. Three workers was no faster than serial in one probe:
+  Bun hands each worker a contiguous run of paths, and `ocr-prepare` and
+  `ocr-read`, the two slow files, are neighbours.
+- The integration suite's files share one database and one Valkey and are
+  not written to run side by side, so it stays serial.
+
+`--timings` (start the slowest file first) was measured and not adopted: it
+made no difference at these worker counts, and a committed timings file would
+need regenerating.
+
 ### Integration Tests
 ```bash
 bun run test:integration
