@@ -18,9 +18,9 @@
  * command the owner runs and every step after it is a review:
  *
  *   1. Refuses, changing nothing, unless: the checkout is on a clean master
- *      equal to origin/master; the newest CI push run for that commit on
- *      master has not failed (one still running is not waited for: the pull
- *      request's own run is the gate); docs/releases/NEXT.md exists with every heading in
+ *      equal to origin/master; the CI push run for that commit on master
+ *      ended green (one still going is waited for, up to CI_WAIT_MINUTES);
+ *      docs/releases/NEXT.md exists with every heading in
  *      REQUIRED_HEADINGS; the guide
  *      describes the current release only (no "the release after"); and the
  *      tag the bump names is free (release-version.ts's refusals).
@@ -83,6 +83,10 @@ export const REQUIRED_HEADINGS = [
   "## Qué ha cambiado",
   "## English",
 ];
+/** How long master's CI run is waited for: twice what a run takes. */
+export const CI_WAIT_MINUTES = 30;
+const CI_POLL_MS = 15_000;
+
 /** What NEXT.md writes where the tag goes: master names no release that does not exist yet. */
 const TAG_PLACEHOLDER = /\bvNEXT\b/g;
 const CHANGES_HEADING = "## Qué ha cambiado";
@@ -99,6 +103,7 @@ export interface PrepareDeps {
   remoteTagExists: (tag: string) => boolean;
   /** The newest CI push run of `sha` on master, or null when there is none. */
   ciRun: (sha: string) => github.CiRun | null;
+  sleep: (ms: number) => void;
   /** scripts/release-refresh-images.ts's exit code: 0 done, 1 a red candidate, 2 an error. */
   refreshImages: () => number;
   push: (refspec: string) => void;
@@ -120,6 +125,7 @@ export function defaultDeps(cwd: string): PrepareDeps {
     remoteTagExists: (tag) => originTagExists(cwd, tag),
     ciRun: (sha) =>
       github.newestCiRun(cwd, { branch: "master", event: "push", sha }),
+    sleep: (ms) => Bun.sleepSync(ms),
     refreshImages: () => {
       const script = join(cwd, "scripts/release-refresh-images.ts");
       if (!existsSync(script)) {
@@ -310,12 +316,26 @@ function checkPreconditions(options: Options, deps: PrepareDeps) {
         "A release is cut from what has landed: push master, or pull it, until they are the same.",
     );
   }
-  // Only a run that already failed stops a release here. One still going, or
-  // not listed yet, does not: the preparation commit is tested by its own
-  // pull request's run, and waiting for master's first tested nothing the
-  // release would not test again.
-  const run = deps.ciRun(local);
-  if (run?.status === "completed" && run.conclusion !== "success") {
+  // A release is cut from a green master. The pull request's run would catch
+  // a red one too, but only after a preparation that then has to be thrown
+  // away and made again, so a run still going (or not listed yet, seconds
+  // after the push) is waited for here instead.
+  let run = deps.ciRun(local);
+  for (let waited = 0; run?.status !== "completed"; waited += CI_POLL_MS) {
+    if (waited >= CI_WAIT_MINUTES * 60_000) {
+      throw new ReleaseError(
+        `CI for ${local.slice(0, 7)} has not finished after ${CI_WAIT_MINUTES} minutes. ${run?.url ?? "No run is listed for it."}`,
+      );
+    }
+    if (waited === 0) {
+      deps.out(
+        `Waiting for CI on ${local.slice(0, 7)}: ${run?.url ?? "no run listed yet"}`,
+      );
+    }
+    deps.sleep(CI_POLL_MS);
+    run = deps.ciRun(local);
+  }
+  if (run.conclusion !== "success") {
     throw new ReleaseError(
       `CI for ${local.slice(0, 7)} ended ${run.conclusion}: master must be green first. ${run.url}`,
     );
