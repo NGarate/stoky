@@ -116,6 +116,12 @@ bun run verify:ci
 This runs the fast gate plus `bun run test:integration` (which brings up its own
 database and cache) and `bun run build`.
 
+In CI the unit, component and integration suites are three jobs, each on its
+own runner (`scripts/ci-in-image.sh test <suite>`). When one fails, `gh run view
+<id>` lists its first ten failing tests as annotations, with file, line and
+message, and the job's summary on the run page has every one
+(`scripts/junit-summary.ts`); read the log only for what they do not say.
+
 ### 3. Browser suite
 
 Before a push, whole (see "When to run what"):
@@ -211,8 +217,10 @@ React Doctor's flags (no telemetry, **no supply-chain upload to Socket.dev**,
 errors only) live once, in `check:react`; every scope calls it and only adds
 the scope.
 
-**On a pull request, CI runs `changed`** against the PR's base inside the
-development image, before the whole-project `quality` step, which still runs.
+**CI does not run them.** A pull request's run used to start with `changed`
+against its base, in the development image; it gated nothing the
+whole-project `quality` step does not, and cost 37s of the run. Its answer is
+worth having before the push, so run `check:changed` then.
 
 **Before every commit, if you want it:** `bash scripts/install-hooks.sh`
 installs a git pre-commit hook that runs `check:staged`; `--uninstall` removes

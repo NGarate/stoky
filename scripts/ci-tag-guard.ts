@@ -28,7 +28,9 @@
 /** The jobs of ci.yml that test a commit, by name. */
 export const TEST_JOBS = [
   "Lint, types, contrast",
-  "Unit, component, integration",
+  "Unit tests",
+  "Component tests",
+  "Integration tests",
   "End-to-end",
 ];
 

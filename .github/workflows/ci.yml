@@ -82,11 +82,11 @@ jobs:
       # it — and a credential nothing needs is only ever available to an
       # attacker in a compromised dependency.
       #
-      # Full history, so a pull request's merge base with master is in the
-      # clone for the scoped step below. Fetching it later would need the
-      # credential just declined, which on a private repository is the
-      # "could not read Username" the `changes` job ran into. The whole
-      # history is under 8 MB.
+      # Full history, for release-assets.sh on a tag, which checks the notes'
+      # change list against the commits since the previous release's tag.
+      # Fetching it later would need the credential just declined, which on a
+      # private repository is the "could not read Username" the `changes` job
+      # ran into. The whole history is under 8 MB.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -156,33 +156,55 @@ jobs:
       #
       # The image is built here rather than pulled: `container:` needs a
       # registry, which needs `packages: write` and a job ordering, and neither
-      # buys anything a build does not. The layers that matter cache; only
-      # `COPY . .` and `prisma generate` re-run per commit.
+      # buys anything a build does not. Each job builds it from nothing, in
+      # about 35s, and that is the fast way: nothing on a fresh runner caches
+      # it. A buildx build that read its layers from the Actions cache and
+      # loaded the image into the daemon took 47s, every layer a cache hit,
+      # plus 9s to set buildx up (probe runs 44740211459, 44740883447): 30s
+      # fetching the cached layers and 13s handing the image to the daemon,
+      # where `bun install` from the network costs 5.
       #
       # `scripts/ci-in-image.sh` is the same script a developer runs, and
       # `check-ci.sh` above shellchecks it.
-      # A pull request's own changes first: oxlint over the files it touched
-      # and React Doctor reporting only issues it introduced, so the first red
-      # line is about this change rather than buried in a whole-project scan.
-      # Feedback, not the gate — a change can break a file it did not touch —
-      # so the full step below still runs. Its image build is a cache hit.
-      - name: Lint the pull request's changes — in the image
-        if: github.event_name == 'pull_request'
-        env:
-          CHANGED_BASE: ${{ github.event.pull_request.base.sha }}
-        run: bash scripts/ci-in-image.sh changed
-
+      #
+      # The whole project only. A pull request used to lint its own changes
+      # first (`ci-in-image.sh changed`, check-scope.sh), as feedback: it gated
+      # nothing this step does not, and cost 37s of a pull request's run in
+      # 44734419906, React Doctor 33 of them. It stays a local command, which
+      # is where that early answer is worth having: before the push.
+      #
       # Not on a tag: the guard above found the run in which this passed.
       - name: Lint, types, contrast — in the image
         if: github.ref_type != 'tag'
         run: bash scripts/ci-in-image.sh quality
 
   # ----------------------------------------------------------------- tests --
+  # One job per suite, each on its own runner. In one job they ran one after
+  # another, 62s, 19s and 40s in run 44734419906 after a 36s image build, and
+  # that job was the slowest a pull request waited for. Separate runners
+  # rather than concurrency inside one job: this 4-vCPU runner has starved
+  # tests before (Argon2 sign-ins behind background OCR, ISSUES TEST-12), and
+  # three suites at once would bring that back. Each leg pays the image build
+  # and the service start again, on a runner of its own.
+  #
+  # `fail-fast: false`, so a failing suite does not cancel the other two and
+  # one run names every suite that fails. The names are what
+  # scripts/ci-tag-guard.ts asks a run for (TEST_JOBS), and image-publish
+  # needs every leg of `test`.
   test:
-    name: Unit, component, integration
+    name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
-    # Measured at 52s for all three suites. Ten is the shared budget, not an
-    # estimate of this job.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: unit
+            name: Unit tests
+          - suite: components
+            name: Component tests
+          - suite: integration
+            name: Integration tests
+    # Ten is the shared budget, not an estimate of these jobs.
     timeout-minutes: 10
     # Service containers rather than docker compose inside the runner: the
     # runner owns health and teardown, and a hung compose cannot wedge the job.
@@ -214,12 +236,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The three suites inside the development image, for the reason the
-      # quality job states. This is the job where it matters most: these
+      # The suite inside the development image, for the reason the quality
+      # job states. This is the job where it matters most: these
       # suites import the generated Prisma client, decode images through
       # `Bun.Image` and load the native modules the deployed process loads.
       #
-      # Migrations run inside it too, against the empty service database.
+      # Migrations run inside it too, before the integration suite, against
+      # the empty service database. The other two read no database; their
+      # services start anyway, which a leg off the critical path can afford.
       # Applying them to an empty database is itself a test: a migration that
       # only works on an already-prepared one fails on somebody's first
       # install, which is what happened with pg_trgm.
@@ -232,9 +256,31 @@ jobs:
       #
       # Not on a tag: its commit already passed this, or quality's guard
       # refuses the tag.
-      - name: Unit, component, integration — in the image
+      #
+      # TEST_REPORTS: the suite also writes a JUnit report there, outside the
+      # checkout, for the step below.
+      - name: Tests — in the image
         if: github.ref_type != 'tag'
-        run: bash scripts/ci-in-image.sh test
+        env:
+          SUITE: ${{ matrix.suite }}
+          TEST_REPORTS: ${{ runner.temp }}/test-reports
+        run: bash scripts/ci-in-image.sh test "$SUITE"
+
+      # Only when the job failed: the failing tests' names, files, lines and
+      # messages go to the job's summary, and the first ten become error
+      # annotations, which `gh run view <id>` prints. What failed, without
+      # reading thousands of passing lines. Bun is downloaded, never restored
+      # from the cache, as in every job here (see e2e).
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        if: failure()
+        with:
+          bun-version-file: .bun-version
+          no-cache: true
+      - name: Name the failing tests
+        if: failure()
+        env:
+          TEST_REPORTS: ${{ runner.temp }}/test-reports
+        run: bun scripts/junit-summary.ts "$TEST_REPORTS"
 
   # ------------------------------------------------------------------- e2e --
   e2e:
@@ -570,13 +616,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # `cleanup: false`: removing the builder at the end of the job deletes
+      # its state from a runner that is thrown away a moment later. It took
+      # 3–25s, 11 on average over eight runs, and this is the last job a pull
+      # request waits for.
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          cleanup: false
 
       # Built and loaded locally first so it is scanned before anyone can pull
       # it. Publishing an image and scanning it afterwards is the wrong order.
       # cache-to here is what makes image-publish cheap on master: it rebuilds
       # this same commit from these layers. A tag's image-publish does not read
       # them — see there.
+      #
+      # Not on a pull request. Its cache is scoped to the pull request's ref,
+      # so only a later run of the same pull request could read it, and the
+      # job that reuses these layers, image-publish, never runs on one. The
+      # export was the larger half of this job on a pull request: 122s of its
+      # 252s in run 44734419906, against a 71s build. cache-from stays, and
+      # reads master's layers.
       #
       # Except the production stage, which is rebuilt every time: its
       # `apk upgrade` is the only thing that fetches Alpine's fixes, and from
@@ -591,7 +650,7 @@ jobs:
           load: true
           tags: stoky:scan
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: ${{ github.event_name != 'pull_request' && 'type=gha,mode=max' || '' }}
           no-cache-filters: production
 
       # The SARIF pair below is reporting, not enforcement — the gate that

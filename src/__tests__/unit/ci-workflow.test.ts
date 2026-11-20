@@ -34,6 +34,7 @@ const workflow = Bun.YAML.parse(
       name?: unknown;
       needs?: unknown;
       if?: unknown;
+      strategy?: { matrix?: { include?: Array<Record<string, string>> } };
       "timeout-minutes"?: unknown;
       permissions?: Record<string, unknown>;
       steps?: Array<{
@@ -374,6 +375,27 @@ describe("the CI workflow's release path restores no cache", () => {
   it("keeps the layer cache for master's image", () => {
     expect(input(push(), "cache-from", master)).toBe("type=gha");
     expect(input(push(), "no-cache", master)).not.toBe("true");
+  });
+
+  // A pull request's cache is readable only by later runs of the same pull
+  // request, and image-publish, which rebuilds from these layers, never runs
+  // on one: the export was 122s of image-build's 252s on a pull request.
+  it("exports image-build's layer cache on every run but a pull request's", () => {
+    const scan = job("image-build").steps?.find(
+      (s) => s.name === "Build for scanning",
+    );
+    if (!scan) throw new Error("image-build has no `Build for scanning` step");
+    for (const [name, context] of triggers) {
+      const pullRequest = context["github.event_name"] === "pull_request";
+      expect([name, input(scan, "cache-to", context)]).toEqual([
+        name,
+        pullRequest ? "" : "type=gha,mode=max",
+      ]);
+      expect([name, input(scan, "cache-from", context)]).toEqual([
+        name,
+        "type=gha",
+      ]);
+    }
   });
 
   // From the cache `apk upgrade` never runs again while the base digest
@@ -1282,7 +1304,7 @@ describe("a tag's run refuses a hand-made tag and repeats no test", () => {
   /** Each test job, and the commands that are its tests. */
   const tests: Record<string, string[]> = {
     quality: ["bash scripts/ci-in-image.sh quality"],
-    test: ["bash scripts/ci-in-image.sh test"],
+    test: ['bash scripts/ci-in-image.sh test "$SUITE"'],
     e2e: [
       "bun install --frozen-lockfile",
       "bun run db:generate",
@@ -1336,8 +1358,58 @@ describe("a tag's run refuses a hand-made tag and repeats no test", () => {
     expect(bun).toBeLessThan(steps.findIndex((step) => step.run === GUARD));
   });
 
+  /** A job's names as GitHub lists them: one per leg of its matrix. */
+  const names = (id: string) =>
+    (job(id).strategy?.matrix?.include ?? [{}]).map((leg) =>
+      interpolate(
+        job(id).name,
+        Object.fromEntries(
+          Object.entries(leg).map(([key, value]) => [`matrix.${key}`, value]),
+        ),
+      ),
+    );
+
   it("guards the jobs the workflow has, by name", () => {
-    expect(Object.keys(tests).map((id) => job(id).name)).toEqual(TEST_JOBS);
+    expect(Object.keys(tests).flatMap(names)).toEqual(TEST_JOBS);
+  });
+
+  // A leg dropped from the matrix would drop its suite from CI, and the run
+  // would still be green.
+  it("runs every suite of `ci-in-image.sh test`, one per leg", () => {
+    const script = readFileSync(join(root, "scripts/ci-in-image.sh"), "utf8");
+    const block = script.match(/^ {2}test\)\n([\s\S]*?)^ {4};;$/m)?.[1];
+    const parts = [...(block ?? "").matchAll(/^ {6}(\w+)\) COMMANDS=/gm)].map(
+      (match) => match[1],
+    );
+    expect(parts.length).toBeGreaterThan(0);
+    const legs = (job("test").strategy?.matrix?.include ?? []).map(
+      (leg) => leg.suite,
+    );
+    expect(legs.toSorted()).toEqual(parts.toSorted());
+
+    // The integration leg still migrates the empty database, and compares the
+    // schema with what the migrations built, before its suite.
+    const migrate = block?.match(/^ {4}MIGRATE='([^']*)'$/m)?.[1] ?? "";
+    expect(migrate).toMatch(
+      /^bunx --bun prisma migrate deploy \\\n\s+&& bunx --bun prisma migrate diff .*--exit-code$/,
+    );
+    expect(block).toMatch(
+      /^ {6}integration\) COMMANDS="\$MIGRATE && \$\(suite integration test:integration:only\)" ;;$/m,
+    );
+  });
+
+  it("refuses a suite ci-in-image.sh does not know, before building anything", () => {
+    for (const args of [["test", "e2e"], ["quality", "unit"], ["unit"]]) {
+      const result = Bun.spawnSync(
+        ["bash", "scripts/ci-in-image.sh", ...args],
+        {
+          cwd: root,
+          env: { PATH: process.env.PATH },
+        },
+      );
+      expect([args, result.exitCode]).toEqual([args, 2]);
+      expect(result.stdout.toString()).not.toContain("Building");
+    }
   });
 
   for (const [id, commands] of Object.entries(tests)) {
@@ -1360,6 +1432,11 @@ describe("a tag's run refuses a hand-made tag and repeats no test", () => {
       expect(job(id).if).toBeUndefined();
       expect(job(id).needs).toBeUndefined();
       expect(job("image-publish").needs).toContain(id);
+      // A failed leg skips image-publish only while it opts into no status
+      // function; `needs: test` waits for every leg of the matrix.
+      expect(String(job("image-publish").if)).not.toMatch(
+        /always\(|failure\(|cancelled\(|!success\(/,
+      );
     });
   }
 
@@ -1377,7 +1454,7 @@ describe("a tag's run refuses a hand-made tag and repeats no test", () => {
     );
     expect(skipped).toEqual([
       "quality: Lint, types, contrast — in the image",
-      "test: Unit, component, integration — in the image",
+      "test: Tests — in the image",
       "e2e: bun install --frozen-lockfile",
       "e2e: bun run db:generate",
       "e2e: The image and the package must agree on Playwright",
@@ -1402,5 +1479,40 @@ describe("the CI workflow's quality job", () => {
     const script = readFileSync(join(root, "scripts/ci-in-image.sh"), "utf8");
     const quality = script.match(/^ {2}quality\)\n([\s\S]*?)^ {4};;$/m)?.[1];
     expect(quality).toContain("bun run check:unused");
+  });
+});
+
+// A failed leg names its failing tests where `gh run view` shows them, from
+// the reports its suite wrote, so the two steps must agree on where.
+describe("the CI workflow's test jobs", () => {
+  const steps = workflow.jobs?.test?.steps ?? [];
+  const suite = steps.find((step) => step.name === "Tests — in the image");
+  const summary = steps.find((step) =>
+    String(step.run).startsWith("bun scripts/junit-summary.ts"),
+  );
+
+  it("name the failing tests from the reports the suite wrote", () => {
+    expect(suite?.env?.TEST_REPORTS).toBe("${{ runner.temp }}/test-reports");
+    expect(summary?.env?.TEST_REPORTS).toBe(suite?.env?.TEST_REPORTS);
+    expect(summary?.run).toBe('bun scripts/junit-summary.ts "$TEST_REPORTS"');
+  });
+
+  it("do so only when the job has failed, with Bun downloaded first", () => {
+    expect(summary?.if).toBe("failure()");
+    const bun = steps.findIndex(
+      (step) =>
+        String(step.uses).startsWith("oven-sh/setup-bun@") &&
+        step.if === "failure()",
+    );
+    expect(bun).toBeGreaterThan(steps.indexOf(suite ?? {}));
+    expect(bun).toBeLessThan(steps.indexOf(summary ?? {}));
+  });
+
+  it("have the suite write its report where the summary reads it", () => {
+    const script = readFileSync(join(root, "scripts/ci-in-image.sh"), "utf8");
+    expect(script).toContain('--volume "$TEST_REPORTS:/reports"');
+    expect(script).toContain(
+      "${TEST_REPORTS:+ --reporter=junit --reporter-outfile=/reports/$1.xml}",
+    );
   });
 });

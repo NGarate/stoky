@@ -24,7 +24,8 @@
 #
 # Usage:
 #   scripts/ci-in-image.sh quality
-#   scripts/ci-in-image.sh test
+#   scripts/ci-in-image.sh test                # unit, components, integration
+#   scripts/ci-in-image.sh test integration    # one of them, as CI runs it
 #   CHANGED_BASE=<sha> scripts/ci-in-image.sh changed
 #
 # Environment:
@@ -32,9 +33,9 @@
 #                 is how a GitHub runner reaches its service containers through
 #                 their published ports. Locally, pass the compose network
 #                 (`stoky_default`) and address the services by name.
-#   CHANGED_BASE  For `changed`: the commit a pull request is compared with.
-#                 Its merge base with HEAD has to be in the clone, which is
-#                 why the quality job checks out the full history.
+#   CHANGED_BASE  For `changed`: the commit to compare with, such as a pull
+#                 request's base. Its merge base with HEAD has to be in the
+#                 clone. CI no longer runs `changed`; it is a local command.
 #   DATABASE_URL  Passed through. The integration suite needs it; `quality`
 #                 does not and does not read it.
 #   VALKEY_URL    As above. Locally, give it a spare database index —
@@ -42,17 +43,30 @@
 #                 counters left by an earlier run against the shared dev
 #                 cache. In CI the services are fresh per job and this does
 #                 not arise; measured both ways.
+#   TEST_REPORTS  For `test`: an absolute directory that each suite also
+#                 writes a JUnit report into, `<suite>.xml`, for
+#                 scripts/junit-summary.ts. Unset, none is written. CI sets
+#                 it outside the checkout, since the container writes as root.
 
 set -euo pipefail
 
 SUITE="${1:-}"
+PART="${2:-}"
 IMAGE_TAG="${IMAGE_TAG:-stoky-dev:ci}"
 CI_NETWORK="${CI_NETWORK:-host}"
 
+USAGE="usage: $0 {quality|test [unit|components|integration]|changed}"
 if [ "$SUITE" != "quality" ] && [ "$SUITE" != "test" ] && [ "$SUITE" != "changed" ]; then
-  echo "usage: $0 {quality|test|changed}" >&2
+  echo "$USAGE" >&2
   exit 2
 fi
+case "$SUITE:$PART" in
+  test: | test:unit | test:components | test:integration | quality: | changed:) ;;
+  *)
+    echo "$USAGE" >&2
+    exit 2
+    ;;
+esac
 if [ "$SUITE" = "changed" ] && [ -z "${CHANGED_BASE:-}" ]; then
   echo "Error: the changed suite needs CHANGED_BASE, the commit to compare with." >&2
   exit 2
@@ -74,13 +88,13 @@ case "$SUITE" in
       && bun run check:unused'
     ;;
   changed)
-    # The pull request's own changes, before the whole-project gates: a fast
-    # answer about what this change did. It proves nothing on its own — a
-    # change can break a file it did not touch — so `quality` still runs.
+    # A branch's own changes: a fast answer about what this change did, in
+    # the image. It proves nothing on its own — a change can break a file it
+    # did not touch — so `quality` is still the gate.
     # --no-pipeline-lint: this image has no Docker to run actionlint, its
-    # bundled shellcheck or zizmor from, and check-ci.sh has already linted
-    # every workflow and script on the runner. CHANGED_BASE expands inside the container, which
-    # receives it below.
+    # bundled shellcheck or zizmor from; `bash scripts/check-ci.sh` runs them
+    # outside it. CHANGED_BASE expands inside the container, which receives
+    # it below.
     COMMANDS='bash scripts/check-scope.sh changed --base "$CHANGED_BASE" --no-pipeline-lint'
     ;;
   test)
@@ -96,20 +110,39 @@ case "$SUITE" in
     # `bunx --bun prisma`, because prisma is a binary rather than a script; and
     # `bun run test:*` rather than `bun test:*`, because the bare form would
     # invoke Bun's own runner and sweep every suite at once.
-    COMMANDS='bunx --bun prisma migrate deploy \
-      && bunx --bun prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code \
-      && bun run test:unit \
-      && bun run test:components \
-      && bun run test:integration:only'
+    #
+    # One suite when PART names it: CI runs each on its own runner. Only the
+    # integration suite reads the database, so the migrations run before it.
+    MIGRATE='bunx --bun prisma migrate deploy \
+      && bunx --bun prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code'
+    # `suite NAME SCRIPT`: one suite's command. With TEST_REPORTS it also
+    # writes a JUnit report, NAME.xml; the console output stays as it is.
+    suite() {
+      echo "bun run $2${TEST_REPORTS:+ --reporter=junit --reporter-outfile=/reports/$1.xml}"
+    }
+    case "$PART" in
+      unit) COMMANDS="$(suite unit test:unit)" ;;
+      components) COMMANDS="$(suite components test:components)" ;;
+      integration) COMMANDS="$MIGRATE && $(suite integration test:integration:only)" ;;
+      *) COMMANDS="$MIGRATE && $(suite unit test:unit) && $(suite components test:components) && $(suite integration test:integration:only)" ;;
+    esac
     ;;
 esac
 
-echo "==> Running '$SUITE' inside $IMAGE_TAG (network: $CI_NETWORK)"
+REPORTS_VOLUME=()
+if [ -n "${TEST_REPORTS:-}" ]; then
+  mkdir -p "$TEST_REPORTS"
+  REPORTS_VOLUME=(--volume "$TEST_REPORTS:/reports")
+fi
+
+echo "==> Running '$SUITE${PART:+ $PART}' inside $IMAGE_TAG (network: $CI_NETWORK)"
+# The `+` form: Bash before 4.4 calls an empty array unbound under `set -u`.
 docker run --rm \
   --network "$CI_NETWORK" \
   --volume "$PWD:/app" \
   --volume /app/node_modules \
   --volume /app/src/generated \
+  ${REPORTS_VOLUME[@]+"${REPORTS_VOLUME[@]}"} \
   --env "DATABASE_URL=${DATABASE_URL:-}" \
   --env "VALKEY_URL=${VALKEY_URL:-}" \
   --env "CHANGED_BASE=${CHANGED_BASE:-}" \
