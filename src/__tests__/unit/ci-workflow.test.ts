@@ -376,6 +376,27 @@ describe("the CI workflow's release path restores no cache", () => {
     expect(input(push(), "no-cache", master)).not.toBe("true");
   });
 
+  // A pull request's cache is readable only by later runs of the same pull
+  // request, and image-publish, which rebuilds from these layers, never runs
+  // on one: the export was 122s of image-build's 252s on a pull request.
+  it("exports image-build's layer cache on every run but a pull request's", () => {
+    const scan = job("image-build").steps?.find(
+      (s) => s.name === "Build for scanning",
+    );
+    if (!scan) throw new Error("image-build has no `Build for scanning` step");
+    for (const [name, context] of triggers) {
+      const pullRequest = context["github.event_name"] === "pull_request";
+      expect([name, input(scan, "cache-to", context)]).toEqual([
+        name,
+        pullRequest ? "" : "type=gha,mode=max",
+      ]);
+      expect([name, input(scan, "cache-from", context)]).toEqual([
+        name,
+        "type=gha",
+      ]);
+    }
+  });
+
   // From the cache `apk upgrade` never runs again while the base digest
   // stands still, so the scan and `latest` kept Alpine packages with fixes
   // already published (zlib, CVE-2026-4738).
