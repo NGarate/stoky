@@ -4,9 +4,9 @@ import { guard, TEST_JOBS } from "../../../scripts/ci-tag-guard";
 
 /**
  * `scripts/ci-tag-guard.ts` is what stands between a pushed `v*` tag and a
- * release: it refuses a tag `release:tag` would not have made. A wrong yes
- * ships a release from a commit nobody prepared, so most cases below are a
- * tag that must be refused.
+ * release: it lets a tag's run skip the tests, and refuses a tag
+ * `release:tag` would not have made. A wrong yes ships a release nothing
+ * tested, so most cases below are a tag that must be refused.
  */
 
 const REPO = "owner/stoky";
@@ -111,7 +111,7 @@ describe("a pushed release tag", () => {
   const untested = { refused: "no CI run has passed the tests on its commit" };
 
   for (const [what, run] of [
-    // A commit does not vouch for itself.
+    // Its test jobs are green without having tested anything.
     [
       "another tag's run",
       { ...pullRequest, event: "push", head_branch: "v0.2.0-alpha.0" },

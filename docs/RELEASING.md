@@ -49,6 +49,13 @@ and a pull request's run or `master`'s has passed the tests on that very
 commit. Otherwise the job fails and nothing is published. A refused tag stays,
 immutable, so its version is spent: the next attempt is the next version.
 
+**The tag's run does not test the commit a second time**, for the same
+reason: the guard has found the run in which lint and types, the unit to
+integration suites and the browser suite passed on that tree, so those steps
+do not run on a tag. The dependency audit, the image's build and scan and the
+bundle's scan are not tests of the commit but of the day, an advisory can
+appear between the pull request and the tag, so they run on every tag.
+
 **The release pull request is merged with a fast-forward**, from a checkout
 of `master`: `git merge --ff-only origin/release/vVERSION` and a push of
 `master`. A squash would replace every commit the notes' change list links by
@@ -243,8 +250,9 @@ tag cannot be deleted or moved afterwards, so a release is never tagged that
 way. The ruleset admits any tag an admin pushes; the tag's run is what refuses
 one made without those checks (above).
 
-The `v*` tag runs the complete CI pipeline and validates the package/environment
-version. The image is built and scanned before publication, and `release-images`
+The `v*` tag runs the complete CI pipeline, except the tests its commit has
+already passed (above), and validates the package/environment version. The
+image is built and scanned before publication, and `release-images`
 scans the bundle's PostgreSQL and Valkey with `scripts/scan-bundle-images.sh`
 (step 4); `release-draft` needs it, so a fixable CRITICAL or HIGH in any of them
 stops the release before promotion, as one in the application does. After all gates pass

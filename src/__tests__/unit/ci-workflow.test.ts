@@ -1271,13 +1271,24 @@ describe("the PostgreSQL image workflow", () => {
 // knip is the only check that sees an unused export; it is a gate only while
 // the quality job runs it, which happens inside scripts/ci-in-image.sh.
 // A pushed `v*` tag starts a release. The quality job's guard
-// (scripts/ci-tag-guard.ts) refuses one `release:tag` would not have made. It
-// must run on every tag, in a job the publication waits for, and not be
-// something a run can step around.
-describe("a tag's run refuses a hand-made tag", () => {
+// (scripts/ci-tag-guard.ts) refuses one `release:tag` would not have made, and
+// since it has found the run that tested the tag's commit, the test steps do
+// not run again on a tag. What must not follow from that: a job that skips
+// whole (image-publish would skip with it, or need always()), a test skipped
+// on anything but a tag, a guard that can be stepped around, or a skip of
+// what only a release checks.
+describe("a tag's run refuses a hand-made tag and repeats no test", () => {
   const tag = run("push", "refs/tags/v0.2.0-alpha.0", "tag");
-  /** The jobs that test a commit. */
-  const tests = ["quality", "test", "e2e"];
+  /** Each test job, and the commands that are its tests. */
+  const tests: Record<string, string[]> = {
+    quality: ["bash scripts/ci-in-image.sh quality"],
+    test: ["bash scripts/ci-in-image.sh test"],
+    e2e: [
+      "bun install --frozen-lockfile",
+      "bun run db:generate",
+      "bunx --bun playwright test",
+    ],
+  };
   const GUARD = "bun scripts/ci-tag-guard.ts";
 
   const job = (id: string) => {
@@ -1326,13 +1337,52 @@ describe("a tag's run refuses a hand-made tag", () => {
   });
 
   it("guards the jobs the workflow has, by name", () => {
-    expect(tests.map((id) => job(id).name)).toEqual(TEST_JOBS);
+    expect(Object.keys(tests).map((id) => job(id).name)).toEqual(TEST_JOBS);
   });
 
-  it("is in a job the publication waits for, itself never skipped", () => {
-    expect(job("quality").if).toBeUndefined();
-    expect(job("quality").needs).toBeUndefined();
-    expect(job("image-publish").needs).toContain("quality");
+  for (const [id, commands] of Object.entries(tests)) {
+    it(`${id} runs its tests on everything but a tag`, () => {
+      const steps = job(id).steps ?? [];
+      for (const command of commands) {
+        const step = steps.find((candidate) => candidate.run === command);
+        expect([command, step === undefined]).toEqual([command, false]);
+        for (const [name, context] of triggers) {
+          expect([command, name, condition(step?.if, context)]).toEqual([
+            command,
+            name,
+            !onTag(context),
+          ]);
+        }
+      }
+    });
+
+    it(`${id} is never skipped as a job, so the publication still waits for it`, () => {
+      expect(job(id).if).toBeUndefined();
+      expect(job(id).needs).toBeUndefined();
+      expect(job("image-publish").needs).toContain(id);
+    });
+  }
+
+  it("skips nothing else on a tag: the audit and the scans are the release's own", () => {
+    // Every step whose condition reads the ref's type and is false on a tag.
+    const skipped = Object.entries(workflow.jobs ?? {}).flatMap(([id, found]) =>
+      (found.steps ?? [])
+        .filter(
+          (step) =>
+            typeof step.if === "string" &&
+            step.if.includes("github.ref_type") &&
+            condition(step.if, tag) === false,
+        )
+        .map((step) => `${id}: ${step.name ?? step.run}`),
+    );
+    expect(skipped).toEqual([
+      "quality: Lint, types, contrast — in the image",
+      "test: Unit, component, integration — in the image",
+      "e2e: bun install --frozen-lockfile",
+      "e2e: bun run db:generate",
+      "e2e: The image and the package must agree on Playwright",
+      "e2e: bunx --bun playwright test",
+    ]);
   });
 });
 

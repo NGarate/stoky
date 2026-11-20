@@ -114,7 +114,17 @@ jobs:
       # request's run or master's has passed the tests on that very commit
       # (scripts/ci-tag-guard.ts). image-publish needs this job, so a refused
       # tag publishes nothing; it cannot be deleted either, so its version is
-      # spent. ci-workflow.test.ts holds the step.
+      # spent.
+      #
+      # That same answer is why no test step in this job, `test` or `e2e`
+      # runs on a tag: the commit passed them in the run the guard found, on
+      # the same tree, and testing it again was ten minutes for an answer
+      # already on the commit. The steps are skipped, never the jobs: each
+      # still ends green, so image-publish's `needs` gates as before and
+      # nothing opts into always(). Only tests are skipped. The audit, the
+      # image's build and scan, the bundle's scan and everything after
+      # publication answer for the day, not the commit, and run on every tag.
+      # ci-workflow.test.ts holds all of this.
       - name: Refuse a tag release:tag would not have made
         if: github.ref_type == 'tag'
         env:
@@ -161,7 +171,9 @@ jobs:
           CHANGED_BASE: ${{ github.event.pull_request.base.sha }}
         run: bash scripts/ci-in-image.sh changed
 
+      # Not on a tag: the guard above found the run in which this passed.
       - name: Lint, types, contrast — in the image
+        if: github.ref_type != 'tag'
         run: bash scripts/ci-in-image.sh quality
 
   # ----------------------------------------------------------------- tests --
@@ -216,7 +228,11 @@ jobs:
       # are fresh per job, which is what keeps the rate-limit test honest —
       # run locally against a shared Valkey it fails on somebody else's
       # leftover counters, and that is the environment rather than the code.
+      #
+      # Not on a tag: its commit already passed this, or quality's guard
+      # refuses the tag.
       - name: Unit, component, integration — in the image
+        if: github.ref_type != 'tag'
         run: bash scripts/ci-in-image.sh test
 
   # ------------------------------------------------------------------- e2e --
@@ -362,12 +378,17 @@ jobs:
       # (argon2 through its `prebuilds/` directory, sharp through
       # `@img/sharp-linux-x64`), so nothing here compiles and the image needs
       # no build toolchain.
+      #
+      # Nothing from here down runs on a tag: its commit already passed this
+      # suite, or quality's guard refuses the tag.
       - run: bun install --frozen-lockfile
+        if: github.ref_type != 'tag'
       # The build inside Playwright's webServer needs the generated client.
       # Migrate and seed are gone from here: the suite's own `seed` project
       # does both against its database, so a second copy in the workflow was a
       # second thing to keep in step.
       - run: bun run db:generate
+        if: github.ref_type != 'tag'
 
       # The browsers come from the image, so the one thing that can go wrong is
       # the image and the driver disagreeing about which browsers those are.
@@ -375,6 +396,7 @@ jobs:
       # /ms-playwright/chromium-####" in the middle of a test run, which reads
       # like a broken suite. Said plainly here instead, before anything runs.
       - name: The image and the package must agree on Playwright
+        if: github.ref_type != 'tag'
         run: |
           PKG="$(bun -p "require('./node_modules/@playwright/test/package.json').version")"
           if [ "$PKG" != "$PLAYWRIGHT_IMAGE_VERSION" ]; then
@@ -387,6 +409,7 @@ jobs:
       # do so in playwright.config.ts, so CI and a local run execute the same
       # matrix. A flag would let the two drift.
       - run: bunx --bun playwright test
+        if: github.ref_type != 'tag'
         env:
           PLAYWRIGHT_PORT: "3000"
 

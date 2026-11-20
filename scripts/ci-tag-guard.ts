@@ -11,8 +11,12 @@
  *   - that commit is on master;
  *   - a run of ci.yml on that very commit finished green with every job in
  *     TEST_JOBS passed: a pull request's from a branch of this repository, or
- *     a push to master. A tag's run never counts: a commit does not vouch
- *     for itself.
+ *     a push to master. A tag's run never counts, since its own test jobs are
+ *     green without having tested anything (below).
+ *
+ * The last one is also why a tag's run does not test the commit again: the
+ * test steps of those jobs do not run on a tag (ci.yml), because this has
+ * found the run in which they passed on the same tree.
  *
  * Any other answer refuses, an API error included: re-run the job. A refused
  * tag cannot be deleted or moved (the tag rulesets), so its version is spent.
