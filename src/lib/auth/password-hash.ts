@@ -39,9 +39,46 @@ const PASSWORD_HASH_OPTIONS = {
 export const DUMMY_PASSWORD_HASH =
   "$argon2id$v=19$m=65536,t=3,p=4$VZSmoJF5HpXm3vHhXficPw$b/zA/ilF3dqpyfmO2KWJjiyH4WLE0yQQRj8LZxrAsvg";
 
-/** Hashes a password for storage, with {@link PASSWORD_HASH_OPTIONS}. */
+/** What {@link hashPassword} uses, unless a test has swapped it. */
+let hashOptions: argon2.Options = PASSWORD_HASH_OPTIONS;
+
+/**
+ * Hashes at `cost` instead until the returned function is called; with no
+ * `cost`, at {@link PASSWORD_HASH_OPTIONS}. Argon2id either way.
+ *
+ * For tests, and held to them twice: `password-hash.test.ts` fails if any file
+ * outside `src/__tests__/` names it, and it throws in a production build,
+ * where Next inlines `process.env.NODE_ENV`, so no environment reopens it.
+ * The accounts the application hashes itself —
+ * registration, an admin adding a member or setting a password, a password
+ * change, and the hash Better Auth spends on an address with no account —
+ * cost the integration suite six seconds at the production cost, which
+ * nothing there asserts. A test that does assert it calls this with no
+ * `cost`. No environment variable or setting reaches it, so an operator
+ * cannot lower the cost; and since a stored hash names the cost it was made
+ * at, {@link verifyPassword} checks either kind unchanged.
+ */
+export function replacePasswordHashCost(
+  cost?: Pick<argon2.Options, "memoryCost" | "timeCost" | "parallelism">,
+): () => void {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("replacePasswordHashCost is for tests only");
+  }
+  const previous = hashOptions;
+  hashOptions = cost
+    ? { ...cost, type: argon2.argon2id }
+    : PASSWORD_HASH_OPTIONS;
+  return () => {
+    hashOptions = previous;
+  };
+}
+
+/**
+ * Hashes a password for storage, at {@link PASSWORD_HASH_OPTIONS} unless a test
+ * has replaced the cost.
+ */
 export function hashPassword(password: string): Promise<string> {
-  return argon2.hash(password, PASSWORD_HASH_OPTIONS);
+  return argon2.hash(password, hashOptions);
 }
 
 /**
