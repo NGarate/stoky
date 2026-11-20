@@ -2,15 +2,11 @@
  * The start of a release: the preparation commit, on a branch, as a pull
  * request for the owner to review.
  *
- * Run: bun scripts/release-prepare.ts <bump | vX.Y.Z[-alpha.N]> [--refresh-images] [--no-push]
+ * Run: bun scripts/release-prepare.ts <bump | vX.Y.Z[-alpha.N]> [--no-push]
  *
  *   bump              what scripts/release-version.ts takes: prerelease,
  *                     prepatch, preminor, premajor, patch, minor, major,
  *                     release, or an explicit tag
- *   --refresh-images  first move deploy/docker-compose.yml's PostgreSQL
- *                     and Valkey to their newest clean builds
- *                     (scripts/release-refresh-images.ts), in a commit of
- *                     their own
  *   --no-push         stop before pushing: the branch stays local
  *
  * It does what docs/RELEASING.md's "Prepare a reviewable version" did by hand
@@ -18,33 +14,37 @@
  * command the owner runs and every step after it is a review:
  *
  *   1. Refuses, changing nothing, unless: the checkout is on a clean master
- *      equal to origin/master; the newest CI push run for that commit on
- *      master has not failed (one still running is not waited for: the pull
- *      request's own run is the gate); docs/releases/NEXT.md exists with every heading in
+ *      equal to origin/master; the CI push run for that commit on master
+ *      ended green (one still going is waited for, up to CI_WAIT_MINUTES);
+ *      docs/releases/NEXT.md exists with every heading in
  *      REQUIRED_HEADINGS; the guide
  *      describes the current release only (no "the release after"); and the
  *      tag the bump names is free (release-version.ts's refusals).
  *   2. Creates release/<tag> from master.
- *   3. With --refresh-images, runs the refresh and commits what it wrote as
- *      `build(docker): refresh the bundle's service images for <tag>`. A red
- *      candidate (exit 1) or an error (exit 2) stops here.
- *   4. Commits `chore: prepare <tag>`: the version in package.json,
+ *   3. Commits `chore: prepare <tag>`: the version in package.json,
  *      deploy/example.env (STOKY_VERSION) and deploy/install.sh
  *      (DEFAULT_VERSION); the previous tag replaced by the new one in
  *      README.md and docs/INSTALL.md, the README's link to its notes
  *      included; NEXT.md renamed to docs/releases/<tag>.md with every
  *      `vNEXT` replaced by the tag and its `## Qué ha cambiado` filled by
- *      `bun scripts/release-notes.ts`. The list
- *      is generated after step 3, so the refresh commit is in it.
- *   5. Runs scripts/release-assets.sh with a placeholder digest, the same
+ *      `bun scripts/release-notes.ts`.
+ *   4. Runs scripts/release-assets.sh with a placeholder digest, the same
  *      check the tag's CI run starts with.
- *   6. Pushes release/<tag> and opens its pull request, with the notes as
+ *   5. Pushes release/<tag> and opens its pull request, with the notes as
  *      its description.
+ *
+ * That commit is the whole branch, and it changes no dependency: not the
+ * lockfile, not a line of package.json but its version, not the bundle's
+ * service images. Those land on master as commits of their own before a
+ * release is prepared (`bun run release:refresh-images` for the images), so
+ * what a release's pull request adds to a green master is its number and its
+ * notes. Until 2026-11-20 a --refresh-images flag moved the images on the
+ * release branch.
  *
  * A failure after step 2 leaves the branch as it is, for inspection; the
  * message says how to discard it. Merge the pull request with a fast-forward
  * (`git merge --ff-only`, then push master), never GitHub's squash: the change
- * list links each commit by SHA, the refresh commit among them, and
+ * list links each commit by SHA, and
  * release-assets.sh checks that list against the history on the tag. Then
  * `bun scripts/release-tag.ts`.
  *
@@ -83,6 +83,10 @@ export const REQUIRED_HEADINGS = [
   "## Qué ha cambiado",
   "## English",
 ];
+/** How long master's CI run is waited for: twice what a run takes. */
+export const CI_WAIT_MINUTES = 30;
+const CI_POLL_MS = 15_000;
+
 /** What NEXT.md writes where the tag goes: master names no release that does not exist yet. */
 const TAG_PLACEHOLDER = /\bvNEXT\b/g;
 const CHANGES_HEADING = "## Qué ha cambiado";
@@ -90,7 +94,7 @@ const CHANGES_HEADING = "## Qué ha cambiado";
 const RELEASE_AFTER = /the release after/i;
 const ZERO_DIGEST = `sha256:${"0".repeat(64)}`;
 const USAGE =
-  "usage: bun scripts/release-prepare.ts <bump|vX.Y.Z[-alpha.N]> [--refresh-images] [--no-push]";
+  "usage: bun scripts/release-prepare.ts <bump|vX.Y.Z[-alpha.N]> [--no-push]";
 
 export interface PrepareDeps {
   /** The repository's root. */
@@ -99,8 +103,7 @@ export interface PrepareDeps {
   remoteTagExists: (tag: string) => boolean;
   /** The newest CI push run of `sha` on master, or null when there is none. */
   ciRun: (sha: string) => github.CiRun | null;
-  /** scripts/release-refresh-images.ts's exit code: 0 done, 1 a red candidate, 2 an error. */
-  refreshImages: () => number;
+  sleep: (ms: number) => void;
   push: (refspec: string) => void;
   /** Opens the pull request; returns its URL. */
   createPullRequest: (options: {
@@ -120,14 +123,7 @@ export function defaultDeps(cwd: string): PrepareDeps {
     remoteTagExists: (tag) => originTagExists(cwd, tag),
     ciRun: (sha) =>
       github.newestCiRun(cwd, { branch: "master", event: "push", sha }),
-    refreshImages: () => {
-      const script = join(cwd, "scripts/release-refresh-images.ts");
-      if (!existsSync(script)) {
-        console.error(`Error: ${script} does not exist in this checkout.`);
-        return 2;
-      }
-      return spawnSync("bun", [script], { cwd, stdio: "inherit" }).status ?? 2;
-    },
+    sleep: (ms) => Bun.sleepSync(ms),
     push: (refspec) => github.pushOverHttps(cwd, refspec),
     createPullRequest: (options) => github.createPullRequest(cwd, options),
     out: (line) => console.log(line),
@@ -260,22 +256,17 @@ export function missingHeadings(markdown: string): string[] {
 
 interface Options {
   request: string;
-  refreshImages: boolean;
   push: boolean;
 }
 
 function parseArgs(argv: string[]): Options | null {
   const positional = argv.filter((arg) => !arg.startsWith("--"));
   const flags = argv.filter((arg) => arg.startsWith("--"));
-  if (
-    positional.length !== 1 ||
-    flags.some((flag) => flag !== "--refresh-images" && flag !== "--no-push")
-  ) {
+  if (positional.length !== 1 || flags.some((flag) => flag !== "--no-push")) {
     return null;
   }
   return {
     request: positional[0],
-    refreshImages: flags.includes("--refresh-images"),
     push: !flags.includes("--no-push"),
   };
 }
@@ -310,12 +301,26 @@ function checkPreconditions(options: Options, deps: PrepareDeps) {
         "A release is cut from what has landed: push master, or pull it, until they are the same.",
     );
   }
-  // Only a run that already failed stops a release here. One still going, or
-  // not listed yet, does not: the preparation commit is tested by its own
-  // pull request's run, and waiting for master's first tested nothing the
-  // release would not test again.
-  const run = deps.ciRun(local);
-  if (run?.status === "completed" && run.conclusion !== "success") {
+  // A release is cut from a green master. The pull request's run would catch
+  // a red one too, but only after a preparation that then has to be thrown
+  // away and made again, so a run still going (or not listed yet, seconds
+  // after the push) is waited for here instead.
+  let run = deps.ciRun(local);
+  for (let waited = 0; run?.status !== "completed"; waited += CI_POLL_MS) {
+    if (waited >= CI_WAIT_MINUTES * 60_000) {
+      throw new ReleaseError(
+        `CI for ${local.slice(0, 7)} has not finished after ${CI_WAIT_MINUTES} minutes. ${run?.url ?? "No run is listed for it."}`,
+      );
+    }
+    if (waited === 0) {
+      deps.out(
+        `Waiting for CI on ${local.slice(0, 7)}: ${run?.url ?? "no run listed yet"}`,
+      );
+    }
+    deps.sleep(CI_POLL_MS);
+    run = deps.ciRun(local);
+  }
+  if (run.conclusion !== "success") {
     throw new ReleaseError(
       `CI for ${local.slice(0, 7)} ended ${run.conclusion}: master must be green first. ${run.url}`,
     );
@@ -401,40 +406,6 @@ export function prepare(argv: string[], deps: PrepareDeps): number {
 
   git(cwd, ["switch", "--quiet", "--create", branchName]);
   deps.out(`On ${branchName}, from master ${checked.base.slice(0, 7)}.`);
-
-  if (options.refreshImages) {
-    const code = deps.refreshImages();
-    if (code === 1)
-      return leave(
-        "a candidate service image is red under the release scan; nothing was refreshed.",
-      );
-    if (code !== 0)
-      return leave(`scripts/release-refresh-images.ts failed (exit ${code}).`);
-    const changed = git(cwd, ["status", "--porcelain"]).trimEnd();
-    if (changed === " M deploy/docker-compose.yml") {
-      git(cwd, ["add", "deploy/docker-compose.yml"]);
-      const subject = `build(docker): refresh the bundle's service images for ${tag}`;
-      git(cwd, [
-        "commit",
-        "--quiet",
-        "-m",
-        subject,
-        "-m",
-        "Each service image moves to the newest build of its major that the release " +
-          "scan passes (scripts/release-refresh-images.ts), so the release does not ship " +
-          "builds older than upstream's. Written by scripts/release-prepare.ts.",
-      ]);
-      deps.out(subject);
-    } else if (changed) {
-      return leave(
-        `the image refresh changed more than deploy/docker-compose.yml:\n${changed}`,
-      );
-    } else {
-      deps.out(
-        "The service images are already the newest clean builds; nothing to commit.",
-      );
-    }
-  }
 
   let list: string;
   try {

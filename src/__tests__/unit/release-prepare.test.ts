@@ -13,6 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  CI_WAIT_MINUTES,
   missingHeadings,
   NEXT_NOTES,
   type PrepareDeps,
@@ -150,29 +151,27 @@ function repository() {
   const calls = {
     pushed: [] as string[],
     pulls: [] as Parameters<PrepareDeps["createPullRequest"]>[0][],
-    refreshed: 0,
+    slept: 0,
   };
   const out: string[] = [];
   const err: string[] = [];
-  const ci: { run: CiRun | null } = {
+  /** master's run; `next` is each poll's answer, `run` unless a test replaces it. */
+  const ci: { run: CiRun | null; next: () => CiRun | null } = {
     run: {
       databaseId: 1,
       status: "completed",
       conclusion: "success",
       url: "https://ci.example/run/1",
     },
+    next: () => ci.run,
   };
   const remoteTags: string[] = [];
-  let refresh = () => 0;
   const deps = (): PrepareDeps => ({
     cwd: dir,
     fetch: () => git("fetch", "-q", "origin"),
     remoteTagExists: (name) => remoteTags.includes(name),
-    ciRun: () => ci.run,
-    refreshImages: () => {
-      calls.refreshed++;
-      return refresh();
-    },
+    ciRun: () => ci.next(),
+    sleep: () => calls.slept++,
     push: (refspec) => {
       calls.pushed.push(refspec);
       git("push", "-q", "origin", refspec);
@@ -222,7 +221,6 @@ function repository() {
     err,
     ci,
     remoteTags,
-    setRefresh: (fn: () => number) => (refresh = fn),
   };
 }
 
@@ -316,7 +314,6 @@ describe("preparing a release", () => {
       "https://github.com/example/stoky/pull/42",
     );
     expect(repo.out.join("\n")).toContain("release-tag.ts");
-    expect(repo.calls.refreshed).toBe(0);
   });
 
   it("stops before pushing with --no-push", () => {
@@ -356,80 +353,6 @@ describe("preparing a release", () => {
     expect(said).toContain("v0.0.9");
     expect(said).toContain(`git branch -D ${branch}`);
     expect(repo.git("rev-parse", "--abbrev-ref", "HEAD").trim()).toBe(branch);
-    expect(repo.calls.pushed).toEqual([]);
-  });
-});
-
-describe("refreshing the service images first", () => {
-  const refreshed = (dir: string) => () => {
-    const compose = join(dir, "deploy/docker-compose.yml");
-    writeFileSync(
-      compose,
-      readFileSync(compose, "utf8").replace(
-        "postgres:16.14-alpine",
-        "postgres:16.15-alpine",
-      ),
-    );
-    return 0;
-  };
-
-  it("commits the refresh alone, before the preparation, and lists it", () => {
-    const repo = repository();
-    repo.setRefresh(refreshed(repo.dir));
-    expect(repo.run("prerelease", "--refresh-images", "--no-push")).toBe(0);
-    expect(
-      repo.git("log", "--format=%s", "master..HEAD").trim().split("\n"),
-    ).toEqual([
-      `chore: prepare ${tag}`,
-      `build(docker): refresh the bundle's service images for ${tag}`,
-    ]);
-    expect(repo.git("show", "--name-only", "--format=", "HEAD~1").trim()).toBe(
-      "deploy/docker-compose.yml",
-    );
-    const notes = read(repo.dir, `docs/releases/${tag}.md`);
-    expect(notes).toContain("### 📦 Dependencias e imágenes");
-    expect(notes).toContain(
-      `* build(docker): refresh the bundle's service images for ${tag}`,
-    );
-  });
-
-  it("commits nothing for images already current", () => {
-    const repo = repository();
-    expect(repo.run("prerelease", "--refresh-images", "--no-push")).toBe(0);
-    expect(repo.calls.refreshed).toBe(1);
-    expect(repo.git("log", "--format=%s", "master..HEAD").trim()).toBe(
-      `chore: prepare ${tag}`,
-    );
-  });
-
-  for (const [label, code, message] of [
-    ["a red candidate", 1, "red under the release scan"],
-    ["an error", 2, "failed (exit 2)"],
-  ] as const) {
-    it(`stops on ${label}, leaving the branch with nothing on it`, () => {
-      const repo = repository();
-      repo.setRefresh(() => code);
-      const master = repo.git("rev-parse", "master").trim();
-      expect(repo.run("prerelease", "--refresh-images")).toBe(1);
-      expect(repo.err.join("\n")).toContain(message);
-      expect(repo.err.join("\n")).toContain("left as it is");
-      expect(repo.git("rev-parse", "--abbrev-ref", "HEAD").trim()).toBe(branch);
-      expect(repo.git("rev-parse", "HEAD").trim()).toBe(master);
-      expect(repo.git("status", "--porcelain")).toBe("");
-      expect(repo.calls.pushed).toEqual([]);
-    });
-  }
-
-  it("stops when the refresh touched anything but the Compose file", () => {
-    const repo = repository();
-    repo.setRefresh(() => {
-      writeFileSync(join(repo.dir, "deploy/example.env"), "changed\n");
-      return 0;
-    });
-    expect(repo.run("prerelease", "--refresh-images")).toBe(1);
-    expect(repo.err.join("\n")).toContain(
-      "more than deploy/docker-compose.yml",
-    );
     expect(repo.calls.pushed).toEqual([]);
   });
 });
@@ -570,29 +493,76 @@ describe("refusing to start", () => {
       expect(repo.err.join("\n")).toMatch(/^Refused, nothing changed: /);
       expect(repo.err.join("\n")).toMatch(message);
       expect(repo.snapshot()).toEqual(before);
-      expect(repo.calls).toEqual({ pushed: [], pulls: [], refreshed: 0 });
+      expect(repo.calls).toEqual({
+        pushed: [],
+        pulls: [],
+        slept: 0,
+      });
     });
   }
 
-  // Waiting for master's run tested nothing the release does not test again:
-  // the preparation commit has its pull request's run, and the tag its own.
-  for (const [label, run] of [
-    ["has no CI run yet", null],
+  const going: CiRun = {
+    databaseId: 2,
+    status: "in_progress",
+    conclusion: "",
+    url: "https://ci.example/run/2",
+  };
+  /** master's run as each poll finds it, the last answer repeating. */
+  const polls = (
+    repo: ReturnType<typeof repository>,
+    answers: (CiRun | null)[],
+  ) => {
+    let asked = 0;
+    repo.ci.next = () => answers[Math.min(asked++, answers.length - 1)];
+  };
+
+  it("waits for a run still going, or not listed yet, and prepares once it is green", () => {
+    const repo = repository();
+    polls(repo, [null, going, going, repo.ci.run]);
+    expect(repo.run("prerelease")).toBe(0);
+    expect(repo.calls.slept).toBe(3);
+    expect(
+      repo.out.filter((line) => line.startsWith("Waiting for CI on ")),
+    ).toHaveLength(1);
+    expect(repo.calls.pushed).toEqual([`${branch}:refs/heads/${branch}`]);
+  });
+
+  it("does not wait for a run already green", () => {
+    const repo = repository();
+    expect(repo.run("prerelease")).toBe(0);
+    expect(repo.calls.slept).toBe(0);
+  });
+
+  it("refuses, changing nothing, when the run it waited for ends red", () => {
+    const repo = repository();
+    const before = repo.snapshot();
+    polls(repo, [
+      going,
+      { ...going, status: "completed", conclusion: "failure" },
+    ]);
+    expect(repo.run("prerelease")).toBe(1);
+    expect(repo.calls.slept).toBe(1);
+    expect(repo.err.join("\n")).toMatch(/ended failure.*run\/2/);
+    expect(repo.snapshot()).toEqual(before);
+  });
+
+  for (const [label, run, message] of [
+    ["never finishes", going, /has not finished after 30 minutes.*run\/2/],
     [
-      "is still in CI",
-      {
-        databaseId: 2,
-        status: "in_progress",
-        conclusion: "",
-        url: "https://ci.example/run/2",
-      },
+      "is never listed",
+      null,
+      /has not finished after 30 minutes. No run is listed/,
     ],
   ] as const) {
-    it(`prepares from a master that ${label}, without waiting`, () => {
+    it(`gives up, changing nothing, on a run that ${label}`, () => {
       const repo = repository();
-      repo.ci.run = run;
-      expect(repo.run("prerelease")).toBe(0);
-      expect(repo.calls.pushed).toEqual([`${branch}:refs/heads/${branch}`]);
+      const before = repo.snapshot();
+      polls(repo, [run]);
+      expect(repo.run("prerelease")).toBe(1);
+      // CI_WAIT_MINUTES of 15-second polls.
+      expect(repo.calls.slept).toBe((CI_WAIT_MINUTES * 60) / 15);
+      expect(repo.err.join("\n")).toMatch(message);
+      expect(repo.snapshot()).toEqual(before);
     });
   }
 
@@ -601,6 +571,8 @@ describe("refusing to start", () => {
     const before = repo.snapshot();
     expect(repo.run()).toBe(2);
     expect(repo.run("prerelease", "--force")).toBe(2);
+    // Gone since 2026-11-20: a release branch changes no dependency.
+    expect(repo.run("prerelease", "--refresh-images")).toBe(2);
     expect(repo.err.join("\n")).toContain("usage:");
     expect(repo.snapshot()).toEqual(before);
   });

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# The dependency audit, for running locally: `bun audit --audit-level moderate`
+# The dependency audit, for running locally: `bun audit --audit-level high`
 # with one difference — an advisory endpoint it cannot reach is a skip, not a
 # failure.
 #
@@ -24,7 +24,7 @@ OUTPUT_FILE="$(mktemp)"
 trap 'rm -f "$OUTPUT_FILE"' EXIT
 
 code=0
-bun audit --audit-level moderate 2>&1 | tee "$OUTPUT_FILE" || code=${PIPESTATUS[0]}
+bun audit --audit-level high 2>&1 | tee "$OUTPUT_FILE" || code=${PIPESTATUS[0]}
 
 # Measured offline (unshare -rn), Bun 1.4.2:
 #   error: POST https://registry.npmjs.org/-/npm/v1/security/advisories/bulk - DNSResolveFailed

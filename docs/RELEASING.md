@@ -16,10 +16,12 @@ hold, and says what to do. What each one checks, and why, is the rest of this
 document.
 
 ```bash
-bun run release:refresh-images --check       # optional: newer PostgreSQL/Valkey of the same major, scanned
+bun run release:refresh-images               # optional: newer PostgreSQL/Valkey of the same major, scanned;
+#   commit what it writes to master as a change of its own, before preparing
 bun run release:prepare prerelease           # or prepatch|preminor|premajor|patch|minor|major|release|vX.Y.Z[-alpha.N]
-#   → opens the pull request "chore: prepare vVERSION" from release/vVERSION;
-#     add --refresh-images to take the newer service images in the same PR
+#   → waits for master's CI run if it is still going, and refuses a red one;
+#     opens the pull request "chore: prepare vVERSION" from release/vVERSION;
+#     its one commit changes the version and the notes, never a dependency
 #   read it; when its CI is green, merge it with a fast-forward (not a squash, below) and push master
 bun run release:tag                          # at once: the pull request's run tested this commit. Signed tag, pushed
 #   → the tag's CI run builds, scans, smokes, promotes and drafts the release
@@ -30,16 +32,22 @@ bun run release:publish vVERSION             # verifies again, publishes, checks
 `bun run release:version <bump>` prints the tag a bump would give, without
 changing anything.
 
-**A release waits for CI twice: the pull request's run, and the tag's.** The
-preparation commit is tested by its pull request; a fast-forward lands that
-same commit on `master`, so `release:tag` takes the pull request's green run,
-image build included, as the proof and does not wait for `master` to test the
-commit again. `release:prepare` does not wait for `master`'s run either: it
-refuses only one that has failed. Until 2026-11-16 both waited, four waits of
-a quarter of an hour a release, two of them for an answer the next step asked
-again. What the tag ships is still decided by the tag's own run alone: an
-image built from nothing, the pushed digest scanned and smoked before the
-version tag names it.
+**A release waits for CI on its own commit twice: the pull request's run, and
+the tag's.** The preparation commit is tested by its pull request; a
+fast-forward lands that same commit on `master`, so `release:tag` takes the
+pull request's green run, image build included, as the proof and does not
+wait for `master` to test the commit again. Until 2026-11-16 it did, for an
+answer it already had. What the tag ships is still decided by the tag's own
+run alone: an image built from nothing, the pushed digest scanned and smoked
+before the version tag names it.
+
+**`release:prepare` cuts a release only from a green `master`.** It waits
+for the push run of `master`'s head while that is still going, up to thirty
+minutes, and refuses if it ends red. The pull request's run would catch a red
+`master` as well, but only after a preparation that must then be closed and
+made again once `master` is fixed, since the fix moves `master` and the
+release branch no longer fast-forwards. With `master` already green, which is
+the usual case, it waits for nothing.
 
 **A tag `release:tag` would not have made starts no release.** GitHub cannot
 tell the tag that command pushed from one pushed without it, so the tag's run
@@ -136,8 +144,11 @@ attestation and anonymous-pull steps below depend on that (see
    updates](#dependency-updates)), a week behind upstream at best, so a release
    that skips this can ship stale builds. `bun run release:refresh-images`
    does all of this, scan included, and writes nothing if any candidate is
-   red; `release:prepare --refresh-images` commits its result on the release
-   branch. By hand: for each, take the newest release of the same major, which is what
+   red. Commit what it writes to `master` as a change of its own, before
+   `release:prepare`: a release branch changes the version and the notes
+   and no dependency, so `release:prepare` has had no `--refresh-images`
+   since 2026-11-20. The release's pull request still scans the bundle's
+   images (`release-images`). By hand: for each, take the newest release of the same major, which is what
    the floating tag (`ghcr.io/ngarate/stoky/postgres:18-alpine`,
    `valkey/valkey:8-alpine`) names that day, and the digest of
    its multi-platform index, not one platform's manifest:

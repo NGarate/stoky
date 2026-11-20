@@ -376,11 +376,11 @@ describe("check-audit.sh", () => {
     };
   }
 
-  it("audits at the moderate level and passes a clean tree", () => {
+  it("audits at the high level and passes a clean tree", () => {
     expect(audit("No vulnerabilities found (checked 564 packages)", 0)).toEqual(
       {
         exitCode: 0,
-        args: "audit --audit-level moderate",
+        args: "audit --audit-level high",
       },
     );
   });

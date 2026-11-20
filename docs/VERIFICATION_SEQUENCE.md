@@ -86,7 +86,8 @@ Ten steps:
 - `bun run check:contrast` — every theme token pair meets WCAG AAA
 - `bun run check:unused` — knip: no unused file, export, type or dependency
   (below)
-- `bun run check:audit` — `bun audit --audit-level moderate`. The one step
+- `bun run check:audit` — `bun audit --audit-level high`: high and critical
+  advisories fail it, moderate and low are counted in its output. The one step
   that needs the network: it sends package names and versions to the npm
   advisory endpoint. Offline it reports **skipped**, not failed, because
   offline is not a finding; CI's `audit` job calls `bun audit` directly and

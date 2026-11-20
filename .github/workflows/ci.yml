@@ -118,8 +118,9 @@ jobs:
       #
       # That same answer is why no test step in this job, `test` or `e2e`
       # runs on a tag: the commit passed them in the run the guard found, on
-      # the same tree, and testing it again was ten minutes for an answer
-      # already on the commit. The steps are skipped, never the jobs: each
+      # the same tree, and testing it again was eight runner minutes (156s,
+      # 203s and 144s in run 43873232262) for an answer already on the
+      # commit. The steps are skipped, never the jobs: each
       # still ends green, so image-publish's `needs` gates as before and
       # nothing opts into always(). Only tests are skipped. The audit, the
       # image's build and scan, the bundle's scan and everything after
@@ -447,8 +448,18 @@ jobs:
       # Measured on this tree under 1.4.0, then the pinned Bun — 586 packages checked in
       # 393ms — where `pnpm audit` needed a populated store first. That deletes
       # a whole dependency install from the pipeline rather than porting it.
+      #
+      # High and critical block; moderate and low do not. That is the line
+      # the image scans already draw (CRITICAL,HIGH), and it was `moderate`
+      # here until 2026-11-20, when seven moderate advisories against Next.js
+      # turned master red and would have stopped a release: the owner's rule
+      # is that a release waits for a fix only at high or above. The output
+      # still counts what sits below the level, and Dependabot's alerts list
+      # each one.
+      # scripts/check-audit.sh runs the same command locally;
+      # ci-workflow.test.ts holds the two together.
       - name: bun audit
-        run: bun audit --audit-level moderate
+        run: bun audit --audit-level high
 
   # ---------------------------------------------------------------- changes --
   # Whether this push touched anything that can reach the image. A docs-only
