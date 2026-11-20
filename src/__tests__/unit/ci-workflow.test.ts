@@ -1386,6 +1386,15 @@ describe("a tag's run refuses a hand-made tag and repeats no test", () => {
   });
 });
 
+describe("the CI workflow's dependency audit", () => {
+  it("blocks on high and critical advisories, as the local audit does", () => {
+    const runs = (workflow.jobs?.audit?.steps ?? []).map((step) => step.run);
+    expect(runs).toContain("bun audit --audit-level high");
+    const local = readFileSync(join(root, "scripts/check-audit.sh"), "utf8");
+    expect(local).toContain("\nbun audit --audit-level high 2>&1");
+  });
+});
+
 describe("the CI workflow's quality job", () => {
   it("runs knip's unused-code check in the development image", () => {
     const runs = (workflow.jobs?.quality?.steps ?? []).map((step) => step.run);

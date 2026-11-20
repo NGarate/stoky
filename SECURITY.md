@@ -1434,8 +1434,11 @@ Verified against the files named in each row.
   `${{ github.event.pull_request.title }}` in a `run:` step exits 14, a
   Dependabot entry without its cooldown exits 13. Its online audits, which
   ask the GitHub API about each pinned action, are not run.
-- `bun audit --audit-level moderate` runs as its own job and fails the build. It
-  answers from `bun.lock` alone, so the job installs nothing.
+- `bun audit --audit-level high` runs as its own job and fails the build on a
+  high or critical advisory, the line the image scans draw. A moderate or low
+  one does not block (it did until 2026-11-20): the job's output counts them
+  and Dependabot's alerts list them. It answers from `bun.lock` alone, so the
+  job installs nothing.
 - The image is built and **loaded locally, then scanned by Trivy before it is
   pushed** — scanning after publication would be the wrong order. Results are
   uploaded as SARIF, and a separate step fails the job on CRITICAL or HIGH
