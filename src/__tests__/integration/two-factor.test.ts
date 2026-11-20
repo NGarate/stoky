@@ -377,8 +377,18 @@ describe("a code works once (ASVS 5.0.0 6.5.1)", () => {
     const answering = Promise.all(
       jars.map((jar) => secondStep("totp", jar, { code: used })),
     );
-    // Long enough for both to read and reach the claim, which then waits.
-    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    // Until both have read and reached the claim, which then waits on the
+    // lock: seen in pg_stat_activity rather than slept for. Never longer than
+    // the 1.5 s this used to sleep, so a claim that stopped waiting is held to
+    // no less than before.
+    const until = Date.now() + 1_500;
+    while (Date.now() < until) {
+      const [{ waiting }] = await prisma.$queryRaw<{ waiting: number }[]>`
+        SELECT count(*)::int AS waiting FROM pg_stat_activity
+        WHERE wait_event_type = 'Lock' AND query ~ '^[[:space:]]*UPDATE "TwoFactor"'`;
+      if (waiting >= 2) break;
+      await Bun.sleep(5);
+    }
     release();
     await holder;
     const answers = await answering;
