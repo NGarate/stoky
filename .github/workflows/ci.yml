@@ -179,11 +179,32 @@ jobs:
         run: bash scripts/ci-in-image.sh quality
 
   # ----------------------------------------------------------------- tests --
+  # One job per suite, each on its own runner. In one job they ran one after
+  # another, 62s, 19s and 40s in run 44734419906 after a 36s image build, and
+  # that job was the slowest a pull request waited for. Separate runners
+  # rather than concurrency inside one job: this 4-vCPU runner has starved
+  # tests before (Argon2 sign-ins behind background OCR, ISSUES TEST-12), and
+  # three suites at once would bring that back. Each leg pays the image build
+  # and the service start again, on a runner of its own.
+  #
+  # `fail-fast: false`, so a failing suite does not cancel the other two and
+  # one run names every suite that fails. The names are what
+  # scripts/ci-tag-guard.ts asks a run for (TEST_JOBS), and image-publish
+  # needs every leg of `test`.
   test:
-    name: Unit, component, integration
+    name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
-    # Measured at 52s for all three suites. Ten is the shared budget, not an
-    # estimate of this job.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: unit
+            name: Unit tests
+          - suite: components
+            name: Component tests
+          - suite: integration
+            name: Integration tests
+    # Ten is the shared budget, not an estimate of these jobs.
     timeout-minutes: 10
     # Service containers rather than docker compose inside the runner: the
     # runner owns health and teardown, and a hung compose cannot wedge the job.
@@ -215,12 +236,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The three suites inside the development image, for the reason the
-      # quality job states. This is the job where it matters most: these
+      # The suite inside the development image, for the reason the quality
+      # job states. This is the job where it matters most: these
       # suites import the generated Prisma client, decode images through
       # `Bun.Image` and load the native modules the deployed process loads.
       #
-      # Migrations run inside it too, against the empty service database.
+      # Migrations run inside it too, before the integration suite, against
+      # the empty service database. The other two read no database; their
+      # services start anyway, which a leg off the critical path can afford.
       # Applying them to an empty database is itself a test: a migration that
       # only works on an already-prepared one fails on somebody's first
       # install, which is what happened with pg_trgm.
@@ -233,9 +256,11 @@ jobs:
       #
       # Not on a tag: its commit already passed this, or quality's guard
       # refuses the tag.
-      - name: Unit, component, integration — in the image
+      - name: Tests — in the image
         if: github.ref_type != 'tag'
-        run: bash scripts/ci-in-image.sh test
+        env:
+          SUITE: ${{ matrix.suite }}
+        run: bash scripts/ci-in-image.sh test "$SUITE"
 
   # ------------------------------------------------------------------- e2e --
   e2e:
