@@ -135,9 +135,9 @@ bun run test:unit
 bun run test:components
 ```
 
-**The unit suite runs its files in parallel; the others do not.** The
-counts were measured on CI's 4-vCPU runner (probe runs `44755095303`,
-`44756289181`):
+**The unit and component suites run their files in parallel; the
+integration suite does not.** The counts were measured on CI's 4-vCPU
+runner (probe runs `44755095303`, `44756289181`):
 
 - `test:unit` is `--parallel=4`: four worker processes, each file in a fresh
   global (Bun's default under `--parallel`). 33 s serial, 22 s in parallel.
@@ -147,6 +147,13 @@ counts were measured on CI's 4-vCPU runner (probe runs `44755095303`,
   bringing that back. Three workers was no faster than serial in one probe:
   Bun hands each worker a contiguous run of paths, and `ocr-prepare` and
   `ocr-read`, the two slow files, are neighbours.
+- `test:components` is `--parallel=3 --no-isolate`: 18 s serial, 8–11 s in
+  parallel. Isolation brought this suite nothing (16 s), because each file
+  pays for happy-dom and React again. Without it, a worker keeps one global
+  across its files, as the serial run always did, but the order of those
+  files changes from run to run. **A component test must leave things as
+  it found them**: module state, `localStorage`, timers. `bun run
+  test:components --randomize` shows a file that does not.
 - The integration suite's files share one database and one Valkey and are
   not written to run side by side, so it stays serial.
 
