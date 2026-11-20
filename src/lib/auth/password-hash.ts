@@ -46,7 +46,9 @@ let hashOptions: argon2.Options = PASSWORD_HASH_OPTIONS;
  * Hashes at `cost` instead until the returned function is called; with no
  * `cost`, at {@link PASSWORD_HASH_OPTIONS}. Argon2id either way.
  *
- * For tests; the application never calls it. The accounts it hashes itself —
+ * For tests; the application never calls it, and the test preload
+ * `src/__tests__/setup/password-cost.ts` lowers the cost for every `bun test`
+ * process. The accounts the application hashes itself —
  * registration, an admin adding a member or setting a password, a password
  * change, and the hash Better Auth spends on an address with no account —
  * cost the integration suite six seconds at the production cost, which
