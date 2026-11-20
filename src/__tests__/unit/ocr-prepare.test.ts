@@ -57,6 +57,27 @@ async function pixelsOf(image: Buffer) {
   return { width, height, at };
 }
 
+/**
+ * A PNG the preparation made, its size and how many of its pixels are ink
+ * (red below 128): all of them, and those in its left half. Counted as each
+ * row is decoded, with no row kept and nothing allocated per pixel — the
+ * readings are a million pixels each, and a test looks at six or twelve.
+ */
+function inkOf(png: Buffer) {
+  let ink = 0;
+  let left = 0;
+  const size = decodePng(png, (_, row, channels) => {
+    const half = (row.length / channels) >> 1;
+    for (let x = 0, i = 0; i < row.length; x++, i += channels) {
+      if (row[i]! < 128) {
+        ink++;
+        if (x < half) left++;
+      }
+    }
+  });
+  return { ...size, ink, left };
+}
+
 describe("findPaper", () => {
   it("finds the ticket on the table, to within its margin", async () => {
     const paper = await findPaper(ticketOnATable(), 400, 300);
@@ -389,14 +410,11 @@ describe("thinned", () => {
 
 /** Tesseract's confidence, as far as these tests need it: sure of text that starts on the left. */
 const likesLeftText: Confidence = async (png) => {
-  const band = await pixelsOf(png);
-  const grey: Grey = greyPainted(
-    band.width,
-    band.height,
-    (x, y) => band.at(x, y)[0]!,
-  );
-  const half = grey.width >> 1;
-  return inkShare(grey, 0, half) > inkShare(grey, half) ? 90 : 20;
+  const { width, height, ink, left } = inkOf(png);
+  const half = width >> 1;
+  return left / (height * half) > (ink - left) / (height * (width - half))
+    ? 90
+    : 20;
 };
 
 describe("prepareForOcr", () => {
@@ -570,7 +588,10 @@ describe("readReceiptPhoto", () => {
     const text = await readReceiptPhoto(
       ticketOnATable(),
       async (image, options) => {
-        seen.push({ width: (await pixelsOf(image)).width, options });
+        seen.push({
+          width: (await new Bun.Image(image).metadata()).width,
+          options,
+        });
         return READ;
       },
     );
@@ -642,10 +663,7 @@ describe("readReceiptPhoto", () => {
   it("reads the ticket with its ink thinned as well as as it is", async () => {
     const inkAt = new Map<number, number[]>();
     await readReceiptPhoto(ticketOnATable(), async (image) => {
-      const { width, height, at } = await pixelsOf(image);
-      let ink = 0;
-      for (let y = 0; y < height; y++)
-        for (let x = 0; x < width; x++) if (at(x, y)[0]! < 128) ink++;
+      const { width, ink } = inkOf(image);
       inkAt.set(width, [...(inkAt.get(width) ?? []), ink]);
       return READ;
     });
@@ -667,11 +685,8 @@ describe("readFramedLines", () => {
   async function framed(quad: Parameters<typeof readFramedLines>[1]) {
     const seen: { width: number; dark: number }[] = [];
     await readFramedLines(quarterInked(), quad, async (image) => {
-      const { width, height, at } = await pixelsOf(image);
-      let dark = 0;
-      for (let y = 0; y < height; y++)
-        for (let x = 0; x < width; x++) if (at(x, y)[0]! < 128) dark++;
-      seen.push({ width, dark: dark / (width * height) });
+      const { width, height, ink } = inkOf(image);
+      seen.push({ width, dark: ink / (width * height) });
       return "PAN 1,00";
     });
     return seen;
