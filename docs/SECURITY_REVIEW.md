@@ -537,7 +537,8 @@ On the running container, the release job starts the published image from
 `deploy/docker-compose.yml` and waits for it to report healthy, so a read-only
 start is exercised on every release tag. No job asserts the running user.
 
-The dependency audit is `bun audit --audit-level moderate`: CI's `audit` job
+The dependency audit is `bun audit --audit-level high` (`moderate` until
+2026-11-20): CI's `audit` job
 runs it directly, and `scripts/check-audit.sh` locally. Of the two *Still
 open* items, the placeholder-secret guard has been closed since 2026-10-06:
 `src/instrumentation.ts` runs the check at start-up and the process exits with
