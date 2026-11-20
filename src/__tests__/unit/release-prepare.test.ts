@@ -13,6 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  CI_WAIT_MINUTES,
   missingHeadings,
   NEXT_NOTES,
   type PrepareDeps,
@@ -151,16 +152,19 @@ function repository() {
     pushed: [] as string[],
     pulls: [] as Parameters<PrepareDeps["createPullRequest"]>[0][],
     refreshed: 0,
+    slept: 0,
   };
   const out: string[] = [];
   const err: string[] = [];
-  const ci: { run: CiRun | null } = {
+  /** master's run; `next` is each poll's answer, `run` unless a test replaces it. */
+  const ci: { run: CiRun | null; next: () => CiRun | null } = {
     run: {
       databaseId: 1,
       status: "completed",
       conclusion: "success",
       url: "https://ci.example/run/1",
     },
+    next: () => ci.run,
   };
   const remoteTags: string[] = [];
   let refresh = () => 0;
@@ -168,7 +172,8 @@ function repository() {
     cwd: dir,
     fetch: () => git("fetch", "-q", "origin"),
     remoteTagExists: (name) => remoteTags.includes(name),
-    ciRun: () => ci.run,
+    ciRun: () => ci.next(),
+    sleep: () => calls.slept++,
     refreshImages: () => {
       calls.refreshed++;
       return refresh();
@@ -570,29 +575,77 @@ describe("refusing to start", () => {
       expect(repo.err.join("\n")).toMatch(/^Refused, nothing changed: /);
       expect(repo.err.join("\n")).toMatch(message);
       expect(repo.snapshot()).toEqual(before);
-      expect(repo.calls).toEqual({ pushed: [], pulls: [], refreshed: 0 });
+      expect(repo.calls).toEqual({
+        pushed: [],
+        pulls: [],
+        refreshed: 0,
+        slept: 0,
+      });
     });
   }
 
-  // Waiting for master's run tested nothing the release does not test again:
-  // the preparation commit has its pull request's run, and the tag its own.
-  for (const [label, run] of [
-    ["has no CI run yet", null],
+  const going: CiRun = {
+    databaseId: 2,
+    status: "in_progress",
+    conclusion: "",
+    url: "https://ci.example/run/2",
+  };
+  /** master's run as each poll finds it, the last answer repeating. */
+  const polls = (
+    repo: ReturnType<typeof repository>,
+    answers: (CiRun | null)[],
+  ) => {
+    let asked = 0;
+    repo.ci.next = () => answers[Math.min(asked++, answers.length - 1)];
+  };
+
+  it("waits for a run still going, or not listed yet, and prepares once it is green", () => {
+    const repo = repository();
+    polls(repo, [null, going, going, repo.ci.run]);
+    expect(repo.run("prerelease")).toBe(0);
+    expect(repo.calls.slept).toBe(3);
+    expect(
+      repo.out.filter((line) => line.startsWith("Waiting for CI on ")),
+    ).toHaveLength(1);
+    expect(repo.calls.pushed).toEqual([`${branch}:refs/heads/${branch}`]);
+  });
+
+  it("does not wait for a run already green", () => {
+    const repo = repository();
+    expect(repo.run("prerelease")).toBe(0);
+    expect(repo.calls.slept).toBe(0);
+  });
+
+  it("refuses, changing nothing, when the run it waited for ends red", () => {
+    const repo = repository();
+    const before = repo.snapshot();
+    polls(repo, [
+      going,
+      { ...going, status: "completed", conclusion: "failure" },
+    ]);
+    expect(repo.run("prerelease")).toBe(1);
+    expect(repo.calls.slept).toBe(1);
+    expect(repo.err.join("\n")).toMatch(/ended failure.*run\/2/);
+    expect(repo.snapshot()).toEqual(before);
+  });
+
+  for (const [label, run, message] of [
+    ["never finishes", going, /has not finished after 30 minutes.*run\/2/],
     [
-      "is still in CI",
-      {
-        databaseId: 2,
-        status: "in_progress",
-        conclusion: "",
-        url: "https://ci.example/run/2",
-      },
+      "is never listed",
+      null,
+      /has not finished after 30 minutes. No run is listed/,
     ],
   ] as const) {
-    it(`prepares from a master that ${label}, without waiting`, () => {
+    it(`gives up, changing nothing, on a run that ${label}`, () => {
       const repo = repository();
-      repo.ci.run = run;
-      expect(repo.run("prerelease")).toBe(0);
-      expect(repo.calls.pushed).toEqual([`${branch}:refs/heads/${branch}`]);
+      const before = repo.snapshot();
+      polls(repo, [run]);
+      expect(repo.run("prerelease")).toBe(1);
+      // CI_WAIT_MINUTES of 15-second polls.
+      expect(repo.calls.slept).toBe((CI_WAIT_MINUTES * 60) / 15);
+      expect(repo.err.join("\n")).toMatch(message);
+      expect(repo.snapshot()).toEqual(before);
     });
   }
 

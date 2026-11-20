@@ -18,7 +18,8 @@ document.
 ```bash
 bun run release:refresh-images --check       # optional: newer PostgreSQL/Valkey of the same major, scanned
 bun run release:prepare prerelease           # or prepatch|preminor|premajor|patch|minor|major|release|vX.Y.Z[-alpha.N]
-#   → opens the pull request "chore: prepare vVERSION" from release/vVERSION;
+#   → waits for master's CI run if it is still going, and refuses a red one;
+#     opens the pull request "chore: prepare vVERSION" from release/vVERSION;
 #     add --refresh-images to take the newer service images in the same PR
 #   read it; when its CI is green, merge it with a fast-forward (not a squash, below) and push master
 bun run release:tag                          # at once: the pull request's run tested this commit. Signed tag, pushed
@@ -30,16 +31,22 @@ bun run release:publish vVERSION             # verifies again, publishes, checks
 `bun run release:version <bump>` prints the tag a bump would give, without
 changing anything.
 
-**A release waits for CI twice: the pull request's run, and the tag's.** The
-preparation commit is tested by its pull request; a fast-forward lands that
-same commit on `master`, so `release:tag` takes the pull request's green run,
-image build included, as the proof and does not wait for `master` to test the
-commit again. `release:prepare` does not wait for `master`'s run either: it
-refuses only one that has failed. Until 2026-11-16 both waited, four waits of
-a quarter of an hour a release, two of them for an answer the next step asked
-again. What the tag ships is still decided by the tag's own run alone: an
-image built from nothing, the pushed digest scanned and smoked before the
-version tag names it.
+**A release waits for CI on its own commit twice: the pull request's run, and
+the tag's.** The preparation commit is tested by its pull request; a
+fast-forward lands that same commit on `master`, so `release:tag` takes the
+pull request's green run, image build included, as the proof and does not
+wait for `master` to test the commit again. Until 2026-11-16 it did, for an
+answer it already had. What the tag ships is still decided by the tag's own
+run alone: an image built from nothing, the pushed digest scanned and smoked
+before the version tag names it.
+
+**`release:prepare` cuts a release only from a green `master`.** It waits
+for the push run of `master`'s head while that is still going, up to thirty
+minutes, and refuses if it ends red. The pull request's run would catch a red
+`master` as well, but only after a preparation that must then be closed and
+made again once `master` is fixed, since the fix moves `master` and the
+release branch no longer fast-forwards. With `master` already green, which is
+the usual case, it waits for nothing.
 
 **A tag `release:tag` would not have made starts no release.** GitHub cannot
 tell the tag that command pushed from one pushed without it, so the tag's run
