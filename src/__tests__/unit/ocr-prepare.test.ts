@@ -156,7 +156,9 @@ describe("croppedTicket", () => {
   });
 
   it("does not shrink a ticket already wide enough", async () => {
-    const wide = pngPainted(1600, 4000, (_, y) => (y % 12 < 3 ? INK : PAPER));
+    // Only just taller than wide, so it stands as it is: every pixel more is
+    // one more to grey and flatten, and only the width is in question.
+    const wide = pngPainted(1600, 1700, (_, y) => (y % 12 < 3 ? INK : PAPER));
 
     expect((await croppedTicket(wide, OCR_TICKET_WIDTH)).width).toBe(1600);
   });
