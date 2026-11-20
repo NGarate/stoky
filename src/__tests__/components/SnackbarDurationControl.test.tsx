@@ -46,13 +46,23 @@ const {
 const { SnackbarDurationControl } =
   await import("@/components/ui/SnackbarDurationControl");
 
-beforeEach(() => {
-  written.length = 0;
+function resetDuration(): void {
   window.localStorage.clear();
   hydrateSnackbarDuration(DEFAULT_SNACKBAR_DURATION);
+}
+
+beforeEach(() => {
+  written.length = 0;
+  resetDuration();
 });
 
-afterEach(cleanup);
+// After as well as before: the preference is module state and a stored value,
+// so a choice left here is the undo window of whichever file runs next in this
+// process — the kitchen and product pages' tests, under `--parallel`.
+afterEach(() => {
+  cleanup();
+  resetDuration();
+});
 
 describe("SnackbarDurationControl", () => {
   it("offers the three the snackbar can honour, and names the group", () => {
