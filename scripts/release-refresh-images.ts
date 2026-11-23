@@ -77,7 +77,7 @@ class Refused extends Error {}
  * valkey carry no version label but set the version their Dockerfile builds.
  */
 const VERSION_SOURCES: Record<string, { env: string }> = {
-  "ghcr.io/ngarate/stoky/postgres": { env: "PG_VERSION" },
+  "ghcr.io/nogcode/stoky/postgres": { env: "PG_VERSION" },
   "valkey/valkey": { env: "VALKEY_VERSION" },
 };
 

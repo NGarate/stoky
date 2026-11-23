@@ -26,7 +26,7 @@ const gitIdentity = {
 };
 const digest = `sha256:${"0123456789abcdef".repeat(4)}`;
 const guide = (ref: string) =>
-  `https://github.com/NGarate/stoky/blob/${ref}/docs/INSTALL.md`;
+  `https://github.com/nogcode/stoky/blob/${ref}/docs/INSTALL.md`;
 // The shape of deploy/docker-compose.yml's application line: quoted, with the
 // required-variable message.
 const appImage = `    image: "ghcr.io/example/stoky:\${STOKY_VERSION:?Define STOKY_VERSION en .env}"`;

@@ -51,7 +51,7 @@ const digest = (n: number) =>
 
 /** The version source each image carries on the real registry (the script's VERSION_SOURCES). */
 function config(name: string, version: string) {
-  if (name === "ghcr.io/ngarate/stoky/postgres")
+  if (name === "ghcr.io/nogcode/stoky/postgres")
     return {
       Env: ["PATH=/usr/bin", "GOSU_VERSION=1.19", `PG_VERSION=${version}`],
     };

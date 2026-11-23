@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-11-13
+Updated: 2026-11-23
 
 Single source of truth for where the project actually is.
 
@@ -11,6 +11,26 @@ say what measured it.
 ---
 
 ## Gate status
+
+**2026-11-23 the repository moves to `nogcode/stoky`**
+(`build/move-to-nogcode-2026-11-23`). GitHub answers `full_name:
+nogcode/stoky`, an organisation's, and redirects the old name. The workflows
+name images from `github.repository`, so `master`'s next push publishes
+`ghcr.io/nogcode/stoky` and, since the change touches `postgres.Dockerfile`,
+`ghcr.io/nogcode/stoky/postgres`; the old names keep alpha.4 and earlier.
+Neither new name answered an anonymous pull that day (`403` on the token).
+The bundle's PostgreSQL line names the new image with the digest it pinned
+under the old name, which no build at the new name has: it pulls nothing,
+and the bundle scan stays red, until `bun run release:refresh-images` writes
+the first build's digest (its pin parses, so the refresh replaces it rather
+than refusing). It was already red on the old build: `bash
+scripts/scan-bundle-images.sh` of the pinned digest exits 1 on one HIGH,
+libxml2 CVE-2026-86144, fixed in 2.13.9-r3, which a rebuild's `apk upgrade`
+takes. Provenance of releases built before the move: `gh
+attestation verify` with `--repo`, under either name, answers `HTTP 404`
+for alpha.3's and alpha.4's image and alpha.4's `SHA256SUMS`; with `--owner
+NGarate` and the old signer workflow both of alpha.4's verify (exit 0), and
+the image's fails with another `--source-ref` (exit 1). SECURITY.md says so.
 
 **2026-11-13 the reverse proxy leaves the bundle**
 (`feat/proxy-outside-the-bundle-2026-11-13`). The bundle is db, cache and

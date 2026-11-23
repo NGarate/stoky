@@ -179,7 +179,7 @@ Verified against the files named in each row.
 - **PostgreSQL and Valkey are pinned by exact version and digest**
   (`valkey/valkey:8.1.11-alpine@sha256:…`, the digest of the multi-platform
   index). PostgreSQL's is our build of the official image
-  (`ghcr.io/ngarate/stoky/postgres`, `postgres.Dockerfile`), which takes the
+  (`ghcr.io/nogcode/stoky/postgres`, `postgres.Dockerfile`), which takes the
   fixes Alpine has shipped before upstream rebuilds.
   A tag can be re-pushed and a digest cannot, so the release smoke and every
   later `docker compose pull` of that release run the same builds, and a
@@ -2836,7 +2836,7 @@ What an instance contacts on its own, as released:
   over HTTPS, for a scanned barcode that neither the household's own products
   nor the shared cache can answer (`src/server/services/openFoodFacts.ts`).
   A call sends the barcode, the instance's IP address and the User-Agent
-  `Stoky/<version> (+https://github.com/NGarate/stoky)`. It sends nothing
+  `Stoky/<version> (+https://github.com/nogcode/stoky)`. It sends nothing
   about the account or the household. Calls are metered at 60 an hour per
   account and give up after 5 seconds. This is the only outbound `fetch` in
   `src/`.
@@ -3082,16 +3082,25 @@ tag you chose. Verify the exact version you set as `STOKY_VERSION`, never
 `latest`, and pin the workflow and the source ref as well as the repository:
 
 ```bash
+STOKY_VERSION=vX.Y.Z   # exactly as in your .env
 gh attestation verify \
-  oci://ghcr.io/ngarate/stoky:v0.1.0-alpha.3 \
-  --repo NGarate/stoky \
-  --signer-workflow NGarate/stoky/.github/workflows/ci.yml \
-  --source-ref refs/tags/v0.1.0-alpha.3
+  "oci://ghcr.io/nogcode/stoky:${STOKY_VERSION}" \
+  --repo nogcode/stoky \
+  --signer-workflow nogcode/stoky/.github/workflows/ci.yml \
+  --source-ref "refs/tags/${STOKY_VERSION}"
 ```
 
 `--repo` alone accepts an attestation from any workflow run on any branch of the
 repository; `--source-ref` is what ties the image to the release tag. For a
 `sha-` image from `master`, use `--source-ref refs/heads/master`.
+
+The repository was `NGarate/stoky` until 2026-11-23, and releases up to
+`v0.1.0-alpha.4` were built there: their image is
+`ghcr.io/ngarate/stoky:<tag>`, their signer workflow is
+`NGarate/stoky/.github/workflows/ci.yml`, and since the move GitHub finds
+their attestations by owner, not by repository — `--owner NGarate` in place of
+`--repo` (measured on 2026-11-23: `--repo` under either name answers
+`HTTP 404`, `--owner NGarate` verifies alpha.4's image and `SHA256SUMS`).
 
 This step is optional. It needs the [GitHub CLI](https://cli.github.com/) signed
 in to a GitHub account (`gh auth login`): without one it stops with
@@ -3123,8 +3132,9 @@ only the digest cannot be moved: release bundles after `v0.1.0-alpha.3` name it.
 The image also carries an SBOM, which lists the packages it contains:
 
 ```bash
+STOKY_VERSION=vX.Y.Z   # exactly as in your .env
 docker buildx imagetools inspect \
-  ghcr.io/ngarate/stoky:v0.1.0-alpha.3 \
+  "ghcr.io/nogcode/stoky:${STOKY_VERSION}" \
   --format '{{ json .SBOM }}'
 ```
 

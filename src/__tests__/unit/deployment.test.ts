@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { REGISTRATION_MODES } from "@/lib/auth/registration";
 import { DEFAULT_OCR_WORKERS } from "@/server/services/ocr";
 import nextConfig from "../../../next.config";
+import { REPOSITORY } from "../../../scripts/release-notes";
 
 const root = join(import.meta.dir, "../../..");
 
@@ -73,7 +74,7 @@ describe("the downloadable installation", () => {
     // The version comes from .env alone. A `:-` default is a hand-kept copy that
     // goes stale on the next release and is what an .env without the line pulls.
     expect(compose.services.app.image).toMatch(
-      /^ghcr\.io\/ngarate\/stoky:\$\{STOKY_VERSION:\?.+\}$/,
+      /^ghcr\.io\/nogcode\/stoky:\$\{STOKY_VERSION:\?.+\}$/,
     );
     expect(template).toMatch(/^STOKY_VERSION=v\S+$/m);
     expect(template).toMatch(/^POSTGRES_PASSWORD=$/m);
@@ -289,6 +290,21 @@ describe("the downloadable installation", () => {
           driver: "json-file",
           options: { "max-size": "10m", "max-file": "5" },
         },
+      });
+    }
+  });
+
+  it("sends an operator to this repository, not its old name", () => {
+    // The repository moved from NGarate/stoky on 2026-11-23. GitHub redirects
+    // the old name only until someone else takes it.
+    for (const file of ["docker-compose.yml", "example.env", "install.sh"]) {
+      const text = readFileSync(join(root, "deploy", file), "utf8");
+      const repositories = text.match(
+        /https:\/\/github\.com\/[^/\s"]+\/[^/\s"]+/g,
+      );
+      expect({ file, repositories: [...new Set(repositories)] }).toEqual({
+        file,
+        repositories: [REPOSITORY],
       });
     }
   });

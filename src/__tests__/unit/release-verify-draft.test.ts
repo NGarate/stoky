@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { REPOSITORY } from "../../../scripts/release-notes";
 
 /**
  * `scripts/release-verify-draft.sh` is the check a draft passes before the
@@ -93,7 +94,7 @@ function setup(options: Options = {}) {
   const source = readFileSync(
     join(root, "deploy/docker-compose.yml"),
     "utf8",
-  ).replaceAll("ghcr.io/ngarate/stoky", IMAGE);
+  ).replaceAll("ghcr.io/nogcode/stoky", IMAGE);
   expect(source).toContain(`"${IMAGE}:\${STOKY_VERSION`);
   writeFileSync(join(fixture, "deploy/docker-compose.yml"), source);
 
@@ -410,4 +411,79 @@ describe("verifying a release draft", () => {
     expect(result.exitCode).toBe(2);
     expect(fixture.calls()).toEqual([]);
   });
+});
+
+// An operator verifies by hand with the documents' commands, so they must name
+// what this script checks: the repository, its ci.yml as the signer, and the
+// image the bundle pulls. A command with `--owner` instead of `--repo` is
+// SECURITY.md's, for releases built before the repository moved, and the
+// mentions of the old image in HISTORY are the same history, so both are left
+// alone; nothing else may name another owner.
+const HISTORY: Record<string, string[]> = {
+  "SECURITY.md": ["`ghcr.io/ngarate/stoky:<tag>`"],
+  "docs/releases/NEXT.md": [
+    "`ghcr.io/ngarate/stoky` a `ghcr.io/nogcode/stoky`",
+    "`ghcr.io/ngarate/stoky` to `ghcr.io/nogcode/stoky`",
+  ],
+};
+
+describe("the documents' attestation commands", () => {
+  const repository = REPOSITORY.replace("https://github.com/", "");
+  const imageOwner =
+    readFileSync(join(root, "deploy/docker-compose.yml"), "utf8").match(
+      /image: "ghcr\.io\/([^/]+)\/stoky:/,
+    )?.[1] ?? "";
+
+  it.each(["SECURITY.md", "docs/INSTALL.md", "docs/RELEASING.md"])(
+    "name this repository and its ci.yml: %s",
+    (path) => {
+      const commands = readFileSync(join(root, path), "utf8")
+        .split("```")
+        .filter((_, index) => index % 2 === 1)
+        .flatMap((block) => block.split("gh attestation verify").slice(1))
+        .filter((command) => !command.includes("--owner"));
+      expect(commands.length).toBeGreaterThan(0);
+      for (const command of commands) {
+        expect(command).toContain(`--repo ${repository} `);
+        expect(command.match(/--signer-workflow (\S+)/)?.[1]).toBe(
+          `${repository}/.github/workflows/ci.yml`,
+        );
+      }
+    },
+  );
+
+  it.each(["SECURITY.md", "docs/RELEASING.md", "docs/releases/NEXT.md"])(
+    "name the bundle's image: %s",
+    (path) => {
+      expect(imageOwner).toBe(repository.split("/")[0]?.toLowerCase());
+      let text = readFileSync(join(root, path), "utf8");
+      for (const mention of HISTORY[path] ?? []) {
+        expect(text).toContain(mention);
+        text = text.replaceAll(mention, "");
+      }
+      const owners = [...text.matchAll(/ghcr\.io\/([^/\s`"]+)\/stoky/g)].map(
+        (match) => match[1],
+      );
+      expect(owners.length).toBeGreaterThan(0);
+      expect([...new Set(owners)]).toEqual([imageOwner]);
+    },
+  );
+
+  // The download URLs an operator pastes, and the links beside them.
+  it.each(["docs/INSTALL.md", "docs/releases/NEXT.md"])(
+    "download from this repository: %s",
+    (path) => {
+      const urls = readFileSync(join(root, path), "utf8").match(
+        /https:\/\/(github\.com|raw\.githubusercontent\.com)\/[^/\s)"]+\/[^/\s)"#]+/g,
+      );
+      expect(urls?.length).toBeGreaterThan(0);
+      expect([
+        ...new Set(
+          urls?.map((url) =>
+            url.replace("raw.githubusercontent.com", "github.com"),
+          ),
+        ),
+      ]).toEqual([REPOSITORY]);
+    },
+  );
 });

@@ -475,7 +475,7 @@ describe("the CI workflow's release scans the digest it promotes", () => {
   const context: Context = {
     ...run("push", "refs/tags/v0.1.0-alpha.3", "tag"),
     "needs.image-publish.outputs.digest": digest,
-    [`steps.${nameStep}.outputs.name`]: "ghcr.io/ngarate/stoky",
+    [`steps.${nameStep}.outputs.name`]: "ghcr.io/nogcode/stoky",
   };
 
   it("scans before the version tag is created, after logging in", () => {
@@ -485,7 +485,7 @@ describe("the CI workflow's release scans the digest it promotes", () => {
 
   it("scans the exact digest the promotion retags", () => {
     expect(interpolate(scan.with?.["image-ref"], context)).toBe(
-      `ghcr.io/ngarate/stoky@${digest}`,
+      `ghcr.io/nogcode/stoky@${digest}`,
     );
     expect(interpolate(steps[promoteAt].env?.EXPECTED_DIGEST, context)).toBe(
       digest,
@@ -1128,10 +1128,10 @@ describe("Dependabot's update configuration", () => {
     const images = Object.values(bundle.services ?? {})
       .map((service) => String(service.image))
       .filter((image) => !image.includes("${"))
-      // ghcr.io/ngarate/stoky/postgres:18.6-alpine@sha256:… -> ghcr.io/ngarate/stoky/postgres
+      // ghcr.io/nogcode/stoky/postgres:18.6-alpine@sha256:… -> ghcr.io/nogcode/stoky/postgres
       .map((image) => image.split("@")[0].replace(/:[^:/]+$/, ""));
     expect(images.toSorted()).toEqual([
-      "ghcr.io/ngarate/stoky/postgres",
+      "ghcr.io/nogcode/stoky/postgres",
       "valkey/valkey",
     ]);
     const ignored = (entry("docker-compose").ignore ?? [])

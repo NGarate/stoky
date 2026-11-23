@@ -840,10 +840,11 @@ jobs:
       # same shape of reason: on a user-owned private fork or copy GitHub
       # answers "Feature not available for user-owned private repositories"
       # after the image has already been pushed.
-      # OCI repository names are lowercase; `github.repository` is NGarate/stoky.
-      # metadata-action lowercases its input, the attestation action does not,
-      # so it would push to `ghcr.io/NGarate/stoky` and fail after the image
-      # was already published.
+      # OCI repository names are lowercase, and `github.repository` need not be:
+      # it was NGarate/stoky until the move to nogcode/stoky, and a fork's may
+      # have capitals. metadata-action lowercases its input, the attestation
+      # action does not, so it would push to `ghcr.io/NGarate/stoky` and fail
+      # after the image was already published.
       - name: Lowercase image name
         if: github.event.repository.private == false
         id: image
@@ -857,7 +858,9 @@ jobs:
           push-to-registry: true
           # v4 would also file an artifact storage record, which needs
           # `artifact-metadata: write` and exists only for organisations'
-          # repositories; this one is a user's.
+          # repositories. This one was a user's when that was decided, and
+          # has been the nogcode organisation's since 2026-11-23; turning the
+          # record on is a decision of its own.
           create-storage-record: false
 
   # --------------------------------------------------------- release-images --
@@ -948,7 +951,7 @@ jobs:
       # `version` is the action's default, pinned so a bump of the default
       # cannot change the scanner of a release unseen; `cache: false` because
       # this is the release's gate (see image-build's). OCI names are
-      # lowercase; `github.repository` is NGarate/stoky.
+      # lowercase, and `github.repository` need not be (it was NGarate/stoky).
       - name: Lowercase image name
         id: image
         run: echo "name=${REGISTRY}/${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"

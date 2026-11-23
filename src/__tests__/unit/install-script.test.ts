@@ -186,7 +186,7 @@ describe("deploy/install.sh", () => {
     // The stub serves only file://, so the run stops at the first download.
     expect(fixture.run([], { baseUrl: null }).exitCode).not.toBe(0);
     expect(fixture.curlCalls()[0]).toEndWith(
-      ` https://github.com/NGarate/stoky/releases/download/${version}/${files[0]}`,
+      ` https://github.com/nogcode/stoky/releases/download/${version}/${files[0]}`,
     );
   });
 

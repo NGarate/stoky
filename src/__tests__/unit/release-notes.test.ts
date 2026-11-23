@@ -125,10 +125,10 @@ describe("a release's change list", () => {
     const sha = commit("feat(shopping): share a list (#42)");
     const list = notes("v0.1.0", "v0.2.0").stdout.toString();
     expect(list).toContain(
-      `* feat(shopping): share a list in [#42](https://github.com/NGarate/stoky/pull/42) ([\`${sha.slice(0, 7)}\`](https://github.com/NGarate/stoky/commit/${sha}))`,
+      `* feat(shopping): share a list in [#42](https://github.com/nogcode/stoky/pull/42) ([\`${sha.slice(0, 7)}\`](https://github.com/nogcode/stoky/commit/${sha}))`,
     );
     expect(list).toContain(
-      "**Changelog completo**: https://github.com/NGarate/stoky/compare/v0.1.0...v0.2.0",
+      "**Changelog completo**: https://github.com/nogcode/stoky/compare/v0.1.0...v0.2.0",
     );
     expect(list.startsWith("<!-- cambios:inicio v0.1.0 -->\n")).toBe(true);
     expect(list.trimEnd().endsWith("<!-- cambios:fin -->")).toBe(true);

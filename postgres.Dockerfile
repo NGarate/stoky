@@ -16,7 +16,7 @@
 #   "gosu: not found" instead of running PostgreSQL's setup as root.
 #
 # Built, scanned and published by .github/workflows/postgres-image.yml as
-# ghcr.io/ngarate/stoky/postgres. Pinned by the digest of the multi-platform
+# ghcr.io/nogcode/stoky/postgres. Pinned by the digest of the multi-platform
 # index, as the application's base is; the tag must name the same index
 # (`docker buildx imagetools inspect postgres:<version>-alpine`).
 FROM postgres:18.6-alpine@sha256:9ba53c7d41ea093baf5c1ba635ba5434c4f979880527d49bb7d9237d3193085b
