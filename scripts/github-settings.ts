@@ -42,7 +42,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
-const DEFAULT_REPO = "NGarate/stoky";
+const DEFAULT_REPO = "nogcode/stoky";
 
 /** The exclusion that lets Dependabot push its branches. */
 const DEPENDABOT_EXCLUDE = "refs/heads/dependabot/**";
@@ -123,7 +123,7 @@ const FEATURES = {
 } as const;
 
 /**
- * The environment a publishing job waits on: one approval, by the repository's
+ * The environment a publishing job waits on: one approval, by the project's
  * owner, for a run from a `v*` tag and nothing else. Self-review is allowed
  * because the owner is the only maintainer, and so the one who pushed the tag:
  * with it prevented, nobody could approve.
@@ -209,7 +209,9 @@ class GitHub {
 
   constructor(readonly repo: string) {}
 
+  /** `""` is the repository, `/…` an endpoint outside it, anything else one under it. */
   private endpoint(path: string) {
+    if (path.startsWith("/")) return path.slice(1);
     return path === "" ? `repos/${this.repo}` : `repos/${this.repo}/${path}`;
   }
 
@@ -306,20 +308,23 @@ function differs(field: string, actual: unknown, wanted: unknown): string[] {
 
 function repository(gh: GitHub) {
   return gh.get("").body as Record<string, unknown> & {
-    owner?: { id?: number };
     security_and_analysis?: Record<string, { status?: string } | undefined>;
   };
 }
 
 /**
- * The environment as `apply` sends it. The reviewer is the repository's owner,
- * read rather than written down, so `--repo` names a fork's owner on a fork.
- * A repository owned by an organisation would need a person or team named
- * instead; NGarate/stoky belongs to a personal account.
+ * The environment as `apply` sends it. The reviewer is the account `gh` is
+ * signed in as (`GET /user`), which both modes need to be an administrator:
+ * read rather than written down, so on a fork it is whoever runs this there.
+ * Not the repository's owner, as it was until 2026-11-23: nogcode/stoky
+ * belongs to an organisation, and GitHub takes a person or a team as a
+ * reviewer, never an organisation.
  */
 function releaseEnvironment(gh: GitHub) {
   return {
-    reviewers: [{ type: "User", id: repository(gh).owner?.id }],
+    reviewers: [
+      { type: "User", id: (gh.get("/user").body as { id?: number }).id },
+    ],
     prevent_self_review: false,
     deployment_branch_policy: CUSTOM_BRANCH_POLICIES,
   };

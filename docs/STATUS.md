@@ -31,6 +31,15 @@ attestation verify` with `--repo`, under either name, answers `HTTP 404`
 for alpha.3's and alpha.4's image and alpha.4's `SHA256SUMS`; with `--owner
 NGarate` and the old signer workflow both of alpha.4's verify (exit 0), and
 the image's fails with another `--source-ref` (exit 1). SECURITY.md says so.
+The transfer also undid repository settings, among them the admin bypass of
+both *Block All except me* and *Release tags are created by an admin*, which
+the owner restored by hand the same day (`RepositoryRole` 5, admin). After
+that, on 2026-11-23, `bun scripts/github-settings.ts check` (GET requests
+only) reports 2 of its 15 settings drifted, exit 1: secret scanning and push
+protection off, and CodeQL's default setup not configured. It reported the
+`release` environment's reviewer too, which it then read as the
+organisation's id; it now reads the signed-in administrator, and that row is
+`ok`. `apply` is the owner's and was not run.
 
 **2026-11-13 the reverse proxy leaves the bundle**
 (`feat/proxy-outside-the-bundle-2026-11-13`). The bundle is db, cache and

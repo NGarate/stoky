@@ -62,7 +62,7 @@ const interactionLimit = (limit: string, days: number) => ({
   body: { limit, origin: "repository", expires_at: daysFromNow(days) },
 });
 
-/** Not 24436231: the reviewer must be read from the repository, not written down. */
+/** Not 24436231: the reviewer must be read from GitHub, not written down. */
 const OWNER_ID = 583231;
 const RELEASE_POLICIES =
   "environments/release/deployment-branch-policies?per_page=100";
@@ -153,7 +153,8 @@ function inSync(): State {
         delete_branch_on_merge: true,
         squash_merge_commit_title: "PR_TITLE",
         squash_merge_commit_message: "PR_BODY",
-        owner: { login: "example", id: OWNER_ID, type: "User" },
+        // An organisation, as nogcode/stoky's is: never the reviewer.
+        owner: { login: "example-org", id: 360139752, type: "Organization" },
         has_issues: true,
         has_projects: false,
         has_wiki: false,
@@ -202,6 +203,11 @@ function inSync(): State {
     "interaction-limits": interactionLimit("collaborators_only", 150),
     "environments/release": releaseEnvironment(ownerReviews()),
     [RELEASE_POLICIES]: releasePolicies({ id: 20, name: "v*", type: "tag" }),
+    // The signed-in administrator, outside the repository's endpoints.
+    "/user": {
+      status: 200,
+      body: { login: "example", id: OWNER_ID, type: "User" },
+    },
     "rulesets?per_page=100": {
       status: 200,
       body: rulesets.map(({ id, name, target, enforcement }) => ({
@@ -254,6 +260,10 @@ function measured(): State {
         secret_scanning_push_protection: { status: "disabled" },
       },
     },
+  };
+  state["/user"] = {
+    status: 200,
+    body: { login: "NGarate", id: 24436231, type: "User" },
   };
   state["private-vulnerability-reporting"] = {
     status: 200,
@@ -347,9 +357,13 @@ function run(
   mkdirSync(replies);
   writeFileSync(calls, "");
   const repo =
-    options.repo === undefined ? REPO : (options.repo ?? "NGarate/stoky");
+    options.repo === undefined ? REPO : (options.repo ?? "nogcode/stoky");
   for (const [path, reply] of Object.entries(state)) {
-    const endpoint = path === "" ? `repos/${repo}` : `repos/${repo}/${path}`;
+    const endpoint = path.startsWith("/")
+      ? path.slice(1)
+      : path === ""
+        ? `repos/${repo}`
+        : `repos/${repo}/${path}`;
     writeFileSync(
       join(replies, key(endpoint)),
       `${reply.status}\n${reply.body === undefined ? "" : JSON.stringify(reply.body)}`,
@@ -897,10 +911,10 @@ describe("scripts/github-settings.ts check", () => {
     expect(result.stderr).toContain("administrator");
   });
 
-  it("checks NGarate/stoky unless told otherwise, and refuses an unknown mode", () => {
+  it("checks nogcode/stoky unless told otherwise, and refuses an unknown mode", () => {
     const result = run(inSync(), ["check"], { repo: null });
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("NGarate/stoky: in sync.");
+    expect(result.stdout).toContain("nogcode/stoky: in sync.");
     expect(run(inSync(), ["fix"]).exitCode).toBe(2);
     expect(run(inSync(), []).exitCode).toBe(2);
   });
@@ -974,7 +988,7 @@ describe("scripts/github-settings.ts apply", () => {
       has_wiki: false,
       has_discussions: false,
     });
-    // The reviewer is the owner GET /repos names.
+    // The reviewer is the administrator GET /user names, not the owner.
     expect(body(14)).toEqual({
       reviewers: [{ type: "User", id: 24436231 }],
       prevent_self_review: false,
@@ -986,7 +1000,7 @@ describe("scripts/github-settings.ts apply", () => {
     expect(body(15)).toEqual({ name: "v*", type: "tag" });
   });
 
-  it("names the repository's owner as the release reviewer, whoever that is", () => {
+  it("names the signed-in administrator as the release reviewer, whoever that is", () => {
     const state = inSync();
     state["environments/release"] = releaseEnvironment(ownerReviews(1));
     const writes = run(state, ["apply"]).calls.filter(
