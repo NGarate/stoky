@@ -15,7 +15,7 @@ import { openFoodFacts } from "@/server/services/openFoodFacts";
 import type { AppSession } from "@/lib/auth/session";
 import { TRPCError } from "@trpc/server";
 import { MAX_NAME_LENGTH } from "@/lib/validations/bounds";
-import { closeValkey } from "@/lib/valkey";
+import { closeValkey, valkey } from "@/lib/valkey";
 import { valkeyProductCache } from "@/server/services/product-cache";
 import { ThrottledError } from "@/server/trpc/throttle";
 import {
@@ -381,6 +381,10 @@ describe("Open Food Facts lookups, metered", () => {
   });
 
   it("never counts a lookup the household or the cache already answers", async () => {
+    // The cache is used only on a connection that is up, so the seeding below
+    // would be dropped on one still opening: open it first rather than rely
+    // on an earlier test having done so.
+    await valkey().ping();
     const api = await meteredCaller();
 
     // More of each than the whole budget.

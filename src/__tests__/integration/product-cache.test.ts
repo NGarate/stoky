@@ -8,7 +8,7 @@ import {
   spyOn,
 } from "bun:test";
 import Redis from "ioredis";
-import { closeValkey } from "@/lib/valkey";
+import { closeValkey, valkey } from "@/lib/valkey";
 import {
   PRODUCT_CACHE_TTL_SECONDS,
   PRODUCT_MISS_TTL_SECONDS,
@@ -114,6 +114,35 @@ describe("when Valkey is not there", () => {
     }
   });
 
+  it("sends a lookup nothing while the connection is not up", async () => {
+    // One spy per command a lookup uses. A command sent on a connection that
+    // is down waits in ioredis's queue for up to two seconds; skipped, a
+    // read is a miss and a write is nothing.
+    const original = process.env.VALKEY_URL;
+    await closeValkey();
+    process.env.VALKEY_URL = "redis://127.0.0.1:1";
+    const client = valkey();
+    const sent = [
+      spyOn(client, "get"),
+      spyOn(client, "exists"),
+      spyOn(client, "set"),
+    ];
+
+    try {
+      expect(client.status).not.toBe("ready");
+      expect(await valkeyProductCache.get("8480000123456")).toBeNull();
+      expect(await valkeyProductCache.isMissing("8480000123456")).toBe(false);
+      await valkeyProductCache.set("8480000123456", "{}");
+      await valkeyProductCache.setMissing("8480000123456");
+      for (const spy of sent) expect(spy).not.toHaveBeenCalled();
+    } finally {
+      for (const spy of sent) spy.mockRestore();
+      await closeValkey();
+      if (original === undefined) delete process.env.VALKEY_URL;
+      else process.env.VALKEY_URL = original;
+    }
+  });
+
   it("still lets a barcode be looked up", async () => {
     // The assertion that matters to a person holding a tin: scanning works with
     // the cache down, just without the saving.
@@ -134,11 +163,18 @@ describe("when Valkey is not there", () => {
       )) as unknown as typeof fetch;
 
     try {
+      const started = performance.now();
       const product = await new OpenFoodFactsClient().getProductByBarcode(
         "8480000123456",
       );
 
       expect(product?.product_name).toBe("Leche entera");
+      // Without waiting on the cache. Called directly, with no meter, a
+      // lookup makes two cache reads and a write, and each waited up to two
+      // seconds for a connection that was not coming. (Through scanBarcode
+      // the write is never reached: the meter cannot count, so nothing is
+      // fetched, and its own wait is not this guard's to remove.)
+      expect(performance.now() - started).toBeLessThan(500);
     } finally {
       globalThis.fetch = realFetch;
       await closeValkey();
