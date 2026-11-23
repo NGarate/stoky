@@ -58,7 +58,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # OCI names are lowercase; `github.repository` is NGarate/stoky. The
+      # OCI names are lowercase; `github.repository` need not be. The
       # exact and major tags come from the Dockerfile's base, and the build is
       # checked against them below. Visibility from the API, as rescan.yml
       # reads it: a scheduled run has no event payload, and the missing

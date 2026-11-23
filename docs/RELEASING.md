@@ -149,7 +149,7 @@ attestation and anonymous-pull steps below depend on that (see
    and no dependency, so `release:prepare` has had no `--refresh-images`
    since 2026-11-20. The release's pull request still scans the bundle's
    images (`release-images`). By hand: for each, take the newest release of the same major, which is what
-   the floating tag (`ghcr.io/ngarate/stoky/postgres:18-alpine`,
+   the floating tag (`ghcr.io/nogcode/stoky/postgres:18-alpine`,
    `valkey/valkey:8-alpine`) names that day, and the digest of
    its multi-platform index, not one platform's manifest:
 
@@ -182,13 +182,13 @@ attestation and anonymous-pull steps below depend on that (see
    started as postgres (70:70) and without gosu, which only a root start
    would call; and `.github/workflows/postgres-image.yml` builds it, scans it
    with the rule above and nothing skipped and, only when clean, publishes it as
-   `ghcr.io/ngarate/stoky/postgres:<version>-alpine` and `:<major>-alpine`,
+   `ghcr.io/nogcode/stoky/postgres:<version>-alpine` and `:<major>-alpine`,
    attested like the application. It runs when the Dockerfile changes on
    `master` (a merged Dependabot bump of its base included), every Monday when
    the published build has gone red, and on demand:
 
    ```bash
-   gh workflow run postgres-image.yml --repo NGarate/stoky --ref master
+   gh workflow run postgres-image.yml --repo nogcode/stoky --ref master
    ```
 
    An installation pulls it anonymously, so `stoky/postgres` must stay a
@@ -210,7 +210,7 @@ attestation and anonymous-pull steps below depend on that (see
    Before the tag no image exists, so a local check passes a placeholder, as the
    tag run's first validation does; `release-draft` packages the attached files
    with the digest it promoted. To package a published release by hand, take the
-   digest from `docker buildx imagetools inspect ghcr.io/ngarate/stoky:vVERSION
+   digest from `docker buildx imagetools inspect ghcr.io/nogcode/stoky:vVERSION
    --format '{{.Manifest.Digest}}'`.
 
 Commit each independent change only after its gates pass. Stage explicit paths,
@@ -267,14 +267,14 @@ image is built and scanned before publication, and `release-images`
 scans the bundle's PostgreSQL and Valkey with `scripts/scan-bundle-images.sh`
 (step 4); `release-draft` needs it, so a fixable CRITICAL or HIGH in any of them
 stops the release before promotion, as one in the application does. After all gates pass
-it is pushed only as `ghcr.io/ngarate/stoky:candidate-vVERSION`; the `release-draft`
+it is pushed only as `ghcr.io/nogcode/stoky:candidate-vVERSION`; the `release-draft`
 job scans that digest from the registry with Trivy (fixable CRITICAL/HIGH fail
 it), installs it with the shipped Compose file on fresh volumes, and only when
 both pass retags the same digest (no rebuild) as `:vVERSION`. A failed scan or
 smoke leaves no version tag behind. The job then packages the installation files
 with that digest written into the Compose file's image line, checks that
 `docker compose config --images` of the packaged file names
-`ghcr.io/ngarate/stoky:vVERSION@<digest>` and that Compose pulls it, attests
+`ghcr.io/nogcode/stoky:vVERSION@<digest>` and that Compose pulls it, attests
 each of the five installation files (build provenance signed for this tag's run,
 stored by GitHub), and creates a draft with the checked-in release notes and the
 installation files plus checksums. Draft retries may replace draft attachments
@@ -293,8 +293,8 @@ attestation, which is the check operators are offered in
 
 ```bash
 for asset in docker-compose.yml example.env install.sh SHA256SUMS; do
-  gh attestation verify "$asset" --repo NGarate/stoky \
-    --signer-workflow NGarate/stoky/.github/workflows/ci.yml \
+  gh attestation verify "$asset" --repo nogcode/stoky \
+    --signer-workflow nogcode/stoky/.github/workflows/ci.yml \
     --source-ref refs/tags/vVERSION || echo "NOT ATTESTED: $asset"
 done
 ```
@@ -304,7 +304,7 @@ the release must not be published. Files packaged by hand carry no attestation,
 so never attach them to a release. Then compare the files with the tagged source: the Compose
 file differs from `deploy/docker-compose.yml` by its guide link and by the
 `@sha256:` digest on the application's image line, which must be the digest
-`docker buildx imagetools inspect ghcr.io/ngarate/stoky:vVERSION` reports. Confirm that
+`docker buildx imagetools inspect ghcr.io/nogcode/stoky:vVERSION` reports. Confirm that
 the versioned image exists and the tag points to the intended commit. The GHCR
 package is public, so the image pulls with no saved credentials, as an operator's
 does. Verify its provenance with the `gh attestation verify` command in
@@ -323,7 +323,11 @@ resolves. Every check runs even after one fails; exit 0 is all ok. The one
 exception is the install: `install.sh` is never run unless its own
 attestation verified, because a tampered draft can carry a `SHA256SUMS` that
 agrees with it.
-`--published` re-verifies a release already published.
+`--published` re-verifies a release already published. It cannot pass for one
+built before 2026-11-23 (`v0.1.0-alpha.4` and earlier): the script names the
+image after the repository and verifies by `--repo`, which answers `HTTP 404`
+for those under either name, so they verify only by hand, as
+[Security](../SECURITY.md#verifying-an-images-provenance) describes.
 
 Publish an alpha only after these checks. `bun run release:publish vVERSION`
 runs `release:verify` first and stops on anything but a clean pass; then it
@@ -378,7 +382,7 @@ the releases that shipped them.
 Run it by hand after changing it, or to check a release on demand:
 
 ```bash
-gh workflow run rescan.yml --repo NGarate/stoky --ref master
+gh workflow run rescan.yml --repo nogcode/stoky --ref master
 ```
 
 A red run means an installation of the current release carries a fixable
@@ -413,8 +417,8 @@ hand with `bash scripts/check-published-notes.sh`.
 
 In a public repository GitHub disables a schedule after 60 days without
 repository activity, which on a quiet trunk is exactly when it is needed.
-`gh workflow list --all --repo NGarate/stoky` shows its state, which must be
-`active`; `gh workflow enable rescan.yml --repo NGarate/stoky` restores it.
+`gh workflow list --all --repo nogcode/stoky` shows its state, which must be
+`active`; `gh workflow enable rescan.yml --repo nogcode/stoky` restores it.
 
 What the re-scan cannot see is the same as the release scan's: dependencies
 compiled into the application's `.next` bundle have no `package.json` for
@@ -530,7 +534,7 @@ uses. The one listed exception is `aquasecurity/setup-trivy`, which
 2026-10-12: the composite actions the workflows call (`trivy-action`,
 `setup-trivy`, `attest-build-provenance`) pin their own nested actions by commit
 SHA too. After applying the Actions policy, confirm it with
-`gh workflow run ci.yml --repo NGarate/stoky --ref master`: nothing else
+`gh workflow run ci.yml --repo nogcode/stoky --ref master`: nothing else
 exercises it until the next push.
 
 What it does not cover, because each is still an owner decision rather than a

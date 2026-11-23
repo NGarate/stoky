@@ -64,7 +64,7 @@ STOKY_RELEASE=v0.1.0-alpha.4
 for asset in install.sh SHA256SUMS; do
   curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --location \
     --output "$asset" \
-    "https://github.com/NGarate/stoky/releases/download/${STOKY_RELEASE}/${asset}"
+    "https://github.com/nogcode/stoky/releases/download/${STOKY_RELEASE}/${asset}"
 done
 grep -E '  install\.sh$' SHA256SUMS | sha256sum -c
 less install.sh      # read what you are about to run; q to quit
@@ -92,7 +92,7 @@ STOKY_RELEASE=v0.1.0-alpha.4
 for asset in docker-compose.yml example.env SHA256SUMS; do
   curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --location \
     --output "$asset" \
-    "https://github.com/NGarate/stoky/releases/download/${STOKY_RELEASE}/${asset}"
+    "https://github.com/nogcode/stoky/releases/download/${STOKY_RELEASE}/${asset}"
 done
 grep -E '  (docker-compose\.yml|example\.env)$' SHA256SUMS | sha256sum -c
 cp example.env .env
@@ -120,12 +120,15 @@ downloaded into:
 
 ```bash
 gh attestation verify SHA256SUMS \
-  --repo NGarate/stoky \
-  --signer-workflow NGarate/stoky/.github/workflows/ci.yml \
+  --repo nogcode/stoky \
+  --signer-workflow nogcode/stoky/.github/workflows/ci.yml \
   --source-ref "refs/tags/${STOKY_RELEASE}"
 ```
 
-It must exit 0 before you go on. One verified `SHA256SUMS` is enough:
+A release built before 2026-11-23, this guide's `v0.1.0-alpha.4` included,
+answers `HTTP 404` to it: verify those with `--owner` and the old signer
+workflow, as [Security](../SECURITY.md#verifying-an-images-provenance)
+describes. It must exit 0 before you go on. One verified `SHA256SUMS` is enough:
 `sha256sum -c` then vouches for the files it lists, and `install.sh` stops
 without changing anything if the `SHA256SUMS` it downloads differs from the one
 already in the directory. Any single file verifies the same way
@@ -645,7 +648,7 @@ only bash and curl:
 ```bash
 STOKY_RELEASE=v0.1.0-alpha.4
 curl --proto '=https' --tlsv1.2 --fail --location --output smoke-proxy.sh \
-  "https://raw.githubusercontent.com/NGarate/stoky/${STOKY_RELEASE}/scripts/smoke-proxy.sh"
+  "https://raw.githubusercontent.com/nogcode/stoky/${STOKY_RELEASE}/scripts/smoke-proxy.sh"
 less smoke-proxy.sh      # read what you are about to run; q to quit
 bash smoke-proxy.sh --live stoky.example.com
 ```

@@ -41,7 +41,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-export const REPOSITORY = "https://github.com/NGarate/stoky";
+export const REPOSITORY = "https://github.com/nogcode/stoky";
 const TAG = /^v\d+\.\d+\.\d+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$/;
 const START = (previous: string) => `<!-- cambios:inicio ${previous} -->`;
 const END = "<!-- cambios:fin -->";

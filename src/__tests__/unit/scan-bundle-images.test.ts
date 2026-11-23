@@ -30,7 +30,7 @@ afterEach(() => {
 const POSTGRES = "postgres:16.15-alpine@sha256:" + "1".repeat(64);
 const VALKEY = "valkey/valkey:8.1.10-alpine@sha256:" + "2".repeat(64);
 const TRAEFIK = "traefik:v3.7.16@sha256:" + "3".repeat(64);
-const APP = "ghcr.io/ngarate/stoky:v0.0.0";
+const APP = "ghcr.io/nogcode/stoky:v0.0.0";
 
 const bundle = {
   services: {

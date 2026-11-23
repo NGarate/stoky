@@ -19,7 +19,7 @@
 > elegir con una cabecera la dirección por la que se le contaban los intentos
 > de inicio de sesión. Valkey pasa a `8.1.11`, con `zlib` y `musl`
 > corregidos. PostgreSQL pasa a una imagen propia
-> (`ghcr.io/ngarate/stoky/postgres`): la oficial con las correcciones que
+> (`ghcr.io/nogcode/stoky/postgres`): la oficial con las correcciones que
 > Alpine ya publicó, sin los 19 avisos HIGH de `krb5` y `libxslt` que tiene
 > la oficial. Arranca como el usuario `postgres` y ya no incluye `gosu`, que
 > solo se usaba al arrancar como root y arrastraba 26 avisos CRITICAL y HIGH
@@ -268,6 +268,15 @@ instalarla.
 5. **`NEXTAUTH_SECRET` y `NEXTAUTH_URL` ya no se leen.** Solo valen
    `STOKY_SECRET` y `STOKY_URLS`, los nombres que ya escribía el `install.sh`
    de alpha.4.
+6. **El proyecto y sus imágenes cambian de dirección.** El repositorio pasa
+   de `NGarate/stoky` a `nogcode/stoky`, y las imágenes de
+   `ghcr.io/ngarate/stoky` a `ghcr.io/nogcode/stoky` (la aplicación) y
+   `ghcr.io/nogcode/stoky/postgres`. El Compose de esta versión ya las nombra;
+   como se instala desde cero, una instalación anterior no cambia y sigue
+   descargando las suyas de la dirección antigua. La procedencia de esta
+   versión se comprueba con `nogcode/stoky` en `--repo` y
+   `--signer-workflow`; la de alpha.4 y anteriores, con `NGarate/stoky` y
+   `--owner NGarate` en lugar de `--repo` (SECURITY.md).
 
 ## Cómo actualizar
 
@@ -275,7 +284,7 @@ No hay actualización desde `v0.1.0-alpha.4`: instala esta versión en una
 carpeta nueva, como dice [Instalación](#instalación), y regístrate otra vez.
 Lo que había en la instalación anterior no pasa a la nueva. Si quieres
 conservarlo, guarda antes la copia de seguridad que describe la
-[guía de alpha.4](https://github.com/NGarate/stoky/blob/v0.1.0-alpha.4/docs/INSTALL.md#backup-and-restore);
+[guía de alpha.4](https://github.com/nogcode/stoky/blob/v0.1.0-alpha.4/docs/INSTALL.md#backup-and-restore);
 solo se puede restaurar en alpha.4.
 
 Para retirar la instalación anterior, en su carpeta:
@@ -288,7 +297,7 @@ Sus volúmenes siguen ahí hasta que los borres con `docker volume rm`.
 
 ## Instalación
 
-Lee la [guía de instalación de esta versión](https://github.com/NGarate/stoky/blob/vNEXT/docs/INSTALL.md).
+Lee la [guía de instalación de esta versión](https://github.com/nogcode/stoky/blob/vNEXT/docs/INSTALL.md).
 En una carpeta vacía:
 
 ```bash
@@ -296,7 +305,7 @@ STOKY_RELEASE=vNEXT
 for asset in install.sh SHA256SUMS; do
   curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --location \
     --output "$asset" \
-    "https://github.com/NGarate/stoky/releases/download/${STOKY_RELEASE}/${asset}"
+    "https://github.com/nogcode/stoky/releases/download/${STOKY_RELEASE}/${asset}"
 done
 grep -E '  install\.sh$' SHA256SUMS | sha256sum -c
 less install.sh
@@ -316,7 +325,7 @@ Pon tu proxy con TLS delante del puerto 3000 y nómbralo en
 arranque**: la primera cuenta es la única que se puede crear desde
 `/register`, y pone nombre al hogar.
 
-Imagen: `ghcr.io/ngarate/stoky:vNEXT` (**Linux amd64**), que el
+Imagen: `ghcr.io/nogcode/stoky:vNEXT` (**Linux amd64**), que el
 Compose de esta versión fija por digest.
 
 ## Límites conocidos
@@ -330,11 +339,11 @@ Compose de esta versión fija por digest.
   Safari en iOS y en la tableta de cocina. Que el iPhone muestre el nombre de
   la app instalada tampoco se ha comprobado en un dispositivo.
 
-Consulta [estado](https://github.com/NGarate/stoky/blob/vNEXT/docs/STATUS.md)
-y [seguridad](https://github.com/NGarate/stoky/blob/vNEXT/SECURITY.md).
-Comunica los errores en [Issues](https://github.com/NGarate/stoky/issues), sin
+Consulta [estado](https://github.com/nogcode/stoky/blob/vNEXT/docs/STATUS.md)
+y [seguridad](https://github.com/nogcode/stoky/blob/vNEXT/SECURITY.md).
+Comunica los errores en [Issues](https://github.com/nogcode/stoky/issues), sin
 secretos ni tickets con datos personales, y las vulnerabilidades por el
-[formulario privado](https://github.com/NGarate/stoky/security/advisories/new).
+[formulario privado](https://github.com/nogcode/stoky/security/advisories/new).
 
 ## Verificación
 
@@ -371,7 +380,7 @@ nombra.
 > who reached the application without going through the proxy could choose,
 > with one header, the address their sign-in attempts were counted by.
 > Valkey moves to `8.1.11`, with `zlib` and `musl` fixed. PostgreSQL moves
-> to our own image (`ghcr.io/ngarate/stoky/postgres`): the official one with
+> to our own image (`ghcr.io/nogcode/stoky/postgres`): the official one with
 > the fixes Alpine has already shipped, without the official one's 19 HIGH
 > advisories in `krb5` and `libxslt`. It starts as the `postgres` user and
 > no longer carries `gosu`, used only by a root start, with its 26 CRITICAL
@@ -605,6 +614,15 @@ iPad only when it is installed again.
   registers creates the household; an administrator adds everybody else.
 * **`NEXTAUTH_SECRET` and `NEXTAUTH_URL` are no longer read**, only
   `STOKY_SECRET` and `STOKY_URLS`.
+* **The project and its images have a new address.** The repository moves
+  from `NGarate/stoky` to `nogcode/stoky`, and the images from
+  `ghcr.io/ngarate/stoky` to `ghcr.io/nogcode/stoky` (the application) and
+  `ghcr.io/nogcode/stoky/postgres`. This release's Compose file already names
+  them; since it is installed from scratch, an earlier installation does not
+  change and keeps pulling its own images from the old address. This
+  release's provenance is checked with `nogcode/stoky` in `--repo` and
+  `--signer-workflow`; alpha.4's and earlier ones', with `NGarate/stoky` and
+  `--owner NGarate` in place of `--repo` (SECURITY.md).
 
 ### Known limits and what was tested
 

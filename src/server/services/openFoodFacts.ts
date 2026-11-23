@@ -16,7 +16,7 @@ const OFF_API_BASE = "https://world.openfoodfacts.org/api/v2";
  * "about this client": it was `contact@stoky.app`, an address referenced
  * nowhere else and not one the project is known to receive mail at.
  */
-const OFF_USER_AGENT = `Stoky/${packageJson.version} (+https://github.com/NGarate/stoky)`;
+const OFF_USER_AGENT = `Stoky/${packageJson.version} (+https://github.com/nogcode/stoky)`;
 
 /**
  * How long a barcode lookup may take, from the request to the last byte of

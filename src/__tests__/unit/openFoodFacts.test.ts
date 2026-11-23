@@ -229,7 +229,7 @@ describe("OpenFoodFacts Service", () => {
         readFileSync(join(import.meta.dir, "../../../package.json"), "utf8"),
       ) as { version: string };
       expect(new Headers(calls[0]?.init?.headers).get("user-agent")).toBe(
-        `Stoky/${version} (+https://github.com/NGarate/stoky)`,
+        `Stoky/${version} (+https://github.com/nogcode/stoky)`,
       );
     });
 

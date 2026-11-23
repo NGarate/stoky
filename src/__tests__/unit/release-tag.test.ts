@@ -277,7 +277,7 @@ describe("tagging a merged release", () => {
     repo.state.pushFails = true;
     expect(repo.run()).toBe(1);
     expect(repo.err.join("\n")).toContain(
-      `push https://github.com/NGarate/stoky.git refs/tags/${tag}`,
+      `push https://github.com/nogcode/stoky.git refs/tags/${tag}`,
     );
     expect(repo.git("tag", "-l", tag).trim()).toBe(tag);
   });

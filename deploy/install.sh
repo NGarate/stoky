@@ -11,7 +11,7 @@
 # pulls or stops anything — reviewing `.env` and starting Stoky is the
 # operator's step, by design. Running it again is safe.
 #
-# Guide: https://github.com/NGarate/stoky/blob/master/docs/INSTALL.md
+# Guide: https://github.com/nogcode/stoky/blob/master/docs/INSTALL.md
 set -euo pipefail
 
 # The release this copy installs. scripts/release-assets.sh refuses a tag
@@ -22,7 +22,7 @@ VERSION="${1:-$DEFAULT_VERSION}"
 # Overridable so a release can be served from a directory (file://): the
 # tests do, and so can a maintainer checking packaged assets before a release.
 # An operator has no use for it.
-BASE_URL="${STOKY_RELEASE_BASE_URL:-https://github.com/NGarate/stoky/releases/download}"
+BASE_URL="${STOKY_RELEASE_BASE_URL:-https://github.com/nogcode/stoky/releases/download}"
 FILES=(docker-compose.yml example.env)
 # The project name fixed in docker-compose.yml, which names its volumes.
 DATABASE_VOLUME=stoky-release_postgres_data
@@ -175,4 +175,4 @@ echo "3. Stoky atiende por HTTP en el puerto 3000 de este equipo. Pon delante tu
 echo "   con TLS y dile a Stoky cuál es con STOKY_TRUSTED_PROXIES: la guía tiene un ejemplo"
 echo "   para Traefik, Caddy, nginx y Tailscale."
 echo
-echo "Guía: https://github.com/NGarate/stoky/blob/master/docs/INSTALL.md"
+echo "Guía: https://github.com/nogcode/stoky/blob/master/docs/INSTALL.md"

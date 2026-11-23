@@ -96,7 +96,7 @@ if [ -z "$REPO" ] && ! REPO="$(gh repo view --json nameWithOwner --jq .nameWithO
   exit 2
 fi
 if [[ ! "$REPO" =~ ^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$ ]]; then
-  echo "Error: expected a repository such as NGarate/stoky, got '$REPO'." >&2
+  echo "Error: expected a repository such as nogcode/stoky, got '$REPO'." >&2
   exit 2
 fi
 
