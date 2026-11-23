@@ -1276,7 +1276,7 @@ migration again.
 | Empty inventory after moving directory | Check `-p`, `COMPOSE_PROJECT_NAME` and volume names before creating or deleting anything |
 
 Report the release tag, image digest, command and redacted error through
-[GitHub issues](https://github.com/NGarate/stoky/issues). Do not attach `.env`,
+[GitHub issues](https://github.com/nogcode/stoky/issues). Do not attach `.env`,
 database dumps, session cookies or unredacted receipt photos.
 
 **Never share the output of `docker inspect` or of `docker compose config`

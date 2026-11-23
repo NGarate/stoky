@@ -16,7 +16,7 @@ says so.
 
 Report privately through GitHub's security advisories:
 
-**<https://github.com/NGarate/stoky/security/advisories/new>**
+**<https://github.com/nogcode/stoky/security/advisories/new>**
 
 It needs a GitHub account: no email address or other channel is published for
 someone without one, which is a gap, not a policy. Please do not open a public
@@ -33,12 +33,12 @@ is not a way in for anyone else.
 **If the form is not offered to you.** GitHub offers it to people outside the
 project only while the repository's private vulnerability reporting setting is
 on, and the Security tab then shows a **Report a vulnerability** button that
-opens it. `gh api repos/NGarate/stoky/private-vulnerability-reporting` answers
+opens it. `gh api repos/nogcode/stoky/private-vulnerability-reporting` answers
 `{"enabled":true}` when it is; on 2026-10-23 it still answered
 `{"enabled":false}`, and turning it on is a repository setting only the owner
 can change. Without the button there is no private channel at all: that is a
 gap too, and the owner's settings check reports it. If GitHub still lets you
-open an [issue](https://github.com/NGarate/stoky/issues/new), open one that
+open an [issue](https://github.com/nogcode/stoky/issues/new), open one that
 says only that you have a security report and asks for a private channel. Leave
 out every detail: not the affected feature, the version, or the kind of
 weakness. A public issue is read by everyone running the same image, and there

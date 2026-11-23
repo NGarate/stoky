@@ -12,7 +12,7 @@
 blank_issues_enabled: true
 contact_links:
   - name: "Informar de una vulnerabilidad / Report a security vulnerability"
-    url: https://github.com/NGarate/stoky/security/advisories/new
+    url: https://github.com/nogcode/stoky/security/advisories/new
     about: >-
       En privado, nunca en una incidencia pública. Las incidencias están
       cerradas a quien no colabora en el proyecto, así que este formulario es

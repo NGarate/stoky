@@ -46,7 +46,7 @@ const chooser = Bun.YAML.parse(
 describe("vulnerability reporting channel", () => {
   it("publishes the private advisory form of this repository", () => {
     expect(publishedChannel()).toBe(
-      "https://github.com/NGarate/stoky/security/advisories/new",
+      "https://github.com/nogcode/stoky/security/advisories/new",
     );
   });
 
@@ -81,7 +81,7 @@ describe("vulnerability reporting channel", () => {
     // The form exists for outsiders only while the repository's private
     // vulnerability reporting setting is on, which no file here controls.
     expect(reportingSection()).toContain(
-      "https://github.com/NGarate/stoky/issues/new",
+      "https://github.com/nogcode/stoky/issues/new",
     );
   });
 
