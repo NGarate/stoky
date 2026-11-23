@@ -75,6 +75,29 @@ export interface ProductCache {
 }
 
 /**
+ * Whether a lookup should use Valkey at all: only on a connection that is up.
+ *
+ * Otherwise ioredis queues the command until a reconnect attempt fails or
+ * `commandTimeout` passes: measured 2.0 s a command against a port nothing
+ * listens on, after the first few, for a cache whose miss costs nothing. A
+ * lookup skips the cache instead. The price is a miss for a lookup made
+ * while the connection is still being opened or re-opened, which asks Open
+ * Food Facts as any miss does.
+ *
+ * This covers a Valkey that refuses the connection or cannot be resolved,
+ * not one that hangs: a frozen Valkey leaves `status` at "ready", and each
+ * command still waits out `commandTimeout` (2000 ms each, measured under
+ * `docker pause`).
+ *
+ * `delete` and `clear` still queue: they keep the cache from serving a stale
+ * entry. The one awaited inside a lookup, `delete` of an entry that would not
+ * parse, follows a `get` that just returned it, so the connection was up.
+ */
+function connected(): boolean {
+  return valkey().status === "ready";
+}
+
+/**
  * The real one.
  *
  * Every method swallows its own failure. A cache that throws is worse than no
@@ -83,6 +106,7 @@ export interface ProductCache {
  */
 export const valkeyProductCache: ProductCache = {
   async get(barcode) {
+    if (!connected()) return null;
     try {
       return await valkey().get(PREFIX + barcode);
     } catch {
@@ -91,6 +115,7 @@ export const valkeyProductCache: ProductCache = {
   },
 
   async set(barcode, value) {
+    if (!connected()) return;
     try {
       // `EX` rather than a stored timestamp: Valkey expires the key itself, so
       // there is no stale entry to step over and no clock to compare against.
@@ -106,6 +131,7 @@ export const valkeyProductCache: ProductCache = {
   },
 
   async isMissing(barcode) {
+    if (!connected()) return false;
     try {
       return (await valkey().exists(MISS_PREFIX + barcode)) === 1;
     } catch {
@@ -116,6 +142,7 @@ export const valkeyProductCache: ProductCache = {
   },
 
   async setMissing(barcode) {
+    if (!connected()) return;
     try {
       await valkey().set(
         MISS_PREFIX + barcode,
