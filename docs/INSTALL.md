@@ -1,6 +1,6 @@
 # Install Stoky with Docker Compose
 
-This guide is for **v0.1.0-alpha.4**, a testing release. Keep backups;
+This guide is for **v0.2.0-alpha.0**, a testing release. Keep backups;
 alpha upgrades can change the database and may require manual migration steps.
 For development from source, use [Local Bootstrap](LOCAL_BOOTSTRAP.md).
 
@@ -60,7 +60,7 @@ upgrade, below), and **never starts anything**: you review `.env` and start
 Stoky yourself in step 3. Running it again is safe.
 
 ```bash
-STOKY_RELEASE=v0.1.0-alpha.4
+STOKY_RELEASE=v0.2.0-alpha.0
 for asset in install.sh SHA256SUMS; do
   curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --location \
     --output "$asset" \
@@ -88,7 +88,7 @@ Download the exact alpha by its tag. Prereleases are not available through
 GitHub's `releases/latest/download` URL.
 
 ```bash
-STOKY_RELEASE=v0.1.0-alpha.4
+STOKY_RELEASE=v0.2.0-alpha.0
 for asset in docker-compose.yml example.env SHA256SUMS; do
   curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --location \
     --output "$asset" \
@@ -153,7 +153,7 @@ Open `.env` in your editor and fill in:
 
 | Setting | Value |
 |---|---|
-| `STOKY_VERSION` | Keep `v0.1.0-alpha.4` for this release |
+| `STOKY_VERSION` | Keep `v0.2.0-alpha.0` for this release |
 | `DOMAIN` | The hostname your proxy serves Stoky at, alone, for example `stoky.example.com`; no scheme or path |
 | `POSTGRES_PASSWORD` | The first generated hex value |
 | `STOKY_SECRET` | The second generated hex value |
@@ -646,7 +646,7 @@ phone's hotspot will do. The repository keeps a script for it, which needs
 only bash and curl:
 
 ```bash
-STOKY_RELEASE=v0.1.0-alpha.4
+STOKY_RELEASE=v0.2.0-alpha.0
 curl --proto '=https' --tlsv1.2 --fail --location --output smoke-proxy.sh \
   "https://raw.githubusercontent.com/nogcode/stoky/${STOKY_RELEASE}/scripts/smoke-proxy.sh"
 less smoke-proxy.sh      # read what you are about to run; q to quit
