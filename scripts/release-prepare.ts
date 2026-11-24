@@ -509,7 +509,8 @@ export function prepare(argv: string[], deps: PrepareDeps): number {
     "Next: review it and wait for its CI. Merge it with a fast-forward, not GitHub's squash " +
       "(the change list links each commit by SHA):\n" +
       `  git switch master && git merge --ff-only ${branchName}\n` +
-      "  then push master over HTTPS as above. Once master's CI run, its image included, is green:\n" +
+      "  then push master over HTTPS as above, and tag at once: the pull request's green run\n" +
+      "  is the proof for that same commit, so master's own run need not finish first:\n" +
       "  bun scripts/release-tag.ts",
   );
   return 0;

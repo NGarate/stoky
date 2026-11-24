@@ -343,6 +343,11 @@ describe("preparing a release", () => {
       "https://github.com/example/stoky/pull/42",
     );
     expect(repo.out.join("\n")).toContain("release-tag.ts");
+    // release:tag takes the pull request's run of the same commit
+    // (release-tag.ts), so the advice must not send the owner to wait for
+    // master's.
+    expect(repo.out.join("\n")).toContain("tag at once");
+    expect(repo.out.join("\n")).not.toContain("Once master's CI run");
   });
 
   it("stops before pushing with --no-push", () => {
