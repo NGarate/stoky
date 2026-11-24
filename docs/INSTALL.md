@@ -125,7 +125,7 @@ gh attestation verify SHA256SUMS \
   --source-ref "refs/tags/${STOKY_RELEASE}"
 ```
 
-A release built before 2026-11-23, this guide's `v0.1.0-alpha.4` included,
+A release built before 2026-11-23, when the repository moved to `nogcode`,
 answers `HTTP 404` to it: verify those with `--owner` and the old signer
 workflow, as [Security](../SECURITY.md#verifying-an-images-provenance)
 describes. It must exit 0 before you go on. One verified `SHA256SUMS` is enough:
@@ -221,8 +221,8 @@ percent-encoding. Do not reuse the development `.env.example`. Rotating the
 session secret signs everybody out, changes every account tag in the
 security log and makes every authenticator app unreadable (see
 [Rotating `STOKY_SECRET`](#rotating-stoky_secret)). An `.env` from
-v0.1.0-alpha.3 or earlier may still call it `NEXTAUTH_SECRET`, which is no
-longer read: rename the key to `STOKY_SECRET` and keep its value.
+an older release may still call it `NEXTAUTH_SECRET`, which is no longer
+read: rename the key to `STOKY_SECRET` and keep its value.
 
 The bundle derives `DATABASE_URL`, `VALKEY_URL` and the instance's address
 itself, so you do not edit them; the address is `https://` and `DOMAIN`, the
