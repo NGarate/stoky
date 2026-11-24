@@ -21,7 +21,7 @@
 > corregidos. PostgreSQL pasa a una imagen propia
 > (`ghcr.io/nogcode/stoky/postgres`): la oficial con las correcciones que
 > Alpine ya publicó, sin los 19 avisos HIGH de `krb5` y `libxslt` que tiene
-> la oficial. Arranca como el usuario `postgres` y ya no incluye `gosu`, que
+> la oficial, ni el de `libxml2` (CVE-2026-86144). Arranca como el usuario `postgres` y ya no incluye `gosu`, que
 > solo se usaba al arrancar como root y arrastraba 26 avisos CRITICAL y HIGH
 > de Go. El Traefik de alpha.4 (`v3.7.16`), con un aviso HIGH en
 > `go-jose` y dos en `golang.org/x/net`, desaparece con el paquete nuevo.
@@ -382,7 +382,8 @@ nombra.
 > Valkey moves to `8.1.11`, with `zlib` and `musl` fixed. PostgreSQL moves
 > to our own image (`ghcr.io/nogcode/stoky/postgres`): the official one with
 > the fixes Alpine has already shipped, without the official one's 19 HIGH
-> advisories in `krb5` and `libxslt`. It starts as the `postgres` user and
+> advisories in `krb5` and `libxslt`, nor the one in `libxml2`
+> (CVE-2026-86144). It starts as the `postgres` user and
 > no longer carries `gosu`, used only by a root start, with its 26 CRITICAL
 > and HIGH Go advisories. alpha.4's Traefik (`v3.7.16`), with a
 > HIGH advisory in `go-jose` and two in `golang.org/x/net`, goes with the
