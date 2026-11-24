@@ -419,9 +419,16 @@ describe("verifying a release draft", () => {
 // SECURITY.md's, for releases built before the repository moved, and the
 // mentions of the old image in HISTORY are the same history, so both are left
 // alone; nothing else may name another owner.
+// The next release's notes are NEXT.md on master, and the version's own file
+// from the commit that prepares it, which renames NEXT.md. Both are checked
+// as the same document.
+const NOTES = existsSync(join(root, "docs/releases/NEXT.md"))
+  ? "docs/releases/NEXT.md"
+  : `docs/releases/v${JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version}.md`;
+
 const HISTORY: Record<string, string[]> = {
   "SECURITY.md": ["`ghcr.io/ngarate/stoky:<tag>`"],
-  "docs/releases/NEXT.md": [
+  [NOTES]: [
     "`ghcr.io/ngarate/stoky` a `ghcr.io/nogcode/stoky`",
     "`ghcr.io/ngarate/stoky` to `ghcr.io/nogcode/stoky`",
   ],
@@ -452,7 +459,7 @@ describe("the documents' attestation commands", () => {
     },
   );
 
-  it.each(["SECURITY.md", "docs/RELEASING.md", "docs/releases/NEXT.md"])(
+  it.each(["SECURITY.md", "docs/RELEASING.md", NOTES])(
     "name the bundle's image: %s",
     (path) => {
       expect(imageOwner).toBe(repository.split("/")[0]?.toLowerCase());
@@ -470,7 +477,7 @@ describe("the documents' attestation commands", () => {
   );
 
   // The download URLs an operator pastes, and the links beside them.
-  it.each(["docs/INSTALL.md", "docs/releases/NEXT.md"])(
+  it.each(["docs/INSTALL.md", NOTES])(
     "download from this repository: %s",
     (path) => {
       const urls = readFileSync(join(root, path), "utf8").match(
