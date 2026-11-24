@@ -644,4 +644,26 @@ describe("the next release's notes on master", () => {
       expect(notes.split("\n")[0]).toBe("# Stoky vNEXT");
     },
   );
+
+  // release-assets.sh refuses a guide or README that names any version but
+  // the one being released, and release:prepare replaces only the current
+  // one. So a second version written on master stops the next release at
+  // its preparation, as `v0.1.0-alpha.3` in INSTALL.md did on 2026-11-24.
+  // Checked here, it stops the commit that writes it instead.
+  it("leave the guide and README naming one version, the current one", () => {
+    const named = new Set(
+      ["docs/INSTALL.md", "README.md"].flatMap(
+        (doc) =>
+          readFileSync(join(import.meta.dir, "../../..", doc), "utf8")
+            .match(
+              /v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?/g,
+            )
+            // The notes' file name ends a match with `.md`; release-assets.sh
+            // drops it the same way.
+            ?.map((version) => version.replace(/\.md$/, "")) ?? [],
+      ),
+    );
+    const current = `v${JSON.parse(readFileSync(join(import.meta.dir, "../../../package.json"), "utf8")).version}`;
+    expect([...named]).toEqual([current]);
+  });
 });
