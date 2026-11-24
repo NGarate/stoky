@@ -1206,7 +1206,7 @@ against the previous release's copies it stops before it reaches `.env`.
 
 PostgreSQL and Valkey change only with a Stoky release. The Compose
 file names each of them by exact version and by digest
-(`valkey/valkey:8.1.11-alpine@sha256:…`), so `docker compose pull` fetches the build
+(`valkey/valkey:8.1.12-alpine@sha256:…`), so `docker compose pull` fetches the build
 the release was tested with, not whatever the tag names that day. Their
 security fixes reach you by upgrading to the release that carries them. Within
 one major version (PostgreSQL 18, Valkey 8) an update keeps the stored data
