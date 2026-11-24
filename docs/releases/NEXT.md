@@ -17,7 +17,7 @@
 > proxies indicados en `STOKY_TRUSTED_PROXIES`, y de ninguno hasta que lo
 > definas. Antes, quien llegara a la aplicación sin pasar por el proxy podía
 > elegir con una cabecera la dirección por la que se le contaban los intentos
-> de inicio de sesión. Valkey pasa a `8.1.11`, con `zlib` y `musl`
+> de inicio de sesión. Valkey pasa a `8.1.12`, con `zlib` y `musl`
 > corregidos. PostgreSQL pasa a una imagen propia
 > (`ghcr.io/nogcode/stoky/postgres`): la oficial con las correcciones que
 > Alpine ya publicó, sin los 19 avisos HIGH de `krb5` y `libxslt` que tiene
@@ -379,7 +379,7 @@ nombra.
 > `STOKY_TRUSTED_PROXIES`, and from none until you set it. Before, anyone
 > who reached the application without going through the proxy could choose,
 > with one header, the address their sign-in attempts were counted by.
-> Valkey moves to `8.1.11`, with `zlib` and `musl` fixed. PostgreSQL moves
+> Valkey moves to `8.1.12`, with `zlib` and `musl` fixed. PostgreSQL moves
 > to our own image (`ghcr.io/nogcode/stoky/postgres`): the official one with
 > the fixes Alpine has already shipped, without the official one's 19 HIGH
 > advisories in `krb5` and `libxslt`, nor the one in `libxml2`

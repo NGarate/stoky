@@ -177,7 +177,7 @@ Verified against the files named in each row.
 ### Release deployment — `deploy/docker-compose.yml`
 
 - **PostgreSQL and Valkey are pinned by exact version and digest**
-  (`valkey/valkey:8.1.11-alpine@sha256:…`, the digest of the multi-platform
+  (`valkey/valkey:8.1.12-alpine@sha256:…`, the digest of the multi-platform
   index). PostgreSQL's is our build of the official image
   (`ghcr.io/nogcode/stoky/postgres`, `postgres.Dockerfile`), which takes the
   fixes Alpine has shipped before upstream rebuilds.
@@ -193,7 +193,7 @@ Verified against the files named in each row.
   and ships with the next release. The app image is named by `STOKY_VERSION`.
   `src/__tests__/unit/deployment.test.ts` fails if a service image loses its
   digest or names a floating major. Verified by running each pinned reference:
-  PostgreSQL 18.6, Valkey 8.1.11.
+  PostgreSQL 18.6, Valkey 8.1.12.
 - `no-new-privileges:true` on every service.
 - `cap_drop: [ALL]` on every service, with capabilities added back only where
   they are actually needed (Valkey for setgid/setuid). PostgreSQL needs none: it starts as the image's
