@@ -16,7 +16,7 @@ set -euo pipefail
 
 # The release this copy installs. scripts/release-assets.sh refuses a tag
 # this line disagrees with, so an attached install.sh installs its own release.
-DEFAULT_VERSION=v0.2.0-alpha.0
+DEFAULT_VERSION=v0.2.0-alpha.1
 
 VERSION="${1:-$DEFAULT_VERSION}"
 # Overridable so a release can be served from a directory (file://): the
