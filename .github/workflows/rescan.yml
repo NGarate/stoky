@@ -126,11 +126,17 @@ jobs:
         with:
           bun-version-file: .bun-version
           no-cache: true
+      # An image without gosu, as the bundle's own PostgreSQL is, gets no
+      # document and so no `vex` output; Trivy then reads no VEX at all.
       - name: Say which of gosu's advisories it reaches
+        id: gosu
         if: matrix.service == 'db'
         env:
           IMAGE: ${{ matrix.image }}
-        run: sh scripts/gosu-vex.sh "$IMAGE" "$RUNNER_TEMP/gosu.openvex.json"
+        run: |
+          OUT="$RUNNER_TEMP/gosu.openvex.json"
+          sh scripts/gosu-vex.sh "$IMAGE" "$OUT"
+          if [ -f "$OUT" ]; then echo "vex=$OUT" >> "$GITHUB_OUTPUT"; fi
 
       # The report: every fixable finding, uploaded per image under its own
       # category. `trivy-release-` keeps it apart from ci.yml's `trivy`, which
@@ -139,8 +145,9 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           TRIVY_IMAGE_SRC: remote
-          # Empty for the other images, which Trivy reads as no VEX at all.
-          TRIVY_VEX: ${{ matrix.service == 'db' && format('{0}/gosu.openvex.json', runner.temp) || '' }}
+          # Empty for the other images and for a PostgreSQL without gosu,
+          # which Trivy reads as no VEX at all.
+          TRIVY_VEX: ${{ steps.gosu.outputs.vex }}
         with:
           image-ref: ${{ matrix.image }}
           format: sarif

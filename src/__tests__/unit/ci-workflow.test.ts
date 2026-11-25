@@ -995,9 +995,9 @@ describe("the weekly rescan of the published release", () => {
   it("annotates only postgres's report, with govulncheck's verdict on its gosu", () => {
     const report = trivySteps.find((s) => s.with?.format === "sarif");
     const vex = String(report?.env?.TRIVY_VEX);
-    expect(vex).toBe(
-      "${{ matrix.service == 'db' && format('{0}/gosu.openvex.json', runner.temp) || '' }}",
-    );
+    // Only what the writer says it wrote: the bundle's own PostgreSQL has no
+    // gosu, and a VEX path to a file that does not exist fails Trivy.
+    expect(vex).toBe("${{ steps.gosu.outputs.vex }}");
 
     const [, scan] = scanJob();
     const stepsOfScan = scan.steps ?? [];
@@ -1008,9 +1008,12 @@ describe("the weekly rescan of the published release", () => {
     expect(writes).toBeLessThan(stepsOfScan.indexOf(report!));
     const writer = stepsOfScan[writes];
     expect(writer.if).toBe("matrix.service == 'db'");
-    expect(String(writer.run).trim()).toBe(
-      'sh scripts/gosu-vex.sh "$IMAGE" "$RUNNER_TEMP/gosu.openvex.json"',
-    );
+    expect(writer.id).toBe("gosu");
+    expect(String(writer.run).trim().split("\n")).toEqual([
+      'OUT="$RUNNER_TEMP/gosu.openvex.json"',
+      'sh scripts/gosu-vex.sh "$IMAGE" "$OUT"',
+      'if [ -f "$OUT" ]; then echo "vex=$OUT" >> "$GITHUB_OUTPUT"; fi',
+    ]);
     expect(writer.env?.IMAGE).toBe("${{ matrix.image }}");
   });
 

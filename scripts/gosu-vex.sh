@@ -21,6 +21,11 @@
 # The gate is not changed: rescan.yml and scan-bundle-images.sh still leave
 # gosu out of it (RELEASING.md, weekly re-scans).
 #
+# An image with no gosu has nothing to vouch for: the bundle's own PostgreSQL
+# (postgres.Dockerfile) deletes it. Then nothing is written and the script
+# exits 0, and rescan.yml gives Trivy no VEX document. Any other failure to
+# copy the binary still fails.
+#
 # Usage: sh scripts/gosu-vex.sh IMAGE OUT
 
 set -eu
@@ -47,7 +52,14 @@ cleanup() {
 trap cleanup EXIT
 
 CONTAINER="$(docker create "$IMAGE")"
-docker cp "$CONTAINER:/usr/local/bin/gosu" "$WORK/gosu"
+if ! docker cp "$CONTAINER:/usr/local/bin/gosu" "$WORK/gosu" 2> "$WORK/cp.err"; then
+  if grep -q "Could not find the file" "$WORK/cp.err"; then
+    echo "$IMAGE has no /usr/local/bin/gosu: no VEX document to write."
+    exit 0
+  fi
+  cat "$WORK/cp.err" >&2
+  exit 1
+fi
 
 docker run --rm -v "$WORK:/scan:ro" "$GOLANG_IMAGE" sh -c \
   "go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION} > /dev/null 2>&1 \
