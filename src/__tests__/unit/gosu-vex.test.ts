@@ -51,7 +51,9 @@ const GOVULNCHECK = {
   ],
 };
 
-function setup(options: { govulncheck?: unknown; cpFails?: boolean } = {}) {
+function setup(
+  options: { govulncheck?: unknown; cpFails?: boolean; noGosu?: boolean } = {},
+) {
   const fixture = mkdtempSync(join(tmpdir(), "stoky-gosu-vex-"));
   fixtures.push(fixture);
   for (const directory of ["scripts", "bin"])
@@ -72,7 +74,13 @@ function setup(options: { govulncheck?: unknown; cpFails?: boolean } = {}) {
 printf 'docker' >> "${log}"; printf ' [%s]' "$@" >> "${log}"; echo >> "${log}"
 case "$1" in
   create) echo stub-container ;;
-  cp) ${options.cpFails ? "exit 1" : `: > "$3"`} ;;
+  cp) ${
+    options.noGosu
+      ? `echo "Error response from daemon: Could not find the file /usr/local/bin/gosu in container stub-container" >&2; exit 1`
+      : options.cpFails
+        ? "exit 1"
+        : `: > "$3"`
+  } ;;
   rm) ;;
   run) cat "${join(fixture, "govulncheck.json")}" ;;
   *) exit 99 ;;
@@ -153,6 +161,18 @@ describe("gosu's VEX document", () => {
     const { run, calls } = setup({ cpFails: true });
 
     expect(run().exitCode).not.toBe(0);
+    expect(calls()).toContainEqual(["rm", "stub-container"]);
+  });
+
+  // The bundle's own PostgreSQL deletes gosu (postgres.Dockerfile). The weekly
+  // re-scan of a release with it must still scan, with no VEX document.
+  it("writes nothing, and succeeds, for an image without gosu", () => {
+    const { run, calls, out } = setup({ noGosu: true });
+    const result = run();
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain("no VEX document");
+    expect(existsSync(out)).toBe(false);
+    expect(calls().some(([command]) => command === "run")).toBe(false);
     expect(calls()).toContainEqual(["rm", "stub-container"]);
   });
 });
