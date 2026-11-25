@@ -813,7 +813,10 @@ jobs:
       # re-exporting identical ones here would spend upload time saying
       # nothing new. Neither on a tag: see the comment above this job. The
       # production stage is rebuilt as image-build's is, so `latest` gets the
-      # Alpine fixes the scan saw rather than a cached `apk upgrade`.
+      # Alpine fixes the scan saw rather than a cached `apk upgrade`. Not on a
+      # tag, which rebuilds every stage already: buildx refuses `no-cache`
+      # together with `no-cache-filters` ("cannot currently be used
+      # together"), which is how v0.2.0-alpha.0's run failed at this step.
       - name: Push
         id: push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -827,7 +830,7 @@ jobs:
           provenance: mode=max
           cache-from: ${{ github.ref_type != 'tag' && 'type=gha' || '' }}
           no-cache: ${{ github.ref_type == 'tag' }}
-          no-cache-filters: production
+          no-cache-filters: ${{ github.ref_type != 'tag' && 'production' || '' }}
 
       # Lets an operator verify the image they are about to self-host really
       # was built from this repository, by this workflow, from this commit.

@@ -376,6 +376,25 @@ describe("the CI workflow's release path restores no cache", () => {
     expect(input(push(), "cache-to", tag)).toBe("");
   });
 
+  // buildx refuses the two together ("--no-cache and --no-cache-filter cannot
+  // currently be used together"). v0.2.0-alpha.0's tag run failed at Publish
+  // image that way, on a combination no test had evaluated for a tag.
+  it("never asks buildx for no-cache and no-cache-filters at once", () => {
+    const builds = using("docker/build-push-action");
+    for (const [name, context] of triggers) {
+      for (const step of builds) {
+        const both =
+          input(step, "no-cache", context) === "true" &&
+          input(step, "no-cache-filters", context) !== "";
+        expect([name, String(step.name), both]).toEqual([
+          name,
+          String(step.name),
+          false,
+        ]);
+      }
+    }
+  });
+
   it("keeps the layer cache for master's image", () => {
     expect(input(push(), "cache-from", master)).toBe("type=gha");
     expect(input(push(), "no-cache", master)).not.toBe("true");
