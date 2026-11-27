@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, mock, spyOn } from "bun:test";
 import { screen, cleanup, fireEvent } from "@testing-library/react";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
+import { PrimaryAction } from "@/components/ui/primary-action";
 import { renderWithIntl as render } from "../utils/render";
 
 let searchParams = new URLSearchParams();
@@ -67,8 +68,20 @@ describe("PageHeader", () => {
     render(<PageHeader back="/inventory" title="Añadir stock" />);
 
     expect(
-      screen.getByRole("link", { name: "Volver al panel" }),
+      screen.getByRole("link", { name: "Volver al inicio" }),
     ).toHaveAttribute("href", "/dashboard");
+  });
+
+  it("draws the way back only where it is asked to", () => {
+    // The kitchen's, `md:hidden`: only the phone has no button for it.
+    render(
+      <PageHeader back="/dashboard" backClassName="md:hidden" title="Cocina" />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Volver al inicio" }).closest("div")
+        ?.className,
+    ).toBe("md:hidden");
   });
 
   it("keeps its own parent when the origin is not one it follows", () => {
@@ -180,6 +193,30 @@ describe("PageHeader", () => {
     expect(kitchen.className).not.toContain("text-2xl");
   });
 
+  it("reads a section's views straight after the title, before the actions", () => {
+    // As the mock-up draws them on a phone; from md they wrap to a row of
+    // their own under the title and the actions beside it.
+    const { container } = render(
+      <PageHeader
+        actions={<Button type="button">Apuntar consumo</Button>}
+        title="Inventario"
+        views={<nav aria-label="Vistas de Inventario">vistas</nav>}
+      />,
+    );
+
+    const views = screen.getByRole("navigation", {
+      name: "Vistas de Inventario",
+    });
+    expect(precedes(screen.getByRole("heading", { level: 1 }), views)).toBe(
+      true,
+    );
+    expect(
+      precedes(views, screen.getByRole("button", { name: "Apuntar consumo" })),
+    ).toBe(true);
+    expect(views.parentElement?.className).toContain("md:order-last");
+    expect(container.querySelector(".md\\:flex-wrap")).not.toBeNull();
+  });
+
   it("gives the actions a row of their own on a phone and a place opposite the title from md", () => {
     const { container } = render(
       <PageHeader
@@ -196,6 +233,54 @@ describe("PageHeader", () => {
     // The buttons share the phone's row rather than squeezing beside the
     // title — the overflow /shopping/lists had at 390px.
     expect(row?.className).toContain("[&>*]:flex-1");
+    expect(row?.className).not.toContain("max-lg:contents");
+  });
+
+  it("reads the primary action first among the actions, fixed above the thumb until lg", () => {
+    render(
+      <PageHeader
+        actions={<Button type="button">Apuntar consumo</Button>}
+        primaryAction={
+          <PrimaryAction href="/inventory/add">
+            Añadir existencias
+          </PrimaryAction>
+        }
+        title="Inventario"
+      />,
+    );
+
+    const primary = screen.getByRole("link", { name: "Añadir existencias" });
+    expect(primary).toHaveAttribute("href", "/inventory/add");
+    expect(
+      precedes(
+        primary,
+        screen.getByRole("button", { name: "Apuntar consumo" }),
+      ),
+    ).toBe(true);
+    expect(precedes(screen.getByRole("heading", { level: 1 }), primary)).toBe(
+      true,
+    );
+    // One element on every tier: in the corner below lg, in the header from.
+    expect(primary.className).toContain("fixed");
+    expect(primary.className).toContain("lg:static");
+    expect(primary.className).toContain("min-h-[56px]");
+  });
+
+  it("draws no row for a primary action alone below lg, so it leaves no gap", () => {
+    const { container } = render(
+      <PageHeader
+        primaryAction={
+          <PrimaryAction href="/receipts/upload">Subir un ticket</PrimaryAction>
+        }
+        title="Tickets"
+      />,
+    );
+
+    const row = container.querySelector("[data-slot=page-actions]");
+    expect(row?.className).toContain("max-lg:contents");
+    expect(
+      screen.getByRole("link", { name: "Subir un ticket" }),
+    ).toBeInTheDocument();
   });
 });
 

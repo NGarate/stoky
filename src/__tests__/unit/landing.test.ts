@@ -61,7 +61,7 @@ describe("a device nobody has been asked about", () => {
     );
   });
 
-  it("does not quietly fall back to the Panel", () => {
+  it("does not quietly fall back to Inicio", () => {
     // This is the omission that matters. Landing somewhere reasonable is why
     // the question went unasked through two phases: nobody is inconvenienced
     // by a default, so nobody builds the choice.

@@ -1,6 +1,6 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
-import { screen, cleanup } from "@testing-library/react";
+import { screen, cleanup, within } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
 import { Suspense, createContext } from "react";
 import { renderWithIntl } from "../utils/render";
@@ -352,4 +352,38 @@ it("passes axe at AAA on a loaded /receipts", async () => {
   );
   await screen.findAllByText("Mercadona");
   expect(await axeViolations(container)).toBe("");
+});
+
+it("draws /prices as Compra's second view, titled with its section's name", () => {
+  // Whatever the query says: the views do not need the data.
+  mount(<PricesPage />);
+
+  expect(
+    screen.getByRole("heading", { level: 1, name: "Compra" }),
+  ).toBeInTheDocument();
+  expect(
+    within(screen.getByRole("navigation", { name: "Vistas de Compra" }))
+      .getAllByRole("link")
+      .map((link) => [link.textContent, link.getAttribute("href")]),
+  ).toEqual([
+    ["Listas", "/shopping"],
+    ["Precios", "/prices"],
+  ]);
+});
+
+it("puts /receipts' upload in the fixed spot, loaded or not, as the mock-up draws it", async () => {
+  // The primary action does not need the list: RouteState draws it too.
+  for (const pending of [true, false]) {
+    queryStub = {
+      ...queryStub,
+      isPending: pending,
+      data: pending ? undefined : { items: [] },
+    };
+    mount(<ReceiptsPage />);
+
+    const upload = await screen.findByRole("link", { name: "Subir un ticket" });
+    expect(upload).toHaveAttribute("href", "/receipts/upload");
+    expect(upload.getAttribute("data-primary-action")).not.toBeNull();
+    cleanup();
+  }
 });

@@ -1,6 +1,6 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, mock } from "bun:test";
-import { screen, cleanup, within } from "@testing-library/react";
+import { screen, cleanup, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -76,26 +76,27 @@ function activeLink(): HTMLElement | undefined {
 }
 
 describe("DashboardNav", () => {
-  it("renders every section using the Spanish catalogue", () => {
+  it("carries the rail's five destinations, in the rail's order", () => {
     pathname = "/dashboard";
     renderNav(<DashboardNav account={ACCOUNT} />);
 
-    const expected = [
-      ["Panel", "/dashboard"],
+    // DECISIONS.md NAVIGATION: from eight links to five. Productos and
+    // Precios are views of their sections, Configuración is in the circle.
+    const nav = screen.getByRole("navigation", {
+      name: "Navegación principal",
+    });
+    expect(
+      within(nav)
+        .getAllByRole("link")
+        .filter((link) => link.textContent?.trim() !== "Stoky")
+        .map((link) => [link.textContent, link.getAttribute("href")]),
+    ).toEqual([
+      ["Inicio", "/dashboard"],
+      ["Compra", "/shopping"],
       ["Inventario", "/inventory"],
-      ["Productos", "/products"],
       ["Tickets", "/receipts"],
-      ["Lista de la compra", "/shopping"],
-      ["Precios", "/prices"],
-      ["Configuración", "/settings"],
-    ];
-
-    for (const [label, href] of expected) {
-      expect(screen.getByRole("link", { name: label })).toHaveAttribute(
-        "href",
-        href,
-      );
-    }
+      ["Cocina", "/kitchen"],
+    ]);
   });
 
   it("links the wordmark back to the dashboard", () => {
@@ -132,12 +133,15 @@ describe("DashboardNav", () => {
     expect(highlighted).toHaveLength(1);
   });
 
-  it("does not confuse a prefix match for a section match", () => {
-    // "/products" must not light up while on "/prices".
+  it("highlights a folded view's section: Precios is Compra, Productos Inventario", () => {
     pathname = "/prices";
     renderNav(<DashboardNav account={ACCOUNT} />);
+    expect(activeLink()?.textContent).toBe("Compra");
+    cleanup();
 
-    expect(activeLink()?.textContent).toBe("Precios");
+    pathname = "/products";
+    renderNav(<DashboardNav account={ACCOUNT} />);
+    expect(activeLink()?.textContent).toBe("Inventario");
   });
 
   it("highlights nothing on an unrelated route", () => {
@@ -180,7 +184,7 @@ describe("DashboardNav", () => {
     pathname = "/dashboard";
     renderNav(<DashboardNav account={ACCOUNT} />);
 
-    for (const label of ["Panel", "Inventario", "Configuración"]) {
+    for (const label of ["Inicio", "Inventario", "Cocina"]) {
       expect(screen.getByRole("link", { name: label }).className).toContain(
         "min-h-[48px]",
       );
@@ -191,9 +195,9 @@ describe("DashboardNav", () => {
    * The bar carried theme, language and snackbar duration on every signed-in
    * route, so three settings controls sat across the top of the household
    * overview — the screen whose job is what to buy and what is running out.
-   * They are on `/settings` now, which this bar links to.
+   * They are on `/settings` now, which the account circle links to.
    */
-  it("carries no settings controls, only destinations", () => {
+  it("carries no settings controls, and no Configuración either", () => {
     pathname = "/dashboard";
     renderNav(<DashboardNav account={ACCOUNT} />);
 
@@ -202,10 +206,7 @@ describe("DashboardNav", () => {
     expect(
       screen.queryByRole("group", { name: "Duración de los avisos" }),
     ).toBeAbsent();
-    expect(screen.getByRole("link", { name: "Configuración" })).toHaveAttribute(
-      "href",
-      "/settings",
-    );
+    expect(screen.queryByRole("link", { name: "Configuración" })).toBeAbsent();
   });
 
   it("ends with the account circle, named in words, which opens the account", async () => {
@@ -223,8 +224,33 @@ describe("DashboardNav", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Tu cuenta" });
     expect(within(dialog).getByText("noa@example.com")).toBeInTheDocument();
+    // Configuración left the bar for here. The kitchen did not: it has its
+    // own link in this bar, so the panel does not repeat it.
+    expect(
+      within(dialog)
+        .getAllByRole("link")
+        .map((link) => [link.textContent, link.getAttribute("href")]),
+    ).toEqual([["Configuración", "/settings"]]);
     expect(
       within(dialog).getByRole("button", { name: "Cerrar sesión" }),
     ).toBeInTheDocument();
+  });
+
+  it("closes its panel when Configuración is the page already open", async () => {
+    pathname = "/settings";
+    renderNav(<DashboardNav account={ACCOUNT} />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Tu cuenta: Noa García" }),
+    );
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("link", {
+        name: "Configuración",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeAbsent();
+    });
   });
 });

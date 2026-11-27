@@ -1226,7 +1226,8 @@ furthest point from a thumb and a drawer hides the destinations behind a control
 you have to know about. Seven destinations do not fit at 48px targets, and they
 should not — the phone answers "what do I need to buy". Compra · Inventario ·
 Escanear · Más. The tablet keeps a side rail instead, because a bottom bar wastes
-the most valuable strip of a screen read from a metre away.
+the most valuable strip of a screen read from a metre away. *Superseded by
+D155 (2026-11-27): four fixed destinations, no "Más".*
 
 **D16 — The structural a11y checks are an E2E suite, and a separate one.**
 A4.2 is a measurement in CSS pixels, A4.3 assembles a layout and a page, and
@@ -3555,3 +3556,47 @@ AAA in the component suite under happy-dom (`src/__tests__/utils/axe.ts`),
 one test per screen the browser sweep audited. With no layout it cannot judge
 contrast (`check:contrast` does, on the tokens), target size, or a tier or
 theme.
+
+**D155 — The navigation the owner chose, as built (2026-11-27).**
+`DECISIONS.md` NAVIGATION is the decision; these are the calls its drawings
+left open, taken while building it.
+
+- **Productos and Precios keep their addresses.** Each view of a section is
+  its own route — `/inventory` and `/products`, `/shopping` and `/prices` —
+  so links, `src/lib/back.ts`, the document titles and the offline cache are
+  untouched. `ViewSwitch` (`src/components/ui/`) is therefore two links in a
+  navigation landmark with `aria-current`, not ARIA tabs, which would promise
+  panels that switch in place. A folded view's `h1` is its section's name,
+  as drawn; its document title keeps the view's own, so the route announcer
+  still speaks on a change of view.
+- **One list.** `DESTINATIONS` in `navigation.ts`; the phone takes all but
+  the kitchen. A folded view's routes mark their section (`SECTIONS`), and
+  Configuración marks nothing; its back link, and the phone's kitchen's
+  (`md:hidden`), lead to Inicio.
+- **The account panel.** On every tier: who is signed in (name and address,
+  as before, not the drawing's role and household), Configuración, on the
+  phone only the kitchen screen, and signing out. The phone opens it from a
+  strip above the page with the wordmark and the circle — not in the title's
+  row, as drawn, because the title belongs to each screen's `PageHeader` and
+  the circle to the shell. "Seguridad y acceso" left the panel for
+  Configuración's Seguridad group.
+- **The primary action** (`PrimaryAction`) is fixed below `lg` and an
+  ordinary header button from `lg`, where there is no bar to sit above and
+  nothing has been drawn. It is on the four screens the mock-up draws one
+  for, with the mock-up's words. Compra's "Añadir a la lista" leads to the
+  one list's screen, or to the lists when there are several or none: the
+  buy list has no add form of its own, and making one was not asked.
+  Scanning stays Screen A's top row, outlined. Header buttons that open a
+  form in place (Crear lista, tienda, ubicación) stay in the header.
+- **KITCHEN** sees what it saw: the same destinations as everyone, and the
+  same actions the headers showed. The server refuses what it may not do,
+  as before (`DECISIONS.md` ROLES); "Añadir a la lista" is one it may.
+- **Configuración** keeps every setting it had and loses one action:
+  signing out, which is the account panel's on every screen. The search
+  filters by a setting's name, the sentence under it and its group's name,
+  accents and capitals aside, and says what it found in a status region.
+  The household's names are findable only by whoever sees them. Group names
+  are sentence-case headings, not the drawing's small capitals, by this
+  project's rule for headings.
+- **"Panel" is "Inicio"** wherever it names the screen, English "Home".
+

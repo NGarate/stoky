@@ -11,7 +11,8 @@ import type { JSX } from "react";
 
 /**
  * The desktop's account control: a circle at the end of the top bar that
- * opens `AccountPanel`, where GitHub, Google and most of the web put it.
+ * opens `AccountPanel` — who is signed in, Configuración and the way out —
+ * where GitHub, Google and most of the web put it.
  *
  * A dialog rather than a dropdown menu, because what it holds is not a list
  * of commands — signing out unfolds a question in place — and `Dialog`
@@ -25,7 +26,8 @@ export function AccountMenu({ account }: { account: Account }): JSX.Element {
   const [open, setOpen] = useState(false);
   const opener = useRef<HTMLButtonElement>(null);
 
-  // "Seguridad y acceso" navigates; the panel should not follow.
+  // Configuración navigates; the panel should not follow. Its link closes it
+  // too, for the page already open, where no route changes.
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
@@ -51,7 +53,7 @@ export function AccountMenu({ account }: { account: Account }): JSX.Element {
         returnFocus={opener}
         title={t("account")}
       >
-        <AccountPanel account={account} />
+        <AccountPanel account={account} onNavigate={() => setOpen(false)} />
       </Dialog>
     </>
   );

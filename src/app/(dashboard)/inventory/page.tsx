@@ -16,9 +16,11 @@ import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ItemRow } from "@/components/ui/item-row";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { PrimaryAction } from "@/components/ui/primary-action";
 import { Pagination } from "@/components/ui/pagination";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
+import { SectionViews } from "@/components/dashboard/SectionViews";
 import { ExpiringItems } from "@/components/inventory/ExpiringItems";
 import type { JSX } from "react";
 
@@ -90,9 +92,9 @@ export default function InventoryPage(): JSX.Element {
 }
 
 /**
- * The Panel's restock overflow links here with `?filter=restock` when its
+ * Inicio's restock overflow links here with `?filter=restock` when its
  * section cannot show everything, and the rule that created the filter binds
- * it: the rows this shows must be exactly the set the Panel counted, which is
+ * it: the rows this shows must be exactly the set Inicio counted, which is
  * why both sides ask the server the same question (`needsRestock`) instead of
  * each filtering for themselves. The filter announces itself and offers the
  * way back — a list quietly showing less than everything is how numbers stop
@@ -171,26 +173,26 @@ export function InventoryView(): JSX.Element {
   // with no household, which is HOUSE-1.
   // Neither needs the list to have arrived, so both are drawn while it has
   // not — RouteState puts them in the same place the loaded screen does.
+  const primaryAction = (
+    <PrimaryAction href="/inventory/add">{t("addStockAction")}</PrimaryAction>
+  );
   const actions = (
-    <>
-      <Button asChild>
-        <Link href="/inventory/add">{t("addStock")}</Link>
-      </Button>
-      <Button asChild variant="outline">
-        <Link href="/inventory/consume">{t("consumeStock")}</Link>
-      </Button>
-    </>
+    <Button asChild variant="outline">
+      <Link href="/inventory/consume">{t("consumeStock")}</Link>
+    </Button>
   );
 
   if (!result) {
     return (
       <RouteState
         actions={actions}
+        primaryAction={primaryAction}
         error={query.error}
         fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
         onRetry={() => void query.refetch()}
         title={t("title")}
+        views={<SectionViews section="inventory" />}
       />
     );
   }
@@ -199,7 +201,12 @@ export function InventoryView(): JSX.Element {
 
   return (
     <PageShell width="index">
-      <PageHeader actions={actions} title={t("title")} />
+      <PageHeader
+        actions={actions}
+        primaryAction={primaryAction}
+        title={t("title")}
+        views={<SectionViews section="inventory" />}
+      />
 
       {filterRestock ? (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded border border-warn-foreground bg-warn px-4 py-3">

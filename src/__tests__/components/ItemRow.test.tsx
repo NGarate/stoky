@@ -115,7 +115,7 @@ describe("a plain ItemRow", () => {
 
       // A card has a surface, so its padding is inside something. A plain row
       // has none, and the padding only pushed every title 12–20px right of
-      // the heading it sits under, on the Panel, the kitchen and the
+      // the heading it sits under, on Inicio, the kitchen and the
       // inventory's expiry block. Vertical rhythm stays; the inset goes, at
       // every breakpoint the density pads at.
       expect(classes).toContain("px-0");

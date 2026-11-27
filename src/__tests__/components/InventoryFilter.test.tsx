@@ -1,12 +1,12 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
-import { screen, cleanup, fireEvent } from "@testing-library/react";
+import { screen, cleanup, within, fireEvent } from "@testing-library/react";
 import { renderWithIntl } from "../utils/render";
 import { axeViolations } from "../utils/axe";
 import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
- * `/inventory?filter=restock` — the Panel's restock card lands here.
+ * `/inventory?filter=restock` — Inicio's restock card lands here.
  *
  * The filter must be loud: a banner naming it, a way back to the whole list,
  * and — when nothing needs restocking — a sentence rather than a bare empty
@@ -260,12 +260,55 @@ describe("finding something in a long inventory", () => {
   });
 });
 
+describe("Inventario's two views", () => {
+  it("are drawn under the title, Existencias the one on screen", () => {
+    overviewStub.data = { products: [], total: 0, page: 1, pageCount: 1 };
+    renderWithIntl(<InventoryView />, { locale: "es" });
+
+    const views = screen.getByRole("navigation", {
+      name: "Vistas de Inventario",
+    });
+    expect(
+      within(views)
+        .getAllByRole("link")
+        .map((link) => [
+          link.textContent,
+          link.getAttribute("href"),
+          link.getAttribute("aria-current"),
+        ]),
+    ).toEqual([
+      ["Existencias", "/inventory", "page"],
+      ["Productos", "/products", null],
+    ]);
+  });
+});
+
+describe("the screen's primary action", () => {
+  it("is the mock-up's \u00abAñadir existencias\u00bb, in the fixed spot", () => {
+    overviewStub.data = { products: [], total: 0, page: 1, pageCount: 1 };
+    renderWithIntl(<InventoryView />, { locale: "es" });
+
+    const add = screen.getByRole("link", { name: "Añadir existencias" });
+    expect(add).toHaveAttribute("href", "/inventory/add");
+    expect(add.getAttribute("data-primary-action")).not.toBeNull();
+    // Recording use stays in the header, outlined.
+    expect(
+      screen
+        .getByRole("link", { name: "Apuntar consumo" })
+        .getAttribute("data-primary-action"),
+    ).toBeNull();
+  });
+});
+
 describe("paging a long inventory", () => {
   it("offers no pager when everything fits on one page", () => {
     overviewStub.data = { products: [], total: 3, page: 1, pageCount: 1 };
     renderWithIntl(<InventoryView />, { locale: "es" });
 
-    expect(screen.queryByRole("navigation")).toBeAbsent();
+    // By name: the screen's other landmark is its two views.
+    expect(
+      screen.queryByRole("navigation", { name: "Páginas del inventario" }),
+    ).toBeAbsent();
   });
 
   it("says where you are, and keeps the description while you page", () => {

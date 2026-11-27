@@ -1,35 +1,26 @@
 "use client";
 
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useRef } from "react";
 import { tabbableWithin } from "@/lib/focus";
 import { AccountPanel, type Account } from "@/components/session/AccountPanel";
 
-import type { Destination } from "./navigation";
 import type { JSX } from "react";
 
-interface NavSheetProps {
-  /** Who is signed in, drawn at the head of the sheet. */
+interface AccountSheetProps {
+  /** Who is signed in. */
   account: Account;
-  /** The destination the current route belongs to, or `null`. */
-  currentHref: string | null;
-  /** What the bar is not showing, in the order to list it. */
-  destinations: readonly Destination[];
   /** Called for Escape, the close button and a tap on the scrim. */
   onClose: () => void;
   open: boolean;
 }
 
 /**
- * The "Más" panel: who is signed in, then the destinations the compact
- * tiers' bar is not showing.
- *
- * It used to carry theme and language as well. They have gone to `/settings`,
- * which is one of the destinations listed here — a settings control reachable
- * from a navigation sheet is a setting somebody changes by accident while
- * looking for a page, and on the phone the sheet is 85vh with the preferences
- * at the bottom of it.
+ * The compact tiers' account panel: who is signed in, Configuración, on the
+ * phone the kitchen screen, and the way out (`AccountPanel`). It opens from
+ * the circle at the top of the phone and from the foot of the tablet's rail
+ * (`DECISIONS.md` NAVIGATION). Until 2026-11-27 it was the "Más" sheet, which
+ * listed the five destinations the bar was not showing below the account.
  *
  * Hand-rolled rather than `<dialog>`. `showModal()` would give the focus trap
  * and Escape for free, but it is not implemented in the DOM the component tests
@@ -44,13 +35,11 @@ interface NavSheetProps {
  * and a full-height panel down the left on the tablet, next to the rail that
  * opened it. Both are the same DOM.
  */
-export function NavSheet({
+export function AccountSheet({
   account,
-  currentHref,
-  destinations,
   onClose,
   open,
-}: NavSheetProps): JSX.Element | null {
+}: AccountSheetProps): JSX.Element | null {
   const t = useTranslations("navigation");
   const tCommon = useTranslations("common");
   const titleId = useId();
@@ -80,8 +69,8 @@ export function NavSheet({
       const active = document.activeElement;
 
       // Wrapping is done by hand because focus must not escape into the page
-      // behind the sheet — the destinations there are the ones this panel is
-      // covering, and tabbing into them would be tabbing into nothing visible.
+      // behind the sheet — tabbing into what the scrim covers would be
+      // tabbing into nothing visible.
       //
       // `active === panel` is the state the sheet opens in: focus is on the
       // panel itself, which is before every control in it, so shift+Tab from
@@ -138,7 +127,7 @@ export function NavSheet({
       <div
         aria-labelledby={titleId}
         aria-modal="true"
-        className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-border bg-card p-4 md:inset-y-0 md:right-auto md:w-96 md:max-h-none md:rounded-none md:border-r md:border-t-0 md:p-6"
+        className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-border bg-card p-4 md:inset-y-0 md:right-auto md:left-32 md:w-96 md:max-h-none md:rounded-none md:border-r md:border-t-0 md:p-6"
         ref={panelRef}
         role="dialog"
         tabIndex={-1}
@@ -148,7 +137,7 @@ export function NavSheet({
             className="text-lg font-semibold text-heading md:text-2xl"
             id={titleId}
           >
-            {t("moreTitle")}
+            {t("account")}
           </h2>
           <button
             className="inline-flex min-h-[48px] min-w-[48px] items-center justify-center rounded-md border border-input bg-card px-3 font-medium text-foreground hover:bg-accent hover:text-accent-foreground md:text-lg"
@@ -159,34 +148,13 @@ export function NavSheet({
           </button>
         </div>
 
-        {/* First, above the destinations: on a phone this is the only place
-            the account is, and on a shared device it is what matters. */}
-        <div className="mt-4 border-b border-border pb-4">
-          <AccountPanel account={account} />
+        <div className="mt-4">
+          <AccountPanel
+            account={account}
+            kitchen="phone"
+            onNavigate={onClose}
+          />
         </div>
-
-        <ul className="mt-4 space-y-2">
-          {destinations.map((destination) => {
-            const isCurrent = currentHref === destination.href;
-
-            return (
-              <li key={destination.href}>
-                <Link
-                  aria-current={isCurrent ? "page" : undefined}
-                  className={`flex min-h-[56px] items-center rounded-md px-4 md:min-h-[64px] md:text-xl ${
-                    isCurrent
-                      ? "border-l-4 border-primary bg-primary font-semibold text-primary-foreground"
-                      : "border-l-4 border-transparent font-normal text-foreground hover:bg-accent hover:text-accent-foreground"
-                  }`}
-                  href={destination.href}
-                  onClick={onClose}
-                >
-                  {t(destination.labelKey)}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
       </div>
     </div>
   );

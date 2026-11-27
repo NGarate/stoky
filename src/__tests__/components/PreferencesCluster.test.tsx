@@ -4,8 +4,9 @@ import { screen, cleanup } from "@testing-library/react";
 import { renderWithIntl } from "../utils/render";
 
 /**
- * The cluster is what `/login`, `/register` and `/settings` all render, so it
- * may only hold preferences that can honestly be offered with no account.
+ * The cluster is what `/login`, `/register` and the registration-closed screen
+ * render, so it may only hold preferences that can honestly be offered with
+ * no account. `/settings` draws its two controls as settings of their own.
  *
  * Theme qualifies: it is a property of the screen and never leaves the device.
  * Language qualifies for a subtler reason — it writes to the account when
@@ -17,7 +18,7 @@ import { renderWithIntl } from "../utils/render";
  * It is stored against the account (WCAG 2.2.1 is about the person, not the
  * browser), and on `/login` there is no account to store it against — so it
  * would have been a control that appears to save and does not. `/settings`
- * renders it beside this cluster instead.
+ * draws it, beside the theme and the language, instead.
  */
 // The language switcher is a server action away from `next/headers`, which
 // has no meaning outside a request.

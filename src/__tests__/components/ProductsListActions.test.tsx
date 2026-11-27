@@ -1,6 +1,6 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
-import { screen, cleanup } from "@testing-library/react";
+import { screen, cleanup, within } from "@testing-library/react";
 import { renderWithIntl } from "../utils/render";
 import { axeViolations } from "../utils/axe";
 import { Decimal } from "@prisma/client-runtime-utils";
@@ -56,6 +56,42 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+/** The section's views, as links: their words and where they lead. */
+function viewLinks(name: string): (string | null)[][] {
+  return within(screen.getByRole("navigation", { name }))
+    .getAllByRole("link")
+    .map((link) => [link.textContent, link.getAttribute("href")]);
+}
+
+describe("Productos, Inventario's second view", () => {
+  it("is titled with its section's name, and leads back to Existencias", () => {
+    renderWithIntl(<ProductsPage />, { locale: "es" });
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Inventario" }),
+    ).toBeInTheDocument();
+    expect(viewLinks("Vistas de Inventario")).toEqual([
+      ["Existencias", "/inventory"],
+      ["Productos", "/products"],
+    ]);
+  });
+});
+
+describe("the screen's primary action", () => {
+  it("is the mock-up's \u00abCrear un producto\u00bb, in the fixed spot, and scanning is not", () => {
+    renderWithIntl(<ProductsPage />, { locale: "es" });
+
+    const create = screen.getByRole("link", { name: "Crear un producto" });
+    expect(create).toHaveAttribute("href", "/products/new");
+    expect(create.getAttribute("data-primary-action")).not.toBeNull();
+    expect(
+      screen
+        .getByRole("link", { name: "Escanear código" })
+        .getAttribute("data-primary-action"),
+    ).toBeNull();
+  });
+});
 
 describe("the catalogue's actions column", () => {
   it("offers the row's real actions, each named with its product", () => {

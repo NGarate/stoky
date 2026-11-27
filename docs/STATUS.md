@@ -1268,10 +1268,16 @@ System/Light/Dark control and a language control on every surface.
 Everything else is Tailwind against the tokens — the earlier plan to install
 ~23 shadcn primitives was not followed, and no page has needed them.
 
-**Navigation — three renderers by tier.** Bottom bar below `md`, rail from `md`,
-top bar from `lg`, with a focus-trapped sheet for the overflow. Audited by axe
-at all three tiers in both themes until 2026-10-27, when that sweep was
-deleted (PROGRESS D154).
+**Navigation — three renderers by tier, one list.** Bottom bar below `md`
+with four fixed destinations (Inicio, Compra, Inventario, Tickets), rail from
+`md` and top bar from `lg` with the same four and Cocina, all read from
+`DESTINATIONS` in `src/components/dashboard/navigation.ts`
+(`DECISIONS.md` NAVIGATION). The account opens a focus-trapped panel —
+Configuración, on the phone the kitchen screen, and signing out — from the
+circle at the top of the phone and the desktop and the foot of the rail.
+Productos and Precios are the second view of Inventario and Compra
+(`ViewSwitch`). Audited by axe at all three tiers in both themes until
+2026-10-27, when that sweep was deleted (PROGRESS D154).
 
 **i18n — two catalogues that cannot silently diverge.**
 `src/__tests__/unit/messages.test.ts` fails on a key present in one and not the
@@ -1495,7 +1501,9 @@ read out of `package.json`, `.bun-version`, the `Dockerfile` and
   composition rules, common-password and identity checks, and a maximum — the
   last of which was missing entirely, leaving Argon2id at 64 MB per call taking
   unbounded input on two endpoints reachable without an account.
-- ~~There is no sign-out control.~~ **Built.** `/settings` ends the session,
+- ~~There is no sign-out control.~~ **Built.** Signing out — from the account
+  panel since 2026-11-27, on every screen (`DECISIONS.md` NAVIGATION), where
+  it was the foot of `/settings` — ends the session,
   purges the queue and tells the worker to forget the cached shell. It asks
   before discarding unsent changes and offers to send them first.
 - ~~Rate limiting is per IP only, `receipt.upload` is unthrottled, and a refusal
@@ -1539,18 +1547,15 @@ read out of `package.json`, `.bun-version`, the `Dockerfile` and
   `/inventory/add`.~~ **Closed.** The last of the eight: the stock procedures'
   inputs described a database row rather than what each one does, and
   `ProductPicker` read one page's namespace on both stock screens.
-- **The phone's bottom bar, its menus and the settings hub are owed a
-  rethink** (owner, 2026-11-27). The bar holds the three screens last used on
-  the device plus "Más" (`nextSlots` in `src/components/dashboard/navigation.ts`),
-  so what is in it moves; the "Más" sheet lists the other five destinations
-  and the account; and `/settings` is one flat list that mixes what belongs
-  to the account, to the device and to the household with two actions.
-  `docs/mockups/navegacion-movil.html` draws the current arrangement beside
-  three alternatives, on the same content. **The owner chose B the same day**
-  — four fixed destinations, one action button, the account in the corner —
-  and `DECISIONS.md` NAVIGATION records it, with Configuración ordered by
-  task and the tablet's rail and the desktop bar following with the same
-  five. None of it is built.
+- ~~**The phone's bottom bar, its menus and the settings hub are owed a
+  rethink**~~ (owner, 2026-11-27). **Built** the same day, as `DECISIONS.md`
+  NAVIGATION chose it (arrangement B of `docs/mockups/navegacion-movil.html`):
+  four fixed destinations on the phone and no "Más"; the rail and the
+  desktop bar with the same four and Cocina; Productos and Precios as the
+  second view of Inventario and Compra; each screen's primary action fixed
+  above the thumb; the account panel with Configuración, on the phone the
+  kitchen screen, and signing out; and Configuración ordered by task with a
+  search. PROGRESS D155 has the calls the drawings left open.
 
 Closed since this section was written, and listed because a status file that
 only ever grows is one nobody trusts: DEBT-2 (the scanner's torch), UI-9 (a

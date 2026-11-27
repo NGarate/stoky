@@ -70,7 +70,8 @@ export function ExportButton(): JSX.Element {
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-heading">{t("exportTitle")}</h2>
+      {/* An h3: it sits inside Configuración's "Tus datos". */}
+      <h3 className="text-lg font-semibold text-heading">{t("exportTitle")}</h3>
       <p className="mt-1 text-muted-foreground">{t("exportDescription")}</p>
       <p className="mt-2 text-sm text-muted-foreground">
         {t("exportImagesNote")}

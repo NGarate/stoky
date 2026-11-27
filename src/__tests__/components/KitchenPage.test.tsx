@@ -90,6 +90,17 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
+// Complete, per D50. The screen draws a way back on the phone, and the way
+// back asks the router and the query string; without this the file only
+// passed when another file's mock happened to be loaded first.
+mock.module("next/navigation", () => ({
+  usePathname: () => "/kitchen",
+  useRouter: () => ({ push: () => {}, replace: () => {}, refresh: () => {} }),
+  useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({}),
+  redirect: () => {},
+}));
+
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
 const { default: KitchenPage } = await import("@/app/(dashboard)/kitchen/page");
 
@@ -156,6 +167,18 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+describe("the way back", () => {
+  it("leads to Inicio on the phone only, where no bar has the kitchen", () => {
+    renderKitchen();
+
+    const back = screen.getByRole("link", { name: "Volver al inicio" });
+    expect(back).toHaveAttribute("href", "/dashboard");
+    // The rail and the top bar have a Cocina of their own (DECISIONS.md
+    // NAVIGATION), so from md the way back is not drawn.
+    expect(back.closest("div")?.className).toContain("md:hidden");
+  });
+});
 
 describe("how fresh the answer is", () => {
   it("says when it last heard from the server, for a tablet nobody touches", () => {

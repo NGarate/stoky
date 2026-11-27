@@ -123,6 +123,8 @@ export default function KitchenPage(): JSX.Element {
   if (!expiring.data) {
     return (
       <RouteState
+        back="/dashboard"
+        backClassName="md:hidden"
         error={expiring.error}
         fetchStatus={expiring.fetchStatus}
         isLoading={expiring.isPending}
@@ -274,7 +276,16 @@ export default function KitchenPage(): JSX.Element {
 
   return (
     <PageShell width="screen">
-      <PageHeader density="touch" title={t("title")} />
+      {/* The way back on the phone only: there the kitchen is reached from
+          the account panel and the bar marks nothing, so the title and this
+          link are what say where you are (DECISIONS.md NAVIGATION). The rail
+          and the top bar have a Cocina of their own. */}
+      <PageHeader
+        back="/dashboard"
+        backClassName="md:hidden"
+        density="touch"
+        title={t("title")}
+      />
 
       {/* Sentence case. These were tracked uppercase grey labels: the
           commonest tell of a template, and on a tablet read from a metre
@@ -427,7 +438,7 @@ export default function KitchenPage(): JSX.Element {
                         }),
                       },
                     ]}
-                    /* StockStatus's word, the one the inventory and the Panel
+                    /* StockStatus's word, the one the inventory and Inicio
                        wear. This row worked the state out for itself — "Queda:
                        Nada" and no badge — which is ISSUES UI-11 on a sixth
                        screen. Every row here came from the `lowStock`

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Section } from "@/components/ui/section";
+import { sectionHeading } from "@/components/ui/section";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
 import { MAX_NAME_LENGTH } from "@/lib/validations/bounds";
@@ -67,9 +67,12 @@ export function HouseholdSettings(): JSX.Element | null {
   }
 
   return (
-    <Section className="mt-8" title={t("settingsTitle")}>
+    // An h3, not a Section: it sits inside Configuración's "Organizar la
+    // casa", and a Section is always an h2 directly under the page's h1.
+    <div>
+      <h3 className={sectionHeading()}>{t("settingsTitle")}</h3>
       <form
-        className="rounded border border-border bg-card p-4"
+        className="mt-3 rounded border border-border bg-card p-4"
         key={[household.name, household.tabName, household.appName].join("\n")}
         onSubmit={save}
       >
@@ -103,7 +106,7 @@ export function HouseholdSettings(): JSX.Element | null {
           {tCommon("save")}
         </Button>
       </form>
-    </Section>
+    </div>
   );
 }
 

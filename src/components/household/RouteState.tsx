@@ -108,8 +108,14 @@ interface RouteStateProps {
   title: string;
   /** The way back, as the loaded screen draws it. */
   back?: string;
+  /** Where the way back is drawn, as the loaded screen draws it. */
+  backClassName?: string;
+  /** The screen's primary action, when it does not depend on the data. */
+  primaryAction?: ReactNode;
   /** The screen's actions, when they do not depend on the data. */
   actions?: ReactNode;
+  /** The section's views, as the loaded screen draws them. */
+  views?: ReactNode;
   /** The loaded screen's width. Defaults to an index's. */
   width?: PageWidth;
   density?: "default" | "touch";
@@ -134,7 +140,10 @@ export function isNotFoundError(error: unknown): boolean {
 export function RouteState({
   title,
   back,
+  backClassName,
+  primaryAction,
   actions,
+  views,
   width = "index",
   density,
   notFound,
@@ -176,9 +185,12 @@ export function RouteState({
           to act on. */}
       <PageHeader
         actions={missing ? undefined : actions}
+        primaryAction={missing ? undefined : primaryAction}
         back={missing ? (notFound.back ?? back) : back}
+        backClassName={missing ? undefined : backClassName}
         density={density}
         title={missing ? notFound.title : title}
+        views={missing ? undefined : views}
       />
       <div aria-live="polite" role="status">
         {missing ? (

@@ -1,135 +1,300 @@
 "use client";
 
-import { ItemRow } from "@/components/ui/item-row";
+import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
+import { ItemRow } from "@/components/ui/item-row";
+import { Input } from "@/components/ui/input";
 import { sectionHeading } from "@/components/ui/section";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
-import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
+import { foldText } from "@/components/ui/combobox";
+import { LocaleSwitcher } from "@/components/ui/LocaleSwitcher";
+import { ThemeControl } from "@/components/ui/ThemeControl";
 import { SnackbarDurationControl } from "@/components/ui/SnackbarDurationControl";
 import { ExportButton } from "@/components/settings/ExportButton";
 import { HouseholdSettings } from "@/components/settings/HouseholdSettings";
-import { SignOutButton } from "@/components/session/SignOutButton";
-import type { JSX } from "react";
+import { api } from "@/lib/trpc/client";
+import type { JSX, ReactNode } from "react";
+
+/** One setting: the words it is found by, and what it draws. */
+interface Setting {
+  key: string;
+  words: readonly string[];
+  node: ReactNode;
+}
+
+interface Group {
+  key: string;
+  title: string;
+  description?: string;
+  settings: readonly Setting[];
+}
+
+/** A control drawn in place, on the same card a row of the list wears. */
+const CONTROL_CARD = "rounded-lg border border-border bg-card p-4 shadow-sm";
 
 /**
- * Settings hub.
+ * Configuración, ordered by what somebody came to do (`DECISIONS.md`
+ * NAVIGATION, owner, 2026-11-27): organise the house, how it looks and how
+ * it tells you things, security, your data — with a search field above,
+ * for whoever does not know what the thing they want is called.
  *
- * `DashboardNav` links here from every dashboard page, so this route existing
- * at all is the point; it is deliberately a plain index of the settings screens
- * that are actually built, not a settings screen itself.
+ * The same settings as before, neither more nor fewer: the screens it links
+ * to, and the controls it draws in place. Only their order changed. It used
+ * to be one flat list that mixed what belongs to the account, to the device
+ * and to the household, with two actions between them. Signing out was one
+ * of those, and is not here any more: it is in the account panel, which
+ * every tier opens from every screen.
  *
- * It now renders the preferences cluster inline. It previously could not:
- * `LocaleSwitcher` hardcoded `id="locale-switcher"` and `DashboardNav` renders
- * it on every dashboard page including this one, so a second instance put two
- * elements with the same id on the page and `<label for>` named the wrong one.
- * Both controls take their ids and their radio group name from `useId()`, so
- * two instances no longer collide (DESIGN_AUDIT A2.1).
+ * The search filters as you type, without accents or capitals in the way,
+ * by each setting's name and the sentence under it and by its group's name;
+ * a group with nothing left in it goes. What it found is said in words in a
+ * status region, so a screen reader hears when nothing matches.
  *
- * It is now the *only* surface that renders them. `DashboardNav` and
- * `NavSheet` rendered the cluster too, so three settings controls sat on every
- * signed-in route; both link here instead.
- *
- * The three controls do not all store their answer in the same place, and the
- * copy under the heading says which is which — because "why is the app in
- * English on my phone but Spanish on the tablet" is a question somebody will
- * otherwise have to guess the answer to. Theme is the device's, language and
- * the confirmation duration are the account's.
- *
- * The household's own settings, its name, are a section here rather than a
- * screen of their own: one field does not need a route, and only an owner or
- * an admin sees it at all (`HouseholdSettings`).
- *
- * What it still does not do, on purpose: profile and notification settings.
- * No procedure backs either.
+ * The household's own settings, its names, are drawn only to an owner or an
+ * admin (`HouseholdSettings`), so only they can find them. What it still
+ * does not do, on purpose: profile and notification settings. No procedure
+ * backs either.
  */
 export default function SettingsPage(): JSX.Element {
   const t = useTranslations("settings.hub");
+  const tSettings = useTranslations("settings");
   const tHousehold = useTranslations("household");
   const tOffline = useTranslations("offline");
   const tStart = useTranslations("start");
   const tSecurity = useTranslations("security");
+  const searchId = useId();
+  const [query, setQuery] = useState("");
+
+  const role = api.household.current.useQuery().data?.role;
+  const canManageHousehold = role === "OWNER" || role === "ADMIN";
+
+  const groups: readonly Group[] = [
+    {
+      key: "house",
+      title: t("groupHouse"),
+      settings: [
+        ...(canManageHousehold
+          ? [
+              {
+                key: "household",
+                words: [
+                  tHousehold("settingsTitle"),
+                  tHousehold("nameLabel"),
+                  tHousehold("tabNameLabel"),
+                  tHousehold("appNameLabel"),
+                ],
+                node: (
+                  <li key="household">
+                    <HouseholdSettings />
+                  </li>
+                ),
+              },
+            ]
+          : []),
+        {
+          key: "people",
+          words: [tHousehold("peopleTitle"), tHousehold("peopleDescription")],
+          node: (
+            <ItemRow
+              description={tHousehold("peopleDescription")}
+              href="/settings/people"
+              key="people"
+              title={tHousehold("peopleTitle")}
+            />
+          ),
+        },
+        {
+          key: "locations",
+          words: [t("locationsTitle"), t("locationsDescription")],
+          node: (
+            <ItemRow
+              description={t("locationsDescription")}
+              href="/settings/locations"
+              key="locations"
+              title={t("locationsTitle")}
+            />
+          ),
+        },
+        {
+          key: "stores",
+          words: [t("storesTitle"), t("storesDescription")],
+          node: (
+            <ItemRow
+              description={t("storesDescription")}
+              href="/settings/stores"
+              key="stores"
+              title={t("storesTitle")}
+            />
+          ),
+        },
+      ],
+    },
+    {
+      key: "look",
+      title: t("groupLook"),
+      // Which of these is the account's and which the device's, because
+      // "why is the app in English on my phone but Spanish on the tablet" is
+      // a question somebody will otherwise have to guess the answer to.
+      description: t("preferencesDescription"),
+      settings: [
+        {
+          key: "language",
+          words: [tSettings("language")],
+          node: (
+            <li className={CONTROL_CARD} key="language">
+              <LocaleSwitcher />
+            </li>
+          ),
+        },
+        {
+          key: "snackbar",
+          words: [
+            tSettings("snackbarDuration"),
+            tSettings("snackbarDurationHint"),
+          ],
+          node: (
+            <li className={CONTROL_CARD} key="snackbar">
+              <SnackbarDurationControl />
+            </li>
+          ),
+        },
+        {
+          key: "theme",
+          words: [tSettings("theme")],
+          node: (
+            <li className={CONTROL_CARD} key="theme">
+              <ThemeControl />
+            </li>
+          ),
+        },
+        {
+          key: "screen",
+          words: [tStart("settingsLink"), tStart("settingsLinkDescription")],
+          node: (
+            <ItemRow
+              description={tStart("settingsLinkDescription")}
+              href="/settings/screen"
+              key="screen"
+              title={tStart("settingsLink")}
+            />
+          ),
+        },
+      ],
+    },
+    {
+      key: "security",
+      title: t("groupSecurity"),
+      settings: [
+        {
+          key: "security",
+          words: [tSecurity("title"), tSecurity("hubDescription")],
+          node: (
+            <ItemRow
+              description={tSecurity("hubDescription")}
+              href="/settings/security"
+              key="security"
+              title={tSecurity("title")}
+            />
+          ),
+        },
+      ],
+    },
+    {
+      key: "data",
+      title: t("groupData"),
+      settings: [
+        {
+          key: "unsaved",
+          words: [tOffline("unsavedTitle"), tOffline("unsavedDescription")],
+          node: (
+            <ItemRow
+              description={tOffline("unsavedDescription")}
+              href="/settings/unsaved"
+              key="unsaved"
+              title={tOffline("unsavedTitle")}
+            />
+          ),
+        },
+        {
+          key: "export",
+          words: [t("exportTitle"), t("exportDescription")],
+          node: (
+            <li className={CONTROL_CARD} key="export">
+              <ExportButton />
+            </li>
+          ),
+        },
+      ],
+    },
+  ];
+
+  const wanted = foldText(query);
+  const shown = groups
+    .map((group) => ({
+      ...group,
+      settings: group.settings.filter(
+        (setting) =>
+          wanted === "" ||
+          [group.title, ...setting.words].some((word) =>
+            foldText(word).includes(wanted),
+          ),
+      ),
+    }))
+    .filter((group) => group.settings.length > 0);
+  const found = shown.reduce((sum, group) => sum + group.settings.length, 0);
 
   return (
     <PageShell width="form">
-      <PageHeader intro={t("intro")} title={t("title")} />
+      {/* Back to Inicio: no bar marks Configuración, so the title and this
+          link say where you are (DECISIONS.md NAVIGATION). */}
+      <PageHeader back="/dashboard" intro={t("intro")} title={t("title")} />
 
-      {/* Each screen is one ItemRow whose title is the link. They were cards
-          whose h2 held a link-styled Button — so the title, at the
-          button's text-sm, rendered smaller than the sentence under it, and
-          five h2s were spent on what is a list of places to go. */}
-      <ul className="space-y-3">
-        {/* First, because it is the one somebody arrives in a hurry for: a
-            phone lost, a device they do not recognise, a password somebody
-            else may know. */}
-        <ItemRow
-          description={tSecurity("hubDescription")}
-          href="/settings/security"
-          title={tSecurity("title")}
+      <div role="search">
+        <label
+          className="mb-1 block text-sm font-medium text-foreground"
+          htmlFor={searchId}
+        >
+          {t("search")}
+        </label>
+        <Input
+          autoComplete="off"
+          id={searchId}
+          onChange={(event) => setQuery(event.target.value)}
+          type="search"
+          value={query}
         />
-        <ItemRow
-          description={t("locationsDescription")}
-          href="/settings/locations"
-          title={t("locationsTitle")}
-        />
-        <ItemRow
-          description={t("storesDescription")}
-          href="/settings/stores"
-          title={t("storesTitle")}
-        />
-        <ItemRow
-          description={tHousehold("peopleDescription")}
-          href="/settings/people"
-          title={tHousehold("peopleTitle")}
-        />
-        <ItemRow
-          description={tStart("settingsLinkDescription")}
-          href="/settings/screen"
-          title={tStart("settingsLink")}
-        />
-        <ItemRow
-          description={tOffline("unsavedDescription")}
-          href="/settings/unsaved"
-          title={tOffline("unsavedTitle")}
-        />
-      </ul>
+      </div>
 
-      <HouseholdSettings />
-
-      {/* Not in the list above, because it is an action rather than a screen —
-          and above sign-out, because leaving with your data is the step that
-          has to come first. */}
-      <section className="mt-8 rounded border border-border bg-card p-4">
-        <ExportButton />
-      </section>
-
-      {/* The action that ends the visit — first-class, because on a shared
-          device it is the control that matters most. Ending the account's
-          other sessions, one or all of them, and changing the password are
-          "Seguridad y acceso" above: each asks for the password and ends
-          sessions, so they sit with the list of what they would end rather
-          than as buttons beside this one. */}
-      <section className="mt-8 rounded border border-border bg-card p-4">
-        <SignOutButton />
-      </section>
-
-      {/* The only place in the application these are offered. They used to be
-          in the top bar and in the "Más" sheet as well, which put settings
-          controls across the top of every screen — including the household
-          overview, whose whole job is what to buy and what is running out. */}
-      <h2 className={`mt-8 ${sectionHeading()}`}>{t("preferencesTitle")}</h2>
-      <p className="mt-2 text-muted-foreground">
-        {t("preferencesDescription")}
+      {/* Present from the first render, so what it says when the search
+          changes is announced rather than appearing in a region created at
+          that moment. Silent while nothing is being searched. */}
+      <p className="sr-only" role="status">
+        {wanted === "" ? "" : t("searchFound", { count: found })}
       </p>
-      <PreferencesCluster className="mt-4" />
 
-      {/* Beside the cluster rather than inside it: this one needs an account
-          to write to, and the cluster is also rendered on `/login`.
+      {shown.length === 0 ? (
+        <p className="mt-6 text-muted-foreground">
+          {t("searchEmpty", { query: query.trim() })}
+        </p>
+      ) : null}
 
-          `mt-3` is the cluster's own `gap-y-3`, restated because this control
-          is outside it. Without it the two sat flush — measured at 1280px,
-          "Tema" ended and "Duración de los avisos" began on the same pixel —
-          so three controls of one kind read as two groups with a seam. */}
-      <SnackbarDurationControl className="mt-3" />
+      {shown.map((group) => (
+        <section
+          aria-labelledby={`settings-${group.key}`}
+          className="mt-8"
+          key={group.key}
+        >
+          <h2 className={sectionHeading()} id={`settings-${group.key}`}>
+            {group.title}
+          </h2>
+          {group.description ? (
+            <p className="mt-2 text-muted-foreground">{group.description}</p>
+          ) : null}
+          <ul className="mt-4 space-y-3">
+            {group.settings.map((setting) => setting.node)}
+          </ul>
+        </section>
+      ))}
     </PageShell>
   );
 }

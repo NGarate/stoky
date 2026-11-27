@@ -18,7 +18,7 @@ import type { JSX, ReactNode } from "react";
  * |---|---|---|
  * | `form` | 2xl | one column of fields, read top to bottom on a phone |
  * | `detail` | 3xl | one thing, its sections stacked |
- * | `screen` | 5xl | a whole-screen overview (the Panel, the kitchen) |
+ * | `screen` | 5xl | a whole-screen overview (Inicio, the kitchen) |
  * | `index` | 6xl | a list of things, a table from `lg` |
  *
  * There is no gutter here: the layout's `p-4` is the only one. A second `p-6`
@@ -71,12 +71,27 @@ export interface PageHeaderProps {
    * and the words name wherever it leads (`useBack`).
    */
   back?: string;
+  /**
+   * Where the way back is drawn, when not on every tier: the kitchen's is
+   * `md:hidden`, because only the phone has no button for the kitchen.
+   */
+  backClassName?: string;
   /** One sentence saying what this screen is for. */
   intro?: ReactNode;
   /**
-   * `<Button>`s. At most one `default` — the screen's primary action — and
-   * the rest `outline` (`DECISIONS.md` USABILITY: one primary action per
-   * screen).
+   * The section's views (`ViewSwitch`), under the title and above the
+   * screen: on Inventario and Compra, which each hold two.
+   */
+  views?: ReactNode;
+  /**
+   * The screen's one primary action, a `<PrimaryAction>`: fixed above the
+   * thumb below `lg`, first among the actions from there.
+   */
+  primaryAction?: ReactNode;
+  /**
+   * `<Button>`s. At most one `default` — the screen's primary action, when it
+   * opens something in place rather than being a `primaryAction` — and the
+   * rest `outline` (`DECISIONS.md` USABILITY: one primary action per screen).
    */
   actions?: ReactNode;
   density?: "default" | "touch";
@@ -98,7 +113,11 @@ export interface PageHeaderProps {
  * 4. **The actions** — on a phone a full-width row of their own under the
  *    words, from `md` opposite the title. Two buttons squeezed beside a title
  *    on a 390px screen pushed `/shopping/lists` to 399px wide, which is a
- *    WCAG 1.4.10 reflow failure rather than a cosmetic one.
+ *    WCAG 1.4.10 reflow failure rather than a cosmetic one. The primary
+ *    action leaves the row below `lg` for the corner above the bar
+ *    (`PrimaryAction`).
+ * 5. **The views**, when the section has two (`ViewSwitch`): under the
+ *    title, and on a phone before the actions' row.
  *
  * DOM order is reading order: title and intro come before the actions, so a
  * screen reader hears what the screen is before what it can do.
@@ -106,7 +125,10 @@ export interface PageHeaderProps {
 export function PageHeader({
   title,
   back,
+  backClassName,
   intro,
+  views,
+  primaryAction,
   actions,
   density,
   className,
@@ -114,17 +136,19 @@ export function PageHeader({
   return (
     <div className={cn("mb-6", className)}>
       {back ? (
-        <WithBack fallback={back}>
-          {({ href, label, onClick }) => (
-            <BackLink href={href} onClick={onClick}>
-              {label}
-            </BackLink>
-          )}
-        </WithBack>
+        <div className={backClassName}>
+          <WithBack fallback={back}>
+            {({ href, label, onClick }) => (
+              <BackLink href={href} onClick={onClick}>
+                {label}
+              </BackLink>
+            )}
+          </WithBack>
+        </div>
       ) : null}
       <div
         className={cn(
-          "flex flex-col gap-4 md:flex-row md:items-start md:justify-between",
+          "flex flex-col gap-4 md:flex-row md:flex-wrap md:items-start md:justify-between",
           back ? "mt-2" : null,
         )}
       >
@@ -132,14 +156,26 @@ export function PageHeader({
           <h1 className={titleVariants({ density })}>{title}</h1>
           {intro ? <p className="mt-2 text-muted-foreground">{intro}</p> : null}
         </div>
-        {actions ? (
+        {/* Straight under the title on a phone, before the actions, as the
+            mock-up draws the two views; from `md` a row of their own under
+            the title and the actions beside it. */}
+        {views ? (
+          <div className="md:order-last md:basis-full">{views}</div>
+        ) : null}
+        {primaryAction || actions ? (
           // Each button takes an equal share of the phone's row and wraps to
           // a row of its own when the two cannot share one; from `md` they
-          // keep their own width and sit opposite the title.
+          // keep their own width and sit opposite the title. A primary action
+          // alone is fixed below `lg`, out of the row, so the row is not
+          // drawn there (`contents`) and leaves no gap under the title.
           <div
-            className="flex flex-wrap gap-2 md:shrink-0 md:justify-end [&>*]:flex-1 md:[&>*]:flex-none"
+            className={cn(
+              "flex flex-wrap gap-2 md:shrink-0 md:justify-end [&>*]:flex-1 md:[&>*]:flex-none",
+              actions ? null : "max-lg:contents",
+            )}
             data-slot="page-actions"
           >
+            {primaryAction}
             {actions}
           </div>
         ) : null}

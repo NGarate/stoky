@@ -10,7 +10,7 @@
  *   would mean for it.
  * - **`needsRestock`** — that, **plus everything at or below zero even with
  *   no minimum set**. A product that has run out without a minimum would
- *   otherwise never appear anywhere, which is the Panel's concern.
+ *   otherwise never appear anywhere, which is Inicio's concern.
  *
  * They were three implementations before this: `getStockOverview` had the
  * canonical pair, `shopping.generateFromLowStock` re-derived one as

@@ -39,10 +39,10 @@ const ALLOWED: Record<string, string> = {
   "app/(dashboard)/shopping/page.tsx":
     "Screen A's trolley disclosure: a full-width row read with a trolley in one hand (D54, DECISIONS.md SCREENS)",
   "components/dashboard/CompactNav.tsx":
-    "the phone bar and the tablet rail: a navigation destination is 56px and 76px by design, not a control (DESIGN_AUDIT A3.5)",
+    "the phone bar and the tablet rail: a navigation destination is 64px and 76px by design, not a control (DESIGN_AUDIT A3.5)",
   "components/dashboard/DashboardNav.tsx":
     "the navigation owns its own geometry: a nav item is not a button and must not look like one",
-  "components/dashboard/NavSheet.tsx":
+  "components/dashboard/AccountSheet.tsx":
     "as above — the sheet's close control belongs to the navigation",
   "components/inventory/LocationPicker.tsx":
     "a hand-built listbox, which exists because a hierarchy is not a flat <select> (documented in the file)",
