@@ -7,9 +7,10 @@
 # Downloads one release's installation files into the current directory,
 # verifies them against that release's SHA256SUMS, and creates whatever
 # configuration is missing: `.env` from `example.env`, with the two secrets
-# generated. It changes no value that is already set, and it never starts,
-# pulls or stops anything — reviewing `.env` and starting Stoky is the
-# operator's step, by design. Running it again is safe.
+# generated, and the directories the installation keeps its data in. It
+# changes no value that is already set, and it never starts, pulls or stops
+# anything — reviewing `.env` and starting Stoky is the operator's step, by
+# design. Running it again is safe.
 #
 # Guide: https://github.com/nogcode/stoky/blob/master/docs/INSTALL.md
 set -euo pipefail
@@ -24,8 +25,10 @@ VERSION="${1:-$DEFAULT_VERSION}"
 # An operator has no use for it.
 BASE_URL="${STOKY_RELEASE_BASE_URL:-https://github.com/nogcode/stoky/releases/download}"
 FILES=(docker-compose.yml example.env)
-# The project name fixed in docker-compose.yml, which names its volumes.
-DATABASE_VOLUME=stoky-release_postgres_data
+# docker-compose.yml mounts both from this directory; PostgreSQL's holds the
+# database once it has started.
+DATABASE_DIR=data/postgres
+UPLOADS_DIR=data/uploads
 
 fail() {
   echo "Error: $*" >&2
@@ -90,19 +93,15 @@ env_has() {
   grep -q "^$1=" .env
 }
 if { [ "$ENV_EXISTS" = false ] || [ -z "$(env_value POSTGRES_PASSWORD)" ]; } \
-   && command -v docker > /dev/null; then
+   && [ -e "$DATABASE_DIR" ]; then
   # PostgreSQL keeps the password it was created with. A new one in .env would
   # not reach the database; it would only lock the application out of it.
   #
-  # Only "no such volume" means there is none. Any other failure — most often
-  # permission denied on Docker's socket, for a user outside the docker group —
-  # says nothing about the volume, and reading it as "absent" wrote a fresh
-  # password over the one the database still holds.
-  if inspect_error=$(docker volume inspect "$DATABASE_VOLUME" 2>&1 > /dev/null); then
-    fail "falta POSTGRES_PASSWORD en .env, pero el volumen de la base de datos $DATABASE_VOLUME ya existe. Recupera la contraseña con la que se creó. No se ha cambiado nada."
-  elif ! printf '%s' "$inspect_error" | grep -qi "no such volume"; then
-    fail "no se puede preguntar a Docker si existe el volumen $DATABASE_VOLUME ($inspect_error). Ejecuta el script con un usuario que pueda usar Docker. No se ha cambiado nada."
-  fi
+  # Any $DATABASE_DIR counts as a database. Once PostgreSQL's user owns it,
+  # this one cannot look inside, and reading "cannot tell" as "empty" would
+  # write a fresh password over the one a database holds. This script creates
+  # it only once .env has a password.
+  fail "falta POSTGRES_PASSWORD en .env, pero $DATABASE_DIR ya existe y puede tener una base de datos creada con otra contraseña. Recupera esa contraseña; si Stoky nunca llegó a arrancar aquí, borra $DATABASE_DIR. No se ha cambiado nada."
 fi
 
 for file in "${FILES[@]}" SHA256SUMS; do
@@ -151,12 +150,69 @@ while IFS= read -r line; do
 done < <(grep -E '^[A-Z_][A-Z0-9_]*=' example.env)
 [ "$CHANGED" = true ] || echo "    conservado .env (ya tiene todos los ajustes)"
 
+echo "==> Preparando los directorios de datos"
+# data/ is closed to every other user of this machine: it holds the database
+# and every receipt, and is what keeps a host account that happens to share
+# a container's uid out of that container's directory. backups/ is where the
+# guide's backup commands write, and stays this user's. Modes are written
+# with five digits throughout: GNU's chmod and install keep a directory's
+# setgid bit, inherited from a setgid parent, under a shorter one.
+for dir in data backups; do
+  if [ -d "$dir" ]; then
+    echo "    conservado $dir/"
+  else
+    (umask 077 && mkdir "$dir")
+    echo "    creado     $dir/"
+  fi
+  if [ "$(stat -c %a "$dir")" != 700 ] && ! chmod 00700 "$dir"; then
+    fail "$dir/ deja entrar a otros usuarios de este equipo y no se puede cerrar. Ejecuta como root, en $(pwd): chmod 00700 $dir"
+  fi
+done
+
+# Each container writes its directory as the user it runs as, with every
+# capability dropped, so it cannot take one over: the database as
+# PostgreSQL's 70 (`user:` in docker-compose.yml), the receipts as the
+# image's bun, which its Dockerfile holds to 1000. Giving them away takes
+# root, through sudo when this is not root. A wrong mode is given back too:
+# copying a Docker volume's contents in brings the volume's own along.
+PENDING=()
+for entry in "$DATABASE_DIR 70:70" "$UPLOADS_DIR 1000:1000"; do
+  read -r dir owner <<< "$entry"
+  if [ -d "$dir" ] && [ "$(stat -c '%u:%g %a' "$dir")" = "$owner 700" ]; then
+    echo "    conservado $dir ($owner)"
+  else
+    PENDING+=("$entry")
+  fi
+done
+if [ "${#PENDING[@]}" -gt 0 ] && [ "$(id -u)" != 0 ]; then
+  echo "    dar a cada contenedor su directorio necesita root: se pide con sudo"
+fi
+for entry in "${PENDING[@]}"; do
+  read -r dir owner <<< "$entry"
+  give=(install -d -m 00700 -o "${owner%:*}" -g "${owner#*:}" "$dir")
+  [ "$(id -u)" = 0 ] || give=(sudo "${give[@]}")
+  if ! "${give[@]}"; then
+    remedy=""
+    for pending in "${PENDING[@]}"; do
+      read -r pending_dir pending_owner <<< "$pending"
+      remedy+="  install -d -m 00700 -o ${pending_owner%:*} -g ${pending_owner#*:} $pending_dir"$'\n'
+    done
+    fail ".env está listo, pero falta dar a cada contenedor su directorio. Ejecuta como root, en $(pwd):
+
+${remedy}
+y vuelve a ejecutar este script, que no cambia lo que ya está hecho."
+  fi
+  echo "    preparado  $dir ($owner)"
+done
+
 if [ "$(env_value STOKY_VERSION)" != "$VERSION" ]; then
   echo "Aviso: .env indica STOKY_VERSION=$(env_value STOKY_VERSION), no $VERSION. Se ha dejado como estaba." >&2
 fi
 
 echo
 echo "Stoky $VERSION está listo para configurar en $(pwd). No se ha arrancado nada."
+echo "Esta carpeta es la instalación: la base de datos y los tickets quedan en data/,"
+echo "y las copias de seguridad de la guía, en backups/."
 echo
 if [ -z "$(env_value DOMAIN)" ]; then
   echo "1. Edita .env y rellena: DOMAIN"

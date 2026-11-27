@@ -973,7 +973,7 @@ migration that refuses with a message naming the rows, as
 
 **Files:** `src/server/trpc/routers/receipt.ts` (`upload`),
 `src/lib/rate-limit.ts` (`uploadRateLimit`), `deploy/docker-compose.yml`
-(the `uploads` volume)
+(`data/uploads`)
 **Severity:** LOW — an installation is one household, and only the account
 that claims it and the people its admins add can upload. It was MEDIUM under
 `STOKY_REGISTRATION=open`, refused since 2026-11-14, where every
@@ -989,17 +989,17 @@ an account make 30 uploads an hour, which is up to 300 MB an hour and about
 nothing ever deletes a photograph: there is no `receipt.delete`
 (`docs/SECURITY_REVIEW.md` finding 16), and an `upload` whose
 `receipt.create` insert fails after `writeFile` leaves its file behind. In the
-release bundle `uploads` is a plain named volume beside PostgreSQL's, so
-unless the operator moves it, filling one fills the disk the database writes
-to, and every household on the instance loses service, not only receipt
-scanning.
+release bundle `data/uploads` sits beside the database's `data/postgres`, so
+unless the operator mounts another filesystem there, filling one fills the
+disk the database writes to, and every household on the instance loses
+service, not only receipt scanning.
 
 **The fix** is three parts, none of them small: record the bytes stored per
 household (a column on `Household` or a sum over `Receipt`), refuse an upload
 past a configurable quota with a message in both catalogues, and finding 16's
 retention — `receipt.delete` removing its file, and a sweep for files no row
 names. Until then the operator's defence is disk monitoring and, for an open
-instance, an `uploads` volume on a filesystem of its own.
+instance, a filesystem of its own mounted at `data/uploads`.
 
 ---
 

@@ -972,7 +972,7 @@ jobs:
           cache: false
           version: v0.76.1
       # Run the downloaded registry image, including its migrations, against
-      # new volumes. This checks the actual publication, beyond the build and
+      # an empty database and uploads directory. This checks the actual publication, beyond the build and
       # source tests. TLS and the proxy are the operator's, and so is their
       # check: scripts/smoke-proxy.sh --live, against their own installation.
       - name: Verify the published image on a fresh database
@@ -989,6 +989,11 @@ jobs:
           export POSTGRES_PASSWORD STOKY_SECRET
           COMPOSE=(docker compose --project-name "stoky-release-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --file deploy/docker-compose.yml)
           trap '"${COMPOSE[@]}" logs --tail=100 app db cache; "${COMPOSE[@]}" down --volumes' EXIT
+          # The database and the receipts are the installation folder's
+          # data/, given to their containers' users as install.sh gives them
+          # (deployment.test.ts holds the two to it). Compose creates neither.
+          sudo install -d -m 00700 -o 70 -g 70 deploy/data/postgres
+          sudo install -d -m 00700 -o 1000 -g 1000 deploy/data/uploads
           "${COMPOSE[@]}" pull app
           APP_IMAGE="$("${COMPOSE[@]}" config --format json | bun -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).services.app.image")"
           docker image inspect "$APP_IMAGE" --format '{{range .RepoDigests}}{{println .}}{{end}}' \

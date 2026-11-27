@@ -59,6 +59,11 @@ playwright-report
 
 # Upload data (mounted as volume)
 uploads
+# The source build's installation data, inside this context
+# (docker-compose.prod.yml): its database and receipts belong to their
+# containers' users, so the context could not even read them.
+deploy/data
+deploy/backups
 
 # OCR models. The builder downloads the checksummed one into /app/tessdata; a
 # stray local copy would otherwise be traced into the standalone output as an
