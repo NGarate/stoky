@@ -4,6 +4,7 @@
 
 * Cuatro sitios fijos en la barra del móvil
 * Productos y Precios, dentro de Inventario y de Compra
+* Lo principal de cada pantalla, siempre en el mismo sitio
 
 ### Cuatro sitios fijos en la barra del móvil
 
@@ -23,6 +24,16 @@ dos, **Listas** y **Precios**, una al lado de la otra bajo el título. Lo que
 guardas en casa y el catálogo de lo que compras quedan en el mismo sitio, y
 pasar de una vista a otra es un toque. Las direcciones no cambian: un enlace
 guardado a `/products` o a `/prices` sigue llevando a donde llevaba.
+
+### Lo principal de cada pantalla, siempre en el mismo sitio
+
+En el móvil y en la tableta, lo que más se hace en cada pantalla es un botón
+grande abajo a la derecha, junto al pulgar y siempre en el mismo punto:
+**Añadir a la lista** en Compra, **Añadir existencias** en Inventario,
+**Crear un producto** en Productos y **Subir un ticket** en Tickets. Si solo
+tienes una lista de la compra, «Añadir a la lista» te lleva a ella; si tienes
+varias o ninguna, a tus listas. En el ordenador el botón sigue arriba, junto
+al título. En Compra, **Escanear** sigue arriba del todo, ahora con borde.
 
 ## Cambios incompatibles
 
@@ -108,6 +119,16 @@ Inventory has two views, **Stock** and **Products**, and Shopping two more,
 and the catalogue of what you buy are in one place, and moving from one view
 to the other is one tap. The addresses do not change: a saved link to
 `/products` or `/prices` still goes where it went.
+
+### Each screen's main action, always in the same place
+
+On a phone and a tablet, what is done most on each screen is a large button
+at the bottom right, by the thumb and always in the same spot: **Add to the
+list** in Shopping, **Add stock** in Inventory, **Create a product** in
+Products and **Upload a receipt** in Receipts. With one shopping list, "Add
+to the list" takes you to it; with several or none, to your lists. On a
+computer the button stays at the top, beside the title. In Shopping,
+**Scan** stays at the very top, now outlined.
 
 ### Known limits and what was tested
 

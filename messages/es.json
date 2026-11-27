@@ -338,6 +338,7 @@
       "title": "Productos",
       "scan": "Escanear código",
       "new": "Nuevo producto",
+      "createAction": "Crear un producto",
       "nameHeader": "Nombre",
       "brandHeader": "Marca",
       "categoryHeader": "Categoría",
@@ -403,6 +404,7 @@
     "filterRestockEmpty": "Ahora mismo no se está acabando nada.",
     "filterClear": "Ver todo el inventario",
     "addStock": "Añadir stock",
+    "addStockAction": "Añadir existencias",
     "lowStock": "Queda poco",
     "locationPlaceholder": "Seleccionar ubicación",
     "locationLabel": "Ubicación",
@@ -537,6 +539,7 @@
   "receipts": {
     "title": "Tickets",
     "upload": "Subir ticket",
+    "uploadAction": "Subir un ticket",
     "review": "Revisar ticket",
     "photo": "Ver la foto del ticket",
     "photoAlt": "Foto del ticket",

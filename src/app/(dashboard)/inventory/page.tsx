@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ItemRow } from "@/components/ui/item-row";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { PrimaryAction } from "@/components/ui/primary-action";
 import { Pagination } from "@/components/ui/pagination";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
@@ -172,21 +173,20 @@ export function InventoryView(): JSX.Element {
   // with no household, which is HOUSE-1.
   // Neither needs the list to have arrived, so both are drawn while it has
   // not — RouteState puts them in the same place the loaded screen does.
+  const primaryAction = (
+    <PrimaryAction href="/inventory/add">{t("addStockAction")}</PrimaryAction>
+  );
   const actions = (
-    <>
-      <Button asChild>
-        <Link href="/inventory/add">{t("addStock")}</Link>
-      </Button>
-      <Button asChild variant="outline">
-        <Link href="/inventory/consume">{t("consumeStock")}</Link>
-      </Button>
-    </>
+    <Button asChild variant="outline">
+      <Link href="/inventory/consume">{t("consumeStock")}</Link>
+    </Button>
   );
 
   if (!result) {
     return (
       <RouteState
         actions={actions}
+        primaryAction={primaryAction}
         error={query.error}
         fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
@@ -203,6 +203,7 @@ export function InventoryView(): JSX.Element {
     <PageShell width="index">
       <PageHeader
         actions={actions}
+        primaryAction={primaryAction}
         title={t("title")}
         views={<SectionViews section="inventory" />}
       />

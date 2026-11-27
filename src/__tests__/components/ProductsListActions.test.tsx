@@ -78,6 +78,21 @@ describe("Productos, Inventario's second view", () => {
   });
 });
 
+describe("the screen's primary action", () => {
+  it("is the mock-up's \u00abCrear un producto\u00bb, in the fixed spot, and scanning is not", () => {
+    renderWithIntl(<ProductsPage />, { locale: "es" });
+
+    const create = screen.getByRole("link", { name: "Crear un producto" });
+    expect(create).toHaveAttribute("href", "/products/new");
+    expect(create.getAttribute("data-primary-action")).not.toBeNull();
+    expect(
+      screen
+        .getByRole("link", { name: "Escanear código" })
+        .getAttribute("data-primary-action"),
+    ).toBeNull();
+  });
+});
+
 describe("the catalogue's actions column", () => {
   it("offers the row's real actions, each named with its product", () => {
     renderWithIntl(<ProductsPage />, { locale: "es" });

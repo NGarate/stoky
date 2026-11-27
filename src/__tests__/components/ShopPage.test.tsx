@@ -44,13 +44,18 @@ mock.module("@/lib/offline/queue-context", () => ({
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({ invalidate: () => Promise.resolve() }),
-    shopping: { getBuyList: { useQuery: () => queryStub } },
+    shopping: {
+      getBuyList: { useQuery: () => queryStub },
+      list: { useQuery: () => ({ data: lists }) },
+    },
     // Who is looking decides whether a row is a control at all.
     auth: { me: { useQuery: () => ({ data: { role } }) } },
   },
 }));
 
 let role = "MEMBER";
+/** The household's active lists, as `shopping.list` answers; unknown while loading. */
+let lists: { id: string }[] | undefined = [{ id: "list-1" }];
 
 const { default: ShopPage } = await import("@/app/(dashboard)/shopping/page");
 
@@ -77,6 +82,7 @@ function row(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   role = "MEMBER";
+  lists = [{ id: "list-1" }];
   enqueue.mockClear();
   pending = [];
   queryStub = {
@@ -109,12 +115,50 @@ describe("Compra's two views", () => {
 });
 
 describe("one task per screen", () => {
-  it("puts scanning on top as the only primary action", () => {
+  it("makes adding to the list the one primary action, above the thumb", () => {
+    renderWithIntl(<ShopPage />);
+
+    // DECISIONS.md NAVIGATION: the mock-up draws Compra's action as this.
+    const add = screen.getByRole("link", { name: "Añadir a la lista" });
+    expect(add.getAttribute("data-primary-action")).not.toBeNull();
+  });
+
+  it("adds to the one list there is, on its own screen, which leads back here", () => {
+    renderWithIntl(<ShopPage />);
+
+    expect(
+      screen.getByRole("link", { name: "Añadir a la lista" }),
+    ).toHaveAttribute("href", "/shopping/list-1?from=%2Fshopping");
+  });
+
+  it("goes to the lists to choose one, or to start the first, otherwise", () => {
+    for (const answer of [[], [{ id: "a" }, { id: "b" }], undefined]) {
+      lists = answer;
+      renderWithIntl(<ShopPage />);
+      expect(
+        screen.getByRole("link", { name: "Añadir a la lista" }),
+      ).toHaveAttribute("href", "/shopping/lists");
+      cleanup();
+    }
+  });
+
+  it("offers it to a kitchen account, which may add to a list", () => {
+    role = "KITCHEN";
+    renderWithIntl(<ShopPage />);
+
+    expect(
+      screen.getByRole("link", { name: "Añadir a la lista" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps scanning on top, outlined beside the primary action", () => {
     renderWithIntl(<ShopPage />);
 
     const scan = screen.getByRole("link", { name: "Escanear" });
     // `?from=/shopping`, so the scan page leads back here, not to the catalogue.
     expect(scan).toHaveAttribute("href", "/products/scan?from=/shopping");
+    expect(scan.className).toContain("border-input");
+    expect(scan.className).not.toContain("bg-primary ");
   });
 
   it("keeps managing lists as a link, not a second primary action", () => {

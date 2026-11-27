@@ -370,3 +370,20 @@ it("draws /prices as Compra's second view, titled with its section's name", () =
     ["Precios", "/prices"],
   ]);
 });
+
+it("puts /receipts' upload in the fixed spot, loaded or not, as the mock-up draws it", async () => {
+  // The primary action does not need the list: RouteState draws it too.
+  for (const pending of [true, false]) {
+    queryStub = {
+      ...queryStub,
+      isPending: pending,
+      data: pending ? undefined : { items: [] },
+    };
+    mount(<ReceiptsPage />);
+
+    const upload = await screen.findByRole("link", { name: "Subir un ticket" });
+    expect(upload).toHaveAttribute("href", "/receipts/upload");
+    expect(upload.getAttribute("data-primary-action")).not.toBeNull();
+    cleanup();
+  }
+});

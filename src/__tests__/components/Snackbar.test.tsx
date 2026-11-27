@@ -209,6 +209,23 @@ describe("the snackbar's live region", () => {
   });
 });
 
+describe("where the snackbar opens", () => {
+  it("clears the bar and the screen's primary action above it, on every tier", async () => {
+    const { baseElement } = render();
+    await press("confirmar");
+
+    // The viewport is the list Radix renders inside the F8 region. Phone:
+    // 84px to the primary action's foot, 56 of button, 12 of air; tablet:
+    // 24 + 56 + 16; desktop, where the action is in the header: 24.
+    const viewport = baseElement.querySelector('[role="region"] ol');
+    expect(viewport?.className).toContain(
+      "bottom-[calc(9.5rem+env(safe-area-inset-bottom))]",
+    );
+    expect(viewport?.className).toContain("md:bottom-24");
+    expect(viewport?.className).toContain("lg:bottom-6");
+  });
+});
+
 describe("what the snackbar says", () => {
   it("renders the stored label rather than a sentence composed at the call site", async () => {
     render();

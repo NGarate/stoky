@@ -24,9 +24,9 @@ export const instant = false;
  *
  * | Width | Control | Where the padding goes |
  * |---|---|---|
- * | base → `md` | bottom bar, and the account circle above the page | `pb-28`, so the last row is not under the bar |
- * | `md` → `lg` | left rail (`w-32`) | `md:pl-36`, clearing the rail |
- * | `lg` and up | top bar | back to a plain `p-4` |
+ * | base → `md` | bottom bar, and the account circle above the page | `pb-40`, so the last row is under neither the bar nor the primary action above it |
+ * | `md` → `lg` | left rail (`w-32`) | `md:pl-36`, clearing the rail, and `md:pb-28`, clearing the primary action in the corner |
+ * | `lg` and up | top bar | back to a plain `p-4`: the primary action is in the header |
  *
  * The desktop bar is first in the DOM so keyboard order on the tier that uses
  * it starts with navigation, and so href-based selectors keep resolving to the
@@ -94,7 +94,7 @@ export default async function DashboardLayout({
             {/* The last answer each screen showed, so opening without a signal
             shows real data rather than the paused panel. */}
             <ReadCache />
-            <main className="mx-auto max-w-7xl p-4 pb-28 md:pb-8 md:pl-36 lg:pb-4 lg:pl-4">
+            <main className="mx-auto max-w-7xl p-4 pb-40 md:pb-28 md:pl-36 lg:pb-4 lg:pl-4">
               {/* Above the content, because what it says sometimes needs doing
                 before what is below it can be trusted. */}
               <SyncStatus />

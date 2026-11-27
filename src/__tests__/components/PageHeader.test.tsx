@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, mock, spyOn } from "bun:test";
 import { screen, cleanup, fireEvent } from "@testing-library/react";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
+import { PrimaryAction } from "@/components/ui/primary-action";
 import { renderWithIntl as render } from "../utils/render";
 
 let searchParams = new URLSearchParams();
@@ -232,6 +233,54 @@ describe("PageHeader", () => {
     // The buttons share the phone's row rather than squeezing beside the
     // title — the overflow /shopping/lists had at 390px.
     expect(row?.className).toContain("[&>*]:flex-1");
+    expect(row?.className).not.toContain("max-lg:contents");
+  });
+
+  it("reads the primary action first among the actions, fixed above the thumb until lg", () => {
+    render(
+      <PageHeader
+        actions={<Button type="button">Apuntar consumo</Button>}
+        primaryAction={
+          <PrimaryAction href="/inventory/add">
+            Añadir existencias
+          </PrimaryAction>
+        }
+        title="Inventario"
+      />,
+    );
+
+    const primary = screen.getByRole("link", { name: "Añadir existencias" });
+    expect(primary).toHaveAttribute("href", "/inventory/add");
+    expect(
+      precedes(
+        primary,
+        screen.getByRole("button", { name: "Apuntar consumo" }),
+      ),
+    ).toBe(true);
+    expect(precedes(screen.getByRole("heading", { level: 1 }), primary)).toBe(
+      true,
+    );
+    // One element on every tier: in the corner below lg, in the header from.
+    expect(primary.className).toContain("fixed");
+    expect(primary.className).toContain("lg:static");
+    expect(primary.className).toContain("min-h-[56px]");
+  });
+
+  it("draws no row for a primary action alone below lg, so it leaves no gap", () => {
+    const { container } = render(
+      <PageHeader
+        primaryAction={
+          <PrimaryAction href="/receipts/upload">Subir un ticket</PrimaryAction>
+        }
+        title="Tickets"
+      />,
+    );
+
+    const row = container.querySelector("[data-slot=page-actions]");
+    expect(row?.className).toContain("max-lg:contents");
+    expect(
+      screen.getByRole("link", { name: "Subir un ticket" }),
+    ).toBeInTheDocument();
   });
 });
 

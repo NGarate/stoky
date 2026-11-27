@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ItemRow } from "@/components/ui/item-row";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { PrimaryAction } from "@/components/ui/primary-action";
 import { StockAmount, StockStatus } from "@/components/inventory/StockStatus";
 import { isLowStock } from "@/lib/stock/low-stock";
 import { api } from "@/lib/trpc/client";
@@ -90,22 +91,22 @@ export default function ProductsPage(): JSX.Element {
   // the skeleton for ever, with no message and no way forward — ISSUES.md
   // UI-8 — and the one failure no amount of waiting fixes is an account
   // with no household, which is HOUSE-1.
-  // Primary first, in reading order as well as in colour.
+  // Primary first, in reading order as well as in colour: PageHeader puts
+  // it before the actions, and below `lg` above the bar.
+  const primaryAction = (
+    <PrimaryAction href="/products/new">{t("createAction")}</PrimaryAction>
+  );
   const actions = (
-    <>
-      <Button asChild>
-        <Link href="/products/new">{t("new")}</Link>
-      </Button>
-      <Button asChild variant="outline">
-        <Link href="/products/scan">{t("scan")}</Link>
-      </Button>
-    </>
+    <Button asChild variant="outline">
+      <Link href="/products/scan">{t("scan")}</Link>
+    </Button>
   );
 
   if (!result) {
     return (
       <RouteState
         actions={actions}
+        primaryAction={primaryAction}
         error={query.error}
         fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
@@ -127,6 +128,7 @@ export default function ProductsPage(): JSX.Element {
     <PageShell width="index">
       <PageHeader
         actions={actions}
+        primaryAction={primaryAction}
         title={tInventory("title")}
         views={<SectionViews section="inventory" />}
       />
@@ -140,7 +142,7 @@ export default function ProductsPage(): JSX.Element {
       {products.length === 0 ? (
         // The header already offers both; here they are the whole of what
         // the screen can say, so they are repeated as its invitation —
-        // outline, because the header's "Nuevo producto" is the one primary.
+        // outline, because "Crear un producto" above is the one primary.
         <EmptyState
           action={
             <>

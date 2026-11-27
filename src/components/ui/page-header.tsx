@@ -84,9 +84,14 @@ export interface PageHeaderProps {
    */
   views?: ReactNode;
   /**
-   * `<Button>`s. At most one `default` — the screen's primary action — and
-   * the rest `outline` (`DECISIONS.md` USABILITY: one primary action per
-   * screen).
+   * The screen's one primary action, a `<PrimaryAction>`: fixed above the
+   * thumb below `lg`, first among the actions from there.
+   */
+  primaryAction?: ReactNode;
+  /**
+   * `<Button>`s. At most one `default` — the screen's primary action, when it
+   * opens something in place rather than being a `primaryAction` — and the
+   * rest `outline` (`DECISIONS.md` USABILITY: one primary action per screen).
    */
   actions?: ReactNode;
   density?: "default" | "touch";
@@ -108,7 +113,9 @@ export interface PageHeaderProps {
  * 4. **The actions** — on a phone a full-width row of their own under the
  *    words, from `md` opposite the title. Two buttons squeezed beside a title
  *    on a 390px screen pushed `/shopping/lists` to 399px wide, which is a
- *    WCAG 1.4.10 reflow failure rather than a cosmetic one.
+ *    WCAG 1.4.10 reflow failure rather than a cosmetic one. The primary
+ *    action leaves the row below `lg` for the corner above the bar
+ *    (`PrimaryAction`).
  * 5. **The views**, when the section has two (`ViewSwitch`): under the
  *    title, and on a phone before the actions' row.
  *
@@ -121,6 +128,7 @@ export function PageHeader({
   backClassName,
   intro,
   views,
+  primaryAction,
   actions,
   density,
   className,
@@ -154,14 +162,20 @@ export function PageHeader({
         {views ? (
           <div className="md:order-last md:basis-full">{views}</div>
         ) : null}
-        {actions ? (
+        {primaryAction || actions ? (
           // Each button takes an equal share of the phone's row and wraps to
           // a row of its own when the two cannot share one; from `md` they
-          // keep their own width and sit opposite the title.
+          // keep their own width and sit opposite the title. A primary action
+          // alone is fixed below `lg`, out of the row, so the row is not
+          // drawn there (`contents`) and leaves no gap under the title.
           <div
-            className="flex flex-wrap gap-2 md:shrink-0 md:justify-end [&>*]:flex-1 md:[&>*]:flex-none"
+            className={cn(
+              "flex flex-wrap gap-2 md:shrink-0 md:justify-end [&>*]:flex-1 md:[&>*]:flex-none",
+              actions ? null : "max-lg:contents",
+            )}
             data-slot="page-actions"
           >
+            {primaryAction}
             {actions}
           </div>
         ) : null}

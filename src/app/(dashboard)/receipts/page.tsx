@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { Plus } from "lucide-react";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ItemRow } from "@/components/ui/item-row";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { PrimaryAction } from "@/components/ui/primary-action";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 
 import type { ReceiptStatus } from "@/generated/prisma/browser";
@@ -66,23 +66,15 @@ export default function ReceiptsPage() {
   // paused offline or has failed — so with no signal, or after a 500, this
   // fell straight through to the empty state and told somebody they had
   // nothing. RouteState says which of loading, offline or failed it is.
-  // `asChild` so the anchor *is* the button: a `<Link>` wrapping a `<Button>`
-  // produced an `<a>` with no box of its own — 103×17, well under the target
-  // floor — around a button that had one, and an anchor containing a button
-  // is not valid HTML either (DESIGN_AUDIT A4.2).
+  // The screen's one primary action, above the bar below `lg`.
   const upload = (
-    <Button asChild>
-      <Link href="/receipts/upload">
-        <Plus aria-hidden="true" className="mr-2 size-5" />
-        {t("upload")}
-      </Link>
-    </Button>
+    <PrimaryAction href="/receipts/upload">{t("uploadAction")}</PrimaryAction>
   );
 
   if (!data) {
     return (
       <RouteState
-        actions={upload}
+        primaryAction={upload}
         error={query.error}
         fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
@@ -94,7 +86,7 @@ export default function ReceiptsPage() {
 
   return (
     <PageShell width="index">
-      <PageHeader actions={upload} title={t("title")} />
+      <PageHeader primaryAction={upload} title={t("title")} />
 
       {receipts.length === 0 ? (
         <EmptyState

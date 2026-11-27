@@ -7,6 +7,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Section, sectionHeading } from "@/components/ui/section";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { PrimaryAction } from "@/components/ui/primary-action";
+import { withFrom } from "@/lib/back";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { SectionViews } from "@/components/dashboard/SectionViews";
@@ -24,9 +26,11 @@ import type { Decimal } from "@prisma/client-runtime-utils";
  *
  * The rules it is built to (§7), and where each shows:
  *
- * - **One task per screen.** Scanning is the single primary action and sits on
- *   top. Managing lists moved to `/shopping/lists`, because "which list does
- *   this belong to" is filing and filing is not shopping.
+ * - **One task per screen.** Adding to the list is the single primary action,
+ *   fixed above the thumb (`DECISIONS.md` NAVIGATION, as the owner's mock-up
+ *   draws Compra); scanning sits on top, outlined. Managing lists moved to
+ *   `/shopping/lists`, because "which list does this belong to" is filing
+ *   and filing is not shopping.
  * - **No system vocabulary.** "No queda nada en casa", not "stock 0".
  * - **State in words, never colour alone.** Every row says how much is at home
  *   in a sentence; the bar beside it is decoration and is `aria-hidden`.
@@ -60,6 +64,22 @@ export default function ShopPage(): JSX.Element {
   const me = api.auth.me.useQuery(undefined, { retry: false });
   const canWrite = me.data?.role !== "KITCHEN";
 
+  // "Añadir a la lista" goes where adding happens: the list's own screen when
+  // there is one list, the lists otherwise — to choose one, or to start the
+  // first. Lists are among the persisted reads, so this works with no signal;
+  // until the answer arrives it is the lists, which is never wrong. A KITCHEN
+  // account may add to a list too (DECISIONS.md ROLES), so it is not gated.
+  const lists = api.shopping.list.useQuery({ includeCompleted: false });
+  // From Compra, so the list's way back leads back here rather than to the
+  // lists this person never opened.
+  const addHref =
+    lists.data?.length === 1
+      ? withFrom(`/shopping/${lists.data[0].id}`, "/shopping")
+      : "/shopping/lists";
+  const primaryAction = (
+    <PrimaryAction href={addHref}>{t("addToList")}</PrimaryAction>
+  );
+
   if (!query.data) {
     return (
       <RouteState
@@ -67,6 +87,7 @@ export default function ShopPage(): JSX.Element {
         fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
         onRetry={() => void query.refetch()}
+        primaryAction={primaryAction}
         title={t("shopTitle")}
         views={<SectionViews section="shopping" />}
         width="form"
@@ -94,20 +115,21 @@ export default function ShopPage(): JSX.Element {
     <PageShell width="form">
       <PageHeader
         className="mb-0"
+        primaryAction={primaryAction}
         title={t("shopTitle")}
         views={<SectionViews section="shopping" />}
       />
 
-      {/* The primary action, always on top and always the same size.
-          Its colour, hover and focus ring come from `Button` rather than
-          being written out beside it — they were, and a hand-written
-          `bg-primary` is a copy of the primitive that stops matching it the
-          moment the primitive changes. What stays local is the geometry:
-          64px and full width is Screen A's own decision, a row read with a
-          trolley in one hand, and no size in the primitive means that. */}
+      {/* Scanning, always on top and always the same size — outlined, now
+          that adding to the list is the screen's one primary action. Its
+          colour, hover and focus ring come from `Button` rather than being
+          written out beside it. What stays local is the geometry: 64px and
+          full width is Screen A's own decision, a row read with a trolley in
+          one hand, and no size in the primitive means that. */}
       <Button
         asChild
         className="mt-4 min-h-[64px] w-full gap-3 rounded-xl py-4 text-lg font-semibold"
+        variant="outline"
       >
         <Link href="/products/scan?from=/shopping">
           <ScanLine aria-hidden="true" className="size-5 shrink-0" />

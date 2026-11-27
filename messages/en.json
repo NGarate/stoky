@@ -338,6 +338,7 @@
       "title": "Products",
       "scan": "Scan a barcode",
       "new": "New product",
+      "createAction": "Create a product",
       "nameHeader": "Name",
       "brandHeader": "Brand",
       "categoryHeader": "Category",
@@ -403,6 +404,7 @@
     "filterRestockEmpty": "Nothing is running low right now.",
     "filterClear": "See the whole inventory",
     "addStock": "Add stock",
+    "addStockAction": "Add stock",
     "lowStock": "Running low",
     "locationPlaceholder": "Choose a location",
     "locationLabel": "Location",
@@ -537,6 +539,7 @@
   "receipts": {
     "title": "Receipts",
     "upload": "Upload receipt",
+    "uploadAction": "Upload a receipt",
     "review": "Review receipt",
     "photo": "See the receipt photo",
     "photoAlt": "Receipt photo",

@@ -283,6 +283,23 @@ describe("Inventario's two views", () => {
   });
 });
 
+describe("the screen's primary action", () => {
+  it("is the mock-up's \u00abAñadir existencias\u00bb, in the fixed spot", () => {
+    overviewStub.data = { products: [], total: 0, page: 1, pageCount: 1 };
+    renderWithIntl(<InventoryView />, { locale: "es" });
+
+    const add = screen.getByRole("link", { name: "Añadir existencias" });
+    expect(add).toHaveAttribute("href", "/inventory/add");
+    expect(add.getAttribute("data-primary-action")).not.toBeNull();
+    // Recording use stays in the header, outlined.
+    expect(
+      screen
+        .getByRole("link", { name: "Apuntar consumo" })
+        .getAttribute("data-primary-action"),
+    ).toBeNull();
+  });
+});
+
 describe("paging a long inventory", () => {
   it("offers no pager when everything fits on one page", () => {
     overviewStub.data = { products: [], total: 3, page: 1, pageCount: 1 };
