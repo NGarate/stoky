@@ -108,6 +108,8 @@ interface RouteStateProps {
   title: string;
   /** The way back, as the loaded screen draws it. */
   back?: string;
+  /** Where the way back is drawn, as the loaded screen draws it. */
+  backClassName?: string;
   /** The screen's actions, when they do not depend on the data. */
   actions?: ReactNode;
   /** The section's views, as the loaded screen draws them. */
@@ -136,6 +138,7 @@ export function isNotFoundError(error: unknown): boolean {
 export function RouteState({
   title,
   back,
+  backClassName,
   actions,
   views,
   width = "index",
@@ -180,6 +183,7 @@ export function RouteState({
       <PageHeader
         actions={missing ? undefined : actions}
         back={missing ? (notFound.back ?? back) : back}
+        backClassName={missing ? undefined : backClassName}
         density={density}
         title={missing ? notFound.title : title}
         views={missing ? undefined : views}

@@ -88,8 +88,10 @@ describe("SectionViews", () => {
     renderWithIntl(<SectionViews section="inventory" />, { locale: "en" });
 
     const views = screen.getByRole("navigation", { name: "Inventory views" });
-    expect(within(views).getAllByRole("link").map((l) => l.textContent)).toEqual(
-      ["Stock", "Products"],
-    );
+    expect(
+      within(views)
+        .getAllByRole("link")
+        .map((l) => l.textContent),
+    ).toEqual(["Stock", "Products"]);
   });
 });

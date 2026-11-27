@@ -1268,10 +1268,16 @@ System/Light/Dark control and a language control on every surface.
 Everything else is Tailwind against the tokens — the earlier plan to install
 ~23 shadcn primitives was not followed, and no page has needed them.
 
-**Navigation — three renderers by tier.** Bottom bar below `md`, rail from `md`,
-top bar from `lg`, with a focus-trapped sheet for the overflow. Audited by axe
-at all three tiers in both themes until 2026-10-27, when that sweep was
-deleted (PROGRESS D154).
+**Navigation — three renderers by tier, one list.** Bottom bar below `md`
+with four fixed destinations (Inicio, Compra, Inventario, Tickets), rail from
+`md` and top bar from `lg` with the same four and Cocina, all read from
+`DESTINATIONS` in `src/components/dashboard/navigation.ts`
+(`DECISIONS.md` NAVIGATION). The account opens a focus-trapped panel —
+Configuración, on the phone the kitchen screen, and signing out — from the
+circle at the top of the phone and the desktop and the foot of the rail.
+Productos and Precios are the second view of Inventario and Compra
+(`ViewSwitch`). Audited by axe at all three tiers in both themes until
+2026-10-27, when that sweep was deleted (PROGRESS D154).
 
 **i18n — two catalogues that cannot silently diverge.**
 `src/__tests__/unit/messages.test.ts` fails on a key present in one and not the

@@ -35,7 +35,7 @@ const itemRowVariants = cva("transition-colors", {
      * Whether the row is a card.
      *
      * `plain` exists because the owner's rule is "no cards except where a
-     * card is concretely justified" (DESIGN_AUDIT A5.4), and the Panel and
+     * card is concretely justified" (DESIGN_AUDIT A5.4), and Inicio and
      * the kitchen are where it was applied: their rows separate with a
      * divider and nothing frames them. Unifying the lists means sharing the
      * *grammar* — a title that links, a status opposite it, the details

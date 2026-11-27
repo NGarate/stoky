@@ -8,7 +8,7 @@ import type { AnchorHTMLAttributes, ReactElement, ReactNode } from "react";
 import { renderWithIntl } from "../utils/render";
 
 /**
- * The phone bottom bar, the tablet rail and the "Más" sheet.
+ * The phone bottom bar, the tablet rail and the account sheet.
  *
  * This is the control every route below `lg` depends on — before it existed,
  * the only page reachable on a phone was the one you landed on (ISSUES.md
@@ -79,15 +79,30 @@ afterEach(() => {
   localStorage.clear();
 });
 
-/** The bottom bar and the rail carry the same four items. */
+/** The bottom bar and the rail, in DOM order: the phone's, then the tablet's. */
 function bars(): HTMLElement[] {
   return screen.getAllByRole("navigation", { name: "Navegación principal" });
 }
 
+function links(nav: HTMLElement): [string, string | null][] {
+  return within(nav)
+    .getAllByRole("link")
+    .map((link) => [link.textContent ?? "", link.getAttribute("href")]);
+}
+
+function current(nav: HTMLElement): string[] {
+  return within(nav)
+    .getAllByRole("link")
+    .filter((link) => link.getAttribute("aria-current") === "page")
+    .map((link) => link.textContent ?? "");
+}
+
+function accountCircle(): HTMLElement {
+  return screen.getByRole("button", { name: "Tu cuenta: Noa García" });
+}
+
 function openSheet(): Promise<void> {
-  return userEvent.click(
-    within(bars()[0]).getByRole("button", { name: /Más/ }),
-  );
+  return userEvent.click(accountCircle());
 }
 
 describe("CompactNav", () => {
@@ -100,201 +115,193 @@ describe("CompactNav", () => {
     expect(bars()).toHaveLength(2);
   });
 
-  it("starts with three destinations and Más, Spanish and short", () => {
+  it("gives the phone four fixed destinations and nothing to open", () => {
     pathname = "/dashboard";
     renderNav(<CompactNav account={ACCOUNT} />);
 
-    const bar = within(bars()[0]);
-    expect(
-      bar
-        .getAllByRole("link")
-        .map((link) => [link.textContent, link.getAttribute("href")]),
-    ).toEqual([
+    const [phone] = bars();
+    expect(links(phone)).toEqual([
+      ["Inicio", "/dashboard"],
       ["Compra", "/shopping"],
       ["Inventario", "/inventory"],
-      ["Panel", "/dashboard"],
+      ["Tickets", "/receipts"],
     ]);
-    expect(bar.getByRole("button", { name: "Más" })).toBeInTheDocument();
-    // Scanning is offered where a product is chosen, not as a place to go.
-    expect(screen.queryByRole("link", { name: "Escanear" })).toBeAbsent();
+    // No "Más": everything else is in the account panel.
+    expect(within(phone).queryByRole("button")).toBeAbsent();
   });
 
-  it("marks the current destination with aria-current, not colour alone", () => {
+  it("gives the tablet the same four, the kitchen, and the account at the foot", () => {
+    pathname = "/kitchen";
+    renderNav(<CompactNav account={ACCOUNT} />);
+
+    const [, rail] = bars();
+    expect(links(rail)).toEqual([
+      ["Inicio", "/dashboard"],
+      ["Compra", "/shopping"],
+      ["Inventario", "/inventory"],
+      ["Tickets", "/receipts"],
+      ["Cocina", "/kitchen"],
+    ]);
+    const account = within(rail).getByRole("button", { name: "Tu cuenta" });
+    expect(account).toHaveAttribute("aria-haspopup", "dialog");
+  });
+
+  it("never reorders itself, wherever you have been", () => {
+    // The bar used to hold the three screens last used on the device.
+    for (const route of ["/receipts", "/prices", "/kitchen", "/settings"]) {
+      pathname = route;
+      renderNav(<CompactNav account={ACCOUNT} />);
+      expect(links(bars()[0]).map(([label]) => label)).toEqual([
+        "Inicio",
+        "Compra",
+        "Inventario",
+        "Tickets",
+      ]);
+      cleanup();
+    }
+    expect(localStorage.getItem("stoky.nav-slots")).toBeNull();
+  });
+
+  it("marks the section you are in, in both tiers, and only that one", () => {
     pathname = "/inventory";
     renderNav(<CompactNav account={ACCOUNT} />);
 
-    const link = within(bars()[0]).getByRole("link", { name: "Inventario" });
-    expect(link).toHaveAttribute("aria-current", "page");
-    // Weight and a solid edge indicator carry the state as well as the fill.
-    expect(link.className).toContain("font-semibold");
-    expect(link.className).toContain("border-primary");
+    for (const nav of bars()) expect(current(nav)).toEqual(["Inventario"]);
   });
 
-  it("keeps a destination current on its nested routes", () => {
-    pathname = "/shopping/list-1";
-    renderNav(<CompactNav account={ACCOUNT} />);
-
-    expect(
-      within(bars()[0]).getByRole("link", { name: "Compra" }),
-    ).toHaveAttribute("aria-current", "page");
-  });
-
-  it("marks exactly one destination as current", async () => {
+  it("marks a folded view's section: Productos is Inventario, Precios is Compra", () => {
     pathname = "/products/scan";
     renderNav(<CompactNav account={ACCOUNT} />);
+    for (const nav of bars()) expect(current(nav)).toEqual(["Inventario"]);
+    cleanup();
 
-    await within(bars()[0]).findByRole("link", { name: "Productos" });
-    const current = within(bars()[0])
-      .getAllByRole("link")
-      .filter((link) => link.getAttribute("aria-current") === "page");
-    expect(current).toHaveLength(1);
-    expect(current[0]).toHaveAttribute("href", "/products");
+    pathname = "/prices/product-1";
+    renderNav(<CompactNav account={ACCOUNT} />);
+    for (const nav of bars()) expect(current(nav)).toEqual(["Compra"]);
   });
 
-  /**
-   * The bar used to answer "where am I" on these screens with a dot on Más.
-   * The screen takes the slot least recently used instead, and Más is never
-   * the current item (owner's report, 2026-10-31).
-   */
-  it("gives the screen you are on a slot in the bar, never Más", async () => {
+  it("marks nothing in Configuración, and the kitchen only where it has a button", () => {
+    pathname = "/settings/stores";
+    renderNav(<CompactNav account={ACCOUNT} />);
+    for (const nav of bars()) expect(current(nav)).toEqual([]);
+    cleanup();
+
+    pathname = "/kitchen";
+    renderNav(<CompactNav account={ACCOUNT} />);
+    const [phone, rail] = bars();
+    expect(current(phone)).toEqual([]);
+    expect(current(rail)).toEqual(["Cocina"]);
+  });
+
+  it("draws the current destination's pill in the primary fill, and bolds its label", () => {
     pathname = "/receipts";
     renderNav(<CompactNav account={ACCOUNT} />);
 
-    const bar = within(bars()[0]);
-    const tickets = await bar.findByRole("link", { name: "Tickets" });
-    expect(tickets).toHaveAttribute("aria-current", "page");
-    // The least recently used of the three went; the other two kept their
-    // places.
-    expect(bar.getAllByRole("link").map((link) => link.textContent)).toEqual([
-      "Compra",
-      "Inventario",
-      "Tickets",
-    ]);
-    const more = bar.getByRole("button", { name: "Más" });
-    expect(more.className).not.toContain("border-primary");
+    const link = within(bars()[0]).getByRole("link", { name: "Tickets" });
+    expect(link.className).toContain("font-bold");
+    expect(link.querySelector("span")?.className).toContain("bg-primary");
+    const other = within(bars()[0]).getByRole("link", { name: "Compra" });
+    expect(other.querySelector("span")?.className).not.toContain("bg-primary");
   });
 
-  it("remembers the bar on this device from one visit to the next", async () => {
-    pathname = "/prices";
-    renderNav(<CompactNav account={ACCOUNT} />);
-    await within(bars()[0]).findByRole("link", { name: "Precios" });
-    cleanup();
-
-    pathname = "/shopping";
+  it("puts the phone's account circle in the page's banner, with the wordmark, on the phone only", () => {
+    pathname = "/dashboard";
     renderNav(<CompactNav account={ACCOUNT} />);
 
-    // Shopping was in the bar already, so nothing was replaced.
+    const banner = screen.getByRole("banner");
+    expect(within(banner).getByRole("link", { name: "Stoky" })).toHaveAttribute(
+      "href",
+      "/dashboard",
+    );
+    expect(within(banner).getByRole("button")).toBe(accountCircle());
+    // The rail has its own account button, and the desktop its circle.
+    expect(banner.className).toContain("md:hidden");
+  });
+
+  it("lets the rail scroll, so a short screen does not cut the account off", () => {
+    pathname = "/dashboard";
+    renderNav(<CompactNav account={ACCOUNT} />);
+
+    // Six 76px targets are taller than a phone held sideways; happy-dom has
+    // no layout, so the class is what can be checked here.
+    expect(bars()[1].className).toContain("overflow-y-auto");
+  });
+
+  it("closes when one of its links leads to the page already open", async () => {
+    pathname = "/settings";
+    renderNav(<CompactNav account={ACCOUNT} />);
+
+    await openSheet();
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("link", {
+        name: "Configuración",
+      }),
+    );
+
     await waitFor(() => {
-      expect(
-        within(bars()[0])
-          .getAllByRole("link")
-          .map((link) => link.textContent),
-      ).toEqual(["Compra", "Inventario", "Precios"]);
+      expect(screen.queryByRole("dialog")).toBeAbsent();
     });
   });
 
-  it("starts again from the default when what it stored is not a bar", async () => {
-    localStorage.setItem("stoky.nav-slots", '{"hrefs":["https://x"]}');
-    pathname = "/inventory";
-    renderNav(<CompactNav account={ACCOUNT} />);
-
-    await waitFor(() => {
-      expect(
-        within(bars()[0])
-          .getAllByRole("link")
-          .map((link) => link.textContent),
-      ).toEqual(["Compra", "Inventario", "Panel"]);
-    });
-  });
-
-  it("keeps the sheet closed, and its links out of the tab order, until asked", () => {
+  it("keeps the sheet closed until the account circle is pressed", () => {
     pathname = "/dashboard";
     renderNav(<CompactNav account={ACCOUNT} />);
 
     expect(screen.queryByRole("dialog")).toBeAbsent();
-    expect(screen.queryByRole("link", { name: "Tickets" })).toBeAbsent();
-    expect(
-      within(bars()[0]).getByRole("button", { name: /Más/ }),
-    ).toHaveAttribute("aria-expanded", "false");
+    expect(accountCircle()).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("opens a named dialog holding the remaining destinations", async () => {
+  it("opens the account panel: who you are, Configuración, the kitchen and the way out", async () => {
     pathname = "/dashboard";
     renderNav(<CompactNav account={ACCOUNT} />);
 
     await openSheet();
+    const sheet = screen.getByRole("dialog", { name: "Tu cuenta" });
 
-    const sheet = screen.getByRole("dialog", { name: "Más secciones" });
     expect(sheet).toHaveAttribute("aria-modal", "true");
-
-    // What the bar does not show, and nothing it does.
-    expect(within(sheet).queryByRole("link", { name: "Panel" })).toBeAbsent();
-    const expected = [
-      ["Cocina", "/kitchen"],
-      ["Productos", "/products"],
-      ["Tickets", "/receipts"],
-      ["Precios", "/prices"],
+    expect(within(sheet).getByText("Noa García")).toBeInTheDocument();
+    expect(within(sheet).getByText("noa@example.com")).toBeInTheDocument();
+    expect(links(sheet)).toEqual([
       ["Configuración", "/settings"],
-    ];
-    for (const [label, href] of expected) {
-      expect(within(sheet).getByRole("link", { name: label })).toHaveAttribute(
-        "href",
-        href,
-      );
-    }
-  });
-
-  /**
-   * The sheet used to carry theme and language at the bottom of 85vh. A
-   * settings control inside a navigation panel is one somebody changes by
-   * accident while looking for a page; `/settings` is a destination in the
-   * same list and is where they belong.
-   */
-  it("carries destinations and nothing else", async () => {
-    pathname = "/dashboard";
-    renderNav(<CompactNav account={ACCOUNT} />);
-
-    await openSheet();
-
-    const sheet = screen.getByRole("dialog");
-    expect(within(sheet).queryByLabelText("Idioma")).toBeAbsent();
-    expect(within(sheet).queryByRole("group", { name: "Tema" })).toBeAbsent();
+      ["Pantalla de cocina", "/kitchen"],
+    ]);
+    // The kitchen's link is the phone's: the rail has a button of its own.
     expect(
-      within(sheet).getByRole("link", { name: "Configuración" }),
-    ).toHaveAttribute("href", "/settings");
-  });
-
-  it("keeps the current page out of the sheet: it is in the bar", async () => {
-    pathname = "/settings/stores";
-    renderNav(<CompactNav account={ACCOUNT} />);
-
-    await within(bars()[0]).findByRole("link", { name: "Configuración" });
-    await openSheet();
-
+      within(sheet).getByRole("link", { name: "Pantalla de cocina" }).className,
+    ).toContain("md:hidden");
     expect(
-      within(screen.getByRole("dialog")).queryByRole("link", {
-        name: "Configuración",
-      }),
-    ).toBeAbsent();
-  });
-
-  it("says who is signed in at the head of the sheet, with the way out", async () => {
-    pathname = "/dashboard";
-    renderNav(<CompactNav account={ACCOUNT} />);
-
-    await openSheet();
-
-    const account = within(screen.getByRole("dialog")).getByRole("region", {
-      name: "Tu cuenta",
-    });
-    expect(within(account).getByText("Noa García")).toBeInTheDocument();
-    expect(within(account).getByText("noa@example.com")).toBeInTheDocument();
-    expect(
-      within(account).getByRole("link", { name: "Seguridad y acceso" }),
-    ).toHaveAttribute("href", "/settings/security?from=%2Fdashboard");
-    expect(
-      within(account).getByRole("button", { name: "Cerrar sesión" }),
+      within(sheet).getByRole("button", { name: "Cerrar sesión" }),
     ).toBeInTheDocument();
+  });
+
+  it("opens the same panel from the foot of the rail", async () => {
+    pathname = "/kitchen";
+    renderNav(<CompactNav account={ACCOUNT} />);
+
+    await userEvent.click(
+      within(bars()[1]).getByRole("button", { name: "Tu cuenta" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Tu cuenta" }),
+    ).toBeInTheDocument();
+  });
+
+  it("closes when the route changes", async () => {
+    pathname = "/dashboard";
+    const { rerender } = renderNav(<CompactNav account={ACCOUNT} />);
+
+    await openSheet();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    pathname = "/settings";
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <CompactNav account={ACCOUNT} />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeAbsent();
+    });
   });
 
   it("moves focus into the sheet when it opens", async () => {
@@ -312,7 +319,7 @@ describe("CompactNav", () => {
     pathname = "/dashboard";
     renderNav(<CompactNav account={ACCOUNT} />);
 
-    const trigger = within(bars()[0]).getByRole("button", { name: /Más/ });
+    const trigger = accountCircle();
     await userEvent.click(trigger);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
@@ -352,28 +359,6 @@ describe("CompactNav", () => {
     for (let step = 0; step < 24; step += 1) {
       await userEvent.tab();
       expect(sheet.contains(document.activeElement)).toBe(true);
-    }
-  });
-
-  it("never wraps onto a control Tab cannot reach", async () => {
-    pathname = "/dashboard";
-    renderNav(<CompactNav account={ACCOUNT} />);
-
-    await openSheet();
-    const sheet = screen.getByRole("dialog");
-
-    // shift+Tab from the panel wraps to what the trap believes is its last
-    // stop. If that belief counts every radio in a group rather than the one
-    // the browser visits, the target is an element focus never lands on, the
-    // wrap silently fails, and focus leaves the sheet. The panel's preference
-    // controls are radio groups, so this is not hypothetical — it is what
-    // happens the moment a radio group is the last thing in the sheet.
-    await userEvent.tab({ shift: true });
-    const landed = document.activeElement;
-
-    expect(sheet.contains(landed)).toBe(true);
-    if (landed instanceof HTMLInputElement && landed.type === "radio") {
-      expect(landed.checked).toBe(true);
     }
   });
 

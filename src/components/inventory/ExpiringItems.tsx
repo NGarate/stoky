@@ -20,7 +20,7 @@ interface ExpiringItemsProps {
  * word in a `Badge`, not a colour and not an SVG, and the 48px
  * target floor comes from the `ItemRow` primitive instead of being restated on
  * the row (DEFERRED.md item 20). No page of its own — expiry is shown where it is
- * relevant (the inventory list, the Panel, the kitchen), and this is the block
+ * relevant (the inventory list, Inicio, the kitchen), and this is the block
  * the inventory list shows.
  */
 export function ExpiringItems({
@@ -63,7 +63,7 @@ export function ExpiringItems({
 
   if (!hasExpired && !hasExpiring) {
     // Not an alert: nothing needs attention, so it is a plain line, the way the
-    // Panel says the same thing. Reason first, no icon carrying a state.
+    // Inicio says the same thing. Reason first, no icon carrying a state.
     return <p className="text-muted-foreground">{t("allClear")}</p>;
   }
 

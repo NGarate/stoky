@@ -434,7 +434,7 @@ Evidence:
 - The shared-tablet, second-device, no-JavaScript and settings cases had
   browser tests until 2026-10-27 (PROGRESS D154); they no longer do.
 - `src/__tests__/unit/landing.test.ts` covers the precedence, including the
-  omission that matters — no quiet fallback to the Panel for the unasked.
+  omission that matters — no quiet fallback to Inicio for the unasked.
 
 - *Signing in goes through the decision*: until 2026-10-06 the login and
   registration forms replaced straight to `/dashboard`, so the question was

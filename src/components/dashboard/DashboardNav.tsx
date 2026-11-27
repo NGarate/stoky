@@ -6,18 +6,21 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { AccountMenu } from "@/components/session/AccountMenu";
 import type { Account } from "@/components/session/AccountPanel";
-import { DESKTOP_DESTINATIONS, activeHref } from "./navigation";
+import { DESTINATIONS, activeHref } from "./navigation";
 import type { JSX } from "react";
 
 /**
  * The desktop top bar.
  *
- * Unchanged in shape, and deliberately so: `lg` and up is the densest tier —
- * mouse, keyboard, half a metre away — and a row of seven text links is the
- * right control for it (DESIGN_AUDIT A3.5). What changed is that it now stops
- * at `lg` instead of `md`, and that it no longer disappears with nothing behind
- * it: below `lg`, `CompactNav` takes over with a bottom bar or a rail
- * (ISSUES.md NAV-1).
+ * `lg` and up is the densest tier — mouse, keyboard, half a metre away — and
+ * a row of text links is the right control for it (DESIGN_AUDIT A3.5). It
+ * carries the rail's five destinations in the rail's order, Inicio, Compra,
+ * Inventario, Tickets and Cocina (`DECISIONS.md` NAVIGATION): it had eight,
+ * and Productos and Precios would otherwise be in two places at once, as
+ * links here and as views in their sections. A tablet held sideways at
+ * 1024px or more is served this bar, not the rail, so the kitchen's tablet
+ * may be looking at it. Below `lg`, `CompactNav` takes over with a bottom
+ * bar or a rail (ISSUES.md NAV-1).
  *
  * `hidden lg:block` is safe here in a way `hidden md:flex` was not. It is not
  * dropping content on small screens — the content is rendered by another
@@ -27,26 +30,27 @@ import type { JSX } from "react";
  * confirmation stays were rendered in this bar on every signed-in route, which
  * put three settings controls across the top of the household overview — the
  * screen whose whole job is what to buy and what is running out. They live on
- * `/settings`, which this bar links to, and which is where somebody goes when
- * changing a setting is what they came to do.
+ * `/settings`, which the account circle at the end of this bar links to, and
+ * which is where somebody goes when changing a setting is what they came to
+ * do.
  *
- * It ends with the account circle (`AccountMenu`): who is signed in, and the
- * way out, from every screen rather than from the foot of `/settings`.
+ * It ends with the account circle (`AccountMenu`): who is signed in,
+ * Configuración, which left the bar, and the way out, from every screen.
  */
 export function DashboardNav({ account }: { account: Account }): JSX.Element {
   const t = useTranslations("navigation");
   const pathname = usePathname();
-  const current = activeHref(pathname, DESKTOP_DESTINATIONS);
+  const current = activeHref(pathname);
 
   return (
     <nav
       aria-label={t("mainLabel")}
       className="hidden border-b border-border bg-card lg:block"
     >
-      {/* `flex-wrap` kept even though the row is now only the wordmark and the
-          destinations: eight labels in a long language still wrap before they
-          overflow, and a horizontal scrollbar on the shell is DESIGN_AUDIT
-          A3.3 rather than a nit. */}
+      {/* `flex-wrap` kept even though the row is now only the wordmark, five
+          destinations and the circle: labels in a long language still wrap
+          before they overflow, and a horizontal scrollbar on the shell is
+          DESIGN_AUDIT A3.3 rather than a nit. */}
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3">
         <div className="flex items-center gap-8">
           {/* The wordmark is a link like any other and gets the same target
@@ -62,7 +66,7 @@ export function DashboardNav({ account }: { account: Account }): JSX.Element {
             <Link href="/dashboard"> Stoky </Link>
           </Button>
           <ul className="flex items-center gap-1">
-            {DESKTOP_DESTINATIONS.map((destination) => {
+            {DESTINATIONS.map((destination) => {
               const isCurrent = current === destination.href;
 
               return (

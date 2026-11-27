@@ -407,4 +407,23 @@ describe("what sits above the data while there is none", () => {
       screen.queryByRole("navigation", { name: "Vistas de Inventario" }),
     ).toBeAbsent();
   });
+
+  it("keeps the way back where the loaded screen draws it", () => {
+    renderWithIntl(
+      <RouteState
+        back="/dashboard"
+        backClassName="md:hidden"
+        error={null}
+        fetchStatus="fetching"
+        isLoading
+        onRetry={() => {}}
+        title="Cocina"
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Volver al inicio" }).closest("div")
+        ?.className,
+    ).toBe("md:hidden");
+  });
 });

@@ -67,8 +67,20 @@ describe("PageHeader", () => {
     render(<PageHeader back="/inventory" title="Añadir stock" />);
 
     expect(
-      screen.getByRole("link", { name: "Volver al panel" }),
+      screen.getByRole("link", { name: "Volver al inicio" }),
     ).toHaveAttribute("href", "/dashboard");
+  });
+
+  it("draws the way back only where it is asked to", () => {
+    // The kitchen's, `md:hidden`: only the phone has no button for it.
+    render(
+      <PageHeader back="/dashboard" backClassName="md:hidden" title="Cocina" />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Volver al inicio" }).closest("div")
+        ?.className,
+    ).toBe("md:hidden");
   });
 
   it("keeps its own parent when the origin is not one it follows", () => {

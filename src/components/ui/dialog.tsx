@@ -13,9 +13,9 @@ import type { JSX, ReactNode, RefObject } from "react";
 /**
  * A modal panel, and the end of `window.confirm`.
  *
- * Two hand-rolled panels already exist — `NavSheet` and `ReconcileDialog` —
+ * Two hand-rolled panels already exist — `AccountSheet` and `ReconcileDialog` —
  * and between them they show why a third should not be written by hand.
- * NavSheet gets almost everything right: it renders nothing when closed, moves
+ * AccountSheet gets almost everything right: it renders nothing when closed, moves
  * focus in, returns it to the opener, closes on Escape and on the scrim, and
  * traps Tab through `tabbableWithin`. `ReconcileDialog` gets almost none of
  * that: no Escape, no trap, no focus return, and `role="dialog"` on the scrim
@@ -33,18 +33,18 @@ import type { JSX, ReactNode, RefObject } from "react";
  * marking ten nodes in this shell while leaving the one that contains
  * `<main>` alone. Why is not yet understood and is not claimed here. A
  * screen reader in browse mode can therefore still reach the page underneath
- * — the same gap `NavSheet` and `ReconcileDialog` have, neither better nor
+ * — the same gap `AccountSheet` and `ReconcileDialog` have, neither better nor
  * worse. Worth closing; not closed by this commit, and not asserted by its
  * tests.
  *
  * Those two are exactly what a library does and a hand-rolled panel keeps
- * getting wrong, so this is Radix. Note what NavSheet's own docblock rejects
+ * getting wrong, so this is Radix. Note what AccountSheet's own docblock rejects
  * and does not: it rejects the *platform* `<dialog>` element, because
  * `showModal()` is not implemented in the DOM the component tests run
  * against. A userland implementation has no such problem — verified by
  * probing `@radix-ui/react-dialog` under happy-dom before adopting it.
  *
- * NavSheet and ReconcileDialog are deliberately left alone. Migrating them is
+ * AccountSheet and ReconcileDialog are deliberately left alone. Migrating them is
  * a second change that can be reverted on its own, and `CompactNav.test.tsx`
  * staying byte-identical is what proves this primitive regressed nothing.
  */

@@ -216,7 +216,7 @@ export function LocationPicker({
   // Focus never leaves the trigger while the panel is open — that is what
   // `aria-activedescendant` buys, and it is why Escape has nothing to restore.
   // So the key handling belongs on the trigger rather than on the document,
-  // unlike NavSheet, whose focus moves into the panel it opens.
+  // unlike AccountSheet, whose focus moves into the panel it opens.
   const handleTriggerKeyDown = (event: React.KeyboardEvent) => {
     if (!isOpen) {
       if (
@@ -392,7 +392,7 @@ export function LocationPicker({
 
       {isOpen && (
         <>
-          {/* Decorative scrim, as in NavSheet: the trigger is still there to
+          {/* Decorative scrim, as in AccountSheet: the trigger is still there to
               close the panel and Escape still works, so this stays out of the
               tab order and out of the accessibility tree rather than being a
               second, invisible "Close dropdown" control on every page that

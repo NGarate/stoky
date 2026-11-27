@@ -304,7 +304,7 @@ export const inventoryRouter = createTRPCRouter({
    * Both filters ask `src/lib/stock/low-stock.ts` — restated in SQL, because
    * the database cannot import TypeScript, and held to it by an integration
    * case that asks both over the same rows. Phase 8 item 2 is why that
-   * matters: the Panel's count and the list it opens must be one question.
+   * matters: Inicio's count and the list it opens must be one question.
    *
    * The page and the count are the same filter run twice, from one fragment,
    * inside one transaction — so the total cannot describe a different set from

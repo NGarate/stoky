@@ -8,7 +8,7 @@ import { Decimal } from "@prisma/client-runtime-utils";
 import { asStored } from "../utils/amount";
 
 /**
- * The Panel's opening: quick actions first, then the sections themselves.
+ * Inicio's opening: quick actions first, then the sections themselves.
  *
  * Three owner reviews have each cut a layer of the same redundancy. The
  * second (2026-08-19) removed the alert rows — cards restating the lists
@@ -126,7 +126,7 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-describe("the Panel's opening order", () => {
+describe("Inicio's opening order", () => {
   it("puts the quick actions above everything else", () => {
     renderWithIntl(<DashboardPage />, { locale: "es" });
 
@@ -162,7 +162,7 @@ describe("the Panel's opening order", () => {
   });
 });
 
-describe("what the Panel does not say twice", () => {
+describe("what Inicio does not say twice", () => {
   it("does not present the catalogue size as needing attention", () => {
     renderWithIntl(<DashboardPage />, { locale: "es" });
 
@@ -287,7 +287,7 @@ describe("the restock list's state", () => {
   });
 });
 
-describe("the Panel's lists", () => {
+describe("Inicio's lists", () => {
   it("offers the overflow as a door to the filtered inventory", () => {
     overviewStub.data = {
       products: Array.from({ length: 7 }, (_, i) => row({ id: `p${i}` })),

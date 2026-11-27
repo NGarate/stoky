@@ -6,7 +6,7 @@ import { axeViolations } from "../utils/axe";
 import { Decimal } from "@prisma/client-runtime-utils";
 
 /**
- * `/inventory?filter=restock` — the Panel's restock card lands here.
+ * `/inventory?filter=restock` — Inicio's restock card lands here.
  *
  * The filter must be loud: a banner naming it, a way back to the whole list,
  * and — when nothing needs restocking — a sentence rather than a bare empty

@@ -18,7 +18,7 @@ import type { JSX, ReactNode } from "react";
  * |---|---|---|
  * | `form` | 2xl | one column of fields, read top to bottom on a phone |
  * | `detail` | 3xl | one thing, its sections stacked |
- * | `screen` | 5xl | a whole-screen overview (the Panel, the kitchen) |
+ * | `screen` | 5xl | a whole-screen overview (Inicio, the kitchen) |
  * | `index` | 6xl | a list of things, a table from `lg` |
  *
  * There is no gutter here: the layout's `p-4` is the only one. A second `p-6`
@@ -71,6 +71,11 @@ export interface PageHeaderProps {
    * and the words name wherever it leads (`useBack`).
    */
   back?: string;
+  /**
+   * Where the way back is drawn, when not on every tier: the kitchen's is
+   * `md:hidden`, because only the phone has no button for the kitchen.
+   */
+  backClassName?: string;
   /** One sentence saying what this screen is for. */
   intro?: ReactNode;
   /**
@@ -113,6 +118,7 @@ export interface PageHeaderProps {
 export function PageHeader({
   title,
   back,
+  backClassName,
   intro,
   views,
   actions,
@@ -122,13 +128,15 @@ export function PageHeader({
   return (
     <div className={cn("mb-6", className)}>
       {back ? (
-        <WithBack fallback={back}>
-          {({ href, label, onClick }) => (
-            <BackLink href={href} onClick={onClick}>
-              {label}
-            </BackLink>
-          )}
-        </WithBack>
+        <div className={backClassName}>
+          <WithBack fallback={back}>
+            {({ href, label, onClick }) => (
+              <BackLink href={href} onClick={onClick}>
+                {label}
+              </BackLink>
+            )}
+          </WithBack>
+        </div>
       ) : null}
       <div
         className={cn(

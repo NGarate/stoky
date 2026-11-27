@@ -39,7 +39,7 @@ import { Decimal } from "@prisma/client-runtime-utils";
  * Escape, the only keyboard ways out were submitting an adjustment or
  * pressing the button that throws the queued change away.
  *
- * The behaviour is `NavSheet`'s, which has been doing this correctly in this
+ * The behaviour is `AccountSheet`'s, which has been doing this correctly in this
  * codebase since the compact tiers landed — the same `tabbableWithin` trap,
  * the same Escape, the same restoration of the opener on unmount. Not the
  * `Dialog` primitive, though it is the better home: migrating this panel to

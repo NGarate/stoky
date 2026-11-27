@@ -26,7 +26,7 @@ import type { JSX } from "react";
  * two instances no longer collide (DESIGN_AUDIT A2.1).
  *
  * It is now the *only* surface that renders them. `DashboardNav` and
- * `NavSheet` rendered the cluster too, so three settings controls sat on every
+ * `AccountSheet` rendered the cluster too, so three settings controls sat on every
  * signed-in route; both link here instead.
  *
  * The three controls do not all store their answer in the same place, and the
@@ -51,7 +51,9 @@ export default function SettingsPage(): JSX.Element {
 
   return (
     <PageShell width="form">
-      <PageHeader intro={t("intro")} title={t("title")} />
+      {/* Back to Inicio: no bar marks Configuración, so the title and this
+          link say where you are (DECISIONS.md NAVIGATION). */}
+      <PageHeader back="/dashboard" intro={t("intro")} title={t("title")} />
 
       {/* Each screen is one ItemRow whose title is the link. They were cards
           whose h2 held a link-styled Button — so the title, at the

@@ -24,7 +24,7 @@ export const instant = false;
  *
  * | Width | Control | Where the padding goes |
  * |---|---|---|
- * | base → `md` | bottom bar | `pb-28`, so the last row is not under the bar |
+ * | base → `md` | bottom bar, and the account circle above the page | `pb-28`, so the last row is not under the bar |
  * | `md` → `lg` | left rail (`w-32`) | `md:pl-36`, clearing the rail |
  * | `lg` and up | top bar | back to a plain `p-4` |
  *
@@ -56,7 +56,7 @@ export default async function DashboardLayout({
     select: { snackbarDuration: true },
   });
 
-  // Who is signed in, for the account circle. From the session the layout
+  // Who is signed in, for the account panel. From the session the layout
   // already holds, so the shell asks the server nothing more for it.
   const account = { name: session.user.name, email: session.user.email };
 

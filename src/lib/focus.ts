@@ -10,7 +10,7 @@
  * so the wrap never fires and focus escapes the trap entirely. Whether that
  * happens is pure luck about ordering: it depends on whether the last control
  * in the panel happens to be a radio group and whether the *last radio in it*
- * happens to be the selected one. `NavSheet` had this latent for as long as
+ * happens to be the selected one. `AccountSheet` had this latent for as long as
  * its language `<select>` sat after the theme radios, and it appeared the
  * moment a third preference was added below them.
  *

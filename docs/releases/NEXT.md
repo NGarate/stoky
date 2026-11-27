@@ -2,7 +2,19 @@
 
 ## Destacado
 
+* Cuatro sitios fijos en la barra del móvil
 * Productos y Precios, dentro de Inventario y de Compra
+
+### Cuatro sitios fijos en la barra del móvil
+
+La barra del móvil tiene siempre los mismos cuatro botones, en el mismo
+orden: **Inicio**, **Compra**, **Inventario** y **Tickets**. Ya no cambia
+según lo que hayas abierto antes, y desaparece «Más». Configuración y la
+pantalla de cocina están en tu cuenta, el círculo de arriba a la derecha,
+junto a cerrar sesión. En la tableta, la barra de la izquierda tiene los
+mismos cuatro y la **Cocina**, y tu cuenta al pie. En el ordenador, la barra
+de arriba pasa de ocho enlaces a esos cinco, y Configuración está en el
+círculo de tu cuenta. «Panel» se llama ahora **Inicio**.
 
 ### Productos y Precios, dentro de Inventario y de Compra
 
@@ -77,6 +89,17 @@ Nada todavía.
 ## Qué ha cambiado
 
 ## English
+
+### Four fixed places in the phone's bar
+
+The phone's bar always has the same four buttons in the same order:
+**Home**, **Shopping**, **Inventory** and **Receipts**. It no longer changes
+with what you opened before, and "More" is gone. Settings and the kitchen
+screen are in your account, the circle at the top right, beside signing out.
+On a tablet the bar on the left has the same four and the **Kitchen**, with
+your account at its foot. On a computer the top bar goes from eight links to
+those five, and Settings is in your account's circle. "Dashboard" is now
+called **Home**.
 
 ### Products and Prices, inside Inventory and Shopping
 
