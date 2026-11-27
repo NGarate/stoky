@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-11-23
+Updated: 2026-11-27
 
 Single source of truth for where the project actually is.
 
@@ -1539,6 +1539,18 @@ read out of `package.json`, `.bun-version`, the `Dockerfile` and
   `/inventory/add`.~~ **Closed.** The last of the eight: the stock procedures'
   inputs described a database row rather than what each one does, and
   `ProductPicker` read one page's namespace on both stock screens.
+- **The phone's bottom bar, its menus and the settings hub are owed a
+  rethink** (owner, 2026-11-27). The bar holds the three screens last used on
+  the device plus "Más" (`nextSlots` in `src/components/dashboard/navigation.ts`),
+  so what is in it moves; the "Más" sheet lists the other five destinations
+  and the account; and `/settings` is one flat list that mixes what belongs
+  to the account, to the device and to the household with two actions.
+  `docs/mockups/navegacion-movil.html` draws the current arrangement beside
+  three alternatives, on the same content. **The owner chose B the same day**
+  — four fixed destinations, one action button, the account in the corner —
+  and `DECISIONS.md` NAVIGATION records it, with Configuración ordered by
+  task and the tablet's rail and the desktop bar following with the same
+  five. None of it is built.
 
 Closed since this section was written, and listed because a status file that
 only ever grows is one nobody trusts: DEBT-2 (the scanner's torch), UI-9 (a
@@ -1690,6 +1702,19 @@ Two things that sequence surfaced, both operational rather than defects:
   errors to somebody else's server. (An earlier line here also said "no data
   export" — stale since the export closed above; a backup story beyond the
   JSON export is still absent.)
+- **The release bundle keeps an installation's data outside its own folder**
+  (owner, 2026-11-27, from the first install on a NAS). `deploy/docker-compose.yml`
+  declares `postgres_data`, `valkey_data` and `uploads` as named volumes, which
+  Docker keeps under its own data root, and a backup lands wherever
+  `INSTALL.md`'s commands are run. Wanted: the database, the receipts
+  (`uploads`) and the backups in directories mounted from the folder that
+  holds `docker-compose.yml`, so that one folder is the installation and
+  copying it is the backup's destination. To settle when it is built: `db`
+  runs as `70:70` and `app` as a non-root user, both with `cap_drop: [ALL]`,
+  so neither can take ownership of a directory Docker creates as root and
+  `install.sh` has to make them; `install.sh` finds an existing installation
+  by its database volume's name; and `INSTALL.md`'s backup, restore and
+  upgrade sections are written around the volumes.
 - Coverage is measured now, but **per tier, and the denominators differ**: each
   report counts only the files that tier loads, so the three numbers do not
   compose into a project figure and must not be added. Integration 90.2% of

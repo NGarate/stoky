@@ -1,6 +1,6 @@
 # Decisions that govern the application
 
-Updated: 2026-11-14
+Updated: 2026-11-27
 
 Why the application is built the way it is: the product decisions every screen
 and every procedure is held to. `PROGRESS.md` records the judgement calls taken
@@ -409,3 +409,58 @@ would take for an operator who wants error tracking to add a self-hosted
 collector (a compose service and an env var, nothing baked in) without this
 repository choosing one for them. Unowned until someone picks the investigation
 up.
+
+---
+
+## NAVIGATION: Four fixed places on the phone, the account in the corner
+
+Taken 2026-11-27. Chosen, not yet built: `STATUS.md` (*Accessibility and
+interface*) carries the work.
+
+The phone's bar showed the three screens last used and "Más" (`PROGRESS.md`
+D15, amended after the owner's report of 2026-10-31), so what was in it moved
+as a side effect of looking at something. Four arrangements were drawn on the
+same content in `docs/mockups/navegacion-movil.html` — that one, and three
+taken from patterns people already know — and the owner chose **B**:
+
+1. **Four destinations, always in the same place**: Inicio, Compra,
+   Inventario, Tickets. Nothing reorders itself and there is no "Más".
+2. **Productos and Precios stop being destinations.** Each becomes the second
+   view of the section it belongs to: Inventario is *Existencias | Productos*,
+   Compra is *Listas | Precios*.
+3. **A screen's one primary action is a button fixed above the bar**, in the
+   same spot on every screen that has one (USABILITY rule 1).
+4. **Configuración and the kitchen screen are reached from the account
+   button**, top right: two taps, the first of them away from the thumb.
+
+**Why B.** The owner's words: two taps to Configuración is a low price,
+because it is what gets used least. The bar is spent on what is done every
+day.
+
+**What it costs, and was accepted with it.** Inside Configuración and the
+kitchen screen the bar marks no destination; the page title and the way back
+are what say where you are.
+
+**Configuración is ordered by task** (same day): what somebody came to do —
+organise the house, how it looks and how it tells you things, security, your
+data — with a search field above. The mock-ups also drew a grouped list and
+an ordering by whom a setting affects; the owner chose this one.
+
+**The tablet follows** (same day). Its rail stops showing the three last
+used and carries the same four in the same order. The rail has room the
+phone's bar does not, and spends it on two things: the kitchen screen gets a
+button of its own, because that screen is what the tablet is for (SCREENS),
+and the account button sits at the foot of the rail.
+
+**The desktop follows as well** (same day), in the owner's words to leave
+everything alike. B did not need it to: its eight links never moved, and it
+already ends in the account circle. But the two views of Inventario and
+Compra reach it anyway, because they are in the pages, and eight links would
+have left Productos and Precios in two places at once. So the top bar
+carries the rail's five in the rail's order — Inicio, Compra, Inventario,
+Tickets, Cocina — and Configuración is inside the account circle. One
+arrangement on every tier is also one list of destinations where
+`navigation.ts` keeps two. A tablet held sideways at 1024px or more is served
+the desktop bar (`lg`), not the rail, so the kitchen's tablet may be looking
+at this bar. It was decided from the description: the mock-ups do not draw
+the desktop.
