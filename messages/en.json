@@ -77,6 +77,9 @@
     "kitchen": "Kitchen",
     "account": "Your account",
     "accountOf": "Your account: {name}",
+    "stockView": "Stock",
+    "listsView": "Lists",
+    "viewsOf": "{section} views",
     "backTo": {
       "dashboard": "Back to the dashboard",
       "inventory": "Back to inventory",

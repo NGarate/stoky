@@ -1,6 +1,6 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
-import { screen, cleanup } from "@testing-library/react";
+import { screen, cleanup, within } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
 import { Suspense, createContext } from "react";
 import { renderWithIntl } from "../utils/render";
@@ -352,4 +352,21 @@ it("passes axe at AAA on a loaded /receipts", async () => {
   );
   await screen.findAllByText("Mercadona");
   expect(await axeViolations(container)).toBe("");
+});
+
+it("draws /prices as Compra's second view, titled with its section's name", () => {
+  // Whatever the query says: the views do not need the data.
+  mount(<PricesPage />);
+
+  expect(
+    screen.getByRole("heading", { level: 1, name: "Compra" }),
+  ).toBeInTheDocument();
+  expect(
+    within(screen.getByRole("navigation", { name: "Vistas de Compra" }))
+      .getAllByRole("link")
+      .map((link) => [link.textContent, link.getAttribute("href")]),
+  ).toEqual([
+    ["Listas", "/shopping"],
+    ["Precios", "/prices"],
+  ]);
 });

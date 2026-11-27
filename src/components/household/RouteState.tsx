@@ -110,6 +110,8 @@ interface RouteStateProps {
   back?: string;
   /** The screen's actions, when they do not depend on the data. */
   actions?: ReactNode;
+  /** The section's views, as the loaded screen draws them. */
+  views?: ReactNode;
   /** The loaded screen's width. Defaults to an index's. */
   width?: PageWidth;
   density?: "default" | "touch";
@@ -135,6 +137,7 @@ export function RouteState({
   title,
   back,
   actions,
+  views,
   width = "index",
   density,
   notFound,
@@ -179,6 +182,7 @@ export function RouteState({
         back={missing ? (notFound.back ?? back) : back}
         density={density}
         title={missing ? notFound.title : title}
+        views={missing ? undefined : views}
       />
       <div aria-live="polite" role="status">
         {missing ? (

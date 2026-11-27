@@ -77,6 +77,9 @@
     "kitchen": "Cocina",
     "account": "Tu cuenta",
     "accountOf": "Tu cuenta: {name}",
+    "stockView": "Existencias",
+    "listsView": "Listas",
+    "viewsOf": "Vistas de {section}",
     "backTo": {
       "dashboard": "Volver al panel",
       "inventory": "Volver al inventario",

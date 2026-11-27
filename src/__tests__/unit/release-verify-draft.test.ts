@@ -426,9 +426,11 @@ const NOTES = existsSync(join(root, "docs/releases/NEXT.md"))
   ? "docs/releases/NEXT.md"
   : `docs/releases/v${JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version}.md`;
 
+// The move is told in the notes of the release that made it, which the test
+// reads only until the next release's NEXT.md exists.
 const HISTORY: Record<string, string[]> = {
   "SECURITY.md": ["`ghcr.io/ngarate/stoky:<tag>`"],
-  [NOTES]: [
+  "docs/releases/v0.2.0-alpha.1.md": [
     "`ghcr.io/ngarate/stoky` a `ghcr.io/nogcode/stoky`",
     "`ghcr.io/ngarate/stoky` to `ghcr.io/nogcode/stoky`",
   ],

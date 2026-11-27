@@ -371,3 +371,40 @@ describe("the page around the state", () => {
     expect(screen.getByText(/conexión/)).toBeInTheDocument();
   });
 });
+
+describe("what sits above the data while there is none", () => {
+  it("keeps the section's views, as the loaded screen draws them", () => {
+    renderWithIntl(
+      <RouteState
+        error={null}
+        fetchStatus="fetching"
+        isLoading
+        onRetry={() => {}}
+        title="Inventario"
+        views={<nav aria-label="Vistas de Inventario" />}
+      />,
+    );
+
+    expect(
+      screen.getByRole("navigation", { name: "Vistas de Inventario" }),
+    ).toBeInTheDocument();
+  });
+
+  it("drops them with the actions when the thing is gone", () => {
+    renderWithIntl(
+      <RouteState
+        error={trpcError("NOT_FOUND")}
+        fetchStatus="idle"
+        isLoading={false}
+        notFound={{ title: "No está", body: "Ya no existe." }}
+        onRetry={() => {}}
+        title="Inventario"
+        views={<nav aria-label="Vistas de Inventario" />}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("navigation", { name: "Vistas de Inventario" }),
+    ).toBeAbsent();
+  });
+});

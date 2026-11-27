@@ -74,6 +74,11 @@ export interface PageHeaderProps {
   /** One sentence saying what this screen is for. */
   intro?: ReactNode;
   /**
+   * The section's views (`ViewSwitch`), under the title and above the
+   * screen: on Inventario and Compra, which each hold two.
+   */
+  views?: ReactNode;
+  /**
    * `<Button>`s. At most one `default` — the screen's primary action — and
    * the rest `outline` (`DECISIONS.md` USABILITY: one primary action per
    * screen).
@@ -99,6 +104,8 @@ export interface PageHeaderProps {
  *    words, from `md` opposite the title. Two buttons squeezed beside a title
  *    on a 390px screen pushed `/shopping/lists` to 399px wide, which is a
  *    WCAG 1.4.10 reflow failure rather than a cosmetic one.
+ * 5. **The views**, when the section has two (`ViewSwitch`): under the
+ *    title, and on a phone before the actions' row.
  *
  * DOM order is reading order: title and intro come before the actions, so a
  * screen reader hears what the screen is before what it can do.
@@ -107,6 +114,7 @@ export function PageHeader({
   title,
   back,
   intro,
+  views,
   actions,
   density,
   className,
@@ -124,7 +132,7 @@ export function PageHeader({
       ) : null}
       <div
         className={cn(
-          "flex flex-col gap-4 md:flex-row md:items-start md:justify-between",
+          "flex flex-col gap-4 md:flex-row md:flex-wrap md:items-start md:justify-between",
           back ? "mt-2" : null,
         )}
       >
@@ -132,6 +140,12 @@ export function PageHeader({
           <h1 className={titleVariants({ density })}>{title}</h1>
           {intro ? <p className="mt-2 text-muted-foreground">{intro}</p> : null}
         </div>
+        {/* Straight under the title on a phone, before the actions, as the
+            mock-up draws the two views; from `md` a row of their own under
+            the title and the actions beside it. */}
+        {views ? (
+          <div className="md:order-last md:basis-full">{views}</div>
+        ) : null}
         {actions ? (
           // Each button takes an equal share of the phone's row and wraps to
           // a row of its own when the two cannot share one; from `md` they

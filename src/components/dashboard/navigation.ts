@@ -36,6 +36,36 @@ export const COMPACT_DESTINATIONS: readonly Destination[] = [
   { href: "/settings", labelKey: "settings" },
 ];
 
+/**
+ * The sections that hold two views: their own screen, and the one folded into
+ * it, which stops being a destination of its own (`DECISIONS.md` NAVIGATION).
+ * Each view keeps its own address, so links, back links and the offline cache
+ * that name `/products` or `/prices` still lead where they did.
+ */
+export interface Section {
+  /** The section's name, in the `navigation` namespace. */
+  labelKey: string;
+  /** Its views, its own screen first. */
+  views: readonly Destination[];
+}
+
+export const SECTIONS = {
+  inventory: {
+    labelKey: "inventory",
+    views: [
+      { href: "/inventory", labelKey: "stockView" },
+      { href: "/products", labelKey: "products" },
+    ],
+  },
+  shopping: {
+    labelKey: "shoppingShort",
+    views: [
+      { href: "/shopping", labelKey: "listsView" },
+      { href: "/prices", labelKey: "prices" },
+    ],
+  },
+} as const satisfies Record<string, Section>;
+
 /** The desktop top bar, which has room for all of them. */
 export const DESKTOP_DESTINATIONS: readonly Destination[] = [
   { href: "/kitchen", labelKey: "kitchen" },

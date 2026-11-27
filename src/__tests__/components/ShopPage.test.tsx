@@ -1,7 +1,7 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { createContext } from "react";
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
 import { axeViolations } from "../utils/axe";
@@ -89,6 +89,24 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+/** The section's views, as links: their words and where they lead. */
+function viewLinks(name: string): (string | null)[][] {
+  return within(screen.getByRole("navigation", { name }))
+    .getAllByRole("link")
+    .map((link) => [link.textContent, link.getAttribute("href")]);
+}
+
+describe("Compra's two views", () => {
+  it("are drawn under the title: Listas, and Precios beside it", () => {
+    renderWithIntl(<ShopPage />);
+
+    expect(viewLinks("Vistas de Compra")).toEqual([
+      ["Listas", "/shopping"],
+      ["Precios", "/prices"],
+    ]);
+  });
+});
 
 describe("one task per screen", () => {
   it("puts scanning on top as the only primary action", () => {

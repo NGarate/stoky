@@ -9,6 +9,7 @@ import { Section, sectionHeading } from "@/components/ui/section";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
+import { SectionViews } from "@/components/dashboard/SectionViews";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { projectShoppingItems } from "@/lib/offline/project";
 import type { JSX } from "react";
@@ -67,6 +68,7 @@ export default function ShopPage(): JSX.Element {
         isLoading={query.isPending}
         onRetry={() => void query.refetch()}
         title={t("shopTitle")}
+        views={<SectionViews section="shopping" />}
         width="form"
       />
     );
@@ -90,7 +92,11 @@ export default function ShopPage(): JSX.Element {
 
   return (
     <PageShell width="form">
-      <PageHeader className="mb-0" title={t("shopTitle")} />
+      <PageHeader
+        className="mb-0"
+        title={t("shopTitle")}
+        views={<SectionViews section="shopping" />}
+      />
 
       {/* The primary action, always on top and always the same size.
           Its colour, hover and focus ring come from `Button` rather than

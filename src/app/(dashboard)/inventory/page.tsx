@@ -19,6 +19,7 @@ import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
+import { SectionViews } from "@/components/dashboard/SectionViews";
 import { ExpiringItems } from "@/components/inventory/ExpiringItems";
 import type { JSX } from "react";
 
@@ -191,6 +192,7 @@ export function InventoryView(): JSX.Element {
         isLoading={query.isPending}
         onRetry={() => void query.refetch()}
         title={t("title")}
+        views={<SectionViews section="inventory" />}
       />
     );
   }
@@ -199,7 +201,11 @@ export function InventoryView(): JSX.Element {
 
   return (
     <PageShell width="index">
-      <PageHeader actions={actions} title={t("title")} />
+      <PageHeader
+        actions={actions}
+        title={t("title")}
+        views={<SectionViews section="inventory" />}
+      />
 
       {filterRestock ? (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded border border-warn-foreground bg-warn px-4 py-3">

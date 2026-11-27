@@ -13,6 +13,7 @@ import { ItemRow } from "@/components/ui/item-row";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
+import { SectionViews } from "@/components/dashboard/SectionViews";
 import { BestPriceIndicator } from "@/components/price/BestPriceIndicator";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
 
@@ -41,7 +42,8 @@ export default function PricesPage() {
         fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
         onRetry={() => void query.refetch()}
-        title={t("prices.title")}
+        title={t("shopping.shopTitle")}
+        views={<SectionViews section="shopping" />}
       />
     );
   }
@@ -51,7 +53,13 @@ export default function PricesPage() {
     // layout's 7xl while `/inventory` and `/products` beside it stopped at
     // 6xl — the same list, two line lengths, depending which one you opened.
     <PageShell width="index">
-      <PageHeader title={t("prices.title")} />
+      {/* Compra's name, not Precios': this is the section's second view
+          (DECISIONS.md NAVIGATION), and the document title still says
+          which. */}
+      <PageHeader
+        title={t("shopping.shopTitle")}
+        views={<SectionViews section="shopping" />}
+      />
       <div className="space-y-6">
         {/* The placeholder was doing the job of the label, which means the field
           loses its name the moment someone types in it — and keeps it lost for

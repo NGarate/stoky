@@ -180,6 +180,30 @@ describe("PageHeader", () => {
     expect(kitchen.className).not.toContain("text-2xl");
   });
 
+  it("reads a section's views straight after the title, before the actions", () => {
+    // As the mock-up draws them on a phone; from md they wrap to a row of
+    // their own under the title and the actions beside it.
+    const { container } = render(
+      <PageHeader
+        actions={<Button type="button">Apuntar consumo</Button>}
+        title="Inventario"
+        views={<nav aria-label="Vistas de Inventario">vistas</nav>}
+      />,
+    );
+
+    const views = screen.getByRole("navigation", {
+      name: "Vistas de Inventario",
+    });
+    expect(precedes(screen.getByRole("heading", { level: 1 }), views)).toBe(
+      true,
+    );
+    expect(
+      precedes(views, screen.getByRole("button", { name: "Apuntar consumo" })),
+    ).toBe(true);
+    expect(views.parentElement?.className).toContain("md:order-last");
+    expect(container.querySelector(".md\\:flex-wrap")).not.toBeNull();
+  });
+
   it("gives the actions a row of their own on a phone and a place opposite the title from md", () => {
     const { container } = render(
       <PageHeader

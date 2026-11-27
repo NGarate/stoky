@@ -11,6 +11,7 @@ import { StockAmount, StockStatus } from "@/components/inventory/StockStatus";
 import { isLowStock } from "@/lib/stock/low-stock";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
+import { SectionViews } from "@/components/dashboard/SectionViews";
 import type { Decimal } from "@prisma/client-runtime-utils";
 import type { JSX } from "react";
 
@@ -77,6 +78,11 @@ function RowAction({
 export default function ProductsPage(): JSX.Element {
   const t = useTranslations("products.list");
   const tProducts = useTranslations("products");
+  // The section's name, not the view's: Productos is the second view of
+  // Inventario, and says so in `SectionViews` (DECISIONS.md NAVIGATION).
+  // The document title stays "Productos", so moving between the two views
+  // is still announced.
+  const tInventory = useTranslations("inventory");
   const query = api.product.list.useQuery({ limit: 100 });
   const result = query.data;
 
@@ -104,7 +110,8 @@ export default function ProductsPage(): JSX.Element {
         fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
         onRetry={() => void query.refetch()}
-        title={t("title")}
+        title={tInventory("title")}
+        views={<SectionViews section="inventory" />}
       />
     );
   }
@@ -118,7 +125,11 @@ export default function ProductsPage(): JSX.Element {
 
   return (
     <PageShell width="index">
-      <PageHeader actions={actions} title={t("title")} />
+      <PageHeader
+        actions={actions}
+        title={tInventory("title")}
+        views={<SectionViews section="inventory" />}
+      />
 
       {truncated ? (
         <p className="mb-4 rounded border border-border bg-card p-3 text-sm text-muted-foreground">
