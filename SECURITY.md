@@ -2786,9 +2786,8 @@ is stored, logged or sent.
 | Rate-limit counters, each with its key. The key is the client's IPv4 address or IPv6 /64 for the per-address sign-in and registration limits. It is the first 32 hex characters of an unkeyed SHA-256 of the address that was tried for the per-account sign-in limit, followed by a SHA-256 fingerprint of the `stoky_device` id when the browser has signed in to that account before. It is the account id for the metered actions, and the session id for the per-session budget of a re-entered password (D143) | Valkey memory, saved to `dump.rdb` on the `valkey_data` volume | The limit's window: 15 minutes or an hour. A snapshot taken during the window keeps a counter until the next snapshot replaces it. Under the release bundle's command line, the pinned Valkey saves at least once an hour while anything changes (`CONFIG GET save` answers `3600 1 300 100 60 10000`, measured 2026-10-12) |
 | Known devices: for each account (keyed by the same unkeyed hash), SHA-256 fingerprints of up to 20 `stoky_device` ids | Valkey | A year after the last successful sign-in from that device |
 | The Open Food Facts cache: product data, keyed by barcode alone, with nothing about who scanned the code | Valkey | 30 days. A day for a code Open Food Facts does not know |
-| Certificates: the ACME account key, `ACME_EMAIL`, and the certificates with their private keys | `acme.json` on the `letsencrypt` volume | Until the volume is removed |
 | On each device: the saved reads, the write queue, the `stoky_device` cookie, and while signed in the `stoky.session_token` and `stoky.dont_remember` cookies (`__Secure-` prefixed behind https) | The browser's storage | See [*A device keeps the last account's data while it stays offline*](#a-device-keeps-the-last-accounts-data-while-it-stays-offline). The device cookie lasts a year; the session cookies end with the browser, and are refused once their row has gone |
-| Backups made with [the documented commands](docs/INSTALL.md#backup-and-restore): the database dump (every PostgreSQL row above, password hashes included), the uploads, `.env` and the Compose file | `backups/`, in the installation's directory, and wherever the operator copies them | As long as the operator keeps them. Nothing in Stoky rotates or expires a backup, and a backup still holds accounts and receipts deleted after it was taken. Valkey, the logs and the certificates are not in it |
+| Backups made with [the documented commands](docs/INSTALL.md#backup-and-restore): the database dump (every PostgreSQL row above, password hashes included), the uploads, `.env` and the Compose file | `backups/`, in the installation's directory, and wherever the operator copies them | As long as the operator keeps them. Nothing in Stoky rotates or expires a backup, and a backup still holds accounts and receipts deleted after it was taken. Valkey and the logs are not in it |
 
 Two hashes in that table are weaker than they look. The security log's
 account tag is keyed with `STOKY_SECRET`, so a pasted log line cannot be
@@ -2840,7 +2839,7 @@ shopping lists. It leaves out:
 - members' display preference and the time their sessions were last ended;
 - people who have been removed from the household;
 - the landing-screen choices and the replay records;
-- everything in Valkey, the logs and the certificate store.
+- everything in Valkey and the logs.
 
 It is therefore not a complete copy of what the instance holds about one
 person, and a member who is not an admin cannot export at all. There is no
