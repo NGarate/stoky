@@ -4,7 +4,7 @@ Updated: 2026-11-27
 
 Why the application is built the way it is: the product decisions every screen
 and every procedure is held to. `PROGRESS.md` records the judgement calls taken
-unit by unit (D1–D154); this file holds the few that bind all of them.
+unit by unit (D1–D155); this file holds the few that bind all of them.
 
 Each decision keeps the wording and the date it was taken with, and an
 amendment is dated where it was made. Cite one by its name — `DECISIONS.md`
@@ -414,8 +414,8 @@ up.
 
 ## NAVIGATION: Four fixed places on the phone, the account in the corner
 
-Taken 2026-11-27. Chosen, not yet built: `STATUS.md` (*Accessibility and
-interface*) carries the work.
+Taken 2026-11-27, and built the same day: PROGRESS D155 records the calls
+the drawings left open.
 
 The phone's bar showed the three screens last used and "Más" (`PROGRESS.md`
 D15, amended after the owner's report of 2026-10-31), so what was in it moved
@@ -460,7 +460,7 @@ have left Productos and Precios in two places at once. So the top bar
 carries the rail's five in the rail's order — Inicio, Compra, Inventario,
 Tickets, Cocina — and Configuración is inside the account circle. One
 arrangement on every tier is also one list of destinations where
-`navigation.ts` keeps two. A tablet held sideways at 1024px or more is served
+`navigation.ts` kept two. A tablet held sideways at 1024px or more is served
 the desktop bar (`lg`), not the rail, so the kitchen's tablet may be looking
 at this bar. It was decided from the description: the mock-ups do not draw
 the desktop.

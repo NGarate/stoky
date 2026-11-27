@@ -17,7 +17,8 @@ import type { JSX } from "react";
  * became an account setting: WCAG 2.2.1 is about the person, not the browser,
  * so it is stored against the account — and `/login` and `/register`, which
  * render this cluster, have no account to store it against. `/settings`
- * renders that control beside this one, where a session is guaranteed.
+ * draws that control, and these two, each as a setting of its own, where a
+ * session is guaranteed.
  *
  * The two that remain are the two that can honestly be offered signed out.
  * The theme is a property of the screen and never leaves the device. The
@@ -27,9 +28,9 @@ import type { JSX } from "react";
  * most needs it.
  *
  * It carries no group label of its own. Both controls are individually
- * labelled, and the surfaces that want a heading (`/settings`) already have
- * one; adding a second name here would just make screen-reader output longer
- * without making it clearer.
+ * labelled, and a surface that wants a heading has its own; adding a second
+ * name here would just make screen-reader output longer without making it
+ * clearer.
  *
  * It wraps rather than overflows: `/login` at 390px has room for one control
  * per line and not two.

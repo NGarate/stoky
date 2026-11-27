@@ -69,10 +69,18 @@ export async function signIn(
   await page.click('button[type="submit"]');
 }
 
+/**
+ * Signs out the way a person does: from the account panel, which the circle at
+ * the end of the desktop bar opens on every screen (DECISIONS.md NAVIGATION).
+ * Configuración no longer carries the button.
+ */
 export async function signOut(page: Page): Promise<void> {
-  await page.goto("/settings");
-  await page.getByRole("button", { name: es.session.signOut }).first().click();
-  await page
+  await page.goto("/dashboard");
+  const accountOf = es.navigation.accountOf.replace("{name}", "");
+  await page.getByRole("button", { name: new RegExp(`^${accountOf}`) }).click();
+  const panel = page.getByRole("dialog", { name: es.navigation.account });
+  await panel.getByRole("button", { name: es.session.signOut }).click();
+  await panel
     .getByRole("group", { name: es.session.signOutTitle })
     .getByRole("button", { name: es.session.signOut })
     .click();

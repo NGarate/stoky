@@ -36,9 +36,8 @@ const LABEL_KEY: Record<ThemeMode, "themeSystem" | "themeLight" | "themeDark"> =
  * `localStorage` does not exist during the server render and guessing at it
  * would be a hydration mismatch.
  *
- * That store is also what keeps two instances honest: `/settings` renders the
- * cluster while the nav above it renders another, and the preference has to be
- * one value rather than two copies.
+ * That store is also what keeps two instances honest: any two on one page
+ * show one value rather than two copies of it.
  *
  * Selection is shown by weight as well as fill, so the current mode is not
  * conveyed by colour alone, and each option is a 48px target — the AAA

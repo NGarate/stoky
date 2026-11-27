@@ -5,6 +5,7 @@
 * Cuatro sitios fijos en la barra del móvil
 * Productos y Precios, dentro de Inventario y de Compra
 * Lo principal de cada pantalla, siempre en el mismo sitio
+* Configuración, ordenada por lo que vienes a hacer
 
 ### Cuatro sitios fijos en la barra del móvil
 
@@ -34,6 +35,15 @@ grande abajo a la derecha, junto al pulgar y siempre en el mismo punto:
 tienes una lista de la compra, «Añadir a la lista» te lleva a ella; si tienes
 varias o ninguna, a tus listas. En el ordenador el botón sigue arriba, junto
 al título. En Compra, **Escanear** sigue arriba del todo, ahora con borde.
+
+### Configuración, ordenada por lo que vienes a hacer
+
+Configuración tiene los mismos ajustes de siempre, agrupados por tarea:
+**Organizar la casa**, **Cómo se ve y cómo avisa**, **Seguridad** y **Tus
+datos**. Arriba hay un buscador: escribe una palabra y quedan solo los
+ajustes que la llevan en su nombre, en su explicación o en el nombre de su
+grupo, con o sin tildes.
+Cerrar sesión ya no está aquí, sino en tu cuenta, desde cualquier pantalla.
 
 ## Cambios incompatibles
 
@@ -129,6 +139,14 @@ Products and **Upload a receipt** in Receipts. With one shopping list, "Add
 to the list" takes you to it; with several or none, to your lists. On a
 computer the button stays at the top, beside the title. In Shopping,
 **Scan** stays at the very top, now outlined.
+
+### Settings, ordered by what you came to do
+
+Settings has the same settings as ever, grouped by task: **Organise the
+house**, **How it looks and how it tells you**, **Security** and **Your
+data**. Above them is a search: type a word and only the settings with it
+in their name, their explanation or their group's name remain, accents or
+not. Signing out is no longer here but in your account, from any screen.
 
 ### Known limits and what was tested
 
