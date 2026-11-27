@@ -42,7 +42,7 @@ export const dataRouter = createTRPCRouter({
    * **Receipt images are referenced, not embedded.** They are the only thing
    * here that is not text, and base64ing a year of photographs would turn a
    * small file into a hundred-megabyte one that most editors will not open. The
-   * paths are included so somebody copying the uploads volume can match them
+   * paths are included so somebody copying the uploads directory can match them
    * up, and the export says as much in its own `notes` field rather than
    * leaving the omission to be discovered.
    */
@@ -192,7 +192,7 @@ export const dataRouter = createTRPCRouter({
         rawOcrText:
           "A receipt's whole-image OCR dump is omitted — it is regenerable from the photograph and is the largest text in the database. Each line's own `rawText` is kept, because it is why that line was read the way it was.",
         images:
-          "Receipt images are referenced by path, not embedded. Copy the uploads volume alongside this file to keep them.",
+          "Receipt images are referenced by path, not embedded. Copy the uploads directory (data/uploads in the release bundle) alongside this file to keep them.",
         passwords:
           "Password hashes are never exported, by anybody, for any reason.",
       },

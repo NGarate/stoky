@@ -245,8 +245,8 @@ describe("the production image's health check", () => {
 describe("the production compose runs read-only", () => {
   it("makes the app root read-only, with only the three writable exceptions", () => {
     // Not a Dockerfile property — read-only lives in compose, with tmpfs for
-    // the two paths Next and the OS must write and the uploads volume for the
-    // one the app must. A `read_only: false`, or a missing tmpfs, is what this
+    // the two paths Next and the OS must write and the uploads directory for
+    // the one the app must. A `read_only: false`, or a missing tmpfs, is what this
     // catches. deploy/ is the one production definition; the source build
     // overrides it (below), so this is the file that has to hold.
     const compose = Bun.YAML.parse(
@@ -258,7 +258,15 @@ describe("the production compose runs read-only", () => {
     expect(app.security_opt).toContain("no-new-privileges:true");
     expect(app.cap_drop).toEqual(["ALL"]);
     expect(app.tmpfs).toEqual(["/tmp", "/app/.next/cache"]);
-    expect(app.volumes).toContain("uploads:/app/uploads");
+    // The one writable path, mounted from the installation's own folder.
+    expect(app.volumes).toEqual([
+      {
+        type: "bind",
+        source: "./data/uploads",
+        target: "/app/uploads",
+        bind: { create_host_path: false },
+      },
+    ]);
   });
 
   it("builds from source without restating, and so without drifting from, that definition", () => {
@@ -276,6 +284,24 @@ describe("the production compose runs read-only", () => {
       "build",
       "pull_policy",
     ]);
+  });
+});
+
+describe("the source build's installation data stays out of the context and of git", () => {
+  // docker-compose.prod.yml runs the bundle from deploy/, so its data lands
+  // in deploy/data, owned by the containers' users: a context that walked
+  // into it would fail on permissions, and git would list it.
+  it("is ignored by both", () => {
+    const lines = (file: string) =>
+      readFileSync(join(ROOT, file), "utf8")
+        .split("\n")
+        .map((line) => line.trim());
+    expect(lines(".dockerignore")).toEqual(
+      expect.arrayContaining(["deploy/data", "deploy/backups"]),
+    );
+    expect(lines(".gitignore")).toEqual(
+      expect.arrayContaining(["/deploy/data/", "/deploy/backups/"]),
+    );
   });
 });
 

@@ -195,7 +195,7 @@ attestation and anonymous-pull steps below depend on that (see
    public package.
 5. Run `bun run verify:ci`, `bash scripts/check-ci.sh`, and the full Playwright suite
    for a release. New tests must be shown to fail against the broken behavior.
-6. Build and test the production image with fresh, isolated volumes. Check migrations,
+6. Build and test the production image in an empty installation directory. Check migrations,
    proxy routing, registration/login, health, restart persistence and backup/restore.
    Record what was actually tested in `STATUS.md`, including any TLS/host limitations.
 7. Package locally: `bash scripts/release-assets.sh vVERSION /tmp/stoky-release-assets
@@ -269,7 +269,7 @@ scans the bundle's PostgreSQL and Valkey with `scripts/scan-bundle-images.sh`
 stops the release before promotion, as one in the application does. After all gates pass
 it is pushed only as `ghcr.io/nogcode/stoky:candidate-vVERSION`; the `release-draft`
 job scans that digest from the registry with Trivy (fixable CRITICAL/HIGH fail
-it), installs it with the shipped Compose file on fresh volumes, and only when
+it), installs it with the shipped Compose file on an empty `data/`, and only when
 both pass retags the same digest (no rebuild) as `:vVERSION`. A failed scan or
 smoke leaves no version tag behind. The job then packages the installation files
 with that digest written into the Compose file's image line, checks that
@@ -544,7 +544,7 @@ get an identity without the owner's bypass.
 
 ## Verification boundaries
 
-The release smoke runs the shipped bundle on the CI runner, on fresh volumes,
+The release smoke runs the shipped bundle on the CI runner, on an empty `data/`,
 and asks its published port for `/api/health`. It proves that the published
 image migrates and starts under the shipped Compose file, that the port
 mapping reaches it, and that the answer carries the security headers the

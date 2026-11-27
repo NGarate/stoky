@@ -306,7 +306,7 @@ describe("what must be in it", () => {
 
   it("references receipt images by path", async () => {
     // Not embedded: base64ing a year of photographs turns a small file into one
-    // most editors will not open. The path is what makes the uploads volume
+    // most editors will not open. The path is what makes the uploads directory
     // matchable afterwards.
     const exported = await owner.data.exportHousehold();
 

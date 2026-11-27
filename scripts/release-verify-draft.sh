@@ -48,11 +48,14 @@
 # check FAILed, 2 it could not start (bad arguments, a missing tool, no such
 # release, or a published release without --published).
 #
-# install.sh runs with a `docker` on its PATH that knows no volume: it refuses
-# to generate a database password when this host already has Stoky's database
-# volume, which is right for an operator and says nothing about the release.
-# It says "no such volume" as Docker does, because install.sh stops on any
-# other failure rather than guess.
+# install.sh runs with a `docker` on its PATH that knows no volume: up to
+# v0.2.0-alpha.1 it refuses to generate a database password when this host
+# already has Stoky's database volume, which is right for an operator and
+# says nothing about the release. It says "no such volume" as Docker does,
+# because install.sh stops on any other failure rather than guess. Later ones
+# give data/'s two directories to their containers' users, through sudo when
+# not run as root, so it also runs with a `sudo` that does nothing: that step
+# takes root, which this check does not, and says nothing about the release.
 #
 # The tests (src/__tests__/unit/release-verify-draft.test.ts) replace gh,
 # docker and curl with stubs on PATH.
@@ -360,7 +363,8 @@ check_install() {
   done
   printf '#!/bin/sh\necho "Error response from daemon: no such volume" >&2\nexit 1\n' \
     > "$WORK/no-docker/docker"
-  chmod 755 "$WORK/no-docker/docker"
+  printf '#!/bin/sh\nexit 0\n' > "$WORK/no-docker/sudo"
+  chmod 755 "$WORK/no-docker/docker" "$WORK/no-docker/sudo"
   # No version argument: the release's own DEFAULT_VERSION must name it.
   if ! (cd "$INSTALL_DIR" && PATH="$WORK/no-docker:$PATH" \
         STOKY_RELEASE_BASE_URL="file://$WORK/base" bash "$DL/install.sh"); then

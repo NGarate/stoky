@@ -69,6 +69,10 @@ src/generated/
 *.sqlite3
 postgres_data/
 valkey_data/
+# The source build's installation data (docker-compose.prod.yml): the
+# database and receipts, owned by their containers' users, and backups.
+/deploy/data/
+/deploy/backups/
 
 # Uploads (local development)
 uploads/receipts/*

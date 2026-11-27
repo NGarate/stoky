@@ -1702,19 +1702,29 @@ Two things that sequence surfaced, both operational rather than defects:
   errors to somebody else's server. (An earlier line here also said "no data
   export" — stale since the export closed above; a backup story beyond the
   JSON export is still absent.)
-- **The release bundle keeps an installation's data outside its own folder**
-  (owner, 2026-11-27, from the first install on a NAS). `deploy/docker-compose.yml`
-  declares `postgres_data`, `valkey_data` and `uploads` as named volumes, which
-  Docker keeps under its own data root, and a backup lands wherever
-  `INSTALL.md`'s commands are run. Wanted: the database, the receipts
-  (`uploads`) and the backups in directories mounted from the folder that
-  holds `docker-compose.yml`, so that one folder is the installation and
-  copying it is the backup's destination. To settle when it is built: `db`
-  runs as `70:70` and `app` as a non-root user, both with `cap_drop: [ALL]`,
-  so neither can take ownership of a directory Docker creates as root and
-  `install.sh` has to make them; `install.sh` finds an existing installation
-  by its database volume's name; and `INSTALL.md`'s backup, restore and
-  upgrade sections are written around the volumes.
+- ~~**The release bundle keeps an installation's data outside its own
+  folder**~~ (owner, 2026-11-27, from the first install on a NAS). **Closed**
+  the same day: the database and the receipts are bind mounts of
+  `data/postgres` and `data/uploads` beside `deploy/docker-compose.yml`, the
+  guide's backups go to `backups/`, and the folder is the installation
+  (`INSTALL.md`, *The data directories*). `install.sh` creates all three mode
+  `700` and gives the two data directories to `70:70` and `1000:1000`: itself
+  as root, through `sudo` otherwise, and printing the two commands to run as
+  root when `sudo` refuses. Before it generates a database password it now
+  counts any `data/postgres` as a database, in place of the volume name it
+  looked for. The cache stays a named volume: what it holds (sign-in
+  counters, known devices, Open Food Facts lookups) needs no backup, and
+  Docker gives a new volume to the image's user, where a bind mount would
+  need a third owner or `CAP_CHOWN` back. An installation of an earlier alpha
+  keeps its volumes and starts empty under the new Compose file; there is no
+  upgrade path before a beta. Verified the same day with `v0.2.0-alpha.1`'s
+  published image, in a Compose project of its own: `install.sh` run without
+  root (sudo refused, its two commands run as root, a second run changing
+  nothing), three healthy containers, an uploaded receipt in `data/uploads`,
+  the guide's backup restored into another folder with the photograph byte
+  for byte, the folder stopped, copied as root and started elsewhere, a
+  missing directory refused by `up` with its path, and `down -v` removing the
+  cache's volume alone.
 - Coverage is measured now, but **per tier, and the denominators differ**: each
   report counts only the files that tier loads, so the three numbers do not
   compose into a project figure and must not be added. Integration 90.2% of

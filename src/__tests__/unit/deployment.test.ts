@@ -8,11 +8,18 @@ import { REPOSITORY } from "../../../scripts/release-notes";
 
 const root = join(import.meta.dir, "../../..");
 
+interface Bind {
+  type: "bind";
+  source: string;
+  target: string;
+  bind?: { create_host_path?: boolean };
+}
+
 interface Service {
   image: string;
   build?: unknown;
   ports?: string[];
-  volumes?: string[];
+  volumes?: (string | Bind)[];
   networks: string[];
   environment?: Record<string, string>;
   read_only?: boolean;
@@ -33,6 +40,7 @@ interface Service {
 interface Compose {
   services: Record<string, Service>;
   configs?: unknown;
+  volumes?: Record<string, unknown>;
   networks: Record<string, { internal?: boolean } | null>;
 }
 
@@ -40,19 +48,100 @@ const compose = Bun.YAML.parse(
   readFileSync(join(root, "deploy/docker-compose.yml"), "utf8"),
 ) as Compose;
 const template = readFileSync(join(root, "deploy/example.env"), "utf8");
+const installer = readFileSync(join(root, "deploy/install.sh"), "utf8");
+
+/** The directory of this folder a service mounts, if it mounts one. */
+function folderMount(service: Service) {
+  return (service.volumes ?? []).find(
+    (volume): volume is Bind => typeof volume !== "string",
+  );
+}
 
 describe("the downloadable installation", () => {
-  it("can start from the release files without source or host data mounts", () => {
+  it("starts from the release files, with no source and nothing of the host's outside its folder", () => {
     for (const service of Object.values(compose.services)) {
       expect(service.image).toBeTruthy();
       expect(service.build).toBeUndefined();
-      for (const volume of service.volumes ?? []) {
-        expect(volume.split(":")[0]).toMatch(/^[a-z][a-z0-9_]*$/);
-      }
     }
     // Two files install it: this one and example.env. A `configs` entry would
     // be a third the operator has to download beside them.
     expect(compose.configs).toBeUndefined();
+  });
+
+  it("keeps the database and the receipts in the installation's own data/, and only the cache in a volume", () => {
+    // The folder that holds this file is the installation: copying it is
+    // copying the data, and `docker compose down -v` cannot delete either.
+    const mounts = Object.fromEntries(
+      Object.entries(compose.services).map(([name, service]) => [
+        name,
+        service.volumes,
+      ]),
+    );
+    expect(mounts).toStrictEqual({
+      db: [
+        {
+          type: "bind",
+          source: "./data/postgres",
+          target: "/var/lib/postgresql",
+          bind: { create_host_path: false },
+        },
+      ],
+      cache: ["valkey_data:/data"],
+      app: [
+        {
+          type: "bind",
+          source: "./data/uploads",
+          target: "/app/uploads",
+          bind: { create_host_path: false },
+        },
+      ],
+    });
+    expect(Object.keys(compose.volumes ?? {})).toEqual(["valkey_data"]);
+  });
+
+  it("mounts each data/ directory where install.sh gives it to the user its container runs as", () => {
+    // Every capability is dropped, so neither container can take over a
+    // directory it does not own, and Compose may not create a missing one
+    // (create_host_path, above) as root. install.sh, the guide's by-hand
+    // step and the release smoke create them; this holds all four to the
+    // users the containers really run as.
+    const directory = (name: string) =>
+      installer.match(new RegExp(`^${name}=(\\S+)$`, "m"))?.[1];
+    const owner = (name: string) =>
+      installer.match(new RegExp(`"\\$${name} (\\d+:\\d+)"`))?.[1];
+    const bun = readFileSync(join(root, "Dockerfile"), "utf8").match(
+      /test "\$\(id -u bun\)" = (\d+) && test "\$\(id -g bun\)" = (\d+)/,
+    );
+    expect(bun).not.toBeNull();
+    const claimed = {
+      db: {
+        source: `./${directory("DATABASE_DIR")}`,
+        owner: owner("DATABASE_DIR"),
+      },
+      app: {
+        source: `./${directory("UPLOADS_DIR")}`,
+        owner: owner("UPLOADS_DIR"),
+      },
+    };
+    expect(claimed).toEqual({
+      db: {
+        source: folderMount(compose.services.db)!.source,
+        owner: compose.services.db.user,
+      },
+      app: {
+        source: folderMount(compose.services.app)!.source,
+        owner: `${bun![1]}:${bun![2]}`,
+      },
+    });
+    const smoke = readFileSync(join(root, ".github/workflows/ci.yml"), "utf8");
+    const guide = readFileSync(join(root, "docs/INSTALL.md"), "utf8");
+    for (const { source, owner: given } of Object.values(claimed)) {
+      const [uid, gid] = given!.split(":");
+      const command = `install -d -m 00700 -o ${uid} -g ${gid}`;
+      const path = source.slice(2);
+      expect(smoke).toContain(`sudo ${command} deploy/${path}\n`);
+      expect(guide).toContain(`sudo ${command} ${path}\n`);
+    }
   });
 
   it("requires fresh operator credentials and derives both database connections from one password", () => {
@@ -205,7 +294,7 @@ describe("the downloadable installation", () => {
     }
     expect(compose.services.app.read_only).toBe(true);
     expect(compose.services.app.tmpfs).toEqual(["/tmp", "/app/.next/cache"]);
-    expect(compose.services.app.volumes).toContain("uploads:/app/uploads");
+    expect(folderMount(compose.services.app)?.target).toBe("/app/uploads");
   });
 
   // As root the entrypoint steps down through gosu, which needs five

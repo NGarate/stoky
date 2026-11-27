@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -35,7 +36,14 @@ function sha256(path: string) {
 // A release served from a directory, built from the repository's own bundle,
 // and an empty installation directory beside it.
 function setup(
-  options: { volumeExists?: boolean; dockerDenied?: boolean } = {},
+  options: {
+    /** What `id -u` answers: not root unless a test says so. */
+    uid?: number;
+    /** sudo refuses, as it does without a password or a sudoers entry. */
+    sudoRefuses?: boolean;
+    /** What `stat` says of data/'s directories: owner and mode, as `%u:%g %a`. */
+    stat?: Record<string, string>;
+  } = {},
 ) {
   const fixture = mkdtempSync(join(tmpdir(), "stoky-install-"));
   fixtures.push(fixture);
@@ -79,23 +87,50 @@ cp "$source" "$output"
   writeFileSync(calls, "");
   writeFileSync(
     join(bin, "docker"),
-    // Answers `volume inspect` as Docker does: the volume, "no such volume",
-    // or the socket refusing a user outside the docker group.
+    `#!/bin/bash\necho "$*" >> "${calls}"\nexit 0\n`,
+    { mode: 0o755 },
+  );
+  // Giving a directory to another user takes root, which a test has neither
+  // on a workstation nor reliably in CI's image, where it is root. So `id`
+  // says who the script runs as, `install` creates the directory without
+  // its owner, and both it and `sudo` record each call, in order.
+  const ownership = join(fixture, "ownership-calls");
+  writeFileSync(ownership, "");
+  writeFileSync(
+    join(bin, "id"),
+    `#!/bin/bash\n[ "$1" = -u ] && echo ${options.uid ?? 1000}\n`,
+    { mode: 0o755 },
+  );
+  writeFileSync(
+    join(bin, "install"),
+    `#!/bin/bash\necho "install $*" >> "${ownership}"\nmkdir -p -m 700 "\${@: -1}"\n`,
+    { mode: 0o755 },
+  );
+  writeFileSync(
+    join(bin, "sudo"),
     `#!/bin/bash
-echo "$*" >> "${calls}"
-if [ "$1 $2" = "volume inspect" ]; then
-  ${
-    options.dockerDenied
-      ? `echo "permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock" >&2; exit 1`
-      : options.volumeExists
-        ? "echo '[{}]'; exit 0"
-        : `echo "Error response from daemon: get $3: no such volume" >&2; exit 1`
-  }
-fi
-exit 0
+echo "sudo $*" >> "${ownership}"
+${
+  options.sudoRefuses
+    ? `echo "sudo: a password is required" >&2; exit 1`
+    : `exec "$@"`
+}
 `,
     { mode: 0o755 },
   );
+  if (options.stat)
+    writeFileSync(
+      join(bin, "stat"),
+      `#!/bin/bash
+case "\${@: -1}" in
+${Object.entries(options.stat)
+  .map(([dir, answer]) => `  ${dir}) echo "${answer}" ;;`)
+  .join("\n")}
+  *) exit 1 ;;
+esac
+`,
+      { mode: 0o755 },
+    );
   return {
     release,
     install,
@@ -104,19 +139,23 @@ exit 0
       readFileSync(curlCalls, "utf8").trim().split("\n").filter(Boolean),
     dockerCalls: () =>
       readFileSync(calls, "utf8").trim().split("\n").filter(Boolean),
+    ownershipCalls: () =>
+      readFileSync(ownership, "utf8").trim().split("\n").filter(Boolean),
     env: () => readFileSync(join(install, ".env"), "utf8"),
     value: (key: string) =>
       readFileSync(join(install, ".env"), "utf8").match(
         new RegExp(`^${key}=(.*)$`, "m"),
       )?.[1],
     mode: (name: string) => statSync(join(install, name)).mode & 0o777,
-    // Under umask 077, the strictest an operator's shell is likely to have.
-    // `baseUrl: null` leaves the override unset, as an operator's run does.
+    // Under umask 077, the strictest an operator's shell is likely to have,
+    // unless a test says otherwise. `baseUrl: null` leaves the override
+    // unset, as an operator's run does.
     run: (
       args: string[] = [],
       {
         baseUrl = `file://${join(fixture, "release")}`,
-      }: { baseUrl?: string | null } = {},
+        umask = "077",
+      }: { baseUrl?: string | null; umask?: string } = {},
     ) => {
       const env: Record<string, string | undefined> = {
         ...process.env,
@@ -125,7 +164,13 @@ exit 0
       delete env.STOKY_RELEASE_BASE_URL;
       if (baseUrl !== null) env.STOKY_RELEASE_BASE_URL = baseUrl;
       const result = Bun.spawnSync(
-        ["bash", "-c", 'umask 077 && exec bash "$0" "$@"', script, ...args],
+        [
+          "bash",
+          "-c",
+          `umask ${umask} && exec bash "$0" "$@"`,
+          script,
+          ...args,
+        ],
         { cwd: install, env },
       );
       return {
@@ -200,11 +245,7 @@ describe("deploy/install.sh", () => {
     const fixture = setup();
     const result = fixture.run();
     expect(result.exitCode).toBe(0);
-    expect(
-      fixture
-        .dockerCalls()
-        .filter((call) => !call.startsWith("volume inspect")),
-    ).toEqual([]);
+    expect(fixture.dockerCalls()).toEqual([]);
     expect(result.stdout).toContain("No se ha arrancado nada");
     expect(result.stdout).toContain("docker compose up -d --wait");
   });
@@ -287,32 +328,126 @@ describe("deploy/install.sh", () => {
     expect(existsSync(join(fixture.install, ".env"))).toBe(false);
   });
 
-  it("refuses to invent a database password for a database that already exists", () => {
-    const fixture = setup({ volumeExists: true });
+  it("refuses to invent a database password where a database directory already exists", () => {
+    // Empty here, and still refused: once PostgreSQL's user owns it, the
+    // script cannot look inside, and a fresh password over an existing
+    // database locks the application out of it.
+    const fixture = setup();
+    mkdirSync(join(fixture.install, "data/postgres"), { recursive: true });
     const result = fixture.run();
     expect(result.exitCode).not.toBe(0);
-    expect(result.stderr).toContain("ya existe");
-    expect(readdirSync(fixture.install)).toEqual([]);
+    expect(result.stderr).toContain("data/postgres ya existe");
+    expect(readdirSync(fixture.install)).toEqual(["data"]);
+    expect(readdirSync(join(fixture.install, "data"))).toEqual(["postgres"]);
   });
 
-  it("stops, rather than guessing, when Docker will not say whether the volume exists", () => {
-    // Read as "no volume", a fresh password went into .env over the one the
-    // database was created with, and the application could not connect.
-    const fixture = setup({ dockerDenied: true });
+  it("refuses just the same when .env is there but leaves the password empty", () => {
+    const fixture = setup();
+    mkdirSync(join(fixture.install, "data/postgres"), { recursive: true });
+    writeFileSync(join(fixture.install, ".env"), "POSTGRES_PASSWORD=\n");
     const result = fixture.run();
     expect(result.exitCode).not.toBe(0);
-    expect(result.stderr).toContain("no se puede preguntar a Docker");
-    expect(readdirSync(fixture.install)).toEqual([]);
+    expect(result.stderr).toContain("data/postgres ya existe");
+    expect(fixture.env()).toBe("POSTGRES_PASSWORD=\n");
   });
 
-  it("does not ask about the volume when the password is already set", () => {
-    const fixture = setup({ volumeExists: true });
+  it("keeps the database directory and its password when the password is already set", () => {
+    const fixture = setup();
+    mkdirSync(join(fixture.install, "data/postgres"), { recursive: true });
     writeFileSync(
       join(fixture.install, ".env"),
       "POSTGRES_PASSWORD=0123abcd\n",
     );
     expect(fixture.run().exitCode).toBe(0);
     expect(fixture.value("POSTGRES_PASSWORD")).toBe("0123abcd");
+  });
+
+  it("creates data/ and backups/ closed to every other user, whatever the umask", () => {
+    const fixture = setup();
+    expect(fixture.run([], { umask: "000" }).exitCode).toBe(0);
+    expect(fixture.mode("data")).toBe(0o700);
+    expect(fixture.mode("backups")).toBe(0o700);
+  });
+
+  it("closes a data/ that already exists open to other users", () => {
+    // A disk mounted at ./data, or a `mkdir data` under umask 022: the mode
+    // of data/ is what keeps a host account sharing a container's uid out.
+    const fixture = setup();
+    mkdirSync(join(fixture.install, "data"), { mode: 0o755 });
+    chmodSync(join(fixture.install, "data"), 0o755);
+    expect(fixture.run().exitCode).toBe(0);
+    expect(fixture.mode("data")).toBe(0o700);
+  });
+
+  it("gives the database to PostgreSQL's user and the receipts to the app's, through sudo when not root", () => {
+    const fixture = setup();
+    const result = fixture.run();
+    expect(result.exitCode).toBe(0);
+    expect(fixture.ownershipCalls()).toEqual([
+      "sudo install -d -m 00700 -o 70 -g 70 data/postgres",
+      "install -d -m 00700 -o 70 -g 70 data/postgres",
+      "sudo install -d -m 00700 -o 1000 -g 1000 data/uploads",
+      "install -d -m 00700 -o 1000 -g 1000 data/uploads",
+    ]);
+    expect(result.stdout).toContain("se pide con sudo");
+  });
+
+  it("gives them away itself when run as root", () => {
+    const fixture = setup({ uid: 0 });
+    const result = fixture.run();
+    expect(result.exitCode).toBe(0);
+    expect(fixture.ownershipCalls()).toEqual([
+      "install -d -m 00700 -o 70 -g 70 data/postgres",
+      "install -d -m 00700 -o 1000 -g 1000 data/uploads",
+    ]);
+    expect(result.stdout).not.toContain("sudo");
+  });
+
+  it("stops with what to run as root when sudo refuses, keeping the .env it wrote", () => {
+    const fixture = setup({ sudoRefuses: true });
+    const result = fixture.run();
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain(
+      "  install -d -m 00700 -o 70 -g 70 data/postgres\n  install -d -m 00700 -o 1000 -g 1000 data/uploads\n",
+    );
+    expect(fixture.value("POSTGRES_PASSWORD")).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("leaves alone directories that already belong to their containers' users", () => {
+    // What a second run finds: nothing to give away, and no sudo prompt.
+    const fixture = setup({
+      stat: { "data/postgres": "70:70 700", "data/uploads": "1000:1000 700" },
+    });
+    mkdirSync(join(fixture.install, "data/postgres"), { recursive: true });
+    mkdirSync(join(fixture.install, "data/uploads"), { recursive: true });
+    writeFileSync(
+      join(fixture.install, ".env"),
+      "POSTGRES_PASSWORD=0123abcd\n",
+    );
+    const result = fixture.run();
+    expect(result.exitCode).toBe(0);
+    expect(fixture.ownershipCalls()).toEqual([]);
+    expect(result.stdout).toContain("conservado data/postgres (70:70)");
+    expect(result.stdout).toContain("conservado data/uploads (1000:1000)");
+  });
+
+  it("gives a directory its mode back when only the mode is wrong", () => {
+    // Copying a Docker volume's contents in with `cp -a /from/. /to/` brings
+    // the volume root's mode along: PostgreSQL's image leaves it 1777.
+    const fixture = setup({
+      stat: { "data/postgres": "70:70 1777", "data/uploads": "1000:1000 700" },
+    });
+    mkdirSync(join(fixture.install, "data/postgres"), { recursive: true });
+    mkdirSync(join(fixture.install, "data/uploads"), { recursive: true });
+    writeFileSync(
+      join(fixture.install, ".env"),
+      "POSTGRES_PASSWORD=0123abcd\n",
+    );
+    expect(fixture.run().exitCode).toBe(0);
+    expect(fixture.ownershipCalls()).toEqual([
+      "sudo install -d -m 00700 -o 70 -g 70 data/postgres",
+      "install -d -m 00700 -o 70 -g 70 data/postgres",
+    ]);
   });
 
   for (const tag of ["latest", "v1/../../secret"]) {

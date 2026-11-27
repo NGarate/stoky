@@ -3,6 +3,9 @@
 # the downloadable bundle (docs/INSTALL.md).
 #
 #   cp deploy/example.env deploy/.env   # fill it in; set STOKY_VERSION=source
+#   mkdir -m 00700 deploy/data
+#   sudo install -d -m 00700 -o 70 -g 70 deploy/data/postgres
+#   sudo install -d -m 00700 -o 1000 -g 1000 deploy/data/uploads
 #   docker compose -f deploy/docker-compose.yml -f docker-compose.prod.yml up -d --build
 #
 # This file is an override, not a second production definition. The hardening
@@ -11,10 +14,11 @@
 # drifted. Like the bundle it serves plain HTTP on STOKY_PORT, for your proxy.
 #
 # Paths are relative to deploy/, the first file's directory, which is also
-# where Compose reads `.env` from.
+# where Compose reads `.env` from and where the data is: deploy/data, which
+# .gitignore and .dockerignore leave out.
 
 # Not `stoky-release`: a source build on a host that also runs the release must
-# not adopt its volumes.
+# not adopt its containers or its cache volume.
 name: stoky-source
 
 services:

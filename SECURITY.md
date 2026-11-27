@@ -204,7 +204,21 @@ Verified against the files named in each row.
   exec`, a restart, and a data directory first created by the root
   entrypoint, which opens unchanged.
 - The app container runs with `read_only: true`. Writes are confined to the
-  `uploads` volume plus tmpfs mounts for `/tmp` and `/app/.next/cache`.
+  receipts' directory, `data/uploads`, plus tmpfs mounts for `/tmp` and
+  `/app/.next/cache`.
+- **The database and the receipts are the installation folder's `data/`**,
+  bind-mounted beside the Compose file, not Docker volumes (2026-11-27).
+  `install.sh`, or the guide's by-hand step, creates `data/` and `backups/`
+  mode `700` for the operator, `data/postgres` mode `700` for PostgreSQL's
+  `70:70` and `data/uploads` mode `700` for the application's `1000:1000`: no
+  other user of the host can read a database file or a receipt. Neither
+  container gets a capability back to take its directory over. Each mount
+  sets `create_host_path: false`, so a missing directory stops `up` naming
+  its path, instead of Docker creating it as root for a container that could
+  not write it. Only the cache, which holds nothing a backup needs, is still a
+  volume. `src/__tests__/unit/deployment.test.ts` holds the mounts, and the
+  owners `install.sh`, the guide and the release smoke give them, to the
+  users the containers run as.
 - Postgres and Valkey sit on an `internal: true` bridge network and publish **no
   ports**. **Only the app publishes one**: 3000, plain HTTP, for the
   operator's proxy, on the host's IPv4 addresses (`STOKY_PORT` moves it,
@@ -1287,9 +1301,9 @@ Verified against the files named in each row.
   black-and-white noise does not deflate and costs a JPEG about a byte, so a
   2.0 MB palette PNG at 4000 × 4000 re-encoded to 15.4 MB (measured, 7.7×).
   Without the check that was seven times the bytes sent, and half as much
-  again as the largest upload accepted, written to a volume that in the
-  release bundle is a plain named volume beside PostgreSQL's — on the same
-  disk unless the operator moves it. With it nothing stored is larger than
+  again as the largest upload accepted, written to the release bundle's
+  `data/uploads`, beside the database's `data/postgres` — on the same disk
+  unless the operator mounts another there. With it nothing stored is larger than
   what could have been sent; storage still grows without bound over time,
   because nothing is deleted and there is no per-household quota
   (`docs/SECURITY_REVIEW.md` finding 16).
@@ -1348,7 +1362,7 @@ Verified against the files named in each row.
   (`receipt.addItem`; ISSUES.md OCR-3). This assumes one application
   process per database, which is what the release bundle runs.
 - Files are written with a `randomUUID()` filename into a per-household
-  directory on the `uploads` volume, so a filename cannot be guessed and cannot
+  directory under `uploads/`, so a filename cannot be guessed and cannot
   be used for path traversal.
 - No HTTP route serves the uploads directory. Nothing in `src/app` reads it, and
   it is not inside `public/`. The one reader is `receipt.getImage`, a
@@ -1839,7 +1853,7 @@ publishing an instance:
   stores — under 700 characters of text for a product, about 100,000 for the
   largest, a 500-line receipt review that creates a product per line — but
   not how many calls there are, so an account can still grow the database
-  row by row. Keep the database volume on a disk something watches. Since
+  row by row. Keep the installation's directory on a disk something watches. Since
   2026-10-12 one request can also carry at most 100 calls ("Batched calls"
   above), so how many arrive at once is bounded by how many requests a caller
   sends — and nothing counts those.
@@ -2343,7 +2357,7 @@ What is still open:
   first owns it, and the hostname is public from the moment its certificate is
   issued, through Certificate Transparency logs. [The installation
   guide](docs/INSTALL.md) says to register immediately, and to start again from
-  empty volumes if someone else did. A one-time setup token printed to the logs
+  an empty database if someone else did. A one-time setup token printed to the logs
   would close the window; it is not built.
 
 ---
@@ -2696,7 +2710,7 @@ full in the section named.
   Valkey has no password.** Neither publishes a port; both sit on an internal
   network, so abusing either needs code execution inside a container already.
   Separate migrator and runtime roles, or `requirepass`, need new secrets and
-  manual steps on existing volumes; the next breaking bundle change is the
+  manual steps on existing databases; the next breaking bundle change is the
   time for them.
 - **Secrets reach the containers as environment variables**, not `_FILE`
   secrets. Reading them takes `docker inspect`, which takes the Docker daemon,
@@ -2756,15 +2770,15 @@ is stored, logged or sent.
 | Data | Where | How long |
 |---|---|---|
 | The household's name, and the names it gives its browser tab and installed app, which are public ([below](#what-anyone-who-reaches-the-address-can-read)) | PostgreSQL `Household` | Until an owner or admin changes them |
-| Accounts: email address, name, role, language and display preference | PostgreSQL `User`, on the `postgres_data` volume | Until an admin removes the person from **Personas del hogar**, which deletes the account, or it is deleted in the database — the household's last owner, whom the application does not remove ([Install](docs/INSTALL.md#deleting-somebodys-account)) |
-| Each account's Argon2id password hash, in its `credential` row: the account id, the hash and when the row was written | PostgreSQL `Account`, on the `postgres_data` volume | As long as the account. The database deletes the row with its `User` row (a cascade, PROGRESS D134), so no hash outlives its account |
+| Accounts: email address, name, role, language and display preference | PostgreSQL `User`, in `data/postgres` | Until an admin removes the person from **Personas del hogar**, which deletes the account, or it is deleted in the database — the household's last owner, whom the application does not remove ([Install](docs/INSTALL.md#deleting-somebodys-account)) |
+| Each account's Argon2id password hash, in its `credential` row: the account id, the hash and when the row was written | PostgreSQL `Account`, in `data/postgres` | As long as the account. The database deletes the row with its `User` row (a cascade, PROGRESS D134), so no hash outlives its account |
 | Sessions, one row each: the account id, the session token (the value the cookie signs), when it expires, was created, last written and was signed in, whether it is remembered, the browser's User-Agent string, and the `stoky_device` cookie value the sign-in carried (`deviceId`, D143), which the list of a person's sessions joins to `ScreenChoice` and never returns. No IP address: Better Auth's address tracking is off, so `ipAddress` stays null | PostgreSQL `Session` | Until the session ends: signing out, ending sessions (one's own, a member's, or the whole household's, D147), a password being set, removal from the household (D146), signing in again in the same browser, an eleventh session ending the least recently used one (D140), or the account's deletion (a cascade) delete it, and an expired row is deleted the next time its cookie is read or the account next signs in (D139). A row whose cookie is never sent again stays, expired, until one of them happens. At most fifteen idle minutes and a day in all for a live browser session (PROGRESS D135); ninety idle days and a year in all for a remembered one (D141) |
 | Each passkey a person adds (D151): the account id, the credential's id and public key, its signature counter, whether it can sync to the person's other devices and is backed up, the transports the browser named, when it was added, the name the person gave it, and its AAGUID — the make of authenticator or password manager, never the device or the person | PostgreSQL `Passkey` | Until the person removes it, or the account's deletion (a cascade, like `Account`). Not in the JSON export |
 | A confirmed password, for five minutes after it is re-entered before a passkey is added or removed (D151): the session's id and the account id | PostgreSQL `Verification` (`stoky-step-up:…`) | Until the change spends it, its session ends, or it lapses |
 | Each account's authenticator, once two-step verification is set up (D148): the account id, the TOTP secret, encrypted with `STOKY_SECRET`, the unused backup codes as SHA-256 hashes (D149), whether the first code has been accepted, the count of wrong codes in a row and the lockout's end, and the last time step a code was accepted for | PostgreSQL `TwoFactor` | Until two-step verification is removed, or the account's deletion (a cascade, like `Account`). Not in the JSON export |
 | Better Auth's short-lived values: an identifier, a value and an expiry. Today, a two-step sign-in in progress (the account id, under a random identifier) and its count of wrong codes | PostgreSQL `Verification` | Ten minutes, or until the code is accepted, the challenge has had five wrong codes, or the account's sessions are ended (D148). An expired row stays until it is next read |
 | The household's things: products, stock movements (each one records the member who made it, and can carry a free-text note), locations, stores (a name and an optional address), price records and shopping lists | PostgreSQL | Until somebody deletes them in the application, where it allows that, or in the database. Price records and stock movements add up to the household's purchase history |
-| Receipts: the photograph, re-encoded as a JPEG with no EXIF or GPS data; the OCR text of the whole ticket (`rawOcrText`), which can include a masked card number, a loyalty number and the cashier's name; the text of each line; the store, date and total; and the member who uploaded it | The photograph on the `uploads` volume, everything else in PostgreSQL | Indefinitely. Nothing in the application deletes a receipt or its photograph (`docs/SECURITY_REVIEW.md` finding 16). The photographs a deleted account uploaded can be removed by hand ([Install](docs/INSTALL.md#deleting-somebodys-account)) |
+| Receipts: the photograph, re-encoded as a JPEG with no EXIF or GPS data; the OCR text of the whole ticket (`rawOcrText`), which can include a masked card number, a loyalty number and the cashier's name; the text of each line; the store, date and total; and the member who uploaded it | The photograph in `data/uploads`, everything else in PostgreSQL | Indefinitely. Nothing in the application deletes a receipt or its photograph (`docs/SECURITY_REVIEW.md` finding 16). The photographs a deleted account uploaded can be removed by hand ([Install](docs/INSTALL.md#deleting-somebodys-account)) |
 | Which screen each person opens on each device: an account id, the `stoky_device` cookie value and the chosen screen | PostgreSQL `ScreenChoice` | Indefinitely. Removing the person from the household deletes their rows, and so does deleting the account as [Install](docs/INSTALL.md#deleting-somebodys-account) describes; deleting the `User` row alone leaves them (`prisma/schema.prisma`) |
 | Offline replay records: account, household, procedure, a hash of the request and the ids of the rows it wrote | PostgreSQL `MutationReplay` | 90 days (`REPLAY_RETENTION_DAYS`). An expired row is deleted the next time the same account sends a replayable write, so an account that stops writing leaves its rows behind. Removing the person from the household deletes theirs |
 | The security log: time, event, the client's full address, account and household ids, procedure, and for a sign-in the keyed tag of the address that was tried ([*Refusals are recorded*](#refusals-are-recorded)) | The `app` container's log | Until rotation removes it. Each container keeps at most 50 MB of log, so how far back it reaches depends on traffic ([Install](docs/INSTALL.md#logs)) |
@@ -2772,9 +2786,8 @@ is stored, logged or sent.
 | Rate-limit counters, each with its key. The key is the client's IPv4 address or IPv6 /64 for the per-address sign-in and registration limits. It is the first 32 hex characters of an unkeyed SHA-256 of the address that was tried for the per-account sign-in limit, followed by a SHA-256 fingerprint of the `stoky_device` id when the browser has signed in to that account before. It is the account id for the metered actions, and the session id for the per-session budget of a re-entered password (D143) | Valkey memory, saved to `dump.rdb` on the `valkey_data` volume | The limit's window: 15 minutes or an hour. A snapshot taken during the window keeps a counter until the next snapshot replaces it. Under the release bundle's command line, the pinned Valkey saves at least once an hour while anything changes (`CONFIG GET save` answers `3600 1 300 100 60 10000`, measured 2026-10-12) |
 | Known devices: for each account (keyed by the same unkeyed hash), SHA-256 fingerprints of up to 20 `stoky_device` ids | Valkey | A year after the last successful sign-in from that device |
 | The Open Food Facts cache: product data, keyed by barcode alone, with nothing about who scanned the code | Valkey | 30 days. A day for a code Open Food Facts does not know |
-| Certificates: the ACME account key, `ACME_EMAIL`, and the certificates with their private keys | `acme.json` on the `letsencrypt` volume | Until the volume is removed |
 | On each device: the saved reads, the write queue, the `stoky_device` cookie, and while signed in the `stoky.session_token` and `stoky.dont_remember` cookies (`__Secure-` prefixed behind https) | The browser's storage | See [*A device keeps the last account's data while it stays offline*](#a-device-keeps-the-last-accounts-data-while-it-stays-offline). The device cookie lasts a year; the session cookies end with the browser, and are refused once their row has gone |
-| Backups made with [the documented commands](docs/INSTALL.md#backup-and-restore): the database dump (every PostgreSQL row above, password hashes included), the uploads, `.env` and the Compose file | Wherever the operator puts them | As long as the operator keeps them. Nothing in Stoky rotates or expires a backup, and a backup still holds accounts and receipts deleted after it was taken. Valkey, the logs and the certificates are not in it |
+| Backups made with [the documented commands](docs/INSTALL.md#backup-and-restore): the database dump (every PostgreSQL row above, password hashes included), the uploads, `.env` and the Compose file | `backups/`, in the installation's directory, and wherever the operator copies them | As long as the operator keeps them. Nothing in Stoky rotates or expires a backup, and a backup still holds accounts and receipts deleted after it was taken. Valkey and the logs are not in it |
 
 Two hashes in that table are weaker than they look. The security log's
 account tag is keyed with `STOKY_SECRET`, so a pasted log line cannot be
@@ -2826,12 +2839,12 @@ shopping lists. It leaves out:
 - members' display preference and the time their sessions were last ended;
 - people who have been removed from the household;
 - the landing-screen choices and the replay records;
-- everything in Valkey, the logs and the certificate store.
+- everything in Valkey and the logs.
 
 It is therefore not a complete copy of what the instance holds about one
 person, and a member who is not an admin cannot export at all. There is no
 per-person export. If a person asks the operator for their data, the operator
-answers from the database and the uploads volume. If they ask to be erased, an
+answers from the database and `data/uploads`. If they ask to be erased, an
 admin removes them from **Personas del hogar**, which deletes the account;
 [Install](docs/INSTALL.md#deleting-somebodys-account) deletes the household's
 last owner in the database, and lists what stays. Either way the operator also
@@ -3071,7 +3084,7 @@ image, not an in-place package upgrade inside a running container.
 
 ### Back up your data
 
-Preserve a PostgreSQL dump, the uploads volume, the exact Compose file and `.env`
+Preserve a PostgreSQL dump, the photographs in `data/uploads`, the exact Compose file and `.env`
 together. The [backup and restore commands](docs/INSTALL.md#backup-and-restore)
 stop app writes during the copy and restore into an empty installation. Keep
 backups off the host and verify restoration before relying on them. JSON export

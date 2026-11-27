@@ -4,6 +4,10 @@
 # Make sure to use the docker-compose.yml and example.env of the same release,
 # and rename example.env to .env. Requires Docker Compose 2.23.1+.
 #
+# The installation is the folder that holds this file. The database and the
+# receipts live in its data/ directory and backups go to its backups/:
+# install.sh creates them, each with the owner its container runs as.
+#
 # Stoky serves plain HTTP on one port. TLS is your reverse proxy's: the guide's
 # "Your proxy" section has an example for Traefik, Caddy, nginx and Tailscale.
 #
@@ -36,8 +40,15 @@ services:
       POSTGRES_USER: stoky
       POSTGRES_DB: stoky
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env con openssl rand -hex 32}"
+    # Neither data/ mount lets Compose create a missing directory: Docker
+    # would make it root's, which this user cannot write, and the database
+    # would stop on "Permission denied" instead of `up` naming the path.
     volumes:
-      - postgres_data:/var/lib/postgresql
+      - type: bind
+        source: ./data/postgres
+        target: /var/lib/postgresql
+        bind:
+          create_host_path: false
     networks:
       - stoky
     healthcheck:
@@ -62,6 +73,10 @@ services:
           pids: 128
     command:
       [valkey-server, --maxmemory, 160mb, --maxmemory-policy, allkeys-lru]
+    # A Docker volume, not the folder: sign-in counters, the devices each
+    # account signed in from and cached product lookups, nothing a backup
+    # needs. Docker gives a new volume to the image's own user, which the
+    # entrypoint relies on before it steps down.
     volumes:
       - valkey_data:/data
     networks:
@@ -106,7 +121,11 @@ services:
     ports:
       - "${STOKY_BIND:-0.0.0.0}:${STOKY_PORT:-3000}:3000"
     volumes:
-      - uploads:/app/uploads
+      - type: bind
+        source: ./data/uploads
+        target: /app/uploads
+        bind:
+          create_host_path: false
     networks:
       - stoky
       - web
@@ -117,9 +136,7 @@ services:
         condition: service_healthy
 
 volumes:
-  postgres_data:
   valkey_data:
-  uploads:
 
 networks:
   stoky:

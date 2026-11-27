@@ -18,7 +18,9 @@ each. You do not need Git, Node.js, Bun or a local build.
 - Docker Engine and **Docker Compose 2.23.1 or newer** (`docker compose version`).
   Use the Compose plugin (`docker compose`), not the legacy Python binary.
 - A starting allocation of **2 CPU cores and 4 GiB RAM**, plus disk space for
-  images, PostgreSQL, uploaded receipts and backups. This is a planning allowance,
+  images, PostgreSQL, uploaded receipts and backups. The images are on
+  Docker's disk; the database, the receipts and the backups are on the disk of
+  the installation's directory (step 1). This is a planning allowance,
   not a measured minimum. OCR performance depends on the host and photographs.
 - **A reverse proxy that serves HTTPS**, on this host or another, and a
   hostname for Stoky that it answers — preferably a dedicated subdomain such
@@ -29,6 +31,9 @@ each. You do not need Git, Node.js, Bun or a local build.
   HTTPS origin alone, and the session cookie is `Secure`.
 - `curl`, `openssl`, `sha256sum` and a text editor. No GitHub account is needed:
   the release files and the image download anonymously.
+- Root on the Docker host, directly or through `sudo`, once in step 1: it
+  gives two [data directories](#the-data-directories) to the users their
+  containers run as.
 
 Registration is closed after the first
 account. The person who installs Stoky registers first and becomes the owner of
@@ -40,10 +45,15 @@ boundary, and read [Security](../SECURITY.md) before deployment.
 
 ## 1. Download and prepare the release files
 
-Use an empty directory and retain it for this installation. The bundle uses project
-name `stoky-release`; keep it unchanged. Overriding it
-with `-p` or `COMPOSE_PROJECT_NAME` selects different volumes and can make
-existing data appear absent. Use a distinct project and host ports for a second instance.
+Use an empty directory, on the disk that should hold Stoky's data, and keep it
+for this installation: **the directory is the installation**. The database and
+the receipts are kept in its `data/`, beside the Compose file, and the backups
+this guide makes in its `backups/` ([below](#the-data-directories)). Only the
+cache, which holds nothing a backup needs, is a Docker volume. The bundle uses
+project name `stoky-release`; keep it unchanged. Overriding it with `-p` or
+`COMPOSE_PROJECT_NAME` in the same directory starts a second PostgreSQL on the
+same `data/postgres`, which corrupts it. A second instance takes a directory of
+its own, a distinct project name and its own host port.
 
 ```bash
 mkdir stoky-app
@@ -53,8 +63,9 @@ cd stoky-app
 ### With the install script
 
 `install.sh` does this step for you and stops: it downloads the release files,
-verifies every one against `SHA256SUMS`, and creates `.env`, readable only
-by you, from `example.env` with both secrets generated. It changes no value that
+verifies every one against `SHA256SUMS`, creates `.env`, readable only
+by you, from `example.env` with both secrets generated, and creates the
+[data directories](#the-data-directories). It changes no value that
 is already set, never replaces an installed file that differs (that is an
 upgrade, below), and **never starts anything**: you review `.env` and start
 Stoky yourself in step 3. Running it again is safe.
@@ -80,7 +91,13 @@ replaced one too. The `--proto` and
 `--tlsv1.2` flags keep every hop on HTTPS with TLS 1.2 or later, GitHub's
 redirect included. `install.sh` passes
 `--proto-redir '=https' --tlsv1.2` to its own downloads. The script installs
-the release it came with. Continue with step 2: only `DOMAIN` is left.
+the release it came with.
+
+Giving two of the data directories to their containers takes root. Run as
+yourself, the script asks for it with `sudo`; where `sudo` refuses or is
+missing, it stops, with `.env` written, and prints the two commands to run as
+root. Run it again afterwards: it changes nothing already done. Continue with
+step 2: only `DOMAIN` is left.
 
 ### By hand
 
@@ -97,6 +114,9 @@ done
 grep -E '  (docker-compose\.yml|example\.env)$' SHA256SUMS | sha256sum -c
 cp example.env .env
 chmod 600 .env
+mkdir -m 00700 data backups
+sudo install -d -m 00700 -o 70 -g 70 data/postgres
+sudo install -d -m 00700 -o 1000 -g 1000 data/uploads
 ```
 
 `sha256sum -c` must print `OK` for both files. Take the Compose and
@@ -107,6 +127,27 @@ they are not a separate signature of the publisher, which the
 digest as well as tag (`…:${STOKY_VERSION}@sha256:…`), so a tag moved on the
 registry later does not change what you pull. To check who built that image,
 see [Verifying an image's provenance](../SECURITY.md#verifying-an-images-provenance).
+Drop `sudo` from the last two commands if you are root. The modes have five
+digits so that a directory created inside a setgid one does not keep that
+bit.
+
+### The data directories
+
+| Directory | Holds | Owner |
+|---|---|---|
+| `data/postgres` | The database | `70:70`, the user PostgreSQL's container runs as |
+| `data/uploads` | The receipts' photographs | `1000:1000`, the user the application runs as |
+| `backups/` | The backups [Backup and restore](#backup-and-restore) makes | You |
+
+Each is mode `700`, and so is `data/` itself: no other user of the machine
+can read the database or a receipt. Both containers run with every capability
+dropped, so neither can take over a directory it does not own, and giving them
+theirs takes root. Docker does not create a missing one: `docker compose up`
+stops at once with `bind source path does not exist`, naming it. These owners
+are the containers' users as Docker run as root, its usual installation,
+sees them. Under rootless Docker or user-namespace remapping each one is
+another user on the host, and with SELinux enforcing (Fedora, RHEL) a bind
+mount needs a label this Compose file does not ask for; neither is tested.
 
 ### Optional: check who published the files
 
@@ -266,7 +307,8 @@ that domain — a router, a NAS, another service — for two years, and changing
 a domain in the browsers' built-in HSTS lists is close to permanent and covers
 the whole domain, so it is left to the domain's owner, at their own proxy.
 
-PostgreSQL uses its password setting **only when creating a new data volume**.
+PostgreSQL uses its password setting **only when it creates the database**, the
+first time it starts on an empty `data/postgres`.
 Editing `POSTGRES_PASSWORD` later does not rotate the database password; it
 breaks the application's connection until the stored password agrees.
 
@@ -289,8 +331,9 @@ endpoint checks both PostgreSQL and Valkey; use your own port in place of
 
 Stoky now answers plain HTTP on that port, and nothing else is published: the
 database and the cache stay on an internal network, and the application runs
-as a non-root user with a read-only filesystem. Named volumes preserve the
-database, uploads and cache across container replacement.
+as a non-root user with a read-only filesystem. Replacing a container loses
+nothing: the database and the receipts are in `data/`, the cache in its
+volume.
 
 **Do not register over this port.** With `first-user`, whoever reaches
 `/register` first becomes the owner of the installation, and until the port is
@@ -669,9 +712,17 @@ and a hostname is public from the moment a public certificate is issued for
 it: certificates are published in Certificate Transparency logs, which people
 watch for new hosts. Create your account and provide a household name. If
 `/register` says registration is closed on a new installation, somebody else
-registered first. Remove the installation with `docker compose down -v`, which
-deletes its data volumes (only on an installation with no data you want to
-keep), and start step 3 again.
+registered first. Start again from empty — only on an installation with no
+data you want to keep — in its directory:
+
+```bash
+docker compose down -v
+sudo rm -r data/postgres data/uploads
+bash install.sh
+```
+
+`install.sh` keeps `.env` and creates the two directories again; by hand, the
+two `install -d` commands of step 1 do. Then start step 3 again.
 
 Sign in, add a product, record stock, and upload a JPEG, PNG or WebP receipt.
 Review recognized lines before applying them. Add other household members through
@@ -701,12 +752,39 @@ docker compose logs --tail=100 app      # migration/runtime errors
 docker compose restart app            # restart the process
 docker compose stop                   # stop, keep containers and data
 docker compose up -d --wait            # start again
-docker compose down                   # remove containers, keep data volumes
+docker compose down                   # remove containers; data/ stays
 ```
 
-**Do not use `docker compose down -v` on an installation you want to keep.** It
-deletes the data volumes. Docker's restart policy restarts exited containers;
+**Never delete `data/`, or move it while Stoky runs, on an installation you
+want to keep**: it is the database and the receipts. `docker compose down -v`
+deletes only the cache's volume: sign-in counters, the devices each account
+has signed in from, and the product lookups Stoky keeps for a while. The
+sign-in limits then count each device as new until it signs in again, and
+nothing else is lost. Docker's restart policy restarts exited containers;
 an `unhealthy` status alone does not automatically restart a running process.
+
+### Moving the installation
+
+The directory is the whole installation, its cache aside. To move it to
+another disk or host, stop it, copy it as root so that its owners and modes go
+with it, and start it from its new place:
+
+```bash
+docker compose down
+sudo cp -a . /new/place/stoky-app
+cd /new/place/stoky-app
+docker compose up -d --wait --wait-timeout 180
+```
+
+To another host, `rsync -a --numeric-ids`, as root on both ends, copies the
+same way: without `--numeric-ids` it matches owners by name, and the
+containers need the numbers. PostgreSQL opens the copied database only under
+the major version that wrote it, which the same release has: move it with the
+same Compose file, and change release with the
+[upgrade](#upgrade-and-rollback) steps, before or after. On the same host the
+cache keeps its volume; on another it starts empty. Once the new directory
+answers, delete the old one as root (`sudo rm -r`): its `data/` is not
+yours.
 
 ## Logs
 
@@ -1047,7 +1125,7 @@ installation directory, replacing the address with the person's:
    that names the deleted `id`; it expires within ten minutes and can no
    longer become a session.
 3. The receipts the person uploaded belong to the household and stay, with
-   their photographs on the `uploads` volume. To remove those photographs too,
+   their photographs in `data/uploads`. To remove those photographs too,
    put the `id` from step 1 in place of `the-id`. For somebody removed in the
    application, it is the `targetUserId` of their removal's line,
    `docker compose logs app | grep '"reason":"removed"'`:
@@ -1101,11 +1179,12 @@ again, as a new account with nothing of the old one.
 The JSON export in Settings is useful for inspection, but is not a full restore
 format and does not include uploaded images. Back up the database and uploads
 together, with the app stopped so neither changes during the copy. Run these
-commands in the installation directory, checking each command succeeds:
+commands in the installation directory, checking each command succeeds. Each
+backup is a directory of its own in `backups/`:
 
 ```bash
 umask 077
-STOKY_BACKUP="backup-$(date +%Y%m%d-%H%M%S)"
+STOKY_BACKUP="backups/$(date +%Y%m%d-%H%M%S)"
 mkdir "$STOKY_BACKUP"
 docker compose stop app
 docker compose exec -T db pg_dump -U stoky -d stoky -Fc > "$STOKY_BACKUP/database.dump"
@@ -1115,7 +1194,13 @@ cp .env docker-compose.yml "$STOKY_BACKUP/"
 docker compose up -d --wait app
 ```
 
-If you wrote a `docker-compose.override.yml`, copy it too. The directory holds `.env` (the database password and the session secret), every
+The database is dumped, not copied: a dump restores under a later PostgreSQL
+as well, and taking it needs no root. The photographs go through the
+application's container because `data/uploads` belongs to its user, not to
+you. If you wrote a `docker-compose.override.yml`, copy it too.
+
+`backups/` is on the same disk as `data/`: a backup there undoes a mistake,
+not a failed disk, so copy it off the server too. The directory holds `.env` (the database password and the session secret), every
 account's password hash and every receipt, all in plaintext. **Encrypt it before
 it leaves the server.** With [age](https://age-encryption.org), installed on
 both machines, create a key pair once on the machine that keeps the backups,
@@ -1131,10 +1216,12 @@ tar -czf "$STOKY_BACKUP.tar.gz" "$STOKY_BACKUP" \
 
 Keep the `&&`: the plaintext copy is deleted only once the encrypted one has
 been written, so a missing `age` or a full disk leaves the backup where it was
-instead of an empty file in its place. Copy the `.age` file off the server. To
-restore, decrypt it on a machine that has the key, with
-`age -d -i stoky-backup.key backup-….tar.gz.age | tar -xzf -`, which recreates
-the `backup-…` directory. With GnuPG, import the public key of a key pair kept
+instead of an empty file in its place. Copy the `.age` file, which is in
+`backups/` beside where the directory was, off the server. To
+restore, decrypt it on a machine that has the key, in the installation's
+directory, with
+`age -d -i stoky-backup.key backups/….tar.gz.age | tar -xzf -`, which recreates
+the `backups/…` directory. With GnuPG, import the public key of a key pair kept
 off the server, then replace the `age` line with
 `&& gpg --encrypt --recipient you@example.com --output "$STOKY_BACKUP.tar.gz.gpg" "$STOKY_BACKUP.tar.gz" \`
 and decrypt with `gpg --decrypt`. Whoever has the private key can read
@@ -1146,16 +1233,20 @@ taken. Your proxy's configuration and certificates are not part of it: they
 are the proxy's to back up.
 
 **Test restoration on an empty installation on another host**, using the same
-release and the saved `.env` and Compose file. These commands assume its database and
-uploads are empty and the backup files have been copied into its directory.
+release and the saved `.env` and Compose file. Put both in a new directory and
+run that release's `install.sh` there, or by hand step 1's `mkdir` and two
+`install -d` commands: either keeps them and creates empty data
+directories. Copy the backup's directory into its
+`backups/`, then:
 
 ```bash
+STOKY_BACKUP=backups/20261127-120000    # the backup's directory
 docker compose pull
 docker compose up -d --wait db cache
 docker compose exec -T db pg_restore -U stoky -d stoky \
-  --exit-on-error --no-owner < database.dump
+  --exit-on-error --no-owner < "$STOKY_BACKUP/database.dump"
 docker compose run --rm --no-deps -T --entrypoint tar app \
-  -C /app/uploads -xzf - < uploads.tar.gz
+  -C /app/uploads -xzf - < "$STOKY_BACKUP/uploads.tar.gz"
 docker compose exec -T db psql -U stoky -d stoky -c 'DELETE FROM "Session";'
 docker compose up -d --wait --wait-timeout 180
 ```
@@ -1163,7 +1254,8 @@ docker compose up -d --wait --wait-timeout 180
 The `DELETE` ends every session the backup carried. A restored instance is a new
 place to sign in to, and a cookie lifted from the old one must not open it.
 Sign in and check inventory and a receipt image. Restoring over existing data is
-not covered by these commands. Never delete the original volumes to test a backup.
+not covered by these commands. Never delete the original installation's
+`data/` to test a backup.
 
 ## Upgrade and rollback
 
@@ -1190,7 +1282,11 @@ docker compose up -d --wait --wait-timeout 180
 Confirm health, sign-in and your data. Automatic alpha updates are not supported.
 Migrations run automatically and are not automatically reversible: a rollback may
 require restoring **both** the pre-upgrade database and uploads into an empty
-installation with the previous image and configuration. A rollback takes the
+installation with the previous image and configuration: a new directory with
+the previous release's files, prepared as the restore above is, once
+`docker compose down` has stopped the current one in its own directory. Both
+are project `stoky-release`, so the new one would otherwise take over the
+running containers; the current `data/` stays where it is. A rollback takes the
 previous release's Compose file, not only its tag, and returning to the previous
 image is not by itself a guaranteed rollback.
 
@@ -1200,7 +1296,8 @@ everybody signing in again, or a migration after which the previous release
 can no longer start against the upgraded database, so that returning to it
 needs the pre-upgrade backup. Those depend on the version you come from, so
 this guide, which describes one release, does not repeat them. The new
-release's `install.sh` adds every missing setting to `.env`, but only once `example.env` and
+release's `install.sh` adds every missing setting to `.env`, and creates a
+missing data directory, but only once `example.env` and
 `SHA256SUMS` have been replaced along with the Compose file:
 against the previous release's copies it stops before it reaches `.env`.
 
@@ -1213,8 +1310,10 @@ one major version (PostgreSQL 18, Valkey 8) an update keeps the stored data
 format and needs no data migration; a release that changes a major version
 says so, and what to do, in its notes.
 
-For an existing source-built deployment, first back it up. Keep its Compose
-project name and volume identities; the new bundle assumes database/user `stoky`
+For an existing source-built deployment, first back it up, then restore the
+backup into a new installation as [Backup and restore](#backup-and-restore)
+describes: the bundle reads its data from its own directory, never from the
+volumes a source build used. It assumes database/user `stoky`
 and URL-safe credentials. Review custom database names, passwords, networks and
 proxy settings before migrating. Do not point an unreviewed bundle at existing data.
 
@@ -1258,7 +1357,10 @@ migration again.
 | Everybody is told to wait at sign-in at once, or the log shows one address for everyone | Stoky is counting the proxy, not the people: `STOKY_TRUSTED_PROXIES` is unset or is not the address Stoky sees the proxy at. See [Check it](#check-it) |
 | A receipt photo will not upload, and the proxy's log shows 413 | The proxy's body limit is below 15 MiB (nginx: `client_max_body_size`) |
 | A page's buttons do nothing without JavaScript, and the app logs `Invalid Server Actions request` | The proxy is not passing the `Host` it was asked for (nginx: `proxy_set_header Host $host`) |
-| `P1000` / database authentication | Password differs from the one stored when the volume was initialized; changing `.env` is not rotation |
+| `P1000` / database authentication | Password differs from the one stored when `data/postgres` was initialized; changing `.env` is not rotation |
+| `docker compose up` stops with `bind source path does not exist` | `data/postgres` or `data/uploads` is missing: run `bash install.sh` again, or step 1's two `install -d` commands |
+| The db container keeps restarting and its log says `Permission denied` | `data/postgres` has another owner: `sudo stat -c '%u:%g %a %n' data/postgres` must print `70:70 700`. `bash install.sh` again gives it its owner and mode back; files copied into it with another owner need `sudo chown -R 70:70 data/postgres`. See [The data directories](#the-data-directories) |
+| Everything works but a receipt upload, which fails | `data/uploads` has another owner: `sudo stat -c '%u:%g %a %n' data/uploads` must print `1000:1000 700`. `bash install.sh` again gives it its owner and mode back; files copied into it with another owner need `sudo chown -R 1000:1000 data/uploads` |
 | App is unhealthy | `docker compose logs --tail=100 app db cache`; migrations, database connectivity and Valkey |
 | App keeps restarting and its log says `P3018` or `P3009` | A migration failed; see [A migration stops the upgrade](#a-migration-stops-the-upgrade) before restarting again |
 | TLS error / certificate not issued | That is your proxy's: its logs, its DNS records and its port 443. Stoky answers plain HTTP and asks for no certificate |
@@ -1276,7 +1378,7 @@ migration again.
 | App exits with `refusing to start: STOKY_REGISTRATION` | The value is not `first-user` or `closed` (`open` is not accepted: an installation is one household); fix `.env`, or remove the line for `first-user` |
 | Upload refused | JPEG/PNG/WebP/HEIC only, maximum 10 MiB |
 | A scanned code always opens the empty product form | Open Food Facts is not being asked: the app needs outbound HTTPS to `world.openfoodfacts.org`, Valkey must be healthy (a lookup that cannot be counted is not sent), and each account may send 60 lookups an hour for codes this instance has not looked up recently — past that the scan page says so. This bundle does not pass `RATE_LIMIT_PRODUCT_LOOKUP_*` to the app, so the default applies |
-| Empty inventory after moving directory | Check `-p`, `COMPOSE_PROJECT_NAME` and volume names before creating or deleting anything |
+| Empty inventory after moving the installation | Stoky was started from another directory than the one holding your `data/`: the data is where the Compose file you started is. See [Moving the installation](#moving-the-installation) |
 
 Report the release tag, image digest, command and redacted error through
 [GitHub issues](https://github.com/nogcode/stoky/issues). Do not attach `.env`,
